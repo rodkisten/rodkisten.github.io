@@ -2,402 +2,713 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rod Kisten</title>
+
     <meta
-      name="viewport"
-      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"
+      name="description"
+      content="Rod Kisten · frontend engineer, open source creator, and browser tooling enthusiast."
     />
-    <meta name="theme-color" content="#050505" />
-    <link rel="manifest" href="./manifest.webmanifest" />
-    <title>Code Glass</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
     <style>
       :root {
-        --bg: #050505;
-        --text: #fafafa;
-        --muted: #a1a1aa;
+        --color-page: #050506;
+        --color-page-soft: #09090b;
+        --color-surface: rgba(255, 255, 255, 0.055);
+        --color-surface-strong: rgba(255, 255, 255, 0.095);
+        --color-border: rgba(255, 255, 255, 0.12);
+        --color-border-strong: rgba(255, 255, 255, 0.24);
+
+        --color-text: #f8fafc;
+        --color-text-soft: #cbd5e1;
+        --color-text-muted: #71717a;
+
+        --color-pink: #f472b6;
+        --color-violet: #8b5cf6;
+        --color-indigo: #6366f1;
+        --color-cyan: #22d3ee;
+        --color-lime: #a3e635;
+        --color-orange: #fb923c;
+
+        --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+        --font-mono: "Geist Mono", ui-monospace, monospace;
+
+        --container: 1160px;
+        --radius-xl: 32px;
+        --radius-lg: 24px;
+        --radius-md: 999px;
+
+        --blur-glass: blur(24px);
+        --shadow-glow: 0 0 80px rgba(139, 92, 246, 0.28);
+        --shadow-card: 0 24px 80px rgba(0, 0, 0, 0.42);
+
+        --gradient-title: linear-gradient(
+          120deg,
+          #ffffff 0%,
+          #d4d4d8 18%,
+          #a78bfa 38%,
+          #22d3ee 58%,
+          #f472b6 78%,
+          #ffffff 100%
+        );
+
+        --gradient-hero: radial-gradient(
+            circle at 12% 18%,
+            rgba(139, 92, 246, 0.34),
+            transparent 34rem
+          ),
+          radial-gradient(
+            circle at 82% 22%,
+            rgba(34, 211, 238, 0.22),
+            transparent 32rem
+          ),
+          radial-gradient(
+            circle at 50% 88%,
+            rgba(244, 114, 182, 0.2),
+            transparent 30rem
+          );
+
+        --gradient-card: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.095),
+          rgba(255, 255, 255, 0.035)
+        );
+
+        --transition-soft: 280ms ease;
       }
 
       * {
         box-sizing: border-box;
-        -webkit-tap-highlight-color: transparent;
       }
 
-      html,
+      html {
+        scroll-behavior: smooth;
+        background: var(--color-page);
+      }
+
       body {
+        min-height: 100vh;
         margin: 0;
-        height: 100%;
-        overflow: hidden;
-        background:
-          radial-gradient(
-            circle at top left,
-            rgba(139, 92, 246, 0.18),
-            transparent 28rem
-          ),
-          radial-gradient(
-            circle at bottom right,
-            rgba(59, 130, 246, 0.12),
-            transparent 24rem
-          ),
-          var(--bg);
-        color: var(--text);
-        font-family: Inter, system-ui, sans-serif;
-        touch-action: manipulation;
+        overflow-x: hidden;
+        font-family: var(--font-sans);
+        color: var(--color-text);
+        background: var(--color-page);
       }
 
       body::before {
         content: "";
         position: fixed;
-        inset: 0;
-        pointer-events: none;
-        opacity: 0.06;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E");
+        inset: -25%;
+        z-index: -4;
+        background: var(--gradient-hero);
+        filter: blur(80px);
+        animation: aura-drift 18s ease-in-out infinite alternate;
       }
 
-      app-root {
+      body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: -3;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+        background-size: 72px 72px;
+        mask-image: radial-gradient(circle at center, black, transparent 72%);
+        pointer-events: none;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .noise {
+        position: fixed;
+        inset: 0;
+        z-index: -2;
+        opacity: 0.085;
+        pointer-events: none;
+        background-image: url("https://grainy-gradients.vercel.app/noise.svg");
+      }
+
+      .orb {
+        position: fixed;
+        z-index: -1;
+        width: var(--orb-size);
+        height: var(--orb-size);
+        border-radius: 999px;
+        opacity: var(--orb-opacity);
+        background: var(--orb-gradient);
+        filter: blur(var(--orb-blur));
+        animation: orb-float var(--orb-speed) ease-in-out infinite alternate;
+      }
+
+      .orb-one {
+        --orb-size: 360px;
+        --orb-opacity: 0.34;
+        --orb-blur: 38px;
+        --orb-speed: 10s;
+        --orb-gradient: var(--color-violet);
+        top: 8%;
+        left: -120px;
+      }
+
+      .orb-two {
+        --orb-size: 420px;
+        --orb-opacity: 0.26;
+        --orb-blur: 48px;
+        --orb-speed: 13s;
+        --orb-gradient: var(--color-cyan);
+        top: 28%;
+        right: -160px;
+      }
+
+      .orb-three {
+        --orb-size: 280px;
+        --orb-opacity: 0.24;
+        --orb-blur: 42px;
+        --orb-speed: 16s;
+        --orb-gradient: var(--color-pink);
+        bottom: 8%;
+        left: 32%;
+      }
+
+      .page {
+        width: min(var(--container), calc(100% - 32px));
+        margin: 0 auto;
+        padding: 24px 0 64px;
+      }
+
+      .nav {
+        position: sticky;
+        top: 16px;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 12px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        background: rgba(5, 5, 6, 0.58);
+        backdrop-filter: var(--blur-glass);
+        box-shadow: var(--shadow-card);
+      }
+
+      .brand,
+      .nav-links,
+      .social-pill,
+      .button {
+        display: inline-flex;
+        align-items: center;
+      }
+
+      .brand {
+        gap: 10px;
+        padding: 6px 12px 6px 6px;
+        font-weight: 700;
+      }
+
+      .brand-mark {
+        display: grid;
+        width: 36px;
+        height: 36px;
+        place-items: center;
+        border-radius: 50%;
+        font-family: var(--font-mono);
+        font-size: 13px;
+        background: var(--gradient-title);
+        color: #050506;
+      }
+
+      .nav-links {
+        gap: 8px;
+      }
+
+      .nav-links a {
+        padding: 10px 14px;
+        border-radius: var(--radius-md);
+        color: var(--color-text-soft);
+        font-size: 14px;
+        transition:
+          background var(--transition-soft),
+          color var(--transition-soft);
+      }
+
+      .nav-links a:hover {
+        color: var(--color-text);
+        background: var(--color-surface);
+      }
+
+      .hero {
+        min-height: calc(100vh - 120px);
+        display: grid;
+        align-items: center;
+        padding: 96px 0 64px;
+      }
+
+      .hero-inner {
+        display: grid;
+        gap: 28px;
+      }
+
+      .eyebrow {
+        width: fit-content;
+        margin: 0;
+        padding: 9px 13px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        color: var(--color-text-soft);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        background: rgba(255, 255, 255, 0.045);
+      }
+
+      .title {
+        max-width: 980px;
+        margin: 0;
+        font-size: clamp(72px, 15vw, 176px);
+        line-height: 0.82;
+        letter-spacing: -0.095em;
+        font-weight: 900;
+      }
+
+      .title span {
         display: block;
-        height: 100dvh;
+        width: fit-content;
+        background: var(--gradient-title);
+        background-size: 240% 240%;
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        animation: gradient-flow 9s linear infinite;
+      }
+
+      .lead {
+        max-width: 720px;
+        margin: 0;
+        color: var(--color-text-soft);
+        font-size: clamp(20px, 3vw, 32px);
+        line-height: 1.18;
+        letter-spacing: -0.045em;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+
+      .button {
+        min-height: 48px;
+        justify-content: center;
+        gap: 10px;
+        padding: 0 18px;
+        border-radius: var(--radius-md);
+        font-weight: 700;
+        transition:
+          transform var(--transition-soft),
+          border-color var(--transition-soft),
+          background var(--transition-soft);
+      }
+
+      .button:hover {
+        transform: translateY(-2px);
+      }
+
+      .button-primary {
+        color: #050506;
+        background: #ffffff;
+      }
+
+      .button-ghost {
+        border: 1px solid var(--color-border);
+        background: var(--color-surface);
+      }
+
+      .social-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .social-pill {
+        min-height: 82px;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 6px;
+        padding: 18px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        background: var(--gradient-card);
+        backdrop-filter: var(--blur-glass);
+        box-shadow: var(--shadow-card);
+        transition:
+          transform var(--transition-soft),
+          border-color var(--transition-soft),
+          background var(--transition-soft);
+      }
+
+      .social-pill:hover {
+        transform: translateY(-4px);
+        border-color: var(--color-border-strong);
+        background: var(--color-surface-strong);
+      }
+
+      .social-pill span {
+        color: var(--color-text-muted);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .social-pill strong {
+        font-size: 18px;
+      }
+
+      .section {
+        padding: 64px 0;
+      }
+
+      .section-heading {
+        display: grid;
+        gap: 14px;
+        margin-bottom: 24px;
+      }
+
+      .section-heading h2 {
+        max-width: 780px;
+        margin: 0;
+        font-size: clamp(42px, 7vw, 88px);
+        line-height: 0.92;
+        letter-spacing: -0.075em;
+      }
+
+      .project-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .project-card {
+        position: relative;
+        min-height: 280px;
+        overflow: hidden;
+        padding: 24px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-xl);
+        background: var(--gradient-card);
+        backdrop-filter: var(--blur-glass);
+        box-shadow: var(--shadow-card);
+        transition:
+          transform var(--transition-soft),
+          border-color var(--transition-soft);
+      }
+
+      .project-card::before {
+        content: "";
+        position: absolute;
+        inset: -1px;
+        z-index: -1;
+        opacity: 0;
+        background: radial-gradient(
+          circle at var(--card-x, 50%) var(--card-y, 0%),
+          var(--project-color),
+          transparent 55%
+        );
+        transition: opacity var(--transition-soft);
+      }
+
+      .project-card:hover {
+        transform: translateY(-8px);
+        border-color: var(--color-border-strong);
+      }
+
+      .project-card:hover::before {
+        opacity: 0.34;
+      }
+
+      .project-card:nth-child(1) {
+        --project-color: rgba(244, 114, 182, 0.75);
+      }
+
+      .project-card:nth-child(2) {
+        --project-color: rgba(34, 211, 238, 0.7);
+      }
+
+      .project-card:nth-child(3) {
+        --project-color: rgba(163, 230, 53, 0.62);
+      }
+
+      .project-kicker {
+        display: inline-flex;
+        width: fit-content;
+        margin-bottom: 72px;
+        padding: 8px 11px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        color: var(--color-text-soft);
+        font-family: var(--font-mono);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        background: rgba(0, 0, 0, 0.24);
+      }
+
+      .project-card h3 {
+        margin: 0 0 12px;
+        font-size: 38px;
+        line-height: 0.96;
+        letter-spacing: -0.06em;
+      }
+
+      .project-card p {
+        max-width: 300px;
+        margin: 0;
+        color: var(--color-text-soft);
+        font-size: 16px;
+        line-height: 1.55;
+      }
+
+      .project-arrow {
+        position: absolute;
+        right: 22px;
+        top: 22px;
+        display: grid;
+        width: 42px;
+        height: 42px;
+        place-items: center;
+        border: 1px solid var(--color-border);
+        border-radius: 50%;
+        color: var(--color-text);
+        background: rgba(255, 255, 255, 0.055);
+      }
+
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        padding: 28px 0 0;
+        border-top: 1px solid var(--color-border);
+        color: var(--color-text-muted);
+        font-family: var(--font-mono);
+        font-size: 13px;
+      }
+
+      @keyframes gradient-flow {
+        0% {
+          background-position: 0% 50%;
+        }
+
+        50% {
+          background-position: 100% 50%;
+        }
+
+        100% {
+          background-position: 0% 50%;
+        }
+      }
+
+      @keyframes aura-drift {
+        0% {
+          transform: rotate(0deg) scale(1);
+        }
+
+        100% {
+          transform: rotate(8deg) scale(1.12);
+        }
+      }
+
+      @keyframes orb-float {
+        0% {
+          transform: translate3d(0, 0, 0) scale(1);
+        }
+
+        100% {
+          transform: translate3d(42px, -36px, 0) scale(1.08);
+        }
+      }
+
+      @media (max-width: 820px) {
+        .page {
+          width: min(100% - 24px, var(--container));
+        }
+
+        .nav {
+          align-items: flex-start;
+          border-radius: 28px;
+        }
+
+        .nav-links {
+          display: none;
+        }
+
+        .hero {
+          padding-top: 72px;
+        }
+
+        .social-grid,
+        .project-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .project-card {
+          min-height: 240px;
+        }
+
+        .footer {
+          flex-direction: column;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 1ms !important;
+          animation-iteration-count: 1 !important;
+          scroll-behavior: auto !important;
+        }
       }
     </style>
   </head>
 
   <body>
-    <app-root></app-root>
+    <div class="noise"></div>
+    <div class="orb orb-one"></div>
+    <div class="orb orb-two"></div>
+    <div class="orb orb-three"></div>
 
-    <script type="module">
-      import { LitElement, html, css } from "https://esm.sh/lit@3.3.0";
-      import { EditorState } from "https://esm.sh/@codemirror/state@6.5.2";
-      import {
-        EditorView,
-        keymap,
-        lineNumbers,
-      } from "https://esm.sh/@codemirror/view@6.38.6";
-      import {
-        defaultKeymap,
-        history,
-        historyKeymap,
-      } from "https://esm.sh/@codemirror/commands@6.8.1";
-      import { javascript } from "https://esm.sh/@codemirror/lang-javascript@6.2.4";
-      import { json } from "https://esm.sh/@codemirror/lang-json@6.0.2";
-      import { html as htmlLang } from "https://esm.sh/@codemirror/lang-html@6.4.9";
-      import { css as cssLang } from "https://esm.sh/@codemirror/lang-css@6.3.1";
-      import { markdown } from "https://esm.sh/@codemirror/lang-markdown@6.3.4";
-      import { go } from "https://esm.sh/@codemirror/lang-go@6.0.2";
-      import { StreamLanguage } from "https://esm.sh/@codemirror/language@6.11.3";
-      import { shell } from "https://esm.sh/@codemirror/legacy-modes/mode/shell";
-      import {
-        lintGutter,
-        linter,
-      } from "https://esm.sh/@codemirror/lint@6.8.5";
+    <main class="page">
+      <nav class="nav" aria-label="Main navigation">
+        <a class="brand" href="/" aria-label="Rod Kisten home">
+          <span class="brand-mark">RK</span>
+          <span>Rod Kisten</span>
+        </a>
 
-      const shellLang = StreamLanguage.define(shell);
+        <div class="nav-links">
+          <a href="https://github.com/oirodolfo">GitHub</a>
+          <a href="https://twitter.com/rodinhocosta">Twitter</a>
+          <a href="https://instagram.com/oirodolfo">Instagram</a>
+          <a href="/bundler">Bundler</a>
+        </div>
+      </nav>
 
-      function detectLanguage(code = "", fileName = "") {
-        const lower = fileName.toLowerCase();
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-inner">
+          <p class="eyebrow">frontend systems · open source · browser magic</p>
 
-        if (lower.endsWith(".ts")) return "typescript";
-        if (lower.endsWith(".js")) return "javascript";
-        if (lower.endsWith(".json")) return "json";
-        if (lower.endsWith(".html")) return "html";
-        if (lower.endsWith(".css")) return "css";
-        if (lower.endsWith(".md")) return "markdown";
-        if (lower.endsWith(".go")) return "go";
-        if (lower.endsWith(".sh") || lower.endsWith(".zsh")) return "shell";
+          <h1 class="title" id="hero-title">
+            <span>Rod</span>
+            <span>Kisten</span>
+          </h1>
 
-        if (code.startsWith("#!/usr/bin/env bash")) return "shell";
-        if (code.startsWith("#!/usr/bin/env zsh")) return "shell";
-        if (code.includes("package main")) return "go";
+          <p class="lead">
+            I build tiny runtimes, strange tools, sharp interfaces, and little
+            browser ecosystems with a neon pulse.
+          </p>
 
-        return "javascript";
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://github.com/oirodolfo">
+              GitHub @oirodolfo
+            </a>
+
+            <a class="button button-ghost" href="/bundler">
+              Open /bundler
+            </a>
+          </div>
+
+          <div class="social-grid" aria-label="Social links">
+            <a class="social-pill" href="https://github.com/oirodolfo">
+              <span>GitHub</span>
+              <strong>@oirodolfo</strong>
+            </a>
+
+            <a class="social-pill" href="https://twitter.com/rodinhocosta">
+              <span>Twitter</span>
+              <strong>@rodinhocosta</strong>
+            </a>
+
+            <a class="social-pill" href="https://instagram.com/oirodolfo">
+              <span>Instagram</span>
+              <strong>@oirodolfo</strong>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="projects-title">
+        <div class="section-heading">
+          <p class="eyebrow">ecosystem</p>
+          <h2 id="projects-title">Fábrica, Seiva and Cipó.</h2>
+        </div>
+
+        <div class="project-grid">
+          <a class="project-card" href="/bundler">
+            <span class="project-arrow">↗</span>
+            <span class="project-kicker">Runtime</span>
+            <h3>Fábrica</h3>
+            <p>
+              A tiny reactive HTML runtime for building browser-native
+              interfaces without the ceremony.
+            </p>
+          </a>
+
+          <a class="project-card" href="/bundler">
+            <span class="project-arrow">↗</span>
+            <span class="project-kicker">State</span>
+            <h3>Seiva</h3>
+            <p>
+              Signal-driven state primitives for interfaces that update with
+              quiet precision.
+            </p>
+          </a>
+
+          <a class="project-card" href="/bundler">
+            <span class="project-arrow">↗</span>
+            <span class="project-kicker">Style</span>
+            <h3>Cipó</h3>
+            <p>
+              Atomic styling vines, design tokens, and expressive utilities for
+              fast visual systems.
+            </p>
+          </a>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <span>© Rod Kisten</span>
+        <span>GitHub Pages · /bundler · open source experiments</span>
+      </footer>
+    </main>
+
+    <script>
+      const cards = document.querySelectorAll(".project-card");
+
+      for (const card of cards) {
+        card.addEventListener("pointermove", (event) => {
+          const rect = card.getBoundingClientRect();
+          const x = ((event.clientX - rect.left) / rect.width) * 100;
+          const y = ((event.clientY - rect.top) / rect.height) * 100;
+
+          card.style.setProperty("--card-x", `${x}%`);
+          card.style.setProperty("--card-y", `${y}%`);
+        });
       }
-
-      function getLanguageExtension(language) {
-        switch (language) {
-          case "typescript":
-            return javascript({ typescript: true });
-          case "javascript":
-            return javascript();
-          case "json":
-            return json();
-          case "html":
-            return htmlLang();
-          case "css":
-            return cssLang();
-          case "markdown":
-            return markdown();
-          case "go":
-            return go();
-          case "shell":
-            return shellLang;
-          default:
-            return javascript();
-        }
-      }
-
-      const THEME = EditorView.theme({
-        "&": { height: "100%" },
-        "&.cm-editor": {
-          height: "100%",
-          background: "#0a0a0a",
-          color: "#fafafa",
-        },
-        ".cm-scroller": {
-          overflow: "auto",
-          fontFamily: "ui-monospace,monospace",
-          fontSize: "13px",
-        },
-        ".cm-gutters": {
-          background: "rgba(255,255,255,.03)",
-          color: "#71717a",
-          borderRight: "1px solid rgba(255,255,255,.08)",
-        },
-      });
-
-      const SIMPLE_LINTER = linter((view) => {
-        const diagnostics = [];
-        const text = view.state.doc.toString();
-
-        if (text.includes("console.log")) {
-          diagnostics.push({
-            from: text.indexOf("console.log"),
-            to: text.indexOf("console.log") + 11,
-            severity: "warning",
-            message: "console.log detected",
-          });
-        }
-
-        return diagnostics;
-      });
-
-      class AppRoot extends LitElement {
-        static styles = css`
-          :host {
-            display: block;
-            height: 100%;
-          }
-          .layout {
-            height: 100%;
-            display: grid;
-            grid-template-rows: auto 1fr auto;
-            gap: 12px;
-            padding: 16px;
-          }
-          .hero {
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            background: rgba(255, 255, 255, 0.04);
-            backdrop-filter: blur(18px);
-            border-radius: 24px;
-            padding: 18px;
-          }
-          h1 {
-            margin: 0;
-            font-size: clamp(2rem, 8vw, 4rem);
-            letter-spacing: -0.08em;
-          }
-          p {
-            color: #a1a1aa;
-          }
-          .toolbar {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-          }
-          button,
-          input {
-            min-height: 44px;
-            border-radius: 14px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            background: rgba(255, 255, 255, 0.06);
-            color: white;
-            padding: 0 14px;
-          }
-          input {
-            flex: 1;
-          }
-          .editor {
-            overflow: hidden;
-            border-radius: 24px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-          }
-          #editor {
-            height: 100%;
-          }
-          .footer {
-            font-size: 0.85rem;
-            color: #71717a;
-          }
-        `;
-
-        static properties = {
-          status: { state: true },
-          language: { state: true },
-        };
-
-        constructor() {
-          super();
-          this.status = "Ready";
-          this.language = "javascript";
-        }
-
-        render() {
-          return html`
-            <div class="layout">
-              <div class="hero">
-                <h1>Code Glass</h1>
-                <p>Offline-first CodeMirror 6 playground.</p>
-
-                <div class="toolbar">
-                  <button @click=${this.loadSample}>🧪 Sample</button>
-                  <button @click=${this.copyCode}>📋 Copy</button>
-                  <button @click=${this.openFile}>📄 File</button>
-
-                  <input
-                    id="urlInput"
-                    placeholder="https://raw.githubusercontent.com/..."
-                  />
-
-                  <button @click=${this.fetchRemote}>🌐 Fetch</button>
-
-                  <input
-                    hidden
-                    id="fileInput"
-                    type="file"
-                    @change=${this.onFileChange}
-                  />
-                </div>
-              </div>
-
-              <div class="editor">
-                <div id="editor"></div>
-              </div>
-
-              <div class="footer">${this.status} · ${this.language}</div>
-            </div>
-          `;
-        }
-
-        firstUpdated() {
-          this.blockZoom();
-          this.setupEditor();
-          this.registerSW();
-        }
-
-        blockZoom() {
-          document.addEventListener("gesturestart", (e) => e.preventDefault());
-          document.addEventListener("gesturechange", (e) => e.preventDefault());
-          document.addEventListener("gestureend", (e) => e.preventDefault());
-        }
-
-        setupEditor(code = 'console.log("hello")') {
-          this.language = detectLanguage(code);
-
-          this.editorView = new EditorView({
-            parent: this.renderRoot.querySelector("#editor"),
-            state: EditorState.create({
-              doc: code,
-              extensions: [
-                lineNumbers(),
-                history(),
-                keymap.of([...defaultKeymap, ...historyKeymap]),
-                THEME,
-                lintGutter(),
-                SIMPLE_LINTER,
-                getLanguageExtension(this.language),
-              ],
-            }),
-          });
-        }
-
-        replaceEditor(code, fileName = "") {
-          this.language = detectLanguage(code, fileName);
-
-          this.editorView.destroy();
-
-          this.renderRoot.querySelector("#editor").innerHTML = "";
-
-          this.editorView = new EditorView({
-            parent: this.renderRoot.querySelector("#editor"),
-            state: EditorState.create({
-              doc: code,
-              extensions: [
-                lineNumbers(),
-                history(),
-                keymap.of([...defaultKeymap, ...historyKeymap]),
-                THEME,
-                lintGutter(),
-                SIMPLE_LINTER,
-                getLanguageExtension(this.language),
-              ],
-            }),
-          });
-        }
-
-        loadSample() {
-          const sample = '#!/usr/bin/env zsh\n\necho "hello"';
-
-          this.replaceEditor(sample, "sample.zsh");
-
-          this.status = "Sample loaded";
-        }
-
-        async copyCode() {
-          await navigator.clipboard.writeText(
-            this.editorView.state.doc.toString(),
-          );
-
-          this.status = "Copied";
-        }
-
-        openFile() {
-          this.renderRoot.querySelector("#fileInput").click();
-        }
-
-        async onFileChange(event) {
-          const file = event.target.files?.[0];
-
-          if (!file) {
-            return;
-          }
-
-          const text = await file.text();
-
-          this.replaceEditor(text, file.name);
-
-          this.status = `Loaded ${file.name}`;
-        }
-
-        async fetchRemote() {
-          const input = this.renderRoot.querySelector("#urlInput");
-
-          if (!input.value) {
-            return;
-          }
-
-          try {
-            const response = await fetch(input.value);
-            const text = await response.text();
-
-            this.replaceEditor(text, input.value);
-
-            this.status = "Remote file loaded";
-          } catch (error) {
-            this.status = error.message;
-          }
-        }
-
-        async registerSW() {
-          if (!("serviceWorker" in navigator)) {
-            return;
-          }
-
-          try {
-            await navigator.serviceWorker.register("./sw.js");
-            this.status = "Offline ready";
-          } catch (error) {
-            this.status = error.message;
-          }
-        }
-      }
-
-      customElements.define("app-root", AppRoot);
     </script>
   </body>
 </html>
