@@ -1,4 +1,7 @@
-/*! eruda v3.4.3 https://eruda.liriliri.io/ */
+/*! 
+eruda v3.4.3 
+https://eruda.liriliri.io/ 
+*/
 !(function (e, t) {
   "object" == typeof exports && "object" == typeof module
     ? (module.exports = t())
