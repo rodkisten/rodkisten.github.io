@@ -681,6 +681,242 @@
         flex: 1;
       }
     }
+
+
+    /* ==========================================================================
+     * Mobile layout repair
+     * --------------------------------------------------------------------------
+     * The builder is designed to be used from iPhone/Safari a lot. These rules
+     * intentionally clamp every major layout surface so a long URL, badge,
+     * code line, search result, or button row can never create a hidden desktop
+     * canvas to the right of the viewport.
+     * ========================================================================== */
+
+    html,
+    body {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+
+    body {
+      touch-action: manipulation;
+    }
+
+    .shell,
+    .hero,
+    .layout,
+    .left-stack,
+    .right-stack,
+    .hero-card,
+    .panel,
+    .output-card,
+    .search-card,
+    .status-grid,
+    .stat,
+    .field,
+    .field-grid,
+    .checkbox-grid,
+    .asset-card,
+    .result-card,
+    .url-box,
+    .mini-code {
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .shell {
+      width: 100%;
+      max-width: 1460px;
+      padding-left: max(12px, env(safe-area-inset-left, 0px));
+      padding-right: max(12px, env(safe-area-inset-right, 0px));
+    }
+
+    .hero,
+    .layout {
+      width: 100%;
+    }
+
+    .hero-card,
+    .panel,
+    .output-card,
+    .search-card {
+      overflow: clip;
+    }
+
+    .panel-title,
+    .asset-top,
+    .button-row,
+    .hero-actions,
+    .url-tools,
+    .tabs {
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .panel-title > div,
+    .asset-top > div,
+    .result-card > div {
+      min-width: 0;
+    }
+
+    .badge,
+    .pill,
+    .btn,
+    .tab {
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .badge,
+    .pill {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .input,
+    .select,
+    .textarea,
+    .url-box textarea,
+    .mini-code {
+      max-width: 100%;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    @supports not (overflow: clip) {
+      .hero-card,
+      .panel,
+      .output-card,
+      .search-card {
+        overflow: hidden;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .shell {
+        padding-top: calc(14px + var(--safe-top));
+        padding-bottom: calc(84px + var(--safe-bottom));
+      }
+
+      .hero,
+      .layout {
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 14px;
+      }
+
+      .hero-card,
+      .panel,
+      .output-card,
+      .search-card {
+        border-radius: 22px;
+        padding: 14px;
+        box-shadow: 0 14px 48px rgb(0 0 0 / 0.42);
+      }
+
+      .hero-card::before {
+        width: 320px;
+        height: 320px;
+        right: -170px;
+        top: -150px;
+      }
+
+      h1 {
+        max-width: 100%;
+        margin-top: 18px;
+        font-size: clamp(38px, 12vw, 54px);
+        line-height: 0.94;
+        letter-spacing: -0.065em;
+        text-wrap: balance;
+      }
+
+      .lead {
+        max-width: 100%;
+        font-size: 16px;
+        line-height: 1.5;
+      }
+
+      .hero-actions,
+      .button-row,
+      .url-tools {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .btn {
+        width: 100%;
+        min-height: 46px;
+        padding-inline: 12px;
+        text-align: center;
+      }
+
+      .status-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .stat {
+        padding: 16px;
+      }
+
+      .field-grid,
+      .checkbox-grid,
+      .result-card {
+        grid-template-columns: minmax(0, 1fr) !important;
+      }
+
+      .panel-title {
+        align-items: flex-start;
+      }
+
+      .panel-title,
+      .asset-top {
+        flex-direction: column;
+      }
+
+      .tabs {
+        gap: 4px;
+      }
+
+      .tab {
+        min-height: 42px;
+        font-size: 14px;
+      }
+
+      .output-card {
+        position: static;
+      }
+
+      .url-box textarea,
+      .textarea {
+        font-size: 12px;
+        line-height: 1.55;
+      }
+    }
+
+    @media (max-width: 390px) {
+      .shell {
+        padding-left: max(10px, env(safe-area-inset-left, 0px));
+        padding-right: max(10px, env(safe-area-inset-right, 0px));
+      }
+
+      .hero-card,
+      .panel,
+      .output-card,
+      .search-card {
+        padding: 12px;
+        border-radius: 20px;
+      }
+
+      h1 {
+        font-size: clamp(34px, 11.5vw, 46px);
+      }
+
+      .eyebrow {
+        max-width: 100%;
+        white-space: normal;
+      }
+    }
+
   </style>
 </head>
 <body>
