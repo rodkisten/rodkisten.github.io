@@ -4,55 +4,52 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="dark" />
-  <title>RodKisten CDN URL Builder</title>
+  <title>Rod Kisten CDN URL Builder</title>
   <style>
     :root {
       color-scheme: dark;
-      --bg: #080a0f;
-      --bg-soft: #0d111b;
-      --card: rgb(15 20 32 / 0.72);
-      --card-strong: rgb(21 28 44 / 0.88);
-      --card-glass: rgb(255 255 255 / 0.055);
-      --line: rgb(255 255 255 / 0.11);
-      --line-strong: rgb(255 255 255 / 0.18);
-      --text: #f5f7fb;
-      --muted: #98a2b7;
-      --faint: #667085;
+      --bg: #08090b;
+      --bg-soft: #0e1014;
+      --card: rgb(18 20 26 / 0.82);
+      --card-2: rgb(25 28 36 / 0.72);
+      --card-strong: rgb(33 37 47 / 0.88);
+      --text: #f6f7fb;
+      --muted: #a1a7b7;
+      --soft: #6f778a;
+      --border: rgb(255 255 255 / 0.1);
+      --border-strong: rgb(255 255 255 / 0.18);
       --accent: #ff8a3d;
-      --accent-2: #a855f7;
-      --accent-3: #22d3ee;
-      --good: #34d399;
-      --bad: #fb7185;
-      --warning: #fbbf24;
-      --shadow: 0 22px 90px rgb(0 0 0 / 0.55);
-      --radius-xl: 32px;
-      --radius-lg: 22px;
-      --radius-md: 16px;
-      --radius-sm: 12px;
-      --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
-      --mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace;
-      --safe-top: env(safe-area-inset-top, 0px);
-      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --accent-2: #ffd1a6;
+      --accent-3: #d16b31;
+      --good: #7dd3a6;
+      --warn: #ffd36e;
+      --danger: #ff7a90;
+      --shadow: 0 24px 80px rgb(0 0 0 / 0.48);
+      --radius-lg: 28px;
+      --radius-md: 20px;
+      --radius-sm: 14px;
+      --pad: clamp(14px, 3vw, 28px);
+      --max: 1180px;
+      --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     }
 
     * { box-sizing: border-box; }
 
     html {
-      min-height: 100%;
-      background: var(--bg);
-      scroll-behavior: smooth;
+      min-width: 0;
+      background:
+        radial-gradient(circle at 18% -12%, rgb(255 138 61 / 0.24), transparent 32rem),
+        radial-gradient(circle at 88% 12%, rgb(255 209 166 / 0.14), transparent 30rem),
+        linear-gradient(135deg, #08090b, #0b0d12 42%, #111017);
+      background-attachment: fixed;
     }
 
     body {
-      min-height: 100vh;
+      min-width: 0;
       margin: 0;
       font-family: var(--font);
       color: var(--text);
-      background:
-        radial-gradient(circle at 8% -8%, rgb(255 138 61 / 0.34), transparent 36rem),
-        radial-gradient(circle at 88% 2%, rgb(168 85 247 / 0.25), transparent 34rem),
-        radial-gradient(circle at 65% 82%, rgb(34 211 238 / 0.16), transparent 38rem),
-        linear-gradient(160deg, #080a0f 0%, #0e1220 48%, #050609 100%);
       overflow-x: hidden;
     }
 
@@ -64,1697 +61,755 @@
       opacity: 0.36;
       background-image:
         linear-gradient(rgb(255 255 255 / 0.035) 1px, transparent 1px),
-        linear-gradient(90deg, rgb(255 255 255 / 0.035) 1px, transparent 1px);
+        linear-gradient(90deg, rgb(255 255 255 / 0.028) 1px, transparent 1px);
       background-size: 44px 44px;
-      mask-image: radial-gradient(circle at center, black, transparent 72%);
-    }
-
-    body::after {
-      content: "";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      opacity: 0.18;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180' viewBox='0 0 180 180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
-      mix-blend-mode: overlay;
-    }
-
-    button, input, select, textarea {
-      font: inherit;
-    }
-
-    button {
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
+      mask-image: radial-gradient(circle at top, black, transparent 78%);
     }
 
     a { color: inherit; }
 
     .shell {
-      position: relative;
-      z-index: 1;
-      width: min(1460px, calc(100% - 28px));
-      margin: 0 auto;
-      padding: calc(26px + var(--safe-top)) 0 calc(52px + var(--safe-bottom));
+      width: min(var(--max), 100%);
+      margin-inline: auto;
+      padding: max(18px, env(safe-area-inset-top)) var(--pad) max(28px, env(safe-area-inset-bottom));
     }
 
     .hero {
       display: grid;
-      grid-template-columns: minmax(0, 1.15fr) minmax(330px, 0.85fr);
-      gap: 22px;
-      align-items: stretch;
-      margin-bottom: 22px;
-    }
-
-    .hero-card,
-    .panel,
-    .output-card,
-    .search-card {
-      border: 1px solid var(--line);
-      background: linear-gradient(145deg, var(--card-strong), rgb(9 12 20 / 0.72));
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(22px) saturate(130%);
-    }
-
-    .hero-card {
-      position: relative;
-      overflow: hidden;
-      padding: clamp(24px, 5vw, 48px);
-      border-radius: var(--radius-xl);
-      isolation: isolate;
-    }
-
-    .hero-card::before {
-      content: "";
-      position: absolute;
-      width: 560px;
-      height: 560px;
-      right: -180px;
-      top: -260px;
-      background:
-        radial-gradient(circle, rgb(255 138 61 / 0.42), transparent 58%),
-        radial-gradient(circle at 35% 70%, rgb(168 85 247 / 0.32), transparent 48%);
-      filter: blur(12px);
-      z-index: -1;
-      animation: drift 8s ease-in-out infinite alternate;
-    }
-
-    @keyframes drift {
-      from { transform: translate3d(-20px, 0, 0) rotate(0deg); }
-      to { transform: translate3d(24px, 24px, 0) rotate(8deg); }
+      grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
+      gap: clamp(18px, 3.5vw, 36px);
+      align-items: center;
+      min-width: 0;
+      padding: clamp(20px, 5vw, 58px) 0 clamp(20px, 4vw, 44px);
     }
 
     .eyebrow {
       display: inline-flex;
-      align-items: center;
       gap: 10px;
-      padding: 9px 12px;
+      align-items: center;
+      max-width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
       border-radius: 999px;
-      color: #ffd8bd;
-      background: rgb(255 138 61 / 0.12);
-      border: 1px solid rgb(255 138 61 / 0.26);
+      background: rgb(255 255 255 / 0.055);
+      color: var(--accent-2);
       font-size: 13px;
-      letter-spacing: 0.02em;
+      font-weight: 750;
+      letter-spacing: 0.01em;
+      backdrop-filter: blur(18px);
     }
 
-    .pulse-dot {
+    .pulse {
       width: 9px;
       height: 9px;
       border-radius: 999px;
-      background: var(--good);
-      box-shadow: 0 0 0 6px rgb(52 211 153 / 0.12), 0 0 26px rgb(52 211 153 / 0.6);
+      background: var(--accent);
+      box-shadow: 0 0 24px var(--accent);
+      flex: 0 0 auto;
     }
 
     h1 {
-      max-width: 920px;
-      margin: 22px 0 14px;
-      font-size: clamp(42px, 8vw, 92px);
-      line-height: 0.88;
-      letter-spacing: -0.075em;
+      margin: 18px 0 14px;
+      font-size: clamp(42px, 9vw, 96px);
+      line-height: 0.9;
+      letter-spacing: -0.08em;
+      max-width: 11ch;
     }
 
-    .gradient-text {
-      background: linear-gradient(100deg, #fff 0%, #ffd6be 33%, #fd8a45 52%, #b985ff 80%, #7ee7ff 100%);
+    .grad {
+      background: linear-gradient(110deg, #fff, #ffd8ba 42%, #ff893d 74%, #8b3f1b);
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
     }
 
-    .lead {
-      max-width: 760px;
-      color: var(--muted);
-      font-size: clamp(16px, 2.1vw, 21px);
-      line-height: 1.6;
+    .hero p {
       margin: 0;
+      max-width: 62ch;
+      color: var(--muted);
+      font-size: clamp(16px, 2vw, 20px);
+      line-height: 1.65;
     }
 
     .hero-actions {
       display: flex;
-      flex-wrap: wrap;
       gap: 12px;
-      margin-top: 28px;
+      flex-wrap: wrap;
+      margin-top: 24px;
     }
 
-    .status-grid {
-      display: grid;
-      gap: 14px;
+    button, .button {
+      min-height: 44px;
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 16px;
+      font: inherit;
+      font-weight: 800;
+      color: var(--text);
+      background: var(--card-strong);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+      touch-action: manipulation;
     }
 
-    .stat {
+    button:hover, .button:hover { transform: translateY(-1px); border-color: var(--border-strong); }
+    button:active, .button:active { transform: translateY(0); }
+
+    .primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-3));
+      color: #160904;
+      border-color: rgb(255 255 255 / 0.18);
+      box-shadow: 0 16px 42px rgb(255 107 28 / 0.26);
+    }
+
+    .mock {
+      min-width: 0;
+      border: 1px solid var(--border);
       border-radius: var(--radius-lg);
-      padding: 18px;
-      background: rgb(255 255 255 / 0.06);
-      border: 1px solid var(--line);
+      background:
+        linear-gradient(180deg, rgb(255 255 255 / 0.08), transparent),
+        rgb(13 15 20 / 0.7);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      backdrop-filter: blur(22px);
     }
 
-    .stat strong {
-      display: block;
-      font-size: 26px;
-      letter-spacing: -0.04em;
-    }
-
-    .stat span {
-      display: block;
-      margin-top: 6px;
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.4;
-    }
-
-    .layout {
-      display: grid;
-      grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
-      gap: 22px;
-      align-items: start;
-    }
-
-    .left-stack,
-    .right-stack {
-      display: grid;
-      gap: 22px;
-    }
-
-    .panel,
-    .output-card,
-    .search-card {
-      border-radius: var(--radius-xl);
-      padding: 20px;
-    }
-
-    .panel-title {
+    .mock-top {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 16px;
+      gap: 8px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+      background: rgb(255 255 255 / 0.035);
     }
 
-    .panel-title h2,
-    .panel-title h3 {
+    .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--soft); }
+    .dot:nth-child(1) { background: #ff6f80; }
+    .dot:nth-child(2) { background: #ffd166; }
+    .dot:nth-child(3) { background: #7dd3a6; }
+
+    .mock-code {
       margin: 0;
-      font-size: 17px;
+      padding: 18px;
+      overflow: auto;
+      font: 12px/1.7 var(--mono);
+      color: #dbe2f5;
+      white-space: pre;
+      max-height: 330px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 0.92fr) minmax(300px, 1.08fr);
+      gap: clamp(16px, 2.5vw, 26px);
+      align-items: start;
+      min-width: 0;
+    }
+
+    .panel {
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--card);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(22px);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      padding: 18px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(180deg, rgb(255 255 255 / 0.055), transparent);
+    }
+
+    .panel-head h2 {
+      margin: 0 0 6px;
+      font-size: 18px;
       letter-spacing: -0.02em;
     }
 
-    .panel-title p {
-      margin: 5px 0 0;
+    .panel-head p {
+      margin: 0;
       color: var(--muted);
       font-size: 13px;
-      line-height: 1.4;
+      line-height: 1.5;
     }
 
-    .badge {
-      white-space: nowrap;
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 7px 10px;
-      border-radius: 999px;
+    .panel-body {
+      display: grid;
+      gap: 14px;
+      padding: 18px;
+      min-width: 0;
+    }
+
+    label {
+      display: grid;
+      gap: 7px;
+      min-width: 0;
+      color: var(--muted);
       font-size: 12px;
-      color: #dce8ff;
-      background: rgb(255 255 255 / 0.065);
-      border: 1px solid var(--line);
+      font-weight: 750;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
     }
 
-    .field-grid {
+    input, select, textarea {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: rgb(5 7 11 / 0.7);
+      color: var(--text);
+      padding: 13px 14px;
+      font: 500 15px/1.4 var(--font);
+      outline: none;
+    }
+
+    textarea {
+      min-height: 112px;
+      resize: vertical;
+      font-family: var(--mono);
+      font-size: 12px;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    input:focus, select:focus, textarea:focus { border-color: rgb(255 138 61 / 0.58); box-shadow: 0 0 0 4px rgb(255 138 61 / 0.12); }
+
+    .row {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
+      min-width: 0;
     }
 
-    .field-grid.single { grid-template-columns: 1fr; }
-
-    .field {
+    .checks {
       display: grid;
-      gap: 7px;
-    }
-
-    .field label,
-    .group-label {
-      color: #d7deed;
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.025em;
-      text-transform: uppercase;
-    }
-
-    .hint {
-      color: var(--faint);
-      font-size: 12px;
-      line-height: 1.4;
-    }
-
-    .input,
-    .select,
-    .textarea {
-      width: 100%;
-      color: var(--text);
-      background: rgb(5 8 14 / 0.72);
-      border: 1px solid var(--line);
-      border-radius: 15px;
-      outline: none;
-      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.045);
-      transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
-    }
-
-    .input,
-    .select {
-      height: 46px;
-      padding: 0 13px;
-    }
-
-    .textarea {
-      min-height: 112px;
-      resize: vertical;
-      padding: 13px;
-      font-family: var(--mono);
-      font-size: 12px;
-      line-height: 1.55;
-    }
-
-    .input:focus,
-    .select:focus,
-    .textarea:focus {
-      border-color: rgb(255 138 61 / 0.8);
-      box-shadow: 0 0 0 4px rgb(255 138 61 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.05);
-      background: rgb(8 12 20 / 0.88);
-    }
-
-    .checkbox-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
     }
 
-    .check-card {
-      position: relative;
+    .check {
       display: flex;
-      align-items: center;
-      gap: 10px;
-      min-height: 48px;
-      padding: 10px 12px;
-      border-radius: 16px;
-      background: rgb(255 255 255 / 0.045);
-      border: 1px solid var(--line);
-      color: #dce3f1;
-      user-select: none;
-      transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
-    }
-
-    .check-card:hover {
-      transform: translateY(-1px);
-      border-color: var(--line-strong);
-      background: rgb(255 255 255 / 0.065);
-    }
-
-    .check-card input {
-      width: 20px;
-      height: 20px;
-      margin: 0;
-      accent-color: var(--accent);
-    }
-
-    .check-card small {
-      display: block;
-      margin-top: 2px;
-      color: var(--faint);
-      font-size: 11px;
-    }
-
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 9px;
-      min-height: 44px;
-      padding: 0 15px;
-      border: 1px solid var(--line);
-      border-radius: 15px;
+      gap: 11px;
+      align-items: flex-start;
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: rgb(255 255 255 / 0.035);
+      text-transform: none;
+      letter-spacing: 0;
+      font-size: 14px;
+      font-weight: 720;
       color: var(--text);
-      background: rgb(255 255 255 / 0.065);
-      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
-      transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
     }
 
-    .btn:hover {
-      transform: translateY(-1px);
-      border-color: var(--line-strong);
-      background: rgb(255 255 255 / 0.09);
+    .check input { width: 18px; height: 18px; flex: 0 0 auto; accent-color: var(--accent); }
+    .check span { min-width: 0; overflow-wrap: anywhere; }
+    .check small { display: block; margin-top: 3px; color: var(--soft); font-weight: 600; line-height: 1.35; }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-width: 0;
     }
 
-    .btn.primary {
-      border-color: rgb(255 138 61 / 0.52);
-      background: linear-gradient(135deg, rgb(255 138 61 / 0.96), rgb(168 85 247 / 0.88));
-      color: white;
+    .chip {
+      border-radius: 999px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      background: rgb(255 255 255 / 0.04);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+
+    .result {
+      position: sticky;
+      top: 16px;
+      min-width: 0;
+    }
+
+    .url-box {
+      display: grid;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .output {
+      min-width: 0;
+      padding: 16px;
+      border: 1px solid rgb(255 138 61 / 0.24);
+      border-radius: var(--radius-md);
+      background: rgb(0 0 0 / 0.42);
+      color: #ffd8ba;
+      font: 12px/1.7 var(--mono);
+      overflow: auto;
+      word-break: break-all;
+      max-height: 260px;
+    }
+
+    .require-output {
+      color: #dff3ff;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .mini {
+      min-height: 38px;
+      padding: 9px 12px;
+      font-size: 13px;
+    }
+
+    .status {
+      min-height: 22px;
+      color: var(--good);
+      font-size: 13px;
       font-weight: 800;
     }
 
-    .btn.good {
-      border-color: rgb(52 211 153 / 0.38);
-      background: rgb(52 211 153 / 0.12);
-      color: #bfffe7;
-    }
-
-    .btn.bad {
-      border-color: rgb(251 113 133 / 0.35);
-      background: rgb(251 113 133 / 0.1);
-      color: #ffd0d8;
-    }
-
-    .btn.small {
-      min-height: 34px;
-      padding: 0 10px;
-      border-radius: 12px;
-      font-size: 12px;
-    }
-
-    .button-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .divider {
-      height: 1px;
-      margin: 18px 0;
-      background: linear-gradient(90deg, transparent, var(--line), transparent);
-    }
-
-    .asset-list {
+    .cards {
       display: grid;
-      gap: 10px;
-      margin-top: 12px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
     }
 
-    .asset-card {
-      display: grid;
-      gap: 10px;
-      padding: 14px;
-      border-radius: 18px;
-      border: 1px solid var(--line);
-      background: rgb(255 255 255 / 0.045);
-    }
-
-    .asset-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 12px;
-    }
-
-    .asset-spec {
+    .feature {
       min-width: 0;
-      font-family: var(--mono);
-      font-size: 12px;
-      line-height: 1.45;
-      word-break: break-all;
-      color: #e9edf8;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: rgb(255 255 255 / 0.035);
     }
 
-    .asset-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
+    .feature b { display: block; margin-bottom: 6px; }
+    .feature p { margin: 0; color: var(--muted); line-height: 1.5; font-size: 13px; }
+
+    .search-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: rgb(255 255 255 / 0.035);
+      overflow: hidden;
+      min-width: 0;
     }
 
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      max-width: 100%;
-      padding: 5px 8px;
-      border-radius: 999px;
-      background: rgb(255 255 255 / 0.065);
-      border: 1px solid var(--line);
-      color: #c8d1e4;
-      font-size: 11px;
-      white-space: nowrap;
-    }
-
-    .pill.warn {
-      color: #ffe3a1;
-      background: rgb(251 191 36 / 0.11);
-      border-color: rgb(251 191 36 / 0.2);
+    .search-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      padding: 12px;
     }
 
     .results {
       display: grid;
-      gap: 10px;
-      margin-top: 14px;
-      max-height: 460px;
+      max-height: 230px;
       overflow: auto;
-      padding-right: 4px;
+      border-top: 1px solid var(--border);
     }
 
-    .result-card {
+    .result-item {
       display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 12px;
-      align-items: center;
-      padding: 14px;
-      border-radius: 18px;
-      background: rgb(255 255 255 / 0.045);
-      border: 1px solid var(--line);
+      gap: 3px;
+      padding: 11px 12px;
+      border-bottom: 1px solid rgb(255 255 255 / 0.06);
+      cursor: pointer;
+      min-width: 0;
     }
 
-    .result-card strong {
-      display: block;
-      font-size: 14px;
-      letter-spacing: -0.01em;
-    }
+    .result-item:hover { background: rgb(255 255 255 / 0.055); }
+    .result-item strong { font-size: 13px; overflow-wrap: anywhere; }
+    .result-item small { color: var(--soft); overflow-wrap: anywhere; line-height: 1.35; }
 
-    .result-card p {
-      margin: 5px 0 0;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.4;
-    }
-
-    .output-card {
-      position: sticky;
-      top: 14px;
-      z-index: 3;
-    }
-
-    .url-box {
-      position: relative;
-      border-radius: 22px;
-      border: 1px solid var(--line-strong);
-      overflow: hidden;
-      background: rgb(2 4 9 / 0.84);
-    }
-
-    .url-box textarea {
-      width: 100%;
-      min-height: 152px;
-      padding: 18px;
-      color: #f8fbff;
-      background: transparent;
-      border: 0;
-      outline: none;
-      resize: vertical;
-      font-family: var(--mono);
-      font-size: 12px;
-      line-height: 1.7;
-    }
-
-    .url-tools {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      padding: 12px;
-      border-top: 1px solid var(--line);
-      background: rgb(255 255 255 / 0.035);
-    }
-
-    .tabs {
-      display: flex;
-      gap: 8px;
-      padding: 6px;
-      border-radius: 18px;
-      background: rgb(255 255 255 / 0.045);
-      border: 1px solid var(--line);
-    }
-
-    .tab {
-      flex: 1;
-      min-height: 38px;
-      border: 0;
-      border-radius: 13px;
-      color: var(--muted);
-      background: transparent;
-    }
-
-    .tab.active {
-      color: var(--text);
-      background: rgb(255 255 255 / 0.1);
-      box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
-    }
-
-    .empty {
-      padding: 22px;
+    .footer {
+      padding: 34px 0 12px;
+      color: var(--soft);
+      font-size: 13px;
       text-align: center;
-      color: var(--muted);
-      border-radius: 18px;
-      border: 1px dashed var(--line);
-      background: rgb(255 255 255 / 0.035);
     }
 
-    .toast {
-      position: fixed;
-      left: 50%;
-      bottom: calc(22px + var(--safe-bottom));
-      transform: translateX(-50%) translateY(18px);
-      z-index: 30;
-      opacity: 0;
-      pointer-events: none;
-      padding: 12px 16px;
-      border-radius: 999px;
-      color: white;
-      background: rgb(10 14 23 / 0.92);
-      border: 1px solid var(--line-strong);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(18px);
-      transition: opacity 180ms ease, transform 180ms ease;
+    @media (max-width: 920px) {
+      .hero, .grid { grid-template-columns: 1fr; }
+      .result { position: static; }
+      .cards { grid-template-columns: 1fr; }
     }
 
-    .toast.show {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
+    @media (max-width: 560px) {
+      :root { --pad: 12px; --radius-lg: 22px; --radius-md: 16px; }
+      .shell { padding-inline: 10px; }
+      .hero { padding-top: 22px; }
+      .hero-actions, .actions { display: grid; grid-template-columns: 1fr; }
+      button, .button { width: 100%; }
+      .row { grid-template-columns: 1fr; }
+      .panel-head, .panel-body { padding: 14px; }
+      .search-row { grid-template-columns: 1fr; }
+      .mock-code, .output { font-size: 11px; }
+      h1 { font-size: clamp(40px, 18vw, 74px); }
     }
-
-    .mini-code {
-      padding: 13px;
-      border-radius: 16px;
-      background: rgb(0 0 0 / 0.32);
-      border: 1px solid var(--line);
-      color: #dfe7f5;
-      font-family: var(--mono);
-      font-size: 12px;
-      line-height: 1.6;
-      overflow: auto;
-    }
-
-    .glow-line {
-      height: 2px;
-      margin: 18px 0;
-      background: linear-gradient(90deg, transparent, var(--accent), var(--accent-2), var(--accent-3), transparent);
-      opacity: 0.72;
-      filter: blur(0.2px);
-    }
-
-    @media (max-width: 1060px) {
-      .hero,
-      .layout {
-        grid-template-columns: 1fr;
-      }
-
-      .output-card {
-        position: static;
-      }
-    }
-
-    @media (max-width: 680px) {
-      .shell {
-        width: min(100% - 18px, 1460px);
-      }
-
-      .hero-card,
-      .panel,
-      .output-card,
-      .search-card {
-        border-radius: 24px;
-        padding: 16px;
-      }
-
-      .field-grid,
-      .checkbox-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .result-card {
-        grid-template-columns: 1fr;
-      }
-
-      .hero-actions .btn,
-      .url-tools .btn {
-        flex: 1;
-      }
-    }
-
-
-    /* ==========================================================================
-     * Mobile layout repair
-     * --------------------------------------------------------------------------
-     * The builder is designed to be used from iPhone/Safari a lot. These rules
-     * intentionally clamp every major layout surface so a long URL, badge,
-     * code line, search result, or button row can never create a hidden desktop
-     * canvas to the right of the viewport.
-     * ========================================================================== */
-
-    html,
-    body {
-      width: 100%;
-      max-width: 100%;
-      overflow-x: hidden;
-    }
-
-    body {
-      touch-action: manipulation;
-    }
-
-    .shell,
-    .hero,
-    .layout,
-    .left-stack,
-    .right-stack,
-    .hero-card,
-    .panel,
-    .output-card,
-    .search-card,
-    .status-grid,
-    .stat,
-    .field,
-    .field-grid,
-    .checkbox-grid,
-    .asset-card,
-    .result-card,
-    .url-box,
-    .mini-code {
-      min-width: 0;
-      max-width: 100%;
-    }
-
-    .shell {
-      width: 100%;
-      max-width: 1460px;
-      padding-left: max(12px, env(safe-area-inset-left, 0px));
-      padding-right: max(12px, env(safe-area-inset-right, 0px));
-    }
-
-    .hero,
-    .layout {
-      width: 100%;
-    }
-
-    .hero-card,
-    .panel,
-    .output-card,
-    .search-card {
-      overflow: clip;
-    }
-
-    .panel-title,
-    .asset-top,
-    .button-row,
-    .hero-actions,
-    .url-tools,
-    .tabs {
-      min-width: 0;
-      max-width: 100%;
-    }
-
-    .panel-title > div,
-    .asset-top > div,
-    .result-card > div {
-      min-width: 0;
-    }
-
-    .badge,
-    .pill,
-    .btn,
-    .tab {
-      min-width: 0;
-      max-width: 100%;
-    }
-
-    .badge,
-    .pill {
-      white-space: normal;
-      overflow-wrap: anywhere;
-    }
-
-    .input,
-    .select,
-    .textarea,
-    .url-box textarea,
-    .mini-code {
-      max-width: 100%;
-      overflow-wrap: anywhere;
-      word-break: break-word;
-    }
-
-    @supports not (overflow: clip) {
-      .hero-card,
-      .panel,
-      .output-card,
-      .search-card {
-        overflow: hidden;
-      }
-    }
-
-    @media (max-width: 760px) {
-      .shell {
-        padding-top: calc(14px + var(--safe-top));
-        padding-bottom: calc(84px + var(--safe-bottom));
-      }
-
-      .hero,
-      .layout {
-        grid-template-columns: minmax(0, 1fr) !important;
-        gap: 14px;
-      }
-
-      .hero-card,
-      .panel,
-      .output-card,
-      .search-card {
-        border-radius: 22px;
-        padding: 14px;
-        box-shadow: 0 14px 48px rgb(0 0 0 / 0.42);
-      }
-
-      .hero-card::before {
-        width: 320px;
-        height: 320px;
-        right: -170px;
-        top: -150px;
-      }
-
-      h1 {
-        max-width: 100%;
-        margin-top: 18px;
-        font-size: clamp(38px, 12vw, 54px);
-        line-height: 0.94;
-        letter-spacing: -0.065em;
-        text-wrap: balance;
-      }
-
-      .lead {
-        max-width: 100%;
-        font-size: 16px;
-        line-height: 1.5;
-      }
-
-      .hero-actions,
-      .button-row,
-      .url-tools {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-      }
-
-      .btn {
-        width: 100%;
-        min-height: 46px;
-        padding-inline: 12px;
-        text-align: center;
-      }
-
-      .status-grid {
-        grid-template-columns: minmax(0, 1fr);
-      }
-
-      .stat {
-        padding: 16px;
-      }
-
-      .field-grid,
-      .checkbox-grid,
-      .result-card {
-        grid-template-columns: minmax(0, 1fr) !important;
-      }
-
-      .panel-title {
-        align-items: flex-start;
-      }
-
-      .panel-title,
-      .asset-top {
-        flex-direction: column;
-      }
-
-      .tabs {
-        gap: 4px;
-      }
-
-      .tab {
-        min-height: 42px;
-        font-size: 14px;
-      }
-
-      .output-card {
-        position: static;
-      }
-
-      .url-box textarea,
-      .textarea {
-        font-size: 12px;
-        line-height: 1.55;
-      }
-    }
-
-    @media (max-width: 390px) {
-      .shell {
-        padding-left: max(10px, env(safe-area-inset-left, 0px));
-        padding-right: max(10px, env(safe-area-inset-right, 0px));
-      }
-
-      .hero-card,
-      .panel,
-      .output-card,
-      .search-card {
-        padding: 12px;
-        border-radius: 20px;
-      }
-
-      h1 {
-        font-size: clamp(34px, 11.5vw, 46px);
-      }
-
-      .eyebrow {
-        max-width: 100%;
-        white-space: normal;
-      }
-    }
-
   </style>
 </head>
 <body>
   <main class="shell">
     <section class="hero">
-      <div class="hero-card">
-        <div class="eyebrow"><span class="pulse-dot"></span> code.migos.club CDN builder</div>
-        <h1><span class="gradient-text">Build the exact URL your userscript wants.</span></h1>
-        <p class="lead">Compose presets, npm packages, cdnjs files, gists, globals, ESM bundles and cache rules without hand-writing a query-string labyrinth.</p>
+      <div>
+        <div class="eyebrow"><span class="pulse"></span> code.migos.club/api/cdn</div>
+        <h1><span class="grad">CDN URL Builder</span></h1>
+        <p>Build userscript-ready URLs with presets, npm/cdn packages, CSS injection, IIFE namespaces, globals, cache modes and metadata banners. Everything lands inside one clean URL. No query-string goblin cave.</p>
         <div class="hero-actions">
-          <button class="btn primary" id="copyRequireTop">Copy @require</button>
-          <button class="btn" id="copyUrlTop">Copy URL</button>
-          <button class="btn" id="loadExampleShiki">Try Shiki IIFE</button>
+          <button class="primary" type="button" id="copyHero">Copy URL</button>
+          <button type="button" id="loadUserscript">Load userscript preset</button>
         </div>
       </div>
-      <div class="status-grid">
-        <div class="stat"><strong id="assetCount">0</strong><span>custom assets in the current manifest</span></div>
-        <div class="stat"><strong id="presetCount">0</strong><span>enabled presets</span></div>
-        <div class="stat"><strong id="urlSize">0</strong><span>characters in the generated URL</span></div>
+
+      <div class="mock" aria-label="Example output preview">
+        <div class="mock-top"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+        <pre class="mock-code">// @require https://code.migos.club/api/cdn?preset=userscript&package=shiki@4.2.0&entry=shiki/bundle/web&css=highlight.js@11.11.1/styles/github-dark.min.css&bundle=iife&global=RodCDN</pre>
       </div>
     </section>
 
-    <section class="layout">
-      <div class="left-stack">
-        <section class="panel">
-          <div class="panel-title">
-            <div>
-              <h2>Base and output</h2>
-              <p>Control the final endpoint and global query options.</p>
-            </div>
-            <span class="badge">⚙️ router</span>
+    <section class="grid">
+      <form class="panel" id="builder">
+        <div class="panel-head">
+          <h2>Builder</h2>
+          <p>Mix JavaScript, CSS, presets and output behavior. The generated URL targets your CDN endpoint.</p>
+        </div>
+
+        <div class="panel-body">
+          <label>
+            Base URL
+            <input id="baseUrl" value="https://code.migos.club/api/cdn" autocomplete="off" />
+          </label>
+
+          <div class="row">
+            <label>
+              Presets
+              <input id="presets" value="userscript" placeholder="highlight,html,utils,userscript" autocomplete="off" />
+            </label>
+            <label>
+              Global namespace
+              <input id="globalName" value="RodCDN" placeholder="RodCDN" autocomplete="off" />
+            </label>
           </div>
-          <div class="field-grid single">
-            <div class="field">
-              <label for="baseUrl">Base URL</label>
-              <input class="input" id="baseUrl" value="https://code.migos.club/api/cdn" />
-            </div>
-          </div>
-          <div class="field-grid" style="margin-top:12px">
-            <div class="field">
-              <label for="bundle">Bundle</label>
-              <select class="select" id="bundle">
-                <option value="raw">raw</option>
-                <option value="iife">iife</option>
+
+          <label>
+            JavaScript packages
+            <textarea id="packages" spellcheck="false" placeholder="lodash(n:Utils)&#10;shiki@4.2.0&#10;gist:oirodolfo/GIST_ID/file.js(namespace:File)">shiki@4.2.0
+lodash(n:Utils)</textarea>
+          </label>
+
+          <label>
+            Entry point
+            <input id="entry" value="shiki/bundle/web" placeholder="shiki/bundle/web" autocomplete="off" />
+          </label>
+
+          <label>
+            CSS packages
+            <textarea id="cssPackages" spellcheck="false" placeholder="highlight.js@11.11.1/styles/github-dark.min.css&#10;animate.css@latest/animate.min.css">highlight.js@11.11.1/styles/github-dark.min.css</textarea>
+          </label>
+
+          <div class="row">
+            <label>
+              Bundle
+              <select id="bundle">
+                <option value="iife" selected>iife</option>
                 <option value="esm">esm</option>
                 <option value="cjs">cjs</option>
+                <option value="false">false</option>
               </select>
-            </div>
-            <div class="field">
-              <label for="format">Format</label>
-              <select class="select" id="format">
-                <option value="js">js</option>
+            </label>
+            <label>
+              Format
+              <select id="format">
+                <option value="js" selected>js</option>
                 <option value="text">text</option>
                 <option value="json">json</option>
-                <option value="iife">iife alias</option>
-                <option value="esm">esm alias</option>
-                <option value="cjs">cjs alias</option>
               </select>
-            </div>
-            <div class="field">
-              <label for="cache">Cache</label>
-              <select class="select" id="cache">
-                <option value="immutable">immutable</option>
+            </label>
+          </div>
+
+          <div class="row">
+            <label>
+              Cache
+              <select id="cache">
+                <option value="immutable" selected>immutable</option>
                 <option value="long">long</option>
                 <option value="normal">normal</option>
                 <option value="short">short</option>
                 <option value="none">none</option>
               </select>
-            </div>
-            <div class="field">
-              <label for="bundleProvider">Bundle provider</label>
-              <select class="select" id="bundleProvider">
-                <option value="esm.sh">esm.sh</option>
-                <option value="jsdelivr">jsdelivr</option>
+            </label>
+            <label>
+              CSS target
+              <select id="cssTarget">
+                <option value="document" selected>document</option>
+                <option value="manual">manual / ShadowRoot</option>
               </select>
-            </div>
-            <div class="field">
-              <label for="platform">Platform</label>
-              <select class="select" id="platform">
-                <option value="browser">browser</option>
-                <option value="node">node</option>
+            </label>
+          </div>
+
+          <div class="row">
+            <label>
+              CSS style id
+              <input id="cssId" value="" placeholder="auto hash" autocomplete="off" />
+            </label>
+            <label>
+              Query alias
+              <select id="packageAlias">
+                <option value="package" selected>package</option>
+                <option value="pkg">pkg</option>
+                <option value="packages">packages</option>
+                <option value="pkgs">pkgs</option>
               </select>
-            </div>
-            <div class="field">
-              <label for="globalName">Global</label>
-              <input class="input" id="globalName" placeholder="Shiki, Rod, Tools" />
-            </div>
+            </label>
           </div>
-          <div class="divider"></div>
-          <div class="checkbox-grid">
-            <label class="check-card"><input type="checkbox" id="minify" checked /><span>Minify <small>minify=true</small></span></label>
-            <label class="check-card"><input type="checkbox" id="removeComments" /><span>Remove comments <small>remove-comments=true</small></span></label>
-            <label class="check-card"><input type="checkbox" id="combine" checked /><span>Combine <small>combine=true</small></span></label>
-            <label class="check-card"><input type="checkbox" id="debug" /><span>Debug JSON <small>debug=true</small></span></label>
-          </div>
-          <div class="field-grid single" style="margin-top:12px">
-            <div class="field">
-              <label for="entry">Entry point</label>
-              <input class="input" id="entry" placeholder="shiki/bundle/web, lit-html, solid-js/web" />
-              <span class="hint">Used by bundle modes when the package entry needs a custom subpath.</span>
-            </div>
-            <div class="field">
-              <label for="external">External packages</label>
-              <input class="input" id="external" placeholder="react,react-dom" />
-            </div>
-          </div>
-        </section>
 
-        <section class="panel">
-          <div class="panel-title">
-            <div>
-              <h2>Presets</h2>
-              <p>Quick bundles for the common beasts.</p>
-            </div>
-            <span class="badge">✨ presets</span>
+          <div class="checks">
+            <label class="check"><input id="minify" type="checkbox" checked /> <span>Minify JS <small>CSS is always minified by the CDN.</small></span></label>
+            <label class="check"><input id="removeComments" type="checkbox" checked /> <span>Remove comments <small>The metadata banner still stays at the top.</small></span></label>
+            <label class="check"><input id="metadata" type="checkbox" checked /> <span>Metadata banner <small>Package names, versions, cache state and generated options.</small></span></label>
+            <label class="check"><input id="cssInject" type="checkbox" checked /> <span>Auto inject CSS <small>Creates a secure style tag with deterministic metadata.</small></span></label>
           </div>
-          <div class="checkbox-grid" id="presetGrid"></div>
-        </section>
 
-        <section class="panel">
-          <div class="panel-title">
-            <div>
-              <h2>Add asset</h2>
-              <p>Build package specs with per-asset options.</p>
+          <div class="search-card">
+            <div class="search-row">
+              <input id="searchInput" placeholder="Search npm or cdnjs packages" autocomplete="off" />
+              <button class="mini" type="button" id="searchButton">Search</button>
             </div>
-            <span class="badge">📦 pkg</span>
+            <div class="results" id="results" aria-live="polite"></div>
           </div>
-          <div class="field-grid">
-            <div class="field">
-              <label for="provider">Provider</label>
-              <select class="select" id="provider">
-                <option value="auto">auto</option>
-                <option value="npm">npm</option>
-                <option value="cdnjs">cdnjs</option>
-                <option value="gist">gist</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="packageName">Package or gist</label>
-              <input class="input" id="packageName" placeholder="shiki, lodash, owner/gistId" />
-            </div>
-            <div class="field">
-              <label for="version">Version</label>
-              <input class="input" id="version" placeholder="latest, 4.2.0, 18.3.1" />
-            </div>
-            <div class="field">
-              <label for="filePath">File or subpath</label>
-              <input class="input" id="filePath" placeholder="dist/index.js, bundle/web, file.js" />
-            </div>
-            <div class="field">
-              <label for="assetGlobal">Global / name</label>
-              <input class="input" id="assetGlobal" placeholder="GlobalLodash" />
-            </div>
-            <div class="field">
-              <label for="namespace">Namespace</label>
-              <input class="input" id="namespace" placeholder="File, RodTools" />
-            </div>
-          </div>
-          <div class="checkbox-grid" style="margin-top:12px">
-            <label class="check-card"><input type="checkbox" id="assetMinify" /><span>Per asset minify false <small>minify:false</small></span></label>
-            <label class="check-card"><input type="checkbox" id="assetComments" /><span>Keep comments <small>remove-comments:false</small></span></label>
-          </div>
-          <div class="button-row" style="margin-top:14px">
-            <button class="btn primary" id="addAsset">Add asset</button>
-            <button class="btn" id="addAsEntry">Add and use as entry</button>
-            <button class="btn" id="clearAssetForm">Clear form</button>
-          </div>
-        </section>
-      </div>
+        </div>
+      </form>
 
-      <div class="right-stack">
-        <section class="output-card">
-          <div class="panel-title">
-            <div>
-              <h2>Generated URL</h2>
-              <p>Ready for browser, Tampermonkey or Safari Userscripts.</p>
-            </div>
-            <span class="badge">🔥 live</span>
+      <aside class="panel result">
+        <div class="panel-head">
+          <h2>Generated URL</h2>
+          <p>Copy this into a userscript <code>@require</code> or open it directly.</p>
+        </div>
+        <div class="panel-body url-box">
+          <div class="chips" id="chips"></div>
+          <div class="output" id="urlOutput"></div>
+          <div class="output require-output" id="requireOutput"></div>
+          <div class="actions">
+            <button class="primary mini" type="button" id="copyUrl">Copy URL</button>
+            <button class="mini" type="button" id="copyRequire">Copy @require</button>
+            <button class="mini" type="button" id="openUrl">Open</button>
           </div>
-          <div class="url-box">
-            <textarea id="urlOutput" readonly></textarea>
-            <div class="url-tools">
-              <button class="btn primary" id="copyUrl">Copy URL</button>
-              <button class="btn good" id="copyRequire">Copy @require</button>
-              <button class="btn" id="openUrl">Open</button>
-              <button class="btn" id="copyHtml">Copy script tag</button>
-            </div>
-          </div>
-          <div class="glow-line"></div>
-          <div class="field">
-            <label for="requireOutput">Userscript @require</label>
-            <textarea class="textarea" id="requireOutput" readonly></textarea>
-          </div>
-        </section>
-
-        <section class="search-card">
-          <div class="panel-title">
-            <div>
-              <h2>Search npm and cdnjs</h2>
-              <p>Find packages, choose provider, then add them to the manifest.</p>
-            </div>
-            <span class="badge">🔎 finder</span>
-          </div>
-          <div class="tabs">
-            <button class="tab active" data-tab="npm">npm</button>
-            <button class="tab" data-tab="cdnjs">cdnjs</button>
-          </div>
-          <div class="field-grid" style="margin-top:14px">
-            <div class="field">
-              <label for="searchInput">Search</label>
-              <input class="input" id="searchInput" placeholder="shiki, react, lodash, highlight.js" />
-            </div>
-            <div class="field">
-              <label for="searchLimit">Limit</label>
-              <select class="select" id="searchLimit">
-                <option value="8">8</option>
-                <option value="16" selected>16</option>
-                <option value="24">24</option>
-              </select>
-            </div>
-          </div>
-          <div class="button-row" style="margin-top:14px">
-            <button class="btn primary" id="runSearch">Search</button>
-            <button class="btn" id="inspectPackage">Inspect selected</button>
-          </div>
-          <div class="results" id="results"><div class="empty">Search results will land here like tiny dependency fireflies.</div></div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-title">
-            <div>
-              <h2>Manifest assets</h2>
-              <p>Ordered specs. Dragging is not needed, arrows are faster on mobile.</p>
-            </div>
-            <span class="badge">🧾 list</span>
-          </div>
-          <div class="asset-list" id="assetList"></div>
-          <div class="button-row" style="margin-top:14px">
-            <button class="btn" id="importFromUrl">Import from generated URL</button>
-            <button class="btn bad" id="clearAssets">Clear assets</button>
-          </div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-title">
-            <div>
-              <h2>Recipes</h2>
-              <p>Click one to load a complete example.</p>
-            </div>
-            <span class="badge">🍱 examples</span>
-          </div>
-          <div class="button-row">
-            <button class="btn" data-recipe="userscript">Userscript full</button>
-            <button class="btn" data-recipe="highlight">Highlight</button>
-            <button class="btn" data-recipe="html">HTML stack</button>
-            <button class="btn" data-recipe="shiki">Shiki IIFE</button>
-            <button class="btn" data-recipe="gist">Gist private shape</button>
-          </div>
-          <div class="mini-code" id="recipePreview" style="margin-top:14px"></div>
-        </section>
-      </div>
+          <div class="status" id="status"></div>
+        </div>
+      </aside>
     </section>
-  </main>
 
-  <div class="toast" id="toast">Copied</div>
+    <section class="cards" aria-label="Feature summary">
+      <article class="feature"><b>Scoped globals</b><p>Default output lands in <code>globalThis.RodCDN</code>, or any namespace you choose.</p></article>
+      <article class="feature"><b>CSS injection</b><p>Ship CSS in the same request, minified and wrapped with a ShadowRoot-friendly injector.</p></article>
+      <article class="feature"><b>Metadata-first</b><p>Every generated bundle can start with a readable banner for debugging and cache sanity.</p></article>
+    </section>
+
+    <footer class="footer">Made for fast userscripts, tiny rituals and fewer tabs. 🦊</footer>
+  </main>
 
   <script>
     (() => {
-      const presets = {
-        highlight: { label: "Highlight", hint: "core + common languages" },
-        html: { label: "HTML", hint: "lit-html, solid, react, react-dom" },
-        utils: { label: "Utils", hint: "es-toolkit" },
-        userscript: { label: "Userscript full", hint: "lucide + highlight + utils" }
-      };
-
-      const state = {
-        assets: [],
-        selectedSearchProvider: "npm",
-        lastSelectedPackage: null
-      };
-
-      const recipes = {
-        userscript: {
-          presets: ["userscript"],
-          assets: ["lodash(n:GlobalLodash)"],
-          bundle: "iife",
-          globalName: "RodCDN"
-        },
-        highlight: {
-          presets: ["highlight"],
-          assets: [],
-          bundle: "raw",
-          globalName: ""
-        },
-        html: {
-          presets: ["html", "utils"],
-          assets: [],
-          bundle: "iife",
-          globalName: "RodHtml"
-        },
-        shiki: {
-          presets: [],
-          assets: ["shiki@4.2.0"],
-          bundle: "iife",
-          globalName: "Shiki",
-          entry: "shiki/bundle/web"
-        },
-        gist: {
-          presets: ["userscript"],
-          assets: ["gist:oirodolfo/GIST_ID/file.js(namespace:File,minify:false,remove-comments:false)"],
-          bundle: "iife",
-          globalName: "RodUserScript"
-        }
-      };
+      "use strict";
 
       const $ = (id) => document.getElementById(id);
-      const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 
-      function trimValue(id) {
-        return $(id).value.trim();
+      const fields = {
+        baseUrl: $("baseUrl"),
+        presets: $("presets"),
+        globalName: $("globalName"),
+        packages: $("packages"),
+        entry: $("entry"),
+        cssPackages: $("cssPackages"),
+        bundle: $("bundle"),
+        format: $("format"),
+        cache: $("cache"),
+        cssTarget: $("cssTarget"),
+        cssId: $("cssId"),
+        packageAlias: $("packageAlias"),
+        minify: $("minify"),
+        removeComments: $("removeComments"),
+        metadata: $("metadata"),
+        cssInject: $("cssInject"),
+      };
+
+      const output = $("urlOutput");
+      const requireOutput = $("requireOutput");
+      const chips = $("chips");
+      const status = $("status");
+      const results = $("results");
+
+      function splitLines(value) {
+        return value
+          .split(/[\n,]/g)
+          .map((item) => item.trim())
+          .filter(Boolean);
       }
 
-      function setValue(id, value) {
-        $(id).value = value ?? "";
-      }
-
-      function checked(id) {
-        return $(id).checked;
-      }
-
-      function setChecked(id, value) {
-        $(id).checked = Boolean(value);
-      }
-
-      function isSafeIdentifier(value) {
-        return /^[A-Za-z_$][\w$]*$/.test(value);
-      }
-
-      function encodeQueryValue(value) {
-        return encodeURIComponent(value).replace(/%2F/g, "/").replace(/%3A/g, ":").replace(/%40/g, "@").replace(/%2C/g, ",").replace(/%28/g, "(").replace(/%29/g, ")");
-      }
-
-      function showToast(message) {
-        const toast = $("toast");
-        toast.textContent = message;
-        toast.classList.add("show");
-        window.clearTimeout(showToast.timer);
-        showToast.timer = window.setTimeout(() => toast.classList.remove("show"), 1600);
-      }
-
-      function getEnabledPresets() {
-        return Object.keys(presets).filter((preset) => $("preset-" + preset).checked);
-      }
-
-      function buildOptionBlock() {
-        const options = [];
-        const assetGlobal = trimValue("assetGlobal");
-        const namespace = trimValue("namespace");
-
-        if (assetGlobal) options.push("n:" + assetGlobal);
-        if (namespace) options.push("namespace:" + namespace);
-        if (checked("assetMinify")) options.push("minify:false");
-        if (checked("assetComments")) options.push("remove-comments:false");
-
-        return options.length ? "(" + options.join(",") + ")" : "";
-      }
-
-      function buildSpecFromForm() {
-        const provider = trimValue("provider");
-        const packageName = trimValue("packageName");
-        const version = trimValue("version");
-        const filePath = trimValue("filePath");
-
-        if (!packageName) {
-          throw new Error("Package or gist is required.");
+      function appendParam(params, key, value) {
+        if (value !== null && value !== undefined && String(value).trim() !== "") {
+          params.append(key, String(value).trim());
         }
-
-        if (trimValue("assetGlobal") && !isSafeIdentifier(trimValue("assetGlobal"))) {
-          throw new Error("Global name must be a valid JavaScript identifier.");
-        }
-
-        const prefix = provider && provider !== "auto" ? provider + ":" : "";
-        const versionPart = version ? "@" + version : "";
-        const filePart = filePath ? "/" + filePath.replace(/^\/+/, "") : "";
-        const optionBlock = buildOptionBlock();
-
-        if (provider === "gist") {
-          return "gist:" + packageName.replace(/^\/+|\/+$/g, "") + filePart + optionBlock;
-        }
-
-        return prefix + packageName + versionPart + filePart + optionBlock;
       }
 
       function buildUrl() {
-        const baseUrl = trimValue("baseUrl") || "https://code.migos.club/api/cdn";
-        const params = [];
-        const enabledPresets = getEnabledPresets();
+        const base = fields.baseUrl.value.trim() || "https://code.migos.club/api/cdn";
+        const params = new URLSearchParams();
+        const packageAlias = fields.packageAlias.value;
+        const packageItems = splitLines(fields.packages.value);
+        const cssItems = splitLines(fields.cssPackages.value);
 
-        for (const preset of enabledPresets) {
-          params.push(["preset", preset]);
+        appendParam(params, "preset", splitLines(fields.presets.value).join(","));
+
+        if (packageAlias === "packages" || packageAlias === "pkgs") {
+          appendParam(params, packageAlias, packageItems.join(","));
+        } else {
+          for (const item of packageItems) appendParam(params, packageAlias, item);
         }
 
-        for (const asset of state.assets) {
-          params.push(["pkg", asset]);
+        for (const item of cssItems) appendParam(params, "css", item);
+
+        appendParam(params, "entry", fields.entry.value);
+        appendParam(params, "bundle", fields.bundle.value);
+        appendParam(params, "format", fields.format.value);
+        appendParam(params, "cache", fields.cache.value);
+        appendParam(params, "global", fields.globalName.value || "RodCDN");
+        appendParam(params, "css-target", fields.cssTarget.value);
+        appendParam(params, "css-id", fields.cssId.value);
+
+        appendParam(params, "minify", fields.minify.checked ? "true" : "false");
+        appendParam(params, "remove-comments", fields.removeComments.checked ? "true" : "false");
+        appendParam(params, "metadata", fields.metadata.checked ? "true" : "false");
+        appendParam(params, "css-inject", fields.cssInject.checked ? "true" : "false");
+
+        return `${base}?${params.toString()}`;
+      }
+
+      function setStatus(message) {
+        status.textContent = message;
+        window.clearTimeout(setStatus.timer);
+        setStatus.timer = window.setTimeout(() => {
+          status.textContent = "";
+        }, 1900);
+      }
+
+      function renderChips() {
+        const packageCount = splitLines(fields.packages.value).length;
+        const cssCount = splitLines(fields.cssPackages.value).length;
+        const presetCount = splitLines(fields.presets.value).length;
+
+        chips.innerHTML = "";
+        const items = [
+          `${packageCount} JS package${packageCount === 1 ? "" : "s"}`,
+          `${cssCount} CSS asset${cssCount === 1 ? "" : "s"}`,
+          `${presetCount} preset${presetCount === 1 ? "" : "s"}`,
+          `${fields.bundle.value} bundle`,
+          `${fields.globalName.value || "RodCDN"} namespace`,
+        ];
+
+        for (const item of items) {
+          const chip = document.createElement("span");
+          chip.className = "chip";
+          chip.textContent = item;
+          chips.appendChild(chip);
         }
-
-        const bundle = trimValue("bundle");
-        const format = trimValue("format");
-        const cache = trimValue("cache");
-        const bundleProvider = trimValue("bundleProvider");
-        const platform = trimValue("platform");
-        const globalName = trimValue("globalName");
-        const entry = trimValue("entry");
-        const external = trimValue("external");
-
-        if (bundle && bundle !== "raw") params.push(["bundle", bundle]);
-        if (format && format !== "js") params.push(["format", format]);
-        if (cache && cache !== "immutable") params.push(["cache", cache]);
-        if (bundleProvider && bundleProvider !== "esm.sh") params.push(["bundle-provider", bundleProvider]);
-        if (platform && platform !== "browser") params.push(["platform", platform]);
-        if (globalName) params.push(["global", globalName]);
-        if (entry) params.push(["entry", entry]);
-        if (external) params.push(["external", external]);
-        if (!checked("minify")) params.push(["minify", "false"]);
-        if (checked("removeComments")) params.push(["remove-comments", "true"]);
-        if (!checked("combine")) params.push(["combine", "false"]);
-        if (checked("debug")) params.push(["debug", "true"]);
-
-        const query = params.map(([key, value]) => key + "=" + encodeQueryValue(value)).join("&");
-        return query ? baseUrl + "?" + query : baseUrl;
       }
 
-      function renderPresetGrid() {
-        const root = $("presetGrid");
-        root.innerHTML = Object.entries(presets).map(([key, preset]) => `
-          <label class="check-card">
-            <input type="checkbox" id="preset-${key}" />
-            <span>${preset.label}<small>${preset.hint}</small></span>
-          </label>
-        `).join("");
-
-        Object.keys(presets).forEach((preset) => {
-          $("preset-" + preset).addEventListener("change", updateAll);
-        });
-      }
-
-      function renderAssets() {
-        const root = $("assetList");
-
-        if (!state.assets.length) {
-          root.innerHTML = `<div class="empty">No custom assets yet. Add packages or search and pick one.</div>`;
-          return;
-        }
-
-        root.innerHTML = state.assets.map((asset, index) => `
-          <article class="asset-card">
-            <div class="asset-top">
-              <div class="asset-spec">${escapeHtml(asset)}</div>
-              <button class="btn small bad" data-remove="${index}">Remove</button>
-            </div>
-            <div class="asset-meta">
-              <span class="pill">#${index + 1}</span>
-              ${asset.includes("gist:") ? `<span class="pill warn">gist</span>` : ""}
-              ${asset.includes("(") ? `<span class="pill">options</span>` : ""}
-              ${asset.includes("@") ? `<span class="pill">versioned</span>` : `<span class="pill warn">latest</span>`}
-            </div>
-            <div class="button-row">
-              <button class="btn small" data-up="${index}">Up</button>
-              <button class="btn small" data-down="${index}">Down</button>
-              <button class="btn small" data-edit="${index}">Edit</button>
-            </div>
-          </article>
-        `).join("");
-
-        $$(`[data-remove]`).forEach((button) => button.addEventListener("click", () => {
-          state.assets.splice(Number(button.dataset.remove), 1);
-          updateAll();
-        }));
-
-        $$(`[data-up]`).forEach((button) => button.addEventListener("click", () => moveAsset(Number(button.dataset.up), -1)));
-        $$(`[data-down]`).forEach((button) => button.addEventListener("click", () => moveAsset(Number(button.dataset.down), 1)));
-        $$(`[data-edit]`).forEach((button) => button.addEventListener("click", () => editAsset(Number(button.dataset.edit))));
-      }
-
-      function moveAsset(index, direction) {
-        const nextIndex = index + direction;
-        if (nextIndex < 0 || nextIndex >= state.assets.length) return;
-        const [asset] = state.assets.splice(index, 1);
-        state.assets.splice(nextIndex, 0, asset);
-        updateAll();
-      }
-
-      function editAsset(index) {
-        const asset = state.assets[index];
-        setValue("packageName", asset);
-        state.assets.splice(index, 1);
-        updateAll();
-        showToast("Loaded asset into the form");
-      }
-
-      function escapeHtml(value) {
-        return String(value).replace(/[&<>"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[char]));
-      }
-
-      function updateAll() {
+      function update() {
         const url = buildUrl();
-        const requireLine = "// @require " + url;
-        const scriptTag = `<script src="${url}"></` + `script>`;
-
-        setValue("urlOutput", url);
-        setValue("requireOutput", requireLine + "\n\n" + scriptTag);
-        $("assetCount").textContent = String(state.assets.length);
-        $("presetCount").textContent = String(getEnabledPresets().length);
-        $("urlSize").textContent = String(url.length);
-        renderAssets();
-        renderRecipePreview();
+        output.textContent = url;
+        requireOutput.textContent = `// @require ${url}`;
+        renderChips();
       }
 
-      function renderRecipePreview() {
-        const compact = buildUrl().replace(trimValue("baseUrl") || "https://code.migos.club/api/cdn", "/api/cdn");
-        $("recipePreview").textContent = compact;
+      async function copyText(text) {
+        await navigator.clipboard.writeText(text);
+        setStatus("Copied ✓");
       }
 
-      async function copyText(text, label) {
+      function addPackage(spec) {
+        const current = splitLines(fields.packages.value);
+        if (!current.includes(spec)) current.push(spec);
+        fields.packages.value = current.join("\n");
+        update();
+      }
+
+      async function searchPackages() {
+        const query = $("searchInput").value.trim();
+        if (!query) return;
+
+        results.innerHTML = `<div class="result-item"><strong>Searching…</strong><small>npm registry, with cdnjs fallback vibe.</small></div>`;
+
         try {
-          await navigator.clipboard.writeText(text);
-          showToast(label || "Copied");
-        } catch (error) {
-          const helper = document.createElement("textarea");
-          helper.value = text;
-          document.body.appendChild(helper);
-          helper.select();
-          document.execCommand("copy");
-          helper.remove();
-          showToast(label || "Copied");
-        }
-      }
+          const endpoint = `https://registry.npmjs.org/-/v1/search?size=8&text=${encodeURIComponent(query)}`;
+          const response = await fetch(endpoint);
+          const data = await response.json();
+          const objects = Array.isArray(data.objects) ? data.objects : [];
 
-      function addAssetFromForm(useAsEntry) {
-        try {
-          const spec = buildSpecFromForm();
-          state.assets.push(spec);
+          results.innerHTML = "";
 
-          if (useAsEntry) {
-            const packageName = trimValue("packageName");
-            const filePath = trimValue("filePath");
-            setValue("entry", filePath ? packageName + "/" + filePath.replace(/^\/+/, "") : packageName);
-            setValue("bundle", "iife");
+          for (const item of objects) {
+            const name = item?.package?.name;
+            const version = item?.package?.version;
+            const description = item?.package?.description || "No description.";
+            if (!name) continue;
+
+            const row = document.createElement("button");
+            row.type = "button";
+            row.className = "result-item";
+            row.innerHTML = `<strong></strong><small></small>`;
+            row.querySelector("strong").textContent = `${name}@${version || "latest"}`;
+            row.querySelector("small").textContent = description;
+            row.addEventListener("click", () => addPackage(`${name}@${version || "latest"}`));
+            results.appendChild(row);
           }
 
-          clearAssetForm(false);
-          updateAll();
-          showToast("Asset added");
-        } catch (error) {
-          showToast(error.message || "Could not add asset");
-        }
-      }
-
-      function clearAssetForm(shouldUpdate = true) {
-        setValue("provider", "auto");
-        setValue("packageName", "");
-        setValue("version", "");
-        setValue("filePath", "");
-        setValue("assetGlobal", "");
-        setValue("namespace", "");
-        setChecked("assetMinify", false);
-        setChecked("assetComments", false);
-        if (shouldUpdate) updateAll();
-      }
-
-      async function searchNpm(query, limit) {
-        const url = "https://registry.npmjs.org/-/v1/search?text=" + encodeURIComponent(query) + "&size=" + limit;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("npm search failed: " + response.status);
-        const data = await response.json();
-        return (data.objects || []).map((item) => ({
-          provider: "npm",
-          name: item.package.name,
-          version: item.package.version,
-          description: item.package.description || "No description",
-          links: item.package.links || {}
-        }));
-      }
-
-      async function searchCdnjs(query, limit) {
-        const url = "https://api.cdnjs.com/libraries?search=" + encodeURIComponent(query) + "&fields=version,description,filename&limit=" + limit;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error("cdnjs search failed: " + response.status);
-        const data = await response.json();
-        return (data.results || []).map((item) => ({
-          provider: "cdnjs",
-          name: item.name,
-          version: item.version,
-          file: item.filename,
-          description: item.description || "No description"
-        }));
-      }
-
-      async function runSearch() {
-        const query = trimValue("searchInput");
-        const limit = trimValue("searchLimit") || "16";
-        if (!query) {
-          showToast("Type a package name first");
-          return;
-        }
-
-        const results = $("results");
-        results.innerHTML = `<div class="empty">Searching ${state.selectedSearchProvider}...</div>`;
-
-        try {
-          const items = state.selectedSearchProvider === "npm"
-            ? await searchNpm(query, limit)
-            : await searchCdnjs(query, limit);
-
-          renderSearchResults(items);
-        } catch (error) {
-          results.innerHTML = `<div class="empty">${escapeHtml(error.message || "Search failed")}</div>`;
-        }
-      }
-
-      function renderSearchResults(items) {
-        const results = $("results");
-
-        if (!items.length) {
-          results.innerHTML = `<div class="empty">No packages found.</div>`;
-          return;
-        }
-
-        results.innerHTML = items.map((item, index) => `
-          <article class="result-card">
-            <div>
-              <strong>${escapeHtml(item.name)} <span class="pill">${escapeHtml(item.provider)}</span></strong>
-              <p>${escapeHtml(item.description)}</p>
-              <div class="asset-meta" style="margin-top:8px">
-                <span class="pill">${escapeHtml(item.version || "latest")}</span>
-                ${item.file ? `<span class="pill">${escapeHtml(item.file)}</span>` : ""}
-              </div>
-            </div>
-            <div class="button-row">
-              <button class="btn small primary" data-pick="${index}">Pick</button>
-              <button class="btn small" data-add-result="${index}">Add</button>
-            </div>
-          </article>
-        `).join("");
-
-        $$(`[data-pick]`).forEach((button) => button.addEventListener("click", () => pickSearchResult(items[Number(button.dataset.pick)])));
-        $$(`[data-add-result]`).forEach((button) => {
-          button.addEventListener("click", () => {
-            pickSearchResult(items[Number(button.dataset.addResult)]);
-            addAssetFromForm(false);
-          });
-        });
-      }
-
-      function pickSearchResult(item) {
-        state.lastSelectedPackage = item;
-        setValue("provider", item.provider);
-        setValue("packageName", item.name);
-        setValue("version", item.version || "latest");
-        setValue("filePath", item.file || "");
-        setValue("assetGlobal", "");
-        setValue("namespace", "");
-        showToast("Package selected");
-      }
-
-      async function inspectSelectedPackage() {
-        const provider = trimValue("provider");
-        const name = trimValue("packageName");
-        const version = trimValue("version");
-
-        if (!name) {
-          showToast("Pick or type a package first");
-          return;
-        }
-
-        const results = $("results");
-        results.innerHTML = `<div class="empty">Inspecting ${escapeHtml(name)}...</div>`;
-
-        try {
-          if (provider === "cdnjs") {
-            await inspectCdnjs(name, version);
-          } else {
-            await inspectNpm(name);
+          if (!results.childElementCount) {
+            results.innerHTML = `<div class="result-item"><strong>No packages found</strong><small>Try a broader search.</small></div>`;
           }
         } catch (error) {
-          results.innerHTML = `<div class="empty">${escapeHtml(error.message || "Inspect failed")}</div>`;
+          results.innerHTML = `<div class="result-item"><strong>Search failed</strong><small>${error instanceof Error ? error.message : "Unknown error"}</small></div>`;
         }
       }
 
-      async function inspectNpm(name) {
-        const response = await fetch("https://registry.npmjs.org/" + encodeURIComponent(name));
-        if (!response.ok) throw new Error("npm package not found: " + response.status);
-        const data = await response.json();
-        const latest = data["dist-tags"] && data["dist-tags"].latest;
-        const pkg = data.versions && latest ? data.versions[latest] : null;
-        const candidates = [pkg && pkg.browser, pkg && pkg.module, pkg && pkg.main, "dist/index.js", "index.js"].filter(Boolean);
-        const normalized = candidates.map((item) => typeof item === "string" ? item : "browser map");
-        renderInspection(name, "npm", latest || "latest", normalized);
+      function loadUserscriptPreset() {
+        fields.presets.value = "userscript,highlight,utils";
+        fields.packages.value = "lucide@0.468.0\nlodash(n:Utils)";
+        fields.cssPackages.value = "highlight.js@11.11.1/styles/github-dark.min.css";
+        fields.entry.value = "";
+        fields.bundle.value = "iife";
+        fields.globalName.value = "RodCDN";
+        update();
       }
 
-      async function inspectCdnjs(name, version) {
-        const packageUrl = "https://api.cdnjs.com/libraries/" + encodeURIComponent(name) + (version ? "/" + encodeURIComponent(version) : "") + "?fields=version,filename,files";
-        const response = await fetch(packageUrl);
-        if (!response.ok) throw new Error("cdnjs package not found: " + response.status);
-        const data = await response.json();
-        renderInspection(name, "cdnjs", data.version || version || "latest", data.files || [data.filename].filter(Boolean));
+      for (const element of Object.values(fields)) {
+        element.addEventListener("input", update);
+        element.addEventListener("change", update);
       }
 
-      function renderInspection(name, provider, version, files) {
-        const safeFiles = files.slice(0, 60);
-        $("results").innerHTML = `
-          <article class="asset-card">
-            <div class="asset-top">
-              <div>
-                <strong>${escapeHtml(name)}</strong>
-                <div class="asset-meta" style="margin-top:8px">
-                  <span class="pill">${escapeHtml(provider)}</span>
-                  <span class="pill">${escapeHtml(version)}</span>
-                </div>
-              </div>
-              <button class="btn small primary" id="useInspectedMain">Use latest</button>
-            </div>
-            <div class="results" style="max-height:360px">
-              ${safeFiles.map((file) => `
-                <div class="result-card">
-                  <div class="asset-spec">${escapeHtml(file)}</div>
-                  <button class="btn small" data-file-choice="${escapeHtml(file)}">Use file</button>
-                </div>
-              `).join("")}
-            </div>
-          </article>
-        `;
-
-        $("useInspectedMain").addEventListener("click", () => {
-          setValue("provider", provider);
-          setValue("packageName", name);
-          setValue("version", version);
-          showToast("Main package selected");
-        });
-
-        $$(`[data-file-choice]`).forEach((button) => button.addEventListener("click", () => {
-          setValue("provider", provider);
-          setValue("packageName", name);
-          setValue("version", version);
-          setValue("filePath", button.dataset.fileChoice);
-          showToast("File selected");
-        }));
-      }
-
-      function loadRecipe(name) {
-        const recipe = recipes[name];
-        if (!recipe) return;
-
-        Object.keys(presets).forEach((preset) => setChecked("preset-" + preset, recipe.presets.includes(preset)));
-        state.assets = [...recipe.assets];
-        setValue("bundle", recipe.bundle || "raw");
-        setValue("globalName", recipe.globalName || "");
-        setValue("entry", recipe.entry || "");
-        setValue("format", "js");
-        setValue("cache", "immutable");
-        setChecked("minify", true);
-        setChecked("combine", true);
-        setChecked("removeComments", false);
-        updateAll();
-        showToast("Recipe loaded");
-      }
-
-      function importFromUrl() {
-        try {
-          const url = new URL(trimValue("urlOutput"));
-          const params = url.searchParams;
-          setValue("baseUrl", url.origin + url.pathname);
-          state.assets = params.getAll("pkg");
-
-          Object.keys(presets).forEach((preset) => setChecked("preset-" + preset, params.getAll("preset").includes(preset)));
-          setValue("bundle", params.get("bundle") || params.get("module") || params.get("bundle-format") || "raw");
-          setValue("format", params.get("format") || "js");
-          setValue("cache", params.get("cache") || "immutable");
-          setValue("globalName", params.get("global") || "");
-          setValue("entry", params.get("entry") || "");
-          setValue("external", params.get("external") || "");
-          setValue("bundleProvider", params.get("bundle-provider") || "esm.sh");
-          setValue("platform", params.get("platform") || "browser");
-          setChecked("minify", params.get("minify") !== "false");
-          setChecked("removeComments", params.get("remove-comments") === "true");
-          setChecked("combine", params.get("combine") !== "false");
-          setChecked("debug", params.get("debug") === "true");
-          updateAll();
-          showToast("Imported from URL");
-        } catch (error) {
-          showToast("Could not import URL");
+      $("copyUrl").addEventListener("click", () => copyText(output.textContent));
+      $("copyHero").addEventListener("click", () => copyText(output.textContent));
+      $("copyRequire").addEventListener("click", () => copyText(requireOutput.textContent));
+      $("openUrl").addEventListener("click", () => window.open(output.textContent, "_blank", "noopener,noreferrer"));
+      $("searchButton").addEventListener("click", searchPackages);
+      $("searchInput").addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          searchPackages();
         }
-      }
+      });
+      $("loadUserscript").addEventListener("click", loadUserscriptPreset);
 
-      function bindEvents() {
-        ["baseUrl", "bundle", "format", "cache", "bundleProvider", "platform", "globalName", "entry", "external"].forEach((id) => {
-          $(id).addEventListener("input", updateAll);
-          $(id).addEventListener("change", updateAll);
-        });
-
-        ["minify", "removeComments", "combine", "debug"].forEach((id) => $(id).addEventListener("change", updateAll));
-
-        $("addAsset").addEventListener("click", () => addAssetFromForm(false));
-        $("addAsEntry").addEventListener("click", () => addAssetFromForm(true));
-        $("clearAssetForm").addEventListener("click", () => clearAssetForm(true));
-        $("clearAssets").addEventListener("click", () => { state.assets = []; updateAll(); });
-        $("importFromUrl").addEventListener("click", importFromUrl);
-
-        $("copyUrl").addEventListener("click", () => copyText(trimValue("urlOutput"), "URL copied"));
-        $("copyUrlTop").addEventListener("click", () => copyText(trimValue("urlOutput"), "URL copied"));
-        $("copyRequire").addEventListener("click", () => copyText(trimValue("requireOutput").split("\n")[0], "@require copied"));
-        $("copyRequireTop").addEventListener("click", () => copyText(trimValue("requireOutput").split("\n")[0], "@require copied"));
-        $("copyHtml").addEventListener("click", () => copyText(trimValue("requireOutput").split("\n\n")[1], "script tag copied"));
-        $("openUrl").addEventListener("click", () => window.open(trimValue("urlOutput"), "_blank", "noopener,noreferrer"));
-        $("loadExampleShiki").addEventListener("click", () => loadRecipe("shiki"));
-
-        $("runSearch").addEventListener("click", runSearch);
-        $("inspectPackage").addEventListener("click", inspectSelectedPackage);
-        $("searchInput").addEventListener("keydown", (event) => {
-          if (event.key === "Enter") runSearch();
-        });
-
-        $$(".tab").forEach((tab) => tab.addEventListener("click", () => {
-          $$(".tab").forEach((item) => item.classList.remove("active"));
-          tab.classList.add("active");
-          state.selectedSearchProvider = tab.dataset.tab;
-        }));
-
-        $$(`[data-recipe]`).forEach((button) => button.addEventListener("click", () => loadRecipe(button.dataset.recipe)));
-      }
-
-      function init() {
-        renderPresetGrid();
-        bindEvents();
-        loadRecipe("userscript");
-      }
-
-      init();
+      update();
     })();
   </script>
 </body>
