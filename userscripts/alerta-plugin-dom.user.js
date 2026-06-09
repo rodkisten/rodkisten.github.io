@@ -8,6 +8,7 @@
 // @run-at       document-idle
 // @weight       997
 // @updateURL    https://github.com/rodkisten/rodkisten.github.io/raw/refs/heads/master/userscripts/alerta-plugin-dom.user.js
+// @downloadURL  https://github.com/rodkisten/rodkisten.github.io/raw/refs/heads/master/userscripts/alerta-plugin-dom.user.js
 // @grant        none
 // @noframes
 // ==/UserScript==
