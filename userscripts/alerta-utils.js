@@ -64,7 +64,6 @@
   /********************
    * Logger
    ********************/
-
   /**
    * Creates a namespaced console logger.
    *
@@ -83,7 +82,7 @@
    * const logger = RodUtils.createLogger("UTILS");
    * logger.log("boot", "Ready");
    */
-  exports.createLogger = function createLogger(namespace) {
+  function createLogger(namespace) {
     /**
      * Formats the visible console prefix.
      *
@@ -102,14 +101,18 @@
      */
     function createMethod(level) {
       return function loggerMethod(fn, ...args) {
-        const output = console[level] || console.log;
+      
+              
+      if(window?.__ROD_DEBUG__ &&  window?.__ROD_DEBUG__ == true){
+          const output = console[level] || console.log;
 
-        output.call(
-          console,
-          `%c${prefix(fn)}`,
-          "color:#a78bfa;font-weight:700;",
-          ...args,
+          output.call(
+            console,
+            `%c${prefix(fn)}`,
+            "color:#a78bfa;font-weight:700;",
+            ...args,
         );
+      };
       };
     }
 
@@ -125,7 +128,9 @@
       },
     });
   };
-
+  
+  exports.createLogger = createLogger;
+  
   const logger = exports.createLogger("RodUtils");
 
   /********************
@@ -143,7 +148,7 @@
    * @example
    * RodUtils.defineGlobal("MyApi", api, { immutable: true });
    */
-  exports.defineGlobal = function defineGlobal(name, value, options = {}) {
+  function defineGlobal(name, value, options = {}) {
     const immutable = options.immutable === true;
     const enumerable = options.enumerable === true;
 
@@ -166,6 +171,8 @@
     }
   };
 
+  exports.defineGlobal = defineGlobal;
+  
   /**
    * Hashes text into a compact id.
    *
@@ -175,7 +182,7 @@
    * @example
    * RodUtils.hashText("hello");
    */
-  exports.hashText = function hashText(value) {
+  function hashText(value) {
     let hash = 5381;
     const text = String(value);
 
@@ -185,7 +192,9 @@
 
     return Math.abs(hash >>> 0).toString(36);
   };
-
+  
+  exports.hashText = hashText;
+  
   /**
    * Safely runs a callback.
    *
@@ -197,13 +206,15 @@
    * @example
    * const data = RodUtils.safeCall(() => JSON.parse(raw), {});
    */
-  exports.safeCall = function safeCall(callback, fallback = null) {
+  function safeCall(callback, fallback = null) {
     try {
       return callback();
     } catch {
       return fallback;
     }
   };
+  
+  exports.safeCall = safeCall;
 
   /**
    * Checks whether a value is object-like.
@@ -214,10 +225,12 @@
    * @example
    * RodUtils.isObjectLike({});
    */
-  exports.isObjectLike = function isObjectLike(value) {
+  function isObjectLike(value) {
     return value !== null && (typeof value === "object" || typeof value === "function");
   };
 
+  exports.isObjectLike = isObjectLike;
+  
   /**
    * Checks whether a value is a plain object.
    *
@@ -227,7 +240,7 @@
    * @example
    * RodUtils.isPlainObject({ ok: true });
    */
-  exports.isPlainObject = function isPlainObject(value) {
+  function isPlainObject(value) {
     if (!value || Object.prototype.toString.call(value) !== "[object Object]") return false;
 
     const prototype = Object.getPrototypeOf(value);
@@ -235,6 +248,8 @@
     return prototype === null || prototype === Object.prototype;
   };
 
+  exports.isPlainObject = isPlainObject;
+  
   /**
    * Checks whether a value looks like a node list.
    *
@@ -244,13 +259,15 @@
    * @example
    * RodUtils.isNodeListLike(document.querySelectorAll("div"));
    */
-  exports.isNodeListLike = function isNodeListLike(value) {
+  function isNodeListLike(value) {
     return (
       value instanceof NodeList ||
       value instanceof HTMLCollection ||
       Boolean(value && typeof value.length === "number" && typeof value !== "string" && typeof value.item === "function")
     );
   };
+  
+  exports.isNodeListLike = isNodeListLike;
 
   /**
    * Escapes HTML text.
@@ -261,7 +278,7 @@
    * @example
    * RodUtils.escapeHtml("<div>");
    */
-  exports.escapeHtml = function escapeHtml(value) {
+  function escapeHtml(value) {
     return String(value ?? "")
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
@@ -269,6 +286,8 @@
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
   };
+  
+  exports.escapeHtml = escapeHtml;
 
   /**
    * Trims long text.
@@ -280,11 +299,13 @@
    * @example
    * RodUtils.trimText("abcdef", 3);
    */
-  exports.trimText = function trimText(value, limit = 240) {
+  function trimText(value, limit = 240) {
     const text = String(value ?? "");
     return text.length > limit ? `${text.slice(0, limit)}…` : text;
   };
 
+  exports.trimText = trimText;
+  
   /**
    * Dedents template-like text.
    *
@@ -294,7 +315,7 @@
    * @example
    * RodUtils.dedent("  hello");
    */
-  exports.dedent = function dedent(value) {
+  function dedent(value) {
     const text = String(value ?? "").replace(/\r\n?/g, "\n");
     const lines = text.split("\n");
 
@@ -309,7 +330,9 @@
 
     return lines.map((line) => line.slice(minIndent)).join("\n");
   };
-
+  
+  exports.dedent = dedent;
+  
   /**
    * Copies text to the clipboard with a fallback.
    *
@@ -319,7 +342,7 @@
    * @example
    * await RodUtils.copyText("hello");
    */
-  exports.copyText = async function copyText(value) {
+  async function copyText(value) {
     const text = String(value ?? "");
 
     if (navigator.clipboard?.writeText) {
@@ -346,7 +369,8 @@
       textarea.remove();
     }
   };
-
+  
+  exports.copyText = copyText;
   /**
    * Formats bytes.
    *
@@ -356,7 +380,7 @@
    * @example
    * RodUtils.formatBytes(1024);
    */
-  exports.formatBytes = function formatBytes(bytes) {
+  function formatBytes(bytes) {
     if (bytes == null || Number.isNaN(Number(bytes))) return "n/a";
 
     const units = ["B", "KB", "MB", "GB"];
@@ -371,6 +395,8 @@
     return `${bytes < 0 ? "-" : ""}${value.toFixed(2)} ${units[unit]}`;
   };
 
+  exports.formatBytes = formatBytes;
+  
   /**
    * Reads JS heap memory when the browser exposes it.
    *
@@ -379,7 +405,7 @@
    * @example
    * RodUtils.getMemorySnapshot();
    */
-  exports.getMemorySnapshot = function getMemorySnapshot() {
+  function getMemorySnapshot() {
     const memory = performance && performance.memory;
 
     if (!memory) return null;
@@ -390,6 +416,8 @@
       limit: memory.jsHeapSizeLimit,
     };
   };
+  
+  exports.getMemorySnapshot = getMemorySnapshot;
 
   /**
    * Creates a centered terminal line.
@@ -403,7 +431,7 @@
    * @example
    * RodUtils.line("Summary");
    */
-  exports.line = function line(text, symbol = "•", size = 60, log = console.warn) {
+  function line(text, symbol = "•", size = 60, log = console.warn) {
     const label = ` ${text} `;
     const available = Math.max(0, size - label.length);
     const left = Math.floor(available / 2);
@@ -414,6 +442,8 @@
 
     return output;
   };
+  
+  exports.line = line;
 
   /**
    * Creates circular-safe JSON.
@@ -425,7 +455,7 @@
    * @example
    * RodUtils.safeJson(window);
    */
-  exports.safeJson = function safeJson(value, space = 2) {
+  function safeJson(value, space = 2) {
     const seen = new WeakSet();
 
     return JSON.stringify(
@@ -446,6 +476,8 @@
     );
   };
 
+  exports.safeJson = safeJson;
+  
   /********************
    * Async / Loading
    ********************/
@@ -460,7 +492,7 @@
    * @example
    * const [utils] = await RodUtils.waitForGlobal("RodUtils");
    */
-  exports.waitForGlobal = async function waitForGlobal(globals, timeout = DEFAULT_TIMEOUT_MS) {
+  async function waitForGlobal(globals, timeout = DEFAULT_TIMEOUT_MS) {
     const keys = Array.isArray(globals) ? globals : [globals];
     const startedAt = performance.now();
 
@@ -474,7 +506,8 @@
 
     throw new Error(`[RodUtils.waitForGlobal] Timeout waiting for: ${keys.join(", ")}`);
   };
-
+  
+  exports.waitForGlobal = waitForGlobal;
   /**
    * Imports an ESM module with a timeout.
    *
@@ -485,7 +518,7 @@
    * @example
    * const mod = await RodUtils.timeoutImport("https://esm.sh/lit");
    */
-  exports.timeoutImport = function timeoutImport(url, timeout = 4_000) {
+  function timeoutImport(url, timeout = 4_000) {
     return Promise.race([
       import(url),
       new Promise((_, reject) => {
@@ -493,6 +526,8 @@
       }),
     ]);
   };
+  
+  exports.timeoutImport = timeoutImport;
 
   /**
    * Loads a script once.
@@ -504,7 +539,7 @@
    * @example
    * await RodUtils.loadScriptOnce("https://example.com/app.js");
    */
-  exports.loadScriptOnce = function loadScriptOnce(url, options = {}) {
+  function loadScriptOnce(url, options = {}) {
     const id = options.id || `${SCRIPT_LOADER_PREFIX}${exports.hashText(url)}`;
     const timeout = options.timeout || DEFAULT_LOADER_TIMEOUT_MS;
 
@@ -549,6 +584,8 @@
     return promise;
   };
 
+  exports.loadScriptOnce = loadScriptOnce;
+  
   /**
    * Loads one stylesheet via <link rel="stylesheet"> and deduplicates by id/url.
    *
@@ -566,7 +603,7 @@
    * @example
    * await RodUtils.injectStylesheet("https://cdn.example.com/app.css");
    */
-  exports.injectStylesheet = function injectStylesheet(href, options = {}) {
+  function injectStylesheet(href, options = {}) {
     const {
       id = `style-${exports.hashText(href)}`,
       root = document,
@@ -613,6 +650,8 @@
       target.appendChild(link);
     });
   };
+  
+  exports.injectStylesheet = injectStylesheet;
 
   /**
    * Installs a style tag once.
@@ -625,7 +664,7 @@
    * @example
    * RodUtils.installStyleOnce(".x{color:red}");
    */
-  exports.installStyleOnce = function installStyleOnce(cssText, id = "", root = document) {
+  function installStyleOnce(cssText, id = "", root = document) {
     const styleId = id || `${STYLE_LOADER_PREFIX}${exports.hashText(cssText)}`;
     const key = `${styleId}:${root === document ? "document" : exports.hashText(String(root))}`;
 
@@ -653,6 +692,8 @@
 
     return style;
   };
+  
+  exports.installStyleOnce = installStyleOnce;
 
   /**
    * Loads a remote script using GM_xmlhttpRequest when available.
@@ -663,7 +704,7 @@
    * @example
    * await RodUtils.loadScriptWithGmXhr("https://example.com/lib.js");
    */
-  exports.loadScriptWithGmXhr = function loadScriptWithGmXhr(url) {
+  function loadScriptWithGmXhr(url) {
     return new Promise((resolve, reject) => {
       if (typeof GM_xmlhttpRequest !== "function") {
         reject(new Error("GM_xmlhttpRequest is not available."));
@@ -696,6 +737,8 @@
       });
     });
   };
+  
+  exports.loadScriptWithGmXhr = loadScriptWithGmXhr;
 
   /********************
    * Timing / Debug
@@ -709,9 +752,11 @@
    * @example
    * RodUtils.isDebugEnabled();
    */
-  exports.isDebugEnabled = function isDebugEnabled() {
+  function isDebugEnabled() {
     return Boolean(window[DEBUG_FLAG]);
   };
+  
+  exports.isDebugEnabled = isDebugEnabled;
 
   /**
    * Enables or disables debug logs.
@@ -722,12 +767,12 @@
    * @example
    * RodUtils.setDebugEnabled(true);
    */
-  exports.setDebugEnabled = function setDebugEnabled(enabled) {
+  function setDebugEnabled(enabled) {
     exports.defineGlobal(DEBUG_FLAG, Boolean(enabled), {
       immutable: false,
     });
   };
-
+  exports.setDebugEnabled = setDebugEnabled;
   /**
    * Formats a debug namespace.
    *
@@ -768,7 +813,7 @@
    * const debug = RodUtils.createDebugLogger("plugin");
    * debug.info("ready");
    */
-  exports.createDebugLogger = function createDebugLogger(namespace) {
+  function createDebugLogger(namespace) {
     const scopedName = String(namespace || "core");
 
     return {
@@ -842,7 +887,8 @@
       },
     };
   };
-
+  
+ exports.createDebugLogger = createDebugLogger
   /**
    * Wraps a function and logs time, memory delta, status, and errors.
    *
@@ -861,7 +907,7 @@
    * const run = RodUtils.timed("parseCss", () => parseCss(source));
    * run();
    */
-  exports.timed = function timed(label, fn, options = {}) {
+ function timed(label, fn, options = {}) {
     const namespace = options.namespace || "RodUtils";
     const logTarget = options.logger || console;
     const showArgs = options.showArgs === true;
@@ -968,11 +1014,142 @@
       });
     };
   };
+  
+  exports.timed = timed;
 
   /********************
    * Formatting
    ********************/
+const MiniHLJS = (() => {
+  const KEYWORDS =
+    "as async await break case catch class const constructor continue debugger default delete do else export extends false finally for from function get if import in instanceof let new null of return set static super switch this throw true try typeof undefined var void while with yield";
 
+  const BUILT_INS =
+    "Array Boolean Date Error Function JSON Map Math Number Object Promise Proxy Reflect RegExp Set String Symbol WeakMap WeakSet console document window globalThis localStorage sessionStorage fetch requestAnimationFrame";
+
+  const TYPES =
+    "any unknown never void string number boolean object bigint symbol null undefined Record Partial Pick Omit Promise Array HTMLElement Element Node Event Document Window";
+
+  const keywordRe = new RegExp(`\\b(${KEYWORDS.split(" ").join("|")})\\b`, "g");
+  const builtInRe = new RegExp(`\\b(${BUILT_INS.split(" ").join("|")})\\b`, "g");
+  const typeRe = new RegExp(`\\b(${TYPES.split(" ").join("|")})\\b`, "g");
+
+  function highlight(code, language = "plaintext") {
+    const lang = String(language || "").toLowerCase();
+
+    if (lang === "html" || lang === "xml") return highlightHtml(code);
+    if (lang === "css") return highlightCss(code);
+    if (lang === "js" || lang === "javascript") return highlightJsTs(code, false);
+    if (lang === "ts" || lang === "typescript") return highlightJsTs(code, true);
+
+    return escapeHtml(code);
+  }
+
+  function highlightAuto(code) {
+    const text = String(code ?? "").trim();
+
+    if (/^<\/?[a-z][\s\S]*>/i.test(text)) return { language: "html", value: highlightHtml(code) };
+    if (/[.#][\w-]+\s*\{|@media|:\s*[^;{}]+;/.test(text)) return { language: "css", value: highlightCss(code) };
+    if (/\b(type|interface|enum|implements|readonly|namespace)\b/.test(text)) return { language: "typescript", value: highlightJsTs(code, true) };
+
+    return { language: "javascript", value: highlightJsTs(code, false) };
+  }
+
+  function highlightElement(element) {
+    const className = element.className || "";
+    const language =
+      (className.match(/language-([\w-]+)/) || className.match(/lang-([\w-]+)/) || [])[1] ||
+      element.dataset.language ||
+      "plaintext";
+
+    element.innerHTML = highlight(element.textContent || "", language);
+    element.classList.add("hljs");
+    element.dataset.highlighted = "yes";
+  }
+
+  function highlightAll(root = document) {
+    root.querySelectorAll("pre code:not([data-highlighted])").forEach(highlightElement);
+  }
+
+  function highlightHtml(code) {
+    return escapeHtml(code)
+      .replace(/(&lt;!--[\s\S]*?--&gt;)/g, m("hljs-comment"))
+      .replace(/(&lt;!doctype[\s\S]*?&gt;)/gi, m("hljs-meta"))
+      .replace(/(&lt;\/?)([a-zA-Z][\w:-]*)([\s\S]*?)(\/?&gt;)/g, (_, open, tag, attrs, close) => {
+        const attrHtml = attrs.replace(
+          /([\w:@.-]+)(=)(&quot;[\s\S]*?&quot;|'[\s\S]*?'|[^\s&]+)/g,
+          (_, name, eq, value) => `${span("hljs-attr", name)}${eq}${span("hljs-string", value)}`,
+        );
+
+        return `${open}${span("hljs-name", tag)}${attrHtml}${close}`;
+      });
+  }
+
+  function highlightCss(code) {
+    return escapeHtml(code)
+      .replace(/(\/\*[\s\S]*?\*\/)/g, m("hljs-comment"))
+      .replace(/(@[\w-]+)/g, m("hljs-keyword"))
+      .replace(/([.#][\w-]+)/g, (_, v) => span(v[0] === "." ? "hljs-selector-class" : "hljs-selector-id", v))
+      .replace(/([\w-]+)(\s*:)/g, (_, prop, colon) => `${span("hljs-attribute", prop)}${colon}`)
+      .replace(/(:\s*)([^;{}\n]+)(;?)/g, (_, prefix, value, end) => {
+        const out = value
+          .replace(/#[0-9a-fA-F]{3,8}\b/g, m("hljs-number"))
+          .replace(/\b\d+(?:\.\d+)?(?:px|rem|em|vh|vw|vmin|vmax|%|s|ms|deg)?\b/g, m("hljs-number"))
+          .replace(/\b(url|rgb|rgba|hsl|hsla|oklab|oklch|var|calc|min|max|clamp)\b/g, m("hljs-built_in"));
+
+        return `${prefix}${out}${end}`;
+      });
+  }
+
+  function highlightJsTs(code, isTs) {
+    let out = escapeHtml(code)
+      .replace(/(\/\*[\s\S]*?\*\/|\/\/[^\n]*)/g, m("hljs-comment"))
+      .replace(/(`(?:\\[\s\S]|[^`])*`|'(?:\\.|[^'])*'|&quot;(?:\\.|(?!&quot;)[\s\S])*&quot;)/g, m("hljs-string"))
+      .replace(/\b(0x[\da-fA-F]+|\d+(?:\.\d+)?n?)\b/g, m("hljs-number"))
+      .replace(/\b([A-Za-z_$][\w$]*)(?=\s*\()/g, m("hljs-title function_"))
+      .replace(builtInRe, m("hljs-built_in"))
+      .replace(keywordRe, m("hljs-keyword"));
+
+    if (isTs) {
+      out = out
+        .replace(/\b(type|interface|enum|implements|namespace|readonly|declare|abstract|public|private|protected|override|satisfies|keyof|infer)\b/g, m("hljs-keyword"))
+        .replace(typeRe, m("hljs-type"))
+        .replace(/(:\s*)([A-Z_a-z][\w$<>,[\] |&.?]*)/g, (_, colon, type) => `${colon}${span("hljs-type", type)}`);
+    }
+
+    return out;
+  }
+
+  function span(className, value) {
+    return `<span class="${className}">${value}</span>`;
+  }
+
+  function m(className) {
+    return (value) => span(className, value);
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  return {
+    highlight,
+    highlightAuto,
+    highlightElement,
+    highlightAll,
+  };
+})();
+
+window.MiniHLJS = MiniHLJS;
+
+exports.MiniHLJS = MiniHLJS;
+
+const debugh = exports.createDebugLogger("RodUtils: formatter")
   /**
    * Highlights code when highlight.js exists.
    *
@@ -983,23 +1160,31 @@
    * @example
    * RodUtils.highlightCode("const x = 1", "javascript");
    */
-  exports.highlightCode = function highlightCode(value, language = "javascript") {
+  function highlightCode(value, language = "javascript") {
     const code = String(value ?? "");
 
     if (window.hljs?.highlight) {
       try {
         return window.hljs.highlight(code, { language, ignoreIllegals: true }).value;
-      } catch {}
+      } catch {
+        debugh.log("Highlighting with MiniHLJS", { hljs: window.hljs, MiniHLJS })
+        return MiniHLJS.highlight(code, { language, ignoreIllegals: true });
+      }
     }
 
     if (window.hljs?.highlightAuto) {
       try {
         return window.hljs.highlightAuto(code).value;
-      } catch {}
+      } catch { 
+         debugh.log("Highlighting AUTO with MiniHLJS", { hljs: window.hljs, MiniHLJS })
+        return MiniHLJS.highlightAuto(code);
+      }
     }
 
     return exports.escapeHtml(code);
   };
+  
+  exports.highlightCode = highlightCode;
 
   /**
    * Pretty-formats small source text without external libraries.
@@ -1010,7 +1195,7 @@
    * @example
    * RodUtils.miniPrettier("a{color:red}");
    */
-  exports.miniPrettier = function miniPrettier(source) {
+  function miniPrettier(source) {
     return String(source ?? "")
       .replace(/\r\n?/g, "\n")
       .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -1035,6 +1220,8 @@
       )
       .lines.join("\n");
   };
+  
+  exports.miniPrettier = miniPrettier;
 
   /**
    * Formats HTML-ish text.
@@ -1045,10 +1232,12 @@
    * @example
    * RodUtils.formatHtml("<div><span>x</span></div>");
    */
-  exports.formatHtml = function formatHtml(source) {
+  function formatHtml(source, formatter, highlight = false) {
     return exports.miniPrettier(String(source ?? ""));
   };
-
+  
+  exports.formatHtml = formatHtml;
+  
   /**
    * Formats CSS-ish text.
    *
@@ -1058,10 +1247,12 @@
    * @example
    * RodUtils.formatCss("a{color:red}");
    */
-  exports.formatCss = function formatCss(source) {
+  function formatCss(source) {
     return exports.miniPrettier(String(source ?? ""));
   };
 
+  exports.formatCss = formatCss;
+  
   /**
    * Pretty-formats source using Prettier when available.
    *
@@ -1073,7 +1264,7 @@
    * @example
    * await RodUtils.prettySource("const x=1", "javascript", true);
    */
-  exports.prettySource = async function prettySource(source, language = "javascript", highlight = false) {
+  async function prettySource(source, language = "javascript", highlight = true) {
     const text = String(source ?? "");
     let output = text;
 
@@ -1083,6 +1274,8 @@
 
     if (!window.prettier || !window.prettierPlugins) {
       output = exports.miniPrettier(text);
+      
+      debugh.log("prettySource using miniPrettier");
       return highlight ? exports.highlightCode(output, language) : output;
     }
 
@@ -1102,6 +1295,8 @@
     return highlight ? exports.highlightCode(output, language) : output;
   };
 
+  exports.prettySource = prettySource;
+  
   /**
    * Sanitizes console CSS style text.
    *
@@ -1111,7 +1306,7 @@
    * @example
    * RodUtils.sanitizeConsoleStyle("color:red");
    */
-  exports.sanitizeConsoleStyle = function sanitizeConsoleStyle(value) {
+  function sanitizeConsoleStyle(value) {
     return String(value ?? "")
       .split(";")
       .map((part) => part.trim())
@@ -1120,6 +1315,8 @@
       .join(";");
   };
 
+  exports.sanitizeConsoleStyle = sanitizeConsoleStyle;
+  
   /********************
    * Reactivity
    ********************/
@@ -1130,7 +1327,7 @@
    * @param {Function} runner Runner.
    * @returns {void}
    */
-  exports.cleanupEffect = function cleanupEffect(runner) {
+  function cleanupEffect(runner) {
     const deps = EFFECT_DEPS.get(runner);
     if (!deps) return;
 
@@ -1138,6 +1335,8 @@
 
     deps.clear();
   };
+  
+  exports.cleanupEffect = cleanupEffect;
 
   /**
    * Tracks the current effect.
@@ -1145,7 +1344,7 @@
    * @param {Set<Function>} subscribers Subscribers.
    * @returns {void}
    */
-  exports.trackEffect = function trackEffect(subscribers) {
+  function trackEffect(subscribers) {
     const currentEffect = CURRENT_EFFECT_STACK[CURRENT_EFFECT_STACK.length - 1];
 
     if (!currentEffect || subscribers.has(currentEffect)) return;
@@ -1161,7 +1360,9 @@
 
     deps.add(subscribers);
   };
-
+  
+  exports.trackEffect = trackEffect;
+  
   /* ****************************** */
   /* Symbols                        */
   /* ****************************** */
@@ -1178,9 +1379,11 @@
    * @example
    * RodUtils.isSignalLike(RodUtils.signal(1));
    */
-  exports.isSignalLike = function isSignalLike(value) {
+  function isSignalLike(value) {
     return Boolean(value && typeof value === "function" && value[SIGNAL_SYMBOL] === true);
   };
+  
+  exports.isSignalLike = isSignalLike;
 
   /**
    * Creates a reactive signal.
@@ -1192,7 +1395,7 @@
    * const count = RodUtils.signal(0);
    * count.set(1);
    */
-  exports.signal = function signal(initialValue) {
+  function signal(initialValue) {
     let value = initialValue;
     const subscribers = new Set();
 
@@ -1228,6 +1431,7 @@
     return read;
   };
 
+  exports.signal = signal;
   /**
    * Creates a legacy signal.
    *
@@ -1238,9 +1442,11 @@
    * @example
    * const value = RodUtils.signalOld("x");
    */
-  exports.signalOld = function signalOld(initialValue) {
+  function signalOld(initialValue) {
     return exports.signal(initialValue);
   };
+  
+  exports.signalOld = signalOld;
 
   /**
    * Runs a reactive effect.
@@ -1251,7 +1457,7 @@
    * @example
    * const dispose = RodUtils.effect(() => console.log(signal()));
    */
-  exports.effect = function effect(callback) {
+  function effect(callback) {
     function run() {
       exports.cleanupEffect(run);
       CURRENT_EFFECT_STACK.push(run);
@@ -1269,6 +1475,8 @@
       exports.cleanupEffect(run);
     };
   };
+  
+  exports.effect = effect;
 
   /**
    * Creates a computed signal.
@@ -1279,7 +1487,7 @@
    * @example
    * const double = RodUtils.computed(() => count() * 2);
    */
-  exports.computed = function computed(callback) {
+  function computed(callback) {
     const output = exports.signal(undefined);
 
     exports.effect(function computeEffect() {
@@ -1288,6 +1496,8 @@
 
     return output;
   };
+  
+  exports.computed = computed;
 
   /********************
    * DOM / React
@@ -1302,7 +1512,7 @@
    * @example
    * RodUtils.formatElement(document.body);
    */
-  exports.formatElement = function formatElement(element) {
+  function formatElement(element) {
     const tag = element.tagName ? element.tagName.toLowerCase() : "element";
     const id = element.id ? ` id="${exports.escapeHtml(element.id)}"` : "";
     const className =
@@ -1312,6 +1522,8 @@
 
     return `<${tag}${id}${className}>`;
   };
+  
+  exports.formatElement = formatElement;
 
   /**
    * Gets a compact label for any common value.
@@ -1322,7 +1534,7 @@
    * @example
    * RodUtils.getNodeLabel(document.body);
    */
-  exports.getNodeLabel = function getNodeLabel(value) {
+  function getNodeLabel(value) {
     if (value === null) return "null";
     if (value === undefined) return "undefined";
     if (typeof value === "string") return `"${exports.trimText(value, 260)}"`;
@@ -1346,6 +1558,8 @@
     return value?.constructor?.name || "Object";
   };
 
+  exports.getNodeLabel = getNodeLabel;
+  
   /**
    * Finds a private React key.
    *
@@ -1356,12 +1570,14 @@
    * @example
    * RodUtils.findReactPrivateKey(node, "__reactFiber$");
    */
-  exports.findReactPrivateKey = function findReactPrivateKey(element, prefix) {
+  function findReactPrivateKey(element, prefix) {
     if (!element) return undefined;
 
     return Object.keys(element).find((key) => key.startsWith(prefix));
   };
-
+  
+  exports.findReactPrivateKey = findReactPrivateKey;
+  
   /**
    * Gets React props from a DOM element.
    *
@@ -1371,10 +1587,12 @@
    * @example
    * RodUtils.getReactProps(document.body);
    */
-  exports.getReactProps = function getReactProps(element) {
+  function getReactProps(element) {
     const key = exports.findReactPrivateKey(element, REACT_PROPS_PREFIX);
     return key ? element[key] : null;
   };
+  
+  exports.getReactProps = getReactProps;
 
   /**
    * Finds a React fiber.
@@ -1385,7 +1603,7 @@
    * @example
    * RodUtils.findReact(document.body);
    */
-  exports.findReact = function findReact(element) {
+  function findReact(element) {
     if (!element) return null;
 
     const fiberKey = exports.findReactPrivateKey(element, REACT_FIBER_PREFIX);
@@ -1396,6 +1614,8 @@
 
     return null;
   };
+  
+  exports.findReact = findReact;
 
   exports.FindReact = exports.findReact;
 
@@ -1408,9 +1628,11 @@
    * @example
    * RodUtils.isReactElement(document.body);
    */
-  exports.isReactElement = function isReactElement(value) {
+  function isReactElement(value) {
     return value instanceof Element && Boolean(exports.findReact(value) || exports.getReactProps(value));
   };
+  
+  exports.isReactElement = isReactElement;
 
   /**
    * Gets simple React owner info from a DOM element.
@@ -1421,7 +1643,7 @@
    * @example
    * RodUtils.getReactOwnerInfo(document.body);
    */
-  exports.getReactOwnerInfo = function getReactOwnerInfo(element) {
+  function getReactOwnerInfo(element) {
     const fiber = exports.findReact(element);
 
     if (!fiber) {
@@ -1438,6 +1660,8 @@
     };
   };
 
+  exports.getReactOwnerInfo = getReactOwnerInfo;
+  
   /**
    * Extracts an element from common wrappers.
    *
@@ -1447,7 +1671,7 @@
    * @example
    * RodUtils.getElementFromObject(document.body);
    */
-  exports.getElementFromObject = function getElementFromObject(value) {
+  function getElementFromObject(value) {
     if (value instanceof Element) return value;
     if (value?.target instanceof Element) return value.target;
     if (value?.currentTarget instanceof Element) return value.currentTarget;
@@ -1458,6 +1682,8 @@
 
     return null;
   };
+  
+  exports.getElementFromObject = getElementFromObject;
 
   /********************
    * Event Listener Tracker
@@ -1582,7 +1808,7 @@
    * @example
    * RodUtils.installEventListenerTracker();
    */
-  exports.installEventListenerTracker = function installEventListenerTracker() {
+  function installEventListenerTracker() {
     if (EventTarget.prototype.addEventListener.__rodUtilsTracked === true) {
       return false;
     }
@@ -1614,6 +1840,8 @@
 
     return true;
   };
+  
+  exports.installEventListenerTracker = installEventListenerTracker;
 
   /**
    * Gets tracked event listeners for one element or event target.
@@ -1628,7 +1856,7 @@
    * @example
    * RodUtils.getEventListeners(document.body, "click");
    */
-  exports.getEventListeners = function getEventListeners(target, type) {
+  function getEventListeners(target, type) {
     if (!target) return [];
 
     const bucket = eventListenerRegistry.get(target);
@@ -1646,6 +1874,8 @@
 
     return output;
   };
+  
+  exports.getEventListeners = getEventListeners;
 
   /**
    * Gets tracked event listeners grouped by event type.
@@ -1656,7 +1886,7 @@
    * @example
    * RodUtils.getEventListenersByType(document.body);
    */
-  exports.getEventListenersByType = function getEventListenersByType(target) {
+  function getEventListenersByType(target) {
     const bucket = eventListenerRegistry.get(target);
     const output = {};
 
@@ -1668,6 +1898,8 @@
 
     return output;
   };
+  
+  exports.getEventListenersByType = getEventListenersByType;
 
   /**
    * Gets all currently tracked targets and listeners.
@@ -1677,7 +1909,7 @@
    * @example
    * RodUtils.getAllTrackedEventListeners();
    */
-  exports.getAllTrackedEventListeners = function getAllTrackedEventListeners() {
+  function getAllTrackedEventListeners() {
     const output = [];
 
     for (const target of eventListenerTargets) {
@@ -1695,6 +1927,7 @@
     return output;
   };
 
+  exports.getAllTrackedEventListeners = getAllTrackedEventListeners;
   /**
    * Restores native event listener methods.
    *
@@ -1703,11 +1936,12 @@
    * @example
    * RodUtils.uninstallEventListenerTracker();
    */
-  exports.uninstallEventListenerTracker = function uninstallEventListenerTracker() {
+  function uninstallEventListenerTracker() {
     EventTarget.prototype.addEventListener = nativeAddEventListener;
     EventTarget.prototype.removeEventListener = nativeRemoveEventListener;
   };
 
+  exports.uninstallEventListenerTracker = uninstallEventListenerTracker;
   /********************
    * Virtualization
    ********************/
@@ -1721,10 +1955,11 @@
    * @example
    * RodUtils.splitLines("a\nb");
    */
-  exports.splitLines = function splitLines(source) {
+  function splitLines(source) {
     return String(source ?? "").replace(/\r\n?/g, "\n").split("\n");
   };
 
+  exports.splitLines = splitLines;
   /**
    * Creates a virtual list slice.
    *
@@ -1740,7 +1975,7 @@
    * @example
    * RodUtils.getVirtualSlice({ scrollTop: 0, viewportHeight: 300, rowHeight: 20, total: 1000 });
    */
-  exports.getVirtualSlice = function getVirtualSlice(options) {
+  function getVirtualSlice(options) {
     const rowHeight = Math.max(1, Number(options.rowHeight || 20));
     const viewportHeight = Math.max(rowHeight, Number(options.viewportHeight || 300));
     const total = Math.max(0, Number(options.total || 0));
@@ -1757,6 +1992,8 @@
     };
   };
 
+  exports.getVirtualSlice = getVirtualSlice;
+  
   /**
    * Creates a virtualized text viewer.
    *
@@ -1774,7 +2011,7 @@
    *   lineHeight: 22,
    * });
    */
-  exports.createVirtualTextComponent = function createVirtualTextComponent({ container, text, lineHeight = 20, overscan = 20 }) {
+  function createVirtualTextComponent({ container, text, lineHeight = 20, overscan = 20 }) {
     if (!(container instanceof HTMLElement)) {
       throw new TypeError("createVirtualTextComponent needs a valid container.");
     }
@@ -1882,6 +2119,8 @@
       },
     };
   };
+  
+  exports.createVirtualTextComponent = createVirtualTextComponent;
 
   /********************
    * Store
@@ -1905,7 +2144,7 @@
    * @example
    * const state = RodUtils.createStore({ count: 0 }, console.log);
    */
-  exports.createStore = function createStore(initialState, onChange = function noop() {}) {
+  function createStore(initialState, onChange = function noop() {}) {
     const proxyCache = new WeakMap();
 
     /**
@@ -1983,6 +2222,8 @@
 
     return proxify(initialState);
   };
+  
+  exports.createStore = createStore;
 
   /**
    * Creates a tiny event bus with on/off/once/emit support.
@@ -2002,7 +2243,7 @@
    * bus.emit("save", { id: 1 });
    * dispose();
    */
-  exports.createEventBus = function createEventBus() {
+  function createEventBus() {
     const listeners = new Map();
 
     /**
@@ -2101,6 +2342,8 @@
       },
     });
   };
+  
+  exports.createEventBus = createEventBus;
 
   /********************
    * Visual Debug
@@ -2122,7 +2365,7 @@
    * @example
    * RodUtils.debugElementOutlines({ enabled: false });
    */
-  exports.debugElementOutlines = function debugElementOutlines(options = {}) {
+  function debugElementOutlines(options = {}) {
     const { id = "rod-debug-element-outlines", root = document, enabled = true } = options;
     const existing = root.getElementById?.(id) || document.getElementById(id);
 
@@ -2167,12 +2410,483 @@
 
     return style;
   };
+  
+  exports.debugElementOutlines = debugElementOutlines;
+
+
+  /* ********************* */
+  /* LOGGER PLUGIN Helpers */
+  /* ********************* */
+
+  const READY_TIMEOUT_MS = 15_000;
+  const READY_INTERVAL_MS = 16;
+  const MAX_RECORDS = 900;
+  const MAX_INLINE_KEYS = 8;
+  const MAX_TREE_KEYS = 120;
+  const MAX_TABLE_ROWS = 120;
+  const MAX_TABLE_COLUMNS = 24;
+  const MAX_PREVIEW_TEXT = 420;
+  const MAX_STRING_PREVIEW = 220;
+  const INITIAL_LIMIT = 160;
+  const LIMIT_STEP = 100;
+
+  /* *************** */
+  /* Value Helpers   */
+  /* *************** */
+
+  /**
+   * Gets entries for object tree.
+   *
+   * TODO(extract-to-shell): move this to api.utils.getInspectableEntries().
+   *
+   * @param {*} value Value.
+   * @returns {Array<{key: string, value: *}>} Entries.
+   */
+  function getInspectableEntries(value) {
+    if (value instanceof Element) {
+      return [
+        { key: "tagName", value: value.tagName },
+        { key: "id", value: value.id },
+        { key: "className", value: value.className },
+        { key: "attributes", value: Array.from(value.attributes).map((attr) => ({ name: attr.name, value: attr.value })) },
+        { key: "dataset", value: { ...value.dataset } },
+        { key: "children", value: Array.from(value.children) },
+        { key: "outerHTML", value: value.outerHTML },
+      ];
+    }
+
+    if (value instanceof Text) {
+      return [{ key: "textContent", value: value.textContent }];
+    }
+
+    if (Array.isArray(value)) {
+      return value.slice(0, MAX_TREE_KEYS).map((item, index) => ({ key: String(index), value: item }));
+    }
+
+    if (value instanceof Map) {
+      return Array.from(value.entries())
+        .slice(0, MAX_TREE_KEYS)
+        .map(([key, item]) => ({ key: String(key), value: item }));
+    }
+
+    if (value instanceof Set) {
+      return Array.from(value.values())
+        .slice(0, MAX_TREE_KEYS)
+        .map((item, index) => ({ key: String(index), value: item }));
+    }
+
+    const keys = Reflect.ownKeys(value).slice(0, MAX_TREE_KEYS);
+
+    return keys.map((key) => ({
+      key: String(key),
+      value: safeRead(value, key),
+    }));
+  }
+  
+  exports.getInspectableEntries = getInspectableEntries;
+
+  /**
+   * Creates inline preview.
+   *
+   * TODO(extract-to-shell): move to api.utils.createInlinePreview().
+   *
+   * @param {*} value Value.
+   * @returns {string} Preview.
+   */
+  function createInlinePreview(value) {
+    if (isPrimitive(value)) return formatPrimitivePlaceholder(value);
+    if (value instanceof Element) return formatDomLabel(value);
+    if (value instanceof Text) return `#text "${trimText(value.textContent || "", 80)}"`;
+    if (Array.isArray(value)) return `(${value.length}) [${value.slice(0, MAX_INLINE_KEYS).map(formatPreviewItem).join(", ")}${value.length > MAX_INLINE_KEYS ? ", …" : ""}]`;
+    if (value instanceof Map) return `Map(${value.size})`;
+    if (value instanceof Set) return `Set(${value.size})`;
+    if (value instanceof Date) return value.toISOString();
+    if (value instanceof RegExp) return String(value);
+    if (value instanceof Error) return `${value.name}: ${value.message}`;
+    if (typeof value === "function") return `ƒ ${value.name || "anonymous"}()`;
+
+    if (isPlainObject(value)) {
+      const keys = Object.keys(value).slice(0, MAX_INLINE_KEYS);
+      const body = keys.map((key) => `${key}: ${formatPreviewItem(safeRead(value, key))}`).join(", ");
+      const suffix = Object.keys(value).length > MAX_INLINE_KEYS ? ", …" : "";
+      return `{${body}${suffix}}`;
+    }
+
+    return getNodeLabel(value);
+  }
+  
+  exports.createInlinePreview = createInlinePreview;
+
+  /**
+   * Formats primitive placeholder.
+   *
+   * @param {*} value Value.
+   * @returns {string} Text.
+   */
+  function formatPrimitivePlaceholder(value) {
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    if (value === null) return "null";
+    if (value === undefined) return "undefined";
+    if (typeof value === "bigint") return `${value}n`;
+    if (typeof value === "symbol") return String(value);
+
+    return createInlinePreview(value);
+  }
+  
+  exports.formatPrimitivePlaceholder = formatPrimitivePlaceholder;
+
+   /**
+   * Formats DOM label.
+   *
+   * @param {Element} element Element.
+   * @returns {string} Label.
+   */
+  function formatDomLabel(element) {
+    const tag = element.tagName?.toLowerCase?.() || "element";
+    const id = element.id ? `#${element.id}` : "";
+    const classes =
+      typeof element.className === "string" && element.className.trim()
+        ? `.${element.className.trim().split(/\s+/).slice(0, 4).join(".")}`
+        : "";
+
+    return `<${tag}${id}${classes}>`;
+  }
+  
+  exports.formatDomLabel = formatDomLabel;
+
+
+  /**
+   * Formats preview item.
+   *
+   * @param {*} value Value.
+   * @returns {string} Preview.
+   */
+  function formatPreviewItem(value) {
+    if (typeof value === "string") return `"${trimText(value, 42)}"`;
+    if (isPrimitive(value)) return String(value);
+    if (value instanceof Element) return exports.formatDomLabel(value);
+    if (Array.isArray(value)) return `Array(${value.length})`;
+    if (isPlainObject(value)) return "{…}";
+    return getNodeLabel(value);
+  }
+  
+  exports.formatPreviewItem = formatPreviewItem;
+  
+  /**
+   * Gets node label.
+   *
+   * @param {*} value Value.
+   * @returns {string} Label.
+   */
+  function getNodeLabel(value) {
+    if (value instanceof Element) return exports.formatDomLabel(value);
+    if (Array.isArray(value)) return `Array(${value.length})`;
+    if (value instanceof Map) return `Map(${value.size})`;
+    if (value instanceof Set) return `Set(${value.size})`;
+    if (value instanceof Error) return `${value.name}: ${value.message}`;
+    if (typeof value === "function") return `ƒ ${value.name || "anonymous"}()`;
+    if (exports.isPlainObject(value)) return "Object";
+    return String(value);
+  }
+  
+  exports.getNodeLabel = getNodeLabel;
+  
+  
+  /* *************** */
+  /* Parsing         */
+  /* *************** */
+
+  /**
+   * Parses console values and placeholders.
+   *
+   * TODO(extract-to-shell): move this parser into api.utils.parseConsoleValues().
+   *
+   * @param {Array<*>} values Values.
+   * @returns {{parts: Array<Record<string, *>>, raw: string, objectTokens: Array<Record<string, *>>}} Parsed model.
+   */
+  function parseConsoleValues(values) {
+    const parts = [];
+    const rawParts = [];
+    const objectTokens = [];
+
+    if (!values.length) return { parts, raw: "", objectTokens };
+
+    if (typeof values[0] !== "string") {
+      for (let index = 0; index < values.length; index += 1) {
+        const value = values[index];
+
+        if (exports.isInspectable(value)) {
+          parts.push({ type: "object", index });
+          objectTokens.push({ index, value });
+          rawParts.push(exports.createInlinePreview(value));
+        } else {
+          const text = exports.formatPrimitivePlaceholder(value);
+          parts.push({ type: "text", text });
+          rawParts.push(text);
+        }
+
+        if (index < values.length - 1) parts.push({ type: "text", text: " " });
+      }
+
+      return { parts, raw: rawParts.join(" "), objectTokens };
+    }
+
+    const format = String(values[0]);
+    const args = values.slice(1);
+    const matcher = /%([%csdiffoO])/g;
+
+    let activeStyle = "";
+    let argIndex = 0;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = matcher.exec(format))) {
+      if (match.index > lastIndex) {
+        pushText(format.slice(lastIndex, match.index));
+      }
+
+      const token = match[1];
+
+      if (token === "%") {
+        pushText("%");
+      } else if (token === "c") {
+        activeStyle = exports.sanitizeConsoleStyle(args[argIndex++]);
+      } else {
+        const argValue = args[argIndex++];
+        const originalIndex = argIndex;
+
+        if (token === "o" || token === "O") {
+          parts.push({ type: "object", index: originalIndex });
+          objectTokens.push({ index: originalIndex, value: argValue });
+          rawParts.push(exports.createInlinePreview(argValue));
+        } else {
+          pushText(exports.formatPlaceholder(token, argValue));
+        }
+      }
+
+      lastIndex = matcher.lastIndex;
+    }
+
+    if (lastIndex < format.length) {
+      pushText(format.slice(lastIndex));
+    }
+
+    for (let index = argIndex; index < args.length; index += 1) {
+      const value = args[index];
+      if (parts.length) pushText(" ");
+
+      if (exports.isInspectable(value)) {
+        const originalIndex = index + 1;
+        parts.push({ type: "object", index: originalIndex });
+        objectTokens.push({ index: originalIndex, value });
+        rawParts.push(exports.createInlinePreview(value));
+      } else {
+        pushText(exports.formatPrimitivePlaceholder(value));
+      }
+    }
+
+    return { parts, raw: rawParts.join(""), objectTokens };
+
+    function pushText(text) {
+      if (!text) return;
+      const part = activeStyle ? { type: "styled", text, style: activeStyle } : { type: "text", text };
+      parts.push(part);
+      rawParts.push(text);
+    }
+  }
+  
+  exports.parseConsoleValues = parseConsoleValues;
+
+ /**
+   * Sanitizes console CSS.
+   *
+   * TODO(extract-to-shell): move this to api.utils.sanitizeConsoleStyle().
+   *
+   * @param {*} value Style value.
+   * @returns {string} Safe style.
+   */
+  function sanitizeConsoleStyle(value) {
+    const text = String(value || "");
+
+    return text
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .filter((part) => !/url\s*\(|expression\s*\(|behavior\s*:|javascript:/i.test(part))
+      .join(";");
+  }
+  
+  exports.sanitizeConsoleStyle = sanitizeConsoleStyle;
+
+   /* *************** */
+  /* Tables          */
+  /* *************** */
+
+  /**
+   * Creates table model for console.table.
+   *
+   * TODO(extract-to-shell): move this to api.utils.createConsoleTableModel().
+   *
+   * @param {*} value Value.
+   * @param {Array<string>|string|undefined} requestedColumns Requested columns.
+   * @returns {{columns: string[], rows: Array<{index: string, values: Record<string, *>}>}} Table.
+   */
+  function createTableModel(value, requestedColumns) {
+    const rows = exports.normalizeTableRows(value);
+    const columnSet = new Set();
+    const requested = Array.isArray(requestedColumns)
+      ? requestedColumns.map(String)
+      : typeof requestedColumns === "string"
+        ? [requestedColumns]
+        : null;
+
+    for (const row of rows.slice(0, MAX_TABLE_ROWS)) {
+      for (const key of Object.keys(row.values)) {
+        columnSet.add(key);
+        if (columnSet.size >= MAX_TABLE_COLUMNS) break;
+      }
+    }
+
+    const columns = requested || Array.from(columnSet).slice(0, MAX_TABLE_COLUMNS);
+
+    return {
+      columns,
+      rows: rows.slice(0, MAX_TABLE_ROWS),
+    };
+  }
+  
+  exports.createTableModel = createTableModel;
+
+  /**
+   * Normalizes table rows.
+   *
+   * @param {*} value Value.
+   * @returns {Array<{index: string, values: Record<string, *>}>} Rows.
+   */
+  function normalizeTableRows(value) {
+    if (Array.isArray(value)) {
+      return value.map((item, index) => ({
+        index: String(index),
+        values: exports.objectToRow(item),
+      }));
+    }
+
+    if (value instanceof Map) {
+      return Array.from(value.entries()).map(([key, item]) => ({
+        index: String(key),
+        values: exports.objectToRow(item),
+      }));
+    }
+
+    if (value instanceof Set) {
+      return Array.from(value.values()).map((item, index) => ({
+        index: String(index),
+        values: exports.objectToRow(item),
+      }));
+    }
+
+    if (isPlainObject(value)) {
+      return Object.keys(value).map((key) => ({
+        index: key,
+        values: exports.objectToRow(value[key]),
+      }));
+    }
+
+    return [
+      {
+        index: "0",
+        values: exports.objectToRow(value),
+      },
+    ];
+  }
+  
+  exports.normalizeTableRows = normalizeTableRows;
+
+  /**
+   * Converts value to table row object.
+   *
+   * @param {*} value Value.
+   * @returns {Record<string, *>} Row.
+   */
+  function objectToRow(value) {
+    if (isPlainObject(value) || Array.isArray(value)) {
+      const row = {};
+
+      for (const key of Object.keys(value).slice(0, MAX_TABLE_COLUMNS)) {
+        row[key] = value[key];
+      }
+
+      return row;
+    }
+
+    return {
+      Value: value,
+    };
+  }
+  
+  exports.objectToRow = objectToRow;
+  
+  
+  
+  /**
+   * Checks inspectability.
+   *
+   * @param {*} value Value.
+   * @returns {boolean} Inspectable.
+   */
+  function isInspectable(value) {
+    return value !== null && (typeof value === "object" || typeof value === "function");
+  }
+  
+  exports.isInspectable = isInspectable;
+
+  /**
+   * Checks primitive.
+   *
+   * @param {*} value Value.
+   * @returns {boolean} Primitive flag.
+   */
+  function isPrimitive(value) {
+    return value === null || (typeof value !== "object" && typeof value !== "function");
+  }
+  exports.isPrimitive = isPrimitive;
+
+  /**
+   * Checks plain object.
+   *
+   * @param {*} value Value.
+   * @returns {boolean} Plain flag.
+   */
+  function isPlainObject(value) {
+    if (!value || typeof value !== "object") return false;
+    const proto = Object.getPrototypeOf(value);
+    return proto === Object.prototype || proto === null;
+  }
+  exports.isPlainObject = isPlainObject;
+
+    /**
+   * Formats placeholder.
+   *
+   * @param {string} token Token.
+   * @param {*} value Value.
+   * @returns {string} Text.
+   */
+  function formatPlaceholder(token, value) {
+    if (token === "d" || token === "i") return String(Number.parseInt(String(value), 10));
+    if (token === "f") return String(Number.parseFloat(String(value)));
+    if (token === "s") return String(value);
+    return formatPrimitivePlaceholder(value);
+  }
+  
+  exports.formatPlaceholder;
+
 
   /********************
    * Public Export
    ********************/
 
-//exports.toolkit = window.esToolkit || window._ || {};
+  exports.toolkit = window.esToolkit || window._ || {};
   exports.VERSION = VERSION;
   exports.logger = logger;
   exports.nativeAddEventListener = nativeAddEventListener;
