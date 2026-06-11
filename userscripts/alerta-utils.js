@@ -2881,6 +2881,154 @@ const debugh = exports.createDebugLogger("RodUtils: formatter")
   
   exports.formatPlaceholder;
 
+  /***************************************************************************
+   * Safari Zoom Lock
+   **************************************************************************/
+
+  /**
+   * Blocks most Safari iOS zoom paths.
+   *
+   * @returns {() => void} Cleanup function.
+   */
+  function lockZoom() {
+    let cleanup = () => {};
+
+    whenHeadReady(() => {
+      let lastTouchEnd = 0;
+
+      const viewport = getOrCreateViewportMeta();
+      const previousViewportContent = viewport.element.getAttribute("content");
+
+      const style = getOrCreateZoomStyle();
+      const previousStyleText = style.textContent;
+
+      viewport.element.setAttribute("content", VIEWPORT_CONTENT);
+
+      style.textContent = `
+        html,
+        body,
+        input,
+        textarea,
+        select,
+        button {
+          -webkit-text-size-adjust: 100% !important;
+          text-size-adjust: 100% !important;
+          touch-action: manipulation !important;
+        }
+
+        input,
+        textarea,
+        select {
+          font-size: max(16px, 1em) !important;
+        }
+
+        * {
+          -webkit-tap-highlight-color: transparent !important;
+        }
+      `;
+
+      /**
+       * Blocks an event aggressively.
+       *
+       * @param {Event} event Event to block.
+       * @returns {void}
+       */
+      function block(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+      }
+
+      /**
+       * Blocks multi-touch gestures.
+       *
+       * @param {TouchEvent} event Touch event.
+       * @returns {void}
+       */
+      function blockMultiTouch(event) {
+        if (event.touches && event.touches.length > 1) {
+          block(event);
+        }
+      }
+
+      /**
+       * Blocks double-tap zoom.
+       *
+       * @param {TouchEvent} event Touch event.
+       * @returns {void}
+       */
+      function blockDoubleTap(event) {
+        const now = Date.now();
+
+        if (now - lastTouchEnd <= 350) {
+          block(event);
+        }
+
+        lastTouchEnd = now;
+      }
+
+      /**
+       * Blocks keyboard, wheel, or trackpad zoom shortcuts where available.
+       *
+       * @param {KeyboardEvent | WheelEvent} event Event.
+       * @returns {void}
+       */
+      function blockShortcutZoom(event) {
+        const isKeyboardEvent = "key" in event;
+        const isZoomKey =
+          isKeyboardEvent &&
+          (event.key === "+" ||
+            event.key === "-" ||
+            event.key === "=" ||
+            event.key === "0");
+
+        if ((event.ctrlKey || event.metaKey) && isZoomKey) {
+          block(event);
+        }
+      }
+
+      const blockingOptions = {
+        passive: false,
+        capture: true,
+      };
+
+      document.addEventListener("gesturestart", block, blockingOptions);
+      document.addEventListener("gesturechange", block, blockingOptions);
+      document.addEventListener("gestureend", block, blockingOptions);
+      document.addEventListener("touchstart", blockMultiTouch, blockingOptions);
+      document.addEventListener("touchmove", blockMultiTouch, blockingOptions);
+      document.addEventListener("touchend", blockDoubleTap, blockingOptions);
+      document.addEventListener("wheel", blockShortcutZoom, blockingOptions);
+      document.addEventListener("keydown", blockShortcutZoom, blockingOptions);
+
+      cleanup = function unlockSafariZoom() {
+        document.removeEventListener("gesturestart", block, blockingOptions);
+        document.removeEventListener("gesturechange", block, blockingOptions);
+        document.removeEventListener("gestureend", block, blockingOptions);
+        document.removeEventListener("touchstart", blockMultiTouch, blockingOptions);
+        document.removeEventListener("touchmove", blockMultiTouch, blockingOptions);
+        document.removeEventListener("touchend", blockDoubleTap, blockingOptions);
+        document.removeEventListener("wheel", blockShortcutZoom, blockingOptions);
+        document.removeEventListener("keydown", blockShortcutZoom, blockingOptions);
+
+        if (viewport.created) {
+          viewport.element.remove();
+        } else if (previousViewportContent == null) {
+          viewport.element.removeAttribute("content");
+        } else {
+          viewport.element.setAttribute("content", previousViewportContent);
+        }
+
+        style.textContent = previousStyleText || "";
+      };
+    });
+
+    return function unlockZoomWhenReady() {
+      cleanup();
+    };
+  }
+
+  exports.lockZoom = lockZoom;
 
   /********************
    * Public Export
