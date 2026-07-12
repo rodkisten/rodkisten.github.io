@@ -489,6 +489,188 @@
       text-align: center;
     }
 
+
+    .button.debug-active {
+      border-color: rgba(93, 224, 166, 0.42);
+      background: rgba(93, 224, 166, 0.1);
+      color: #c9ffe7;
+    }
+
+    .tree-row.archive {
+      background: rgba(155, 124, 255, 0.045);
+    }
+
+    .tree-row.archive > .tree-main .tree-name {
+      color: #ddceff;
+      font-weight: 700;
+    }
+
+    .tree-row.archive-entry .tree-name {
+      color: #c8b9e8;
+    }
+
+    .debug-panel {
+      margin-top: 20px;
+      overflow: hidden;
+      border: 1px solid rgba(93, 224, 166, 0.18);
+      border-radius: var(--radius-md);
+      background: rgba(3, 12, 17, 0.9);
+      box-shadow: 0 22px 55px rgba(0, 0, 0, 0.24);
+    }
+
+    .debug-panel[hidden] {
+      display: none;
+    }
+
+    .debug-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(93, 224, 166, 0.13);
+      background: rgba(93, 224, 166, 0.045);
+    }
+
+    .debug-title {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .debug-live-dot {
+      width: 8px;
+      height: 8px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 16px rgba(93, 224, 166, 0.75);
+    }
+
+    .debug-title strong {
+      font-size: 13px;
+    }
+
+    .debug-title span {
+      overflow: hidden;
+      color: #81aa9b;
+      font-size: 11px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .debug-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .debug-output {
+      max-height: 420px;
+      overflow: auto;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        "Liberation Mono", monospace;
+      font-size: 11px;
+      line-height: 1.55;
+    }
+
+    .debug-line {
+      display: grid;
+      grid-template-columns: 78px 58px minmax(0, 1fr);
+      gap: 10px;
+      padding: 7px 8px;
+      border-radius: 8px;
+    }
+
+    .debug-line:hover {
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    .debug-time {
+      color: #62877a;
+    }
+
+    .debug-level {
+      font-weight: 800;
+      letter-spacing: 0.04em;
+    }
+
+    .debug-level.info {
+      color: #9dc1ff;
+    }
+
+    .debug-level.success {
+      color: var(--success);
+    }
+
+    .debug-level.warn {
+      color: var(--warning);
+    }
+
+    .debug-level.error {
+      color: var(--danger);
+    }
+
+    .debug-message {
+      min-width: 0;
+      color: #bed2ca;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+
+    .compatibility-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      padding: 12px;
+      border-top: 1px solid rgba(93, 224, 166, 0.1);
+    }
+
+    .compatibility-item {
+      min-width: 0;
+      padding: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .compatibility-item span {
+      display: block;
+      overflow: hidden;
+      color: #739287;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .compatibility-item strong {
+      display: block;
+      margin-top: 5px;
+      color: #d6eee5;
+      font-size: 11px;
+    }
+
+    @media (max-width: 640px) {
+      .debug-header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .debug-line {
+        grid-template-columns: 66px 50px minmax(0, 1fr);
+        gap: 7px;
+      }
+
+      .compatibility-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
     @keyframes spin {
       to {
         transform: rotate(360deg);
@@ -560,6 +742,16 @@
           Escolher pasta
         </button>
 
+        <button class="button" id="choose-files" type="button">
+          <span>📦</span>
+          Arquivos / ZIP
+        </button>
+
+        <button class="button" id="toggle-debug" type="button">
+          <span>⌁</span>
+          Trace
+        </button>
+
         <button class="button" id="clear-all" type="button">
           <span>⌫</span>
           Limpar
@@ -589,7 +781,7 @@
             <div class="drop-icon">☁️</div>
             <h2>Solte arquivos ou pastas aqui</h2>
             <p>
-              Também funciona com múltiplas pastas e arquivos misturados.<br />
+              Também funciona com múltiplas pastas, arquivos e ZIPs.<br />
               Clique para abrir o seletor de diretórios.
             </p>
           </div>
@@ -672,12 +864,36 @@
           </div>
 
           <div class="notice">
-            O drag de diretórios usa uma API historicamente prefixada:
-            <code>webkitGetAsEntry()</code>. Chrome, Edge e Safari costumam
-            suportá-la bem. O seletor usa <code>webkitdirectory</code>.
+            O leitor tenta, nesta ordem:
+            <code>getAsFileSystemHandle()</code>,
+            <code>getAsEntry()/webkitGetAsEntry()</code> e
+            <code>getAsFile()</code>. No iPhone, arrastar uma pasta pode chegar
+            somente como um item opaco; nesse caso use “Escolher pasta” ou
+            compacte-a em ZIP.
           </div>
         </div>
       </aside>
+    </section>
+
+    <section class="debug-panel" id="debug-panel">
+      <div class="debug-header">
+        <div class="debug-title">
+          <span class="debug-live-dot"></span>
+          <div>
+            <strong>Debug trace</strong>
+            <span id="debug-summary">Aguardando interação</span>
+          </div>
+        </div>
+
+        <div class="debug-actions">
+          <button class="button" id="copy-debug" type="button">⧉ Copiar</button>
+          <button class="button" id="clear-debug" type="button">⌫ Limpar trace</button>
+        </div>
+      </div>
+
+      <div class="debug-output" id="debug-output"></div>
+
+      <div class="compatibility-grid" id="compatibility-grid"></div>
     </section>
 
     <p class="footer">
@@ -694,118 +910,583 @@
     multiple
   />
 
+  <input
+    class="hidden-input"
+    id="file-input"
+    type="file"
+    accept=".zip,application/zip,application/x-zip-compressed,*/*"
+    multiple
+  />
+
   <script>
     (() => {
       "use strict";
 
-      const dropZone = document.querySelector("#drop-zone");
-      const folderInput = document.querySelector("#folder-input");
-      const chooseFolderButton = document.querySelector("#choose-folder");
-      const clearButton = document.querySelector("#clear-all");
-      const copyJsonButton = document.querySelector("#copy-json");
-      const treeElement = document.querySelector("#tree");
-      const rootLabel = document.querySelector("#root-label");
-      const fileCountElement = document.querySelector("#file-count");
-      const folderCountElement = document.querySelector("#folder-count");
-      const totalSizeElement = document.querySelector("#total-size");
-      const samplePathElement = document.querySelector("#sample-path");
+      const $ = (selector) => document.querySelector(selector);
+
+      const dropZone = $("#drop-zone");
+      const folderInput = $("#folder-input");
+      const fileInput = $("#file-input");
+      const chooseFolderButton = $("#choose-folder");
+      const chooseFilesButton = $("#choose-files");
+      const toggleDebugButton = $("#toggle-debug");
+      const clearButton = $("#clear-all");
+      const copyJsonButton = $("#copy-json");
+      const treeElement = $("#tree");
+      const rootLabel = $("#root-label");
+      const fileCountElement = $("#file-count");
+      const folderCountElement = $("#folder-count");
+      const totalSizeElement = $("#total-size");
+      const samplePathElement = $("#sample-path");
+      const debugPanel = $("#debug-panel");
+      const debugOutput = $("#debug-output");
+      const debugSummary = $("#debug-summary");
+      const compatibilityGrid = $("#compatibility-grid");
+      const copyDebugButton = $("#copy-debug");
+      const clearDebugButton = $("#clear-debug");
+
+      const textDecoder = new TextDecoder("utf-8");
+      const fallbackDecoder = createFallbackDecoder();
 
       let files = [];
+      let traceEntries = [];
+      let dragDepth = 0;
+      let operationId = 0;
+
+      /* ******************** */
+      /* Diagnostics          */
+      /* ******************** */
+
+      installGlobalErrorTrace();
+      renderCompatibility();
+      trace("info", "Aplicação iniciada", getEnvironmentSnapshot());
+
+      function trace(level, message, data) {
+        const entry = {
+          time: new Date(),
+          level,
+          message,
+          data: serializeForTrace(data),
+        };
+
+        traceEntries.push(entry);
+
+        if (traceEntries.length > 500) {
+          traceEntries.shift();
+        }
+
+        const line = document.createElement("div");
+        line.className = "debug-line";
+
+        const time = document.createElement("span");
+        time.className = "debug-time";
+        time.textContent = formatTraceTime(entry.time);
+
+        const levelElement = document.createElement("span");
+        levelElement.className = `debug-level ${level}`;
+        levelElement.textContent = level.toUpperCase();
+
+        const content = document.createElement("span");
+        content.className = "debug-message";
+        content.textContent = entry.data
+          ? `${message}
+${entry.data}`
+          : message;
+
+        line.append(time, levelElement, content);
+        debugOutput.append(line);
+        debugOutput.scrollTop = debugOutput.scrollHeight;
+
+        debugSummary.textContent =
+          `${traceEntries.length} eventos · último: ${message}`;
+
+        const consoleMethod =
+          level === "error" ? "error" :
+          level === "warn" ? "warn" :
+          level === "success" ? "info" :
+          "debug";
+
+        console[consoleMethod](`[Folder Drop] ${message}`, data ?? "");
+      }
+
+      function serializeForTrace(value) {
+        if (value == null) return "";
+
+        if (typeof value === "string") return value;
+
+        try {
+          return JSON.stringify(value, createCircularReplacer(), 2);
+        } catch {
+          return String(value);
+        }
+      }
+
+      function createCircularReplacer() {
+        const seen = new WeakSet();
+
+        return (_key, value) => {
+          if (typeof value === "object" && value !== null) {
+            if (seen.has(value)) return "[Circular]";
+            seen.add(value);
+          }
+
+          if (value instanceof File) {
+            return describeFile(value);
+          }
+
+          if (value instanceof DOMException || value instanceof Error) {
+            return {
+              name: value.name,
+              message: value.message,
+              stack: value.stack,
+            };
+          }
+
+          return value;
+        };
+      }
+
+      function installGlobalErrorTrace() {
+        window.addEventListener("error", (event) => {
+          trace("error", "Erro global", {
+            message: event.message,
+            filename: event.filename,
+            line: event.lineno,
+            column: event.colno,
+            error: event.error,
+          });
+        });
+
+        window.addEventListener("unhandledrejection", (event) => {
+          trace("error", "Promise rejeitada sem tratamento", event.reason);
+        });
+      }
+
+      function getEnvironmentSnapshot() {
+        return {
+          href: location.href,
+          protocol: location.protocol,
+          secureContext: window.isSecureContext,
+          userAgent: navigator.userAgent,
+          platform: navigator.platform,
+          maxTouchPoints: navigator.maxTouchPoints,
+          DataTransferItem: {
+            getAsFileSystemHandle:
+              typeof DataTransferItem !== "undefined" &&
+              typeof DataTransferItem.prototype.getAsFileSystemHandle === "function",
+            getAsEntry:
+              typeof DataTransferItem !== "undefined" &&
+              typeof DataTransferItem.prototype.getAsEntry === "function",
+            webkitGetAsEntry:
+              typeof DataTransferItem !== "undefined" &&
+              typeof DataTransferItem.prototype.webkitGetAsEntry === "function",
+            getAsFile:
+              typeof DataTransferItem !== "undefined" &&
+              typeof DataTransferItem.prototype.getAsFile === "function",
+          },
+          directoryInput: {
+            webkitdirectoryProperty: "webkitdirectory" in folderInput,
+            webkitdirectoryValue: folderInput.webkitdirectory,
+            webkitEntriesProperty: "webkitEntries" in folderInput,
+          },
+        };
+      }
+
+      function renderCompatibility() {
+        const checks = [
+          ["Contexto seguro", window.isSecureContext],
+          [
+            "FS Handle",
+            typeof DataTransferItem !== "undefined" &&
+              "getAsFileSystemHandle" in DataTransferItem.prototype,
+          ],
+          [
+            "webkitGetAsEntry",
+            typeof DataTransferItem !== "undefined" &&
+              "webkitGetAsEntry" in DataTransferItem.prototype,
+          ],
+          ["webkitdirectory", "webkitdirectory" in folderInput],
+          ["FileReader", "FileReader" in window],
+          ["ArrayBuffer", "arrayBuffer" in Blob.prototype],
+          ["TextDecoder", "TextDecoder" in window],
+          ["Touch", navigator.maxTouchPoints > 0],
+        ];
+
+        compatibilityGrid.replaceChildren(
+          ...checks.map(([label, supported]) => {
+            const item = document.createElement("div");
+            item.className = "compatibility-item";
+
+            const name = document.createElement("span");
+            name.textContent = label;
+
+            const value = document.createElement("strong");
+            value.textContent = supported ? "✓ disponível" : "✕ indisponível";
+
+            item.append(name, value);
+            return item;
+          }),
+        );
+      }
 
       /* ******************** */
       /* Drag and drop        */
       /* ******************** */
 
-      ["dragenter", "dragover"].forEach((eventName) => {
-        dropZone.addEventListener(eventName, (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          dropZone.classList.add("dragging");
-        });
+      window.addEventListener("dragover", preventDocumentDrop, false);
+      window.addEventListener("drop", preventDocumentDrop, false);
+
+      dropZone.addEventListener("dragenter", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dragDepth += 1;
+        dropZone.classList.add("dragging");
+
+        trace("info", "dragenter", describeDataTransfer(event.dataTransfer));
       });
 
-      ["dragleave", "drop"].forEach((eventName) => {
-        dropZone.addEventListener(eventName, (event) => {
-          event.preventDefault();
-          event.stopPropagation();
+      dropZone.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (event.dataTransfer) {
+          event.dataTransfer.dropEffect = "copy";
+        }
+      });
+
+      dropZone.addEventListener("dragleave", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        dragDepth = Math.max(0, dragDepth - 1);
+
+        if (dragDepth === 0) {
           dropZone.classList.remove("dragging");
-        });
+        }
       });
 
-      dropZone.addEventListener("drop", async (event) => {
-        const items = [...event.dataTransfer.items];
+      dropZone.addEventListener("drop", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
 
-        if (!items.length) return;
+        dragDepth = 0;
+        dropZone.classList.remove("dragging");
 
-        const collected = [];
+        const currentOperation = ++operationId;
+        const transfer = event.dataTransfer;
 
-        for (const item of items) {
-          const entry = item.webkitGetAsEntry?.();
+        trace("info", `DROP #${currentOperation} recebido`, describeDataTransfer(transfer));
 
-          if (entry) {
-            await walkEntry(entry, "", collected);
-            continue;
-          }
+        if (!transfer) {
+          trace("error", "drop sem dataTransfer");
+          return;
+        }
 
-          const file = item.getAsFile();
+        /*
+         * This capture must happen synchronously. Chromium invalidates access to
+         * getAsFileSystemHandle() after the initial drop event tick.
+         */
+        const capturedItems = [...transfer.items].map((item, index) =>
+          captureDropItem(item, index),
+        );
 
-          if (file) {
-            collected.push(createFileRecord(file, file.name));
+        const fallbackFiles = [...transfer.files];
+
+        trace("info", `DROP #${currentOperation}: itens capturados`, {
+          capturedItems: capturedItems.map(describeCapturedItem),
+          fallbackFiles: fallbackFiles.map(describeFile),
+        });
+
+        void processCapturedDrop(
+          capturedItems,
+          fallbackFiles,
+          currentOperation,
+        );
+      });
+
+      function preventDocumentDrop(event) {
+        if (event.target === dropZone || dropZone.contains(event.target)) return;
+        event.preventDefault();
+      }
+
+      function captureDropItem(item, index) {
+        const capture = {
+          index,
+          kind: item.kind,
+          type: item.type,
+          handlePromise: null,
+          entry: null,
+          file: null,
+          errors: [],
+        };
+
+        if (item.kind !== "file") {
+          return capture;
+        }
+
+        if (typeof item.getAsFileSystemHandle === "function") {
+          try {
+            capture.handlePromise = item.getAsFileSystemHandle();
+          } catch (error) {
+            capture.errors.push({
+              strategy: "getAsFileSystemHandle",
+              error,
+            });
           }
         }
 
-        setFiles(collected);
+        const getEntry =
+          typeof item.getAsEntry === "function"
+            ? item.getAsEntry.bind(item)
+            : typeof item.webkitGetAsEntry === "function"
+              ? item.webkitGetAsEntry.bind(item)
+              : null;
+
+        if (getEntry) {
+          try {
+            capture.entry = getEntry();
+          } catch (error) {
+            capture.errors.push({
+              strategy: "getAsEntry",
+              error,
+            });
+          }
+        }
+
+        try {
+          capture.file = item.getAsFile?.() ?? null;
+        } catch (error) {
+          capture.errors.push({
+            strategy: "getAsFile",
+            error,
+          });
+        }
+
+        return capture;
+      }
+
+      async function processCapturedDrop(captures, fallbackFiles, currentOperation) {
+        const collected = [];
+
+        for (const capture of captures) {
+          if (currentOperation !== operationId) return;
+
+          trace("info", `Item ${capture.index}: iniciando estratégias`, describeCapturedItem(capture));
+
+          for (const failure of capture.errors) {
+            trace("warn", `Item ${capture.index}: ${failure.strategy} lançou erro`, failure.error);
+          }
+
+          let handled = false;
+
+          if (capture.handlePromise) {
+            try {
+              const handle = await capture.handlePromise;
+
+              if (handle) {
+                trace("success", `Item ${capture.index}: File System Handle obtido`, {
+                  kind: handle.kind,
+                  name: handle.name,
+                });
+
+                await walkFileSystemHandle(handle, "", collected);
+                handled = true;
+              } else {
+                trace("warn", `Item ${capture.index}: handle retornou null`);
+              }
+            } catch (error) {
+              trace("warn", `Item ${capture.index}: File System Handle falhou`, error);
+            }
+          }
+
+          if (!handled && capture.entry) {
+            try {
+              trace("info", `Item ${capture.index}: usando Entries API`, describeEntry(capture.entry));
+              await walkEntry(capture.entry, "", collected);
+              handled = true;
+            } catch (error) {
+              trace("warn", `Item ${capture.index}: Entries API falhou`, error);
+            }
+          }
+
+          if (!handled && capture.file) {
+            trace("info", `Item ${capture.index}: usando File fallback`, describeFile(capture.file));
+            await appendFileAndArchive(capture.file, capture.file.name, collected);
+            handled = true;
+          }
+
+          if (!handled) {
+            trace("error", `Item ${capture.index}: nenhuma estratégia produziu arquivo`, {
+              capture: describeCapturedItem(capture),
+              explanation:
+                "Em iOS, uma pasta arrastada pode ser exposta sem handle, entry ou File utilizável.",
+            });
+          }
+        }
+
+        if (!collected.length && fallbackFiles.length) {
+          trace("warn", "Nenhum item processado; usando dataTransfer.files como fallback global");
+
+          for (const file of fallbackFiles) {
+            await appendFileAndArchive(
+              file,
+              file.webkitRelativePath || file.name,
+              collected,
+            );
+          }
+        }
+
+        finishCollection(collected, `DROP #${currentOperation}`);
+      }
+
+      function describeDataTransfer(transfer) {
+        if (!transfer) return null;
+
+        return {
+          dropEffect: transfer.dropEffect,
+          effectAllowed: transfer.effectAllowed,
+          types: [...transfer.types],
+          itemCount: transfer.items?.length ?? 0,
+          fileCount: transfer.files?.length ?? 0,
+          items: [...(transfer.items || [])].map((item, index) => ({
+            index,
+            kind: item.kind,
+            type: item.type,
+            methods: {
+              getAsFileSystemHandle:
+                typeof item.getAsFileSystemHandle === "function",
+              getAsEntry: typeof item.getAsEntry === "function",
+              webkitGetAsEntry:
+                typeof item.webkitGetAsEntry === "function",
+              getAsFile: typeof item.getAsFile === "function",
+            },
+          })),
+          files: [...(transfer.files || [])].map(describeFile),
+        };
+      }
+
+      function describeCapturedItem(capture) {
+        return {
+          index: capture.index,
+          kind: capture.kind,
+          type: capture.type,
+          hasHandlePromise: Boolean(capture.handlePromise),
+          entry: describeEntry(capture.entry),
+          file: capture.file ? describeFile(capture.file) : null,
+          captureErrorCount: capture.errors.length,
+        };
+      }
+
+      /* ******************** */
+      /* Pickers              */
+      /* ******************** */
+
+      chooseFolderButton.addEventListener("click", () => {
+        trace("info", "Abrindo seletor de diretório");
+        folderInput.click();
       });
 
-      /* ******************** */
-      /* Folder picker        */
-      /* ******************** */
+      chooseFilesButton.addEventListener("click", () => {
+        trace("info", "Abrindo seletor de arquivos/ZIP");
+        fileInput.click();
+      });
 
-      chooseFolderButton.addEventListener("click", openFolderPicker);
-      dropZone.addEventListener("click", openFolderPicker);
+      dropZone.addEventListener("click", () => {
+        trace("info", "Drop zone clicada; abrindo seletor de diretório");
+        folderInput.click();
+      });
 
       dropZone.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          openFolderPicker();
+          folderInput.click();
         }
       });
 
-      folderInput.addEventListener("change", () => {
-        const selected = [...folderInput.files].map((file) =>
-          createFileRecord(
-            file,
-            file.webkitRelativePath || file.name,
-          ),
-        );
+      folderInput.addEventListener("change", async () => {
+        const selected = [...folderInput.files];
+        trace("info", "Seletor de diretório retornou", {
+          count: selected.length,
+          files: selected.map(describeFile),
+          webkitEntries: [...(folderInput.webkitEntries || [])].map(describeEntry),
+        });
 
-        setFiles(selected);
+        await processPickerFiles(selected, "seletor de diretório");
         folderInput.value = "";
       });
 
-      function openFolderPicker() {
-        folderInput.click();
+      fileInput.addEventListener("change", async () => {
+        const selected = [...fileInput.files];
+        trace("info", "Seletor de arquivos retornou", {
+          count: selected.length,
+          files: selected.map(describeFile),
+        });
+
+        await processPickerFiles(selected, "seletor de arquivos");
+        fileInput.value = "";
+      });
+
+      async function processPickerFiles(selected, source) {
+        const collected = [];
+
+        for (const file of selected) {
+          await appendFileAndArchive(
+            file,
+            file.webkitRelativePath || file.name,
+            collected,
+          );
+        }
+
+        finishCollection(collected, source);
       }
 
       /* ******************** */
       /* Directory traversal  */
       /* ******************** */
 
+      async function walkFileSystemHandle(handle, parentPath, output) {
+        const currentPath = parentPath
+          ? `${parentPath}/${handle.name}`
+          : handle.name;
+
+        trace("info", "Percorrendo File System Handle", {
+          kind: handle.kind,
+          name: handle.name,
+          currentPath,
+        });
+
+        if (handle.kind === "file") {
+          const file = await handle.getFile();
+          await appendFileAndArchive(file, currentPath, output);
+          return;
+        }
+
+        if (handle.kind !== "directory") return;
+
+        for await (const childHandle of handle.values()) {
+          await walkFileSystemHandle(childHandle, currentPath, output);
+        }
+      }
+
       async function walkEntry(entry, parentPath, output) {
         const currentPath = parentPath
           ? `${parentPath}/${entry.name}`
           : entry.name;
 
+        trace("info", "Percorrendo Entries API", {
+          ...describeEntry(entry),
+          currentPath,
+        });
+
         if (entry.isFile) {
           const file = await readFileEntry(entry);
-          output.push(createFileRecord(file, currentPath));
+          await appendFileAndArchive(file, currentPath, output);
           return;
         }
 
         if (!entry.isDirectory) return;
 
         const reader = entry.createReader();
-        const entries = await readAllDirectoryEntries(reader);
+        const entries = await readAllDirectoryEntries(reader, currentPath);
 
         for (const childEntry of entries) {
           await walkEntry(childEntry, currentPath, output);
@@ -818,14 +1499,25 @@
         });
       }
 
-      async function readAllDirectoryEntries(reader) {
+      async function readAllDirectoryEntries(reader, path) {
         const entries = [];
+        let batchIndex = 0;
 
-        // readEntries() may return directory contents in multiple batches.
+        /*
+         * readEntries() is intentionally repeated until an empty batch arrives.
+         * Chromium commonly limits each batch instead of returning all children.
+         */
         while (true) {
           const batch = await new Promise((resolve, reject) => {
             reader.readEntries(resolve, reject);
           });
+
+          trace("info", `Diretório ${path}: lote ${batchIndex}`, {
+            count: batch.length,
+            names: batch.map((entry) => entry.name),
+          });
+
+          batchIndex += 1;
 
           if (!batch.length) break;
           entries.push(...batch);
@@ -833,6 +1525,221 @@
 
         return entries;
       }
+
+      function describeEntry(entry) {
+        if (!entry) return null;
+
+        return {
+          name: entry.name,
+          fullPath: entry.fullPath,
+          isFile: entry.isFile,
+          isDirectory: entry.isDirectory,
+        };
+      }
+
+      /* ******************** */
+      /* ZIP inspection       */
+      /* ******************** */
+
+      async function appendFileAndArchive(file, relativePath, output) {
+        const record = createFileRecord(file, relativePath);
+        output.push(record);
+
+        if (!isZipFile(file)) return;
+
+        trace("info", `ZIP detectado: ${record.relativePath}`, describeFile(file));
+
+        try {
+          const entries = await inspectZip(file);
+
+          record.archiveEntries = entries;
+
+          trace("success", `ZIP aberto: ${record.relativePath}`, {
+            entryCount: entries.length,
+            entries: entries.slice(0, 100),
+            truncatedInTrace: entries.length > 100,
+          });
+        } catch (error) {
+          record.archiveError =
+            error instanceof Error ? error.message : String(error);
+
+          trace("error", `Falha ao abrir ZIP: ${record.relativePath}`, error);
+        }
+      }
+
+      function isZipFile(file) {
+        return (
+          /\.zip$/i.test(file.name) ||
+          file.type === "application/zip" ||
+          file.type === "application/x-zip-compressed"
+        );
+      }
+
+      async function inspectZip(file) {
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        const view = new DataView(buffer);
+
+        if (bytes.length < 22) {
+          throw new Error("Arquivo pequeno demais para ser um ZIP válido.");
+        }
+
+        const eocdOffset = findEndOfCentralDirectory(view);
+
+        if (eocdOffset < 0) {
+          throw new Error(
+            "Assinatura EOCD não encontrada. ZIP corrompido, multipart ou ZIP64 sem EOCD clássico.",
+          );
+        }
+
+        const entryCount = view.getUint16(eocdOffset + 10, true);
+        const centralDirectorySize = view.getUint32(eocdOffset + 12, true);
+        const centralDirectoryOffset = view.getUint32(eocdOffset + 16, true);
+
+        trace("info", `ZIP ${file.name}: central directory`, {
+          fileSize: bytes.length,
+          eocdOffset,
+          entryCount,
+          centralDirectorySize,
+          centralDirectoryOffset,
+        });
+
+        if (
+          entryCount === 0xffff ||
+          centralDirectorySize === 0xffffffff ||
+          centralDirectoryOffset === 0xffffffff
+        ) {
+          throw new Error(
+            "Este arquivo usa ZIP64. O exemplo lista ZIP clássico para permanecer sem dependências externas.",
+          );
+        }
+
+        const entries = [];
+        let offset = centralDirectoryOffset;
+
+        for (let index = 0; index < entryCount; index += 1) {
+          ensureRange(view, offset, 46, "cabeçalho central");
+
+          const signature = view.getUint32(offset, true);
+
+          if (signature !== 0x02014b50) {
+            throw new Error(
+              `Assinatura central inválida no item ${index}: 0x${signature.toString(16)}.`,
+            );
+          }
+
+          const flags = view.getUint16(offset + 8, true);
+          const compressionMethod = view.getUint16(offset + 10, true);
+          const crc32 = view.getUint32(offset + 16, true);
+          const compressedSize = view.getUint32(offset + 20, true);
+          const uncompressedSize = view.getUint32(offset + 24, true);
+          const fileNameLength = view.getUint16(offset + 28, true);
+          const extraLength = view.getUint16(offset + 30, true);
+          const commentLength = view.getUint16(offset + 32, true);
+          const externalAttributes = view.getUint32(offset + 38, true);
+          const localHeaderOffset = view.getUint32(offset + 42, true);
+
+          const variableLength =
+            fileNameLength + extraLength + commentLength;
+
+          ensureRange(
+            view,
+            offset + 46,
+            variableLength,
+            "dados variáveis do cabeçalho central",
+          );
+
+          const nameBytes = bytes.subarray(
+            offset + 46,
+            offset + 46 + fileNameLength,
+          );
+
+          const utf8 = Boolean(flags & 0x0800);
+          const rawName = decodeZipName(nameBytes, utf8);
+          const name = sanitizeArchivePath(rawName);
+          const directory =
+            name.endsWith("/") ||
+            Boolean((externalAttributes >>> 16) & 0x4000);
+
+          if (name) {
+            entries.push({
+              name,
+              directory,
+              compressedSize,
+              uncompressedSize,
+              compressionMethod,
+              encrypted: Boolean(flags & 0x0001),
+              crc32: crc32.toString(16).padStart(8, "0"),
+              localHeaderOffset,
+            });
+          }
+
+          offset += 46 + variableLength;
+        }
+
+        return entries;
+      }
+
+      function findEndOfCentralDirectory(view) {
+        const minimumEocdSize = 22;
+        const maximumCommentSize = 0xffff;
+        const minimumOffset = Math.max(
+          0,
+          view.byteLength - minimumEocdSize - maximumCommentSize,
+        );
+
+        for (
+          let offset = view.byteLength - minimumEocdSize;
+          offset >= minimumOffset;
+          offset -= 1
+        ) {
+          if (view.getUint32(offset, true) === 0x06054b50) {
+            return offset;
+          }
+        }
+
+        return -1;
+      }
+
+      function decodeZipName(bytes, utf8) {
+        if (utf8) {
+          return textDecoder.decode(bytes);
+        }
+
+        return fallbackDecoder(bytes);
+      }
+
+      function createFallbackDecoder() {
+        try {
+          const decoder = new TextDecoder("windows-1252");
+          return (bytes) => decoder.decode(bytes);
+        } catch {
+          return (bytes) =>
+            [...bytes].map((value) => String.fromCharCode(value)).join("");
+        }
+      }
+
+      function sanitizeArchivePath(path) {
+        return String(path)
+          .replaceAll("\\", "/")
+          .replace(/^\/+/, "")
+          .split("/")
+          .filter((part) => part && part !== ".")
+          .map((part) => (part === ".." ? "__parent__" : part))
+          .join("/");
+      }
+
+      function ensureRange(view, offset, length, label) {
+        if (offset < 0 || offset + length > view.byteLength) {
+          throw new Error(
+            `ZIP truncado ao ler ${label} em ${offset} (+${length}).`,
+          );
+        }
+      }
+
+      /* ******************** */
+      /* Data model           */
+      /* ******************** */
 
       function createFileRecord(file, relativePath) {
         return {
@@ -842,19 +1749,30 @@
           size: file.size,
           type: file.type || "application/octet-stream",
           lastModified: file.lastModified,
+          archiveEntries: null,
+          archiveError: null,
         };
       }
 
       function normalizePath(path) {
         return String(path)
-          .replaceAll("\\\\", "/")
+          .replaceAll("\\", "/")
           .replace(/^\/+/, "")
           .replace(/\/+/g, "/");
       }
 
-      /* ******************** */
-      /* Rendering            */
-      /* ******************** */
+      function finishCollection(collected, source) {
+        if (!collected.length) {
+          trace("warn", `${source}: nenhum arquivo coletado`);
+          return;
+        }
+
+        setFiles(collected);
+        trace("success", `${source}: processamento concluído`, {
+          fileCount: collected.length,
+          archiveCount: collected.filter((item) => item.archiveEntries).length,
+        });
+      }
 
       function setFiles(nextFiles) {
         files = deduplicateFiles(nextFiles).sort((a, b) =>
@@ -874,6 +1792,10 @@
         return [...map.values()];
       }
 
+      /* ******************** */
+      /* Rendering            */
+      /* ******************** */
+
       function render() {
         if (!files.length) {
           renderEmptyState();
@@ -884,14 +1806,15 @@
         const folderCount = countFolders(tree);
         const totalSize = files.reduce((sum, item) => sum + item.size, 0);
         const rootNames = [...new Set(files.map(getRootName))];
+        const zipCount = files.filter((item) => item.archiveEntries).length;
 
         fileCountElement.textContent = String(files.length);
         folderCountElement.textContent = String(folderCount);
         totalSizeElement.textContent = formatBytes(totalSize);
         rootLabel.textContent =
           rootNames.length === 1
-            ? rootNames[0]
-            : `${rootNames.length} raízes carregadas`;
+            ? `${rootNames[0]}${zipCount ? ` · ${zipCount} ZIP aberto` : ""}`
+            : `${rootNames.length} raízes · ${zipCount} ZIP aberto(s)`;
 
         samplePathElement.textContent = files[0].relativePath;
         treeElement.replaceChildren(renderTree(tree));
@@ -925,11 +1848,18 @@
             const isFile = index === parts.length - 1;
 
             if (isFile) {
-              current.children.set(part, {
-                type: "file",
+              const fileNode = {
+                type: record.archiveEntries ? "archive" : "file",
                 name: part,
                 record,
-              });
+                children: new Map(),
+              };
+
+              current.children.set(part, fileNode);
+
+              if (record.archiveEntries) {
+                addArchiveEntries(fileNode, record.archiveEntries);
+              }
 
               return;
             }
@@ -943,6 +1873,36 @@
         }
 
         return root;
+      }
+
+      function addArchiveEntries(archiveNode, entries) {
+        for (const entry of entries) {
+          const parts = entry.name.split("/").filter(Boolean);
+          let current = archiveNode;
+
+          parts.forEach((part, index) => {
+            const isLast = index === parts.length - 1;
+            const isDirectory = entry.directory || !isLast;
+
+            if (isDirectory) {
+              if (!current.children.has(part)) {
+                current.children.set(part, {
+                  ...createFolderNode(part),
+                  archiveEntry: true,
+                });
+              }
+
+              current = current.children.get(part);
+              return;
+            }
+
+            current.children.set(part, {
+              type: "archive-entry",
+              name: part,
+              entry,
+            });
+          });
+        }
       }
 
       function createFolderNode(name) {
@@ -976,7 +1936,7 @@
 
         const icon = document.createElement("span");
         icon.className = "tree-icon";
-        icon.textContent = node.type === "folder" ? "📂" : getFileIcon(node.name);
+        icon.textContent = getNodeIcon(node);
 
         const name = document.createElement("span");
         name.className = "tree-name";
@@ -988,25 +1948,46 @@
         if (node.type === "file") {
           meta.textContent = formatBytes(node.record.size);
           row.title = node.record.relativePath;
+        } else if (node.type === "archive") {
+          meta.textContent = node.record.archiveError
+            ? "ZIP inválido"
+            : `${node.record.archiveEntries.length} entradas`;
+          row.title = node.record.relativePath;
+        } else if (node.type === "archive-entry") {
+          meta.textContent = formatBytes(node.entry.uncompressedSize);
+          row.title =
+            `Dentro do ZIP · método ${node.entry.compressionMethod}` +
+            `${node.entry.encrypted ? " · criptografado" : ""}`;
         } else {
-          meta.textContent = `${node.children.size} item${node.children.size === 1 ? "" : "s"}`;
+          meta.textContent =
+            `${node.children.size} item${node.children.size === 1 ? "" : "s"}`;
         }
 
         main.append(indent, icon, name);
         row.append(main, meta);
         parent.append(row);
 
-        if (node.type === "folder") {
+        if (node.children) {
           for (const child of sortNodes(node.children.values())) {
             renderTreeNode(child, depth + 1, parent);
           }
         }
       }
 
+      function getNodeIcon(node) {
+        if (node.type === "archive") return "📦";
+        if (node.type === "folder") return node.archiveEntry ? "🗀" : "📂";
+        if (node.type === "archive-entry") return getFileIcon(node.name);
+        return getFileIcon(node.name);
+      }
+
       function sortNodes(nodes) {
         return [...nodes].sort((a, b) => {
-          if (a.type !== b.type) {
-            return a.type === "folder" ? -1 : 1;
+          const aFolder = Boolean(a.children);
+          const bFolder = Boolean(b.children);
+
+          if (aFolder !== bFolder) {
+            return aFolder ? -1 : 1;
           }
 
           return a.name.localeCompare(b.name);
@@ -1017,7 +1998,7 @@
         let count = 0;
 
         for (const child of node.children.values()) {
-          if (child.type !== "folder") continue;
+          if (!child.children) continue;
           count += 1 + countFolders(child);
         }
 
@@ -1046,7 +2027,7 @@
           jpeg: "🖼️",
           gif: "🖼️",
           svg: "✒️",
-          zip: "🗜️",
+          zip: "📦",
           pdf: "📕",
           txt: "📄",
         };
@@ -1068,26 +2049,92 @@
         return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
       }
 
+      function describeFile(file) {
+        if (!file) return null;
+
+        return {
+          name: file.name,
+          type: file.type || "(vazio)",
+          size: file.size,
+          formattedSize: formatBytes(file.size),
+          lastModified: file.lastModified,
+          webkitRelativePath: file.webkitRelativePath || "",
+        };
+      }
+
+      function formatTraceTime(date) {
+        return new Intl.DateTimeFormat("pt-BR", {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          fractionalSecondDigits: 3,
+        }).format(date);
+      }
+
       /* ******************** */
       /* Actions              */
       /* ******************** */
 
       clearButton.addEventListener("click", () => {
+        operationId += 1;
         setFiles([]);
+        trace("info", "Árvore limpa");
+      });
+
+      toggleDebugButton.addEventListener("click", () => {
+        debugPanel.hidden = !debugPanel.hidden;
+        toggleDebugButton.classList.toggle("debug-active", !debugPanel.hidden);
+      });
+
+      clearDebugButton.addEventListener("click", () => {
+        traceEntries = [];
+        debugOutput.replaceChildren();
+        debugSummary.textContent = "Trace limpo";
+        trace("info", "Trace reiniciado");
+      });
+
+      copyDebugButton.addEventListener("click", async () => {
+        const text = traceEntries
+          .map((entry) => {
+            const suffix = entry.data ? `
+${entry.data}` : "";
+            return `${entry.time.toISOString()} [${entry.level.toUpperCase()}] ${entry.message}${suffix}`;
+          })
+          .join("\n\n");
+
+        await copyText(text, copyDebugButton, "✓ Trace copiado");
       });
 
       copyJsonButton.addEventListener("click", async () => {
         const data = files.map(({ file, ...serializable }) => serializable);
         const json = JSON.stringify(data, null, 2);
 
-        try {
-          await navigator.clipboard.writeText(json);
-          showTemporaryButtonState(copyJsonButton, "✓ JSON copiado");
-        } catch {
-          console.log(json);
-          showTemporaryButtonState(copyJsonButton, "Veja o console");
-        }
+        await copyText(json, copyJsonButton, "✓ JSON copiado");
       });
+
+      async function copyText(text, button, successText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          showTemporaryButtonState(button, successText);
+        } catch (error) {
+          trace("warn", "Clipboard API falhou; usando textarea fallback", error);
+
+          const textarea = document.createElement("textarea");
+          textarea.value = text;
+          textarea.style.position = "fixed";
+          textarea.style.opacity = "0";
+          document.body.append(textarea);
+          textarea.select();
+
+          const copied = document.execCommand("copy");
+          textarea.remove();
+
+          showTemporaryButtonState(
+            button,
+            copied ? successText : "Falha ao copiar",
+          );
+        }
+      }
 
       function showTemporaryButtonState(button, text) {
         const original = button.innerHTML;
