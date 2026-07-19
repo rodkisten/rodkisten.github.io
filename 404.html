@@ -1,0 +1,1031 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  />
+
+  <title>404 — Rod was not found</title>
+
+  <meta
+    name="description"
+    content="Você chegou ao nada. Aproveite para conhecer os projetos de Rod."
+  />
+
+  <meta name="theme-color" content="#ff4fd8" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo+Black&family=DM+Mono:wght@300;400;500&display=swap"
+    rel="stylesheet"
+  />
+
+  <style>
+    /* ==========================================================================
+       RESET
+       ========================================================================== */
+
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    :root {
+      --black: #090909;
+      --white: #fffdf5;
+      --pink: #ff4fd8;
+      --acid: #d8ff00;
+      --orange: #ff5c00;
+      --blue: #3548ff;
+      --cyan: #00fff0;
+      --red: #ff263b;
+
+      --border: clamp(3px, 0.35vw, 6px) solid var(--black);
+
+      --display:
+        "Anton",
+        "Arial Black",
+        Impact,
+        sans-serif;
+
+      --display-alt:
+        "Archivo Black",
+        "Arial Black",
+        sans-serif;
+
+      --mono:
+        "DM Mono",
+        "SFMono-Regular",
+        Consolas,
+        monospace;
+    }
+
+    html {
+      background: var(--pink);
+      color: var(--black);
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      background: var(--pink);
+      font-family: var(--mono);
+    }
+
+    button,
+    a {
+      font: inherit;
+    }
+
+    a {
+      color: inherit;
+    }
+
+    ::selection {
+      color: var(--white);
+      background: var(--blue);
+    }
+
+    /* ==========================================================================
+       GRAIN / BACKGROUND
+       ========================================================================== */
+
+    body::before {
+      position: fixed;
+      z-index: 999;
+      inset: 0;
+      pointer-events: none;
+      content: "";
+      opacity: 0.13;
+      background-image:
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.65'/%3E%3C/svg%3E");
+      mix-blend-mode: multiply;
+    }
+
+    .page {
+      position: relative;
+      min-height: 100dvh;
+      isolation: isolate;
+    }
+
+    /* ==========================================================================
+       TOP BAR
+       ========================================================================== */
+
+    .topbar {
+      position: relative;
+      z-index: 20;
+      display: flex;
+      align-items: stretch;
+      min-height: 64px;
+      border-bottom: var(--border);
+      background: var(--acid);
+    }
+
+    .topbar__logo {
+      display: grid;
+      flex: 0 0 auto;
+      place-items: center;
+      padding: 0 1.2rem;
+      border-right: var(--border);
+      font-family: var(--display-alt);
+      font-size: clamp(1rem, 2vw, 1.5rem);
+      text-decoration: none;
+      text-transform: uppercase;
+    }
+
+    .topbar__logo:hover {
+      color: var(--white);
+      background: var(--black);
+    }
+
+    .marquee {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .marquee__track {
+      display: flex;
+      width: max-content;
+      animation: marquee 18s linear infinite;
+    }
+
+    .marquee__item {
+      padding-right: 1rem;
+      font-family: var(--display-alt);
+      font-size: clamp(0.9rem, 1.5vw, 1.25rem);
+      text-transform: uppercase;
+    }
+
+    @keyframes marquee {
+      to {
+        transform: translateX(-50%);
+      }
+    }
+
+    /* ==========================================================================
+       HERO
+       ========================================================================== */
+
+    .hero {
+      position: relative;
+      display: grid;
+      min-height: min(780px, calc(100dvh - 64px));
+      overflow: hidden;
+      border-bottom: var(--border);
+      background: var(--pink);
+    }
+
+    .hero__grid {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      opacity: 0.18;
+      background-image:
+        linear-gradient(var(--black) 2px, transparent 2px),
+        linear-gradient(90deg, var(--black) 2px, transparent 2px);
+      background-size: 44px 44px;
+    }
+
+    .hero__404 {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      margin: 0;
+      transform: translate(-50%, -52%);
+      font-family: var(--display);
+      font-size: clamp(17rem, 54vw, 52rem);
+      font-weight: 400;
+      line-height: 0.72;
+      letter-spacing: -0.075em;
+      white-space: nowrap;
+      color: var(--pink);
+      -webkit-text-stroke:
+        clamp(3px, 0.55vw, 9px)
+        var(--black);
+      text-shadow:
+        0.015em 0.015em 0 var(--acid),
+        0.03em 0.03em 0 var(--orange),
+        0.045em 0.045em 0 var(--blue);
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .hero__content {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns:
+        minmax(0, 1.3fr)
+        minmax(270px, 0.7fr);
+      align-items: end;
+      gap: 1rem;
+      min-height: inherit;
+      padding:
+        clamp(1rem, 3vw, 3rem);
+    }
+
+    .hero__headline {
+      align-self: end;
+      max-width: 1100px;
+      margin: 0;
+      font-family: var(--display-alt);
+      font-size: clamp(3.7rem, 11vw, 11rem);
+      line-height: 0.75;
+      letter-spacing: -0.075em;
+      text-transform: uppercase;
+    }
+
+    .hero__headline span {
+      display: inline;
+      padding: 0 0.08em;
+      background: var(--white);
+      box-decoration-break: clone;
+      -webkit-box-decoration-break: clone;
+      box-shadow:
+        0.065em 0.065em 0 var(--black);
+    }
+
+    .hero__aside {
+      align-self: end;
+      transform: rotate(2deg);
+      border: var(--border);
+      background: var(--cyan);
+      box-shadow:
+        12px 12px 0 var(--black);
+    }
+
+    .hero__aside-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.7rem 1rem;
+      border-bottom: var(--border);
+      background: var(--white);
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .hero__aside-body {
+      padding: 1.25rem;
+      font-size: clamp(1rem, 2vw, 1.3rem);
+      line-height: 1.4;
+    }
+
+    .hero__aside strong {
+      font-family: var(--display-alt);
+      font-size: 1.15em;
+    }
+
+    /* ==========================================================================
+       FLOATING STICKERS
+       ========================================================================== */
+
+    .sticker {
+      position: absolute;
+      z-index: 6;
+      display: grid;
+      place-items: center;
+      border: var(--border);
+      font-family: var(--display-alt);
+      text-align: center;
+      text-transform: uppercase;
+      box-shadow: 7px 7px 0 var(--black);
+      pointer-events: none;
+    }
+
+    .sticker--one {
+      top: 8%;
+      right: 6%;
+      width: clamp(110px, 14vw, 190px);
+      aspect-ratio: 1;
+      transform: rotate(11deg);
+      border-radius: 50%;
+      background: var(--orange);
+      font-size: clamp(1rem, 2vw, 1.6rem);
+    }
+
+    .sticker--two {
+      top: 18%;
+      left: 4%;
+      padding: 0.8rem 1.2rem;
+      transform: rotate(-8deg);
+      background: var(--acid);
+      font-size: clamp(0.8rem, 1.5vw, 1.2rem);
+    }
+
+    .sticker--three {
+      right: 25%;
+      bottom: 12%;
+      padding: 0.5rem 1rem;
+      transform: rotate(-4deg);
+      background: var(--blue);
+      color: var(--white);
+    }
+
+    /* ==========================================================================
+       ERROR STRIP
+       ========================================================================== */
+
+    .error-strip {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      border-bottom: var(--border);
+      background: var(--black);
+      color: var(--white);
+    }
+
+    .error-strip > * {
+      padding: 0.9rem 1.2rem;
+    }
+
+    .error-strip__code {
+      border-right: 3px solid var(--white);
+      color: var(--acid);
+      font-family: var(--display-alt);
+    }
+
+    .error-strip__message {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .error-strip__status {
+      border-left: 3px solid var(--white);
+      color: var(--pink);
+      font-weight: 700;
+    }
+
+    /* ==========================================================================
+       PROJECTS
+       ========================================================================== */
+
+    .projects {
+      background: var(--white);
+    }
+
+    .projects__intro {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: end;
+      gap: 2rem;
+      padding: clamp(2rem, 6vw, 6rem) clamp(1rem, 3vw, 3rem);
+      border-bottom: var(--border);
+    }
+
+    .projects__title {
+      max-width: 1100px;
+      margin: 0;
+      font-family: var(--display);
+      font-size: clamp(5rem, 17vw, 18rem);
+      font-weight: 400;
+      line-height: 0.72;
+      letter-spacing: -0.055em;
+      text-transform: uppercase;
+    }
+
+    .projects__counter {
+      align-self: start;
+      padding: 0.7rem;
+      border: var(--border);
+      background: var(--acid);
+      font-family: var(--display-alt);
+      font-size: clamp(1rem, 3vw, 2rem);
+      box-shadow: 8px 8px 0 var(--black);
+      transform: rotate(3deg);
+    }
+
+    .project-list {
+      display: grid;
+    }
+
+    .project {
+      position: relative;
+      display: grid;
+      grid-template-columns:
+        minmax(90px, 0.22fr)
+        minmax(0, 1fr)
+        auto;
+      align-items: center;
+      gap: 1rem;
+      min-height: clamp(130px, 14vw, 210px);
+      padding: 1rem clamp(1rem, 3vw, 3rem);
+      overflow: hidden;
+      border-bottom: var(--border);
+      text-decoration: none;
+      transition:
+        color 140ms ease,
+        background 140ms ease;
+    }
+
+    .project::before {
+      position: absolute;
+      z-index: 0;
+      inset: 0;
+      content: "";
+      transform: translateX(-101%);
+      background: var(--black);
+      transition: transform 280ms cubic-bezier(.2, .8, .2, 1);
+    }
+
+    .project > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .project:hover::before,
+    .project:focus-visible::before {
+      transform: translateX(0);
+    }
+
+    .project:hover,
+    .project:focus-visible {
+      color: var(--white);
+      outline: none;
+    }
+
+    .project__number {
+      align-self: start;
+      font-weight: 700;
+    }
+
+    .project__name {
+      margin: 0;
+      font-family: var(--display-alt);
+      font-size: clamp(2.8rem, 8vw, 9rem);
+      line-height: 0.85;
+      letter-spacing: -0.055em;
+      text-transform: uppercase;
+    }
+
+    .project__meta {
+      max-width: 250px;
+      font-size: clamp(0.7rem, 1.3vw, 1rem);
+      text-align: right;
+      text-transform: uppercase;
+    }
+
+    .project__arrow {
+      display: inline-block;
+      margin-left: 0.5rem;
+      font-family: var(--display);
+      font-size: 1.4em;
+      transition: transform 200ms ease;
+    }
+
+    .project:hover .project__arrow {
+      transform: translate(0.3em, -0.2em) rotate(-15deg);
+    }
+
+    .project:nth-child(1) {
+      background: var(--acid);
+    }
+
+    .project:nth-child(2) {
+      background: var(--pink);
+    }
+
+    .project:nth-child(3) {
+      background: var(--cyan);
+    }
+
+    .project:nth-child(4) {
+      background: var(--orange);
+    }
+
+    .project:nth-child(5) {
+      background: #a8ffb4;
+    }
+
+    .project:nth-child(6) {
+      background: #bba7ff;
+    }
+
+    .project:nth-child(7) {
+      background: #fffb76;
+    }
+
+    /* ==========================================================================
+       GIANT CTA
+       ========================================================================== */
+
+    .escape {
+      position: relative;
+      display: grid;
+      min-height: 65dvh;
+      place-items: center;
+      overflow: hidden;
+      padding: 3rem 1rem;
+      border-bottom: var(--border);
+      background: var(--blue);
+      color: var(--white);
+      text-align: center;
+    }
+
+    .escape::before {
+      position: absolute;
+      width: 70vw;
+      height: 70vw;
+      border: 6px solid var(--white);
+      content: "";
+      transform: rotate(25deg);
+    }
+
+    .escape::after {
+      position: absolute;
+      width: 45vw;
+      height: 45vw;
+      border: 6px solid var(--acid);
+      border-radius: 50%;
+      content: "";
+    }
+
+    .escape__link {
+      position: relative;
+      z-index: 2;
+      display: block;
+      color: inherit;
+      font-family: var(--display);
+      font-size: clamp(6rem, 22vw, 24rem);
+      font-weight: 400;
+      line-height: 0.7;
+      letter-spacing: -0.06em;
+      text-decoration: none;
+      text-transform: uppercase;
+      -webkit-text-stroke: 3px var(--black);
+      text-shadow:
+        8px 8px 0 var(--black),
+        15px 15px 0 var(--pink);
+      transition: transform 200ms ease;
+    }
+
+    .escape__link:hover {
+      transform: scale(1.035) rotate(-1deg);
+    }
+
+    /* ==========================================================================
+       FOOTER
+       ========================================================================== */
+
+    footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1.2rem;
+      background: var(--acid);
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    footer a:hover {
+      text-decoration-thickness: 4px;
+    }
+
+    /* ==========================================================================
+       CURSOR
+       ========================================================================== */
+
+    @media (pointer: fine) {
+      body,
+      a {
+        cursor: none;
+      }
+
+      .cursor {
+        position: fixed;
+        z-index: 2000;
+        top: 0;
+        left: 0;
+        width: 20px;
+        height: 20px;
+        pointer-events: none;
+        border: 3px solid var(--black);
+        border-radius: 50%;
+        background: var(--acid);
+        transform:
+          translate(-50%, -50%)
+          translate3d(var(--cursor-x, -100px), var(--cursor-y, -100px), 0);
+        mix-blend-mode: difference;
+      }
+
+      .cursor.is-link {
+        width: 62px;
+        height: 62px;
+        background: var(--white);
+      }
+    }
+
+    /* ==========================================================================
+       RESPONSIVE
+       ========================================================================== */
+
+    @media (max-width: 800px) {
+      .hero {
+        min-height: 760px;
+      }
+
+      .hero__content {
+        grid-template-columns: 1fr;
+        align-content: end;
+      }
+
+      .hero__aside {
+        max-width: 430px;
+      }
+
+      .hero__404 {
+        top: 34%;
+      }
+
+      .sticker--three {
+        display: none;
+      }
+
+      .projects__intro {
+        grid-template-columns: 1fr;
+      }
+
+      .projects__counter {
+        justify-self: start;
+      }
+
+      .project {
+        grid-template-columns: 50px minmax(0, 1fr);
+      }
+
+      .project__meta {
+        grid-column: 2;
+        max-width: none;
+        text-align: left;
+      }
+
+      .error-strip {
+        grid-template-columns: auto 1fr;
+      }
+
+      .error-strip__status {
+        display: none;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .topbar__logo {
+        padding-inline: 0.75rem;
+      }
+
+      .hero__headline {
+        font-size: clamp(3.4rem, 20vw, 6.4rem);
+      }
+
+      .sticker--one {
+        top: 7%;
+        right: -5%;
+      }
+
+      .sticker--two {
+        top: 19%;
+        left: -4%;
+      }
+
+      .project {
+        grid-template-columns: 1fr;
+        gap: 0.4rem;
+        min-height: 180px;
+      }
+
+      .project__number,
+      .project__meta {
+        grid-column: 1;
+      }
+
+      .project__name {
+        font-size: clamp(3.3rem, 17vw, 6rem);
+      }
+
+      footer {
+        flex-direction: column;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="cursor" aria-hidden="true"></div>
+
+  <main class="page">
+
+    <!-- =====================================================================
+         TOP NAVIGATION
+         ===================================================================== -->
+
+    <header class="topbar">
+      <a class="topbar__logo" href="/">
+        ROD.
+      </a>
+
+      <div class="marquee" aria-hidden="true">
+        <div class="marquee__track">
+          <span class="marquee__item">
+            ✦ rod.migos.club ✦ página não encontrada ✦ mas olha quanta coisa legal tem aqui ✦
+          </span>
+
+          <span class="marquee__item">
+            ✦ rod.migos.club ✦ página não encontrada ✦ mas olha quanta coisa legal tem aqui ✦
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <!-- =====================================================================
+         HERO
+         ===================================================================== -->
+
+    <section class="hero">
+      <div class="hero__grid"></div>
+
+      <p class="hero__404" aria-hidden="true">
+        404
+      </p>
+
+      <div class="sticker sticker--one">
+        Wrong<br />
+        turn!
+      </div>
+
+      <div class="sticker sticker--two">
+        ☠ URL<br />
+        deceased
+      </div>
+
+      <div class="sticker sticker--three">
+        INTERNET<br />
+        IS WEIRD
+      </div>
+
+      <div class="hero__content">
+        <h1 class="hero__headline">
+          <span>
+            VOCÊ<br />
+            CHEGOU<br />
+            AO NADA.
+          </span>
+        </h1>
+
+        <aside class="hero__aside">
+          <div class="hero__aside-header">
+            <span>ERROR_REPORT.TXT</span>
+            <span>×</span>
+          </div>
+
+          <div class="hero__aside-body">
+            A página que você pediu provavelmente foi
+            <strong>devorada pela internet</strong>.
+
+            <br /><br />
+
+            Já que você chegou até aqui, conheça as coisas
+            que eu construo quando deveria estar dormindo.
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- =====================================================================
+         ERROR STATUS
+         ===================================================================== -->
+
+    <div class="error-strip">
+      <div class="error-strip__code">
+        HTTP 404
+      </div>
+
+      <div class="error-strip__message">
+        GET /whatever-you-were-looking-for → absolutamente nada encontrado
+      </div>
+
+      <div class="error-strip__status">
+        ● VERY NOT FOUND
+      </div>
+    </div>
+
+    <!-- =====================================================================
+         PROJECTS
+
+         Change the href attributes below to point to the final project URLs.
+         ===================================================================== -->
+
+    <section class="projects">
+      <header class="projects__intro">
+        <h2 class="projects__title">
+          MEUS<br />
+          PROJETOS
+        </h2>
+
+        <div class="projects__counter">
+          07 COISAS<br />
+          & COUNTING
+        </div>
+      </header>
+
+      <nav class="project-list" aria-label="Projetos">
+
+        <a class="project" href="/cipo">
+          <span class="project__number">[ 01 ]</span>
+
+          <h3 class="project__name">
+            CIPÓ
+          </h3>
+
+          <span class="project__meta">
+            CSS runtime<br />
+            que cresce selvagem
+            <span class="project__arrow">↗</span>
+          </span>
+        </a>
+
+        <a class="project" href="/fabrica">
+          <span class="project__number">[ 02 ]</span>
+
+          <h3 class="project__name">
+            FÁBRICA
+          </h3>
+
+          <span class="project__meta">
+            UI runtime<br />
+            sem cerimônia
+            <span class="project__arrow">↗</span>
+          </span>
+        </a>
+
+        <a class="project" href="/broto">
+          <span class="project__number">[ 03 ]</span>
+
+          <h3 class="project__name">
+            BROTO
+          </h3>
+
+          <span class="project__meta">
+            Fine-grained<br />
+            reactivity
+            <span class="project__arrow">↗</span>
+          </span>
+        </a>
+
+        <a class="project" href="/devtools">
+          <span class="project__number">[ 04 ]</span>
+
+          <h3 class="project__name">
+            DEVTOOLS
+          </h3>
+
+          <span class="project__meta">
+            Abra o capô<br />
+            da aplicação
+            <span class="project__arrow">↗</span>
+          </span>
+        </a>
+
+        <a class="project" href="/nascente">
+          <span class="project__number">[ 05 ]</span>
+
+          <h3 class="project__name">
+            NASCENTE
+          </h3>
+
+          <span class="project__meta">
+            Utilities feitas<br />
+            para hot paths
+            <span class="project__arrow">↗</span>
+          </span>
+        </a>
+
+        <a class="project" href="/tw-fold">
+          <span class="project__number">[ 06 ]</span>
+
+          <h3 class="project__name">
+            TW-FOLD
+          </h3>
+
+          <span class="project__meta">
+            Dobre o Tailwind<br />
+            até caber
+            <span class="project__arrow">↗</span>
+          </span>
+        </a>
+
+        <a class="project" href="/colinha">
+          <span class="project__number">[ 07 ]</span>
+
+          <h3 class="project__name">
+            COLINHA
+          </h3>
+
+          <span class="project__meta">
+            Política sem<br />
+            prova surpresa
+            <span class="project__arrow">↗</span>
+          </span>
+        </a>
+
+      </nav>
+    </section>
+
+    <!-- =====================================================================
+         HOME CTA
+         ===================================================================== -->
+
+    <section class="escape">
+      <a class="escape__link" href="/">
+        SAIR<br />
+        DAQUI ↗
+      </a>
+    </section>
+
+    <!-- =====================================================================
+         FOOTER
+         ===================================================================== -->
+
+    <footer>
+      <span>
+        © <span id="year"></span> ROD
+      </span>
+
+      <span>
+        MADE SOMEWHERE BETWEEN<br />
+        TYPESCRIPT & BAD DECISIONS
+      </span>
+
+      <a href="https://rod.migos.club">
+        ROD.MIGOS.CLUB ↗
+      </a>
+    </footer>
+
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      document.getElementById("year").textContent =
+        new Date().getFullYear();
+
+      const cursor = document.querySelector(".cursor");
+
+      if (!cursor || !window.matchMedia("(pointer: fine)").matches) {
+        return;
+      }
+
+      let x = -100;
+      let y = -100;
+
+      document.addEventListener(
+        "pointermove",
+        (event) => {
+          x = event.clientX;
+          y = event.clientY;
+
+          cursor.style.setProperty("--cursor-x", `${x}px`);
+          cursor.style.setProperty("--cursor-y", `${y}px`);
+        },
+        { passive: true },
+      );
+
+      document.addEventListener("pointerover", (event) => {
+        const target = event.target;
+
+        if (!(target instanceof Element)) {
+          return;
+        }
+
+        cursor.classList.toggle(
+          "is-link",
+          Boolean(target.closest("a, button")),
+        );
+      });
+    })();
+  </script>
+</body>
+</html>
