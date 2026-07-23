@@ -1,7 +1,7 @@
 (function Toaster(globalWindow) {
   "use strict";
 
-  const VERSION = "3.2.0";
+  const VERSION = "3.3.0";
   const TOAST_GLOBAL = "RodToaster";
   const INSPECTOR_GLOBAL = "RodObjectInspector";
   const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -10,42 +10,121 @@
   const MAX_Z_INDEX = 2147483647;
 
   const TOAST_COLORS = {
+    default: {
+      bg: "rgba(9, 9, 11, 0.975)",
+      border: "rgba(255, 255, 255, 0.12)",
+      text: "rgba(244, 244, 245, 0.88)",
+      accent: "rgba(244, 244, 245, 0.76)",
+      icon: "circle",
+    },
     error: {
-      bg: "rgba(24, 24, 27, 0.985)",
-      border: "rgba(82, 82, 91, 0.98)",
-      text: "rgba(250, 250, 250, 1)",
-      accent: "rgba(255, 92, 108, 1)",
-      icon: "✕",
+      bg: "rgba(9, 9, 11, 0.975)",
+      border: "rgba(255, 255, 255, 0.12)",
+      text: "rgba(244, 244, 245, 0.88)",
+      accent: "rgba(248, 113, 113, 0.96)",
+      icon: "circle-x",
     },
     info: {
-      bg: "rgba(24, 24, 27, 0.985)",
-      border: "rgba(82, 82, 91, 0.98)",
-      text: "rgba(250, 250, 250, 1)",
-      accent: "rgba(96, 165, 250, 1)",
-      icon: "ⓘ",
+      bg: "rgba(9, 9, 11, 0.975)",
+      border: "rgba(255, 255, 255, 0.12)",
+      text: "rgba(244, 244, 245, 0.88)",
+      accent: "rgba(147, 197, 253, 0.96)",
+      icon: "info",
     },
     success: {
-      bg: "rgba(24, 24, 27, 0.985)",
-      border: "rgba(82, 82, 91, 0.98)",
-      text: "rgba(250, 250, 250, 1)",
-      accent: "rgba(74, 222, 128, 1)",
-      icon: "✓",
+      bg: "rgba(9, 9, 11, 0.975)",
+      border: "rgba(255, 255, 255, 0.12)",
+      text: "rgba(244, 244, 245, 0.88)",
+      accent: "rgba(74, 222, 128, 0.98)",
+      icon: "check",
     },
     warning: {
-      bg: "rgba(24, 24, 27, 0.985)",
-      border: "rgba(82, 82, 91, 0.98)",
-      text: "rgba(250, 250, 250, 1)",
-      accent: "rgba(250, 204, 21, 1)",
-      icon: "⚠",
+      bg: "rgba(9, 9, 11, 0.975)",
+      border: "rgba(255, 255, 255, 0.12)",
+      text: "rgba(244, 244, 245, 0.88)",
+      accent: "rgba(250, 204, 21, 0.96)",
+      icon: "triangle-alert",
     },
     debug: {
-      bg: "rgba(24, 24, 27, 0.985)",
-      border: "rgba(82, 82, 91, 0.98)",
-      text: "rgba(250, 250, 250, 1)",
-      accent: "rgba(196, 181, 253, 1)",
-      icon: "›",
+      bg: "rgba(9, 9, 11, 0.975)",
+      border: "rgba(255, 255, 255, 0.12)",
+      text: "rgba(244, 244, 245, 0.88)",
+      accent: "rgba(228, 228, 231, 0.76)",
+      icon: "terminal",
     },
   };
+
+  const SVG_ICONS = {
+    circle: `
+      <circle cx="12" cy="12" r="7.5"></circle>
+    `,
+    "circle-x": `
+      <circle cx="12" cy="12" r="9"></circle>
+      <path d="m9 9 6 6"></path>
+      <path d="m15 9-6 6"></path>
+    `,
+    info: `
+      <circle cx="12" cy="12" r="9"></circle>
+      <path d="M12 11v5"></path>
+      <path d="M12 8h.01"></path>
+    `,
+    check: `
+      <path
+        class="rod-icon-check-path"
+        d="m6.5 12.5 3.25 3.25L17.5 8"
+      ></path>
+    `,
+    "triangle-alert": `
+      <path d="M10.3 3.8 2.4 18a2 2 0 0 0 1.75 3h15.7a2 2 0 0 0 1.75-3L13.7 3.8a2 2 0 0 0-3.4 0Z"></path>
+      <path d="M12 9v4"></path>
+      <path d="M12 17h.01"></path>
+    `,
+    terminal: `
+      <path d="m7 8 4 4-4 4"></path>
+      <path d="M13 16h4"></path>
+    `,
+    x: `
+      <path d="M6 6l12 12"></path>
+      <path d="M18 6 6 18"></path>
+    `,
+    "chevron-down": `
+      <path d="m6 9 6 6 6-6"></path>
+    `,
+    "chevrons-up": `
+      <path d="m17 11-5-5-5 5"></path>
+      <path d="m17 18-5-5-5 5"></path>
+    `,
+    "x-circle": `
+      <circle cx="12" cy="12" r="9"></circle>
+      <path d="m9 9 6 6"></path>
+      <path d="m15 9-6 6"></path>
+    `,
+  };
+
+  function createSvgIcon(documentRef, name, size = 18) {
+    const svg = documentRef.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "svg",
+    );
+
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("width", String(size));
+    svg.setAttribute("height", String(size));
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "2");
+    svg.setAttribute("stroke-linecap", "round");
+    svg.setAttribute("stroke-linejoin", "round");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    svg.innerHTML = SVG_ICONS[name] || SVG_ICONS.circle;
+
+    return svg;
+  }
+
+  function setSvgIcon(node, documentRef, name, size = 18) {
+    node.replaceChildren(createSvgIcon(documentRef, name, size));
+  }
 
   const DEFAULT_CONFIG = {
     duration: 15_000,
@@ -64,9 +143,18 @@
 
     // The expanded stack is always a bounded tray. Even persistent debug
     // toasts can never grow until they cover the whole viewport.
-    stackMaxHeight: 420,
-    stackViewportRatio: 0.48,
+    stackMaxHeight: 560,
+    stackViewportRatio: 0.62,
     stackToolbar: true,
+
+    // The host survives SPA route changes and is reattached if an app shell
+    // replaces DOM nodes around it.
+    persistAcrossSpaNavigation: true,
+
+    // Success toasts collapse into a check circle before fading upward.
+    successExitAnimation: true,
+    successCollapseDuration: 360,
+    successExitDuration: 220,
 
     // Persistent duplicate messages behave like a console counter instead of
     // creating an endless wall of identical debug toasts.
@@ -236,6 +324,9 @@
     inspectorApi: null,
     inspectorRuntime: null,
     inspectorStyle: null,
+    spaObserver: null,
+    spaCleanup: null,
+    hostRepairFrame: null,
   };
 
   try {
@@ -328,15 +419,26 @@
       :host {
         all: initial;
         contain: layout style;
+        color-scheme: dark;
       }
 
-      *, *::before, *::after {
+      *,
+      *::before,
+      *::after {
         box-sizing: border-box;
       }
 
       .rod-toast-stack {
-        --rod-toast-stack-max-height: 420px;
-        --rod-toast-stack-max-viewport: 48dvh;
+        --rod-toast-stack-max-height: 560px;
+        --rod-toast-stack-max-viewport: 62dvh;
+        --rod-surface: rgba(9, 9, 11, 0.975);
+        --rod-surface-raised: rgba(17, 17, 19, 0.985);
+        --rod-border: rgba(255, 255, 255, 0.12);
+        --rod-border-strong: rgba(255, 255, 255, 0.18);
+        --rod-text: rgba(244, 244, 245, 0.88);
+        --rod-text-strong: rgba(250, 250, 250, 0.96);
+        --rod-muted: rgba(161, 161, 170, 0.78);
+        --rod-hover: rgba(255, 255, 255, 0.07);
         position: fixed;
         z-index: ${MAX_Z_INDEX};
         isolation: isolate;
@@ -344,9 +446,17 @@
         flex-direction: column;
         gap: 8px;
         pointer-events: none;
+        color: var(--rod-text);
         color-scheme: dark;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
-          "Liberation Mono", "Courier New", monospace;
+        font-family:
+          ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Monaco,
+          Consolas,
+          "Liberation Mono",
+          "Courier New",
+          monospace;
         font-size: var(--rod-toaster-font-size, 13px);
         font-weight: 400;
         line-height: var(--rod-toaster-line-height, 1.45);
@@ -369,16 +479,18 @@
         display: none;
         align-items: center;
         justify-content: space-between;
-        gap: 10px;
-        min-height: 38px;
-        padding: 6px 8px 6px 12px;
-        border: 1px solid rgba(82, 82, 91, 0.9);
+        gap: 12px;
+        min-height: 42px;
+        padding: 6px 7px 6px 13px;
+        border: 1px solid var(--rod-border);
         border-radius: 12px;
-        background: rgba(24, 24, 27, 0.96);
-        color: rgba(228, 228, 231, 0.96);
-        box-shadow: 0 12px 34px rgba(0, 0, 0, 0.3);
-        backdrop-filter: blur(16px) saturate(1.15);
-        -webkit-backdrop-filter: blur(16px) saturate(1.15);
+        background: rgba(9, 9, 11, 0.94);
+        color: var(--rod-text);
+        box-shadow:
+          0 1px 0 rgba(255, 255, 255, 0.035) inset,
+          0 12px 32px rgba(0, 0, 0, 0.34);
+        backdrop-filter: blur(18px) saturate(1.08);
+        -webkit-backdrop-filter: blur(18px) saturate(1.08);
         pointer-events: auto;
         user-select: none;
       }
@@ -391,8 +503,9 @@
       .rod-toast-stack__toolbar-label {
         min-width: 0;
         overflow: hidden;
-        color: rgba(212, 212, 216, 0.92);
-        font: 650 11px/1.2 ui-sans-serif, system-ui, sans-serif;
+        color: var(--rod-muted);
+        font: 600 11px/1.2 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        letter-spacing: 0.01em;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
@@ -404,27 +517,49 @@
         gap: 4px;
       }
 
-      .rod-toast-stack__toolbar-button {
+      .rod-toast-stack__toolbar-button,
+      .rod-toast__close,
+      .rod-toast__expand {
         appearance: none;
-        min-height: 28px;
-        padding: 0 9px;
         border: 0;
-        border-radius: 8px;
         outline: none;
         background: transparent;
-        color: rgba(244, 244, 245, 0.88);
-        font: 650 11px/1 ui-sans-serif, system-ui, sans-serif;
+        color: inherit;
         touch-action: manipulation;
         cursor: pointer;
       }
 
-      .rod-toast-stack__toolbar-button:hover,
-      .rod-toast-stack__toolbar-button:focus-visible {
-        background: rgba(255, 255, 255, 0.09);
+      .rod-toast-stack__toolbar-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 30px;
+        padding: 0 9px;
+        border-radius: 8px;
+        color: rgba(244, 244, 245, 0.8);
+        font: 600 11px/1 ui-sans-serif, system-ui, -apple-system, sans-serif;
       }
 
-      .rod-toast-stack__toolbar-button:focus-visible {
-        outline: 1px solid rgba(125, 211, 252, 1);
+      .rod-toast-stack__toolbar-button svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      .rod-toast-stack__toolbar-button:hover,
+      .rod-toast-stack__toolbar-button:focus-visible,
+      .rod-toast__close:hover,
+      .rod-toast__close:focus-visible,
+      .rod-toast__expand:hover,
+      .rod-toast__expand:focus-visible {
+        background: var(--rod-hover);
+        color: var(--rod-text-strong);
+      }
+
+      .rod-toast-stack__toolbar-button:focus-visible,
+      .rod-toast__close:focus-visible,
+      .rod-toast__expand:focus-visible {
+        outline: 1px solid rgba(255, 255, 255, 0.28);
         outline-offset: 1px;
       }
 
@@ -433,12 +568,13 @@
         isolation: isolate;
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 9px;
         min-width: 0;
         overflow: visible;
         pointer-events: none;
         overscroll-behavior: contain;
         scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
       }
 
       .rod-toast-stack[data-position^="bottom"] .rod-toast-stack__list {
@@ -450,14 +586,16 @@
         content: "";
         position: absolute;
         inset: 0;
-        border: 1px solid rgba(82, 82, 91, 0.98);
+        border: 1px solid var(--rod-border);
         border-radius: 14px;
-        background: rgba(24, 24, 27, 0.985);
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+        background: var(--rod-surface);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
         opacity: 0;
         transform-origin: top center;
         pointer-events: none;
-        transition: opacity 180ms ease, transform 180ms ease;
+        transition:
+          opacity 180ms ease,
+          transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
       }
 
       .rod-toast-stack__list::before {
@@ -473,13 +611,13 @@
       .rod-toast-stack[data-expanded="false"][data-stack-depth="3"]
         .rod-toast-stack__list::before {
         opacity: 1;
-        transform: translateY(9px) scaleX(0.975);
+        transform: translateY(8px) scaleX(0.976);
       }
 
       .rod-toast-stack[data-expanded="false"][data-stack-depth="3"]
         .rod-toast-stack__list::after {
         opacity: 1;
-        transform: translateY(17px) scaleX(0.945);
+        transform: translateY(15px) scaleX(0.948);
       }
 
       .rod-toast-stack[data-expanded="true"] .rod-toast-stack__list {
@@ -509,10 +647,10 @@
       }
 
       .rod-toast {
-        --rod-toast-bg: rgba(24, 24, 27, 0.985);
-        --rod-toast-border: rgba(82, 82, 91, 0.98);
-        --rod-toast-text: rgba(250, 250, 250, 1);
-        --rod-toast-accent: rgba(196, 181, 253, 1);
+        --rod-toast-bg: var(--rod-surface);
+        --rod-toast-border: var(--rod-border);
+        --rod-toast-text: var(--rod-text);
+        --rod-toast-accent: rgba(244, 244, 245, 0.76);
         position: relative;
         z-index: 1;
         display: grid;
@@ -522,18 +660,28 @@
         width: 100%;
         min-width: 0;
         max-width: 100%;
-        max-height: min(70dvh, 720px);
+        max-height: min(72dvh, 760px);
         overflow: auto;
-        padding: 12px 12px 12px 14px;
+        padding: 12px 11px 12px 13px;
         border: 1px solid var(--rod-toast-border);
-        border-radius: var(--rod-toaster-border-radius, 14px);
+        border-radius: var(--rod-toaster-border-radius, 12px);
         background: var(--rod-toast-bg);
         color: var(--rod-toast-text);
-        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
+        box-shadow:
+          0 1px 0 rgba(255, 255, 255, 0.035) inset,
+          0 14px 36px rgba(0, 0, 0, 0.34);
         opacity: 0;
-        transform: translate3d(0, -6px, 0) scale(0.99);
-        transition: opacity 180ms ease, transform 180ms ease,
-          border-color 180ms ease;
+        transform: translate3d(0, -8px, 0) scale(0.99);
+        transition:
+          opacity 180ms ease,
+          transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+          border-color 180ms ease,
+          background-color 180ms ease,
+          width 320ms cubic-bezier(0.2, 0.9, 0.2, 1),
+          min-width 320ms cubic-bezier(0.2, 0.9, 0.2, 1),
+          height 320ms cubic-bezier(0.2, 0.9, 0.2, 1),
+          padding 320ms cubic-bezier(0.2, 0.9, 0.2, 1),
+          border-radius 320ms cubic-bezier(0.2, 0.9, 0.2, 1);
         pointer-events: auto;
         touch-action: none;
         user-select: text;
@@ -556,6 +704,39 @@
         cursor: grab;
       }
 
+      .rod-toast-stack[data-expanded="true"][data-has-many="true"]
+        .rod-toast[data-item-expanded="false"] {
+        max-height: 52px;
+        overflow: hidden;
+        cursor: pointer;
+      }
+
+      .rod-toast-stack[data-expanded="true"][data-has-many="true"]
+        .rod-toast[data-item-expanded="false"]
+        .rod-toast__content {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .rod-toast-stack[data-expanded="true"][data-has-many="true"]
+        .rod-toast[data-item-expanded="false"]
+        .rod-toast__arg {
+        display: inline;
+      }
+
+      .rod-toast-stack[data-expanded="true"][data-has-many="true"]
+        .rod-toast[data-item-expanded="true"] {
+        max-height: min(68dvh, 720px);
+        overflow: auto;
+        border-color: var(--rod-border-strong);
+        background: var(--rod-surface-raised);
+        box-shadow:
+          0 1px 0 rgba(255, 255, 255, 0.05) inset,
+          0 16px 42px rgba(0, 0, 0, 0.4);
+      }
+
       .rod-toast__icon {
         display: grid;
         place-items: center;
@@ -564,8 +745,16 @@
         height: 20px;
         margin-top: 1px;
         color: var(--rod-toast-accent);
-        font: 800 14px/1 ui-sans-serif, system-ui, sans-serif;
         user-select: none;
+        transition:
+          color 180ms ease,
+          transform 260ms cubic-bezier(0.2, 0.9, 0.2, 1);
+      }
+
+      .rod-toast__icon svg {
+        width: 17px;
+        height: 17px;
+        overflow: visible;
       }
 
       .rod-toast__content {
@@ -578,6 +767,9 @@
         white-space: pre-wrap;
         overflow-wrap: anywhere;
         user-select: text;
+        transition:
+          opacity 160ms ease,
+          transform 220ms ease;
       }
 
       .rod-toast__arg {
@@ -590,8 +782,11 @@
         top: 0;
         display: flex;
         align-items: center;
-        gap: 5px;
+        gap: 3px;
         margin: -4px -4px 0 0;
+        transition:
+          opacity 160ms ease,
+          transform 220ms ease;
       }
 
       .rod-toast__count {
@@ -599,11 +794,11 @@
         min-width: 24px;
         height: 24px;
         padding: 0 7px;
-        border: 1px solid rgba(255, 255, 255, 0.16);
+        border: 1px solid var(--rod-border);
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.09);
-        color: rgba(250, 250, 250, 0.96);
-        font: 700 10px/22px ui-sans-serif, system-ui, sans-serif;
+        background: rgba(255, 255, 255, 0.06);
+        color: rgba(244, 244, 245, 0.78);
+        font: 650 10px/22px ui-sans-serif, system-ui, -apple-system, sans-serif;
         text-align: center;
         user-select: none;
       }
@@ -612,36 +807,43 @@
         display: block;
       }
 
-      .rod-toast__close {
-        appearance: none;
+      .rod-toast__close,
+      .rod-toast__expand {
         display: grid;
         place-items: center;
-        width: 34px;
-        min-width: 34px;
-        height: 34px;
-        margin: -6px -6px 0 0;
-        border: 0;
-        border-radius: 9px;
-        outline: none;
-        background: transparent;
-        color: rgba(250, 250, 250, 0.8);
-        font: 400 22px/1 ui-sans-serif, system-ui, sans-serif;
-        touch-action: manipulation;
-        cursor: pointer;
+        width: 32px;
+        min-width: 32px;
+        height: 32px;
+        padding: 0;
+        border-radius: 8px;
+        color: rgba(244, 244, 245, 0.62);
       }
 
-      .rod-toast__close:hover,
-      .rod-toast__close:focus-visible {
-        background: rgba(255, 255, 255, 0.1);
+      .rod-toast__close svg,
+      .rod-toast__expand svg {
+        width: 16px;
+        height: 16px;
       }
 
-      .rod-toast__close:focus-visible {
-        outline: 1px solid rgba(125, 211, 252, 1);
-        outline-offset: 1px;
+      .rod-toast__expand {
+        display: none;
+      }
+
+      .rod-toast-stack[data-expanded="true"][data-has-many="true"]
+        .rod-toast__expand {
+        display: grid;
+      }
+
+      .rod-toast[data-item-expanded="true"] .rod-toast__expand svg {
+        transform: rotate(180deg);
+      }
+
+      .rod-toast__expand svg {
+        transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
       }
 
       .rod-toast__inspector-placeholder {
-        color: rgba(228, 228, 231, 0.94);
+        color: rgba(212, 212, 216, 0.78);
         font-style: italic;
       }
 
@@ -651,7 +853,7 @@
 
       .rod-token--undefined,
       .rod-token--meta {
-        color: rgba(212, 212, 216, 1);
+        color: rgba(212, 212, 216, 0.82);
       }
 
       .rod-token--string {
@@ -663,23 +865,90 @@
       }
 
       .rod-token--boolean {
-        color: rgba(96, 165, 250, 1);
+        color: rgba(147, 197, 253, 1);
         font-weight: 600;
       }
 
       .rod-token--symbol {
-        color: rgba(45, 212, 191, 1);
+        color: rgba(94, 234, 212, 1);
       }
 
       .rod-token--function {
         color: rgba(253, 224, 71, 1);
       }
 
+      .rod-toast[data-completing="true"] {
+        align-self: center;
+        justify-self: center;
+        grid-template-columns: 1fr;
+        gap: 0;
+        width: 46px;
+        min-width: 46px;
+        max-width: 46px;
+        height: 46px;
+        min-height: 46px;
+        max-height: 46px;
+        padding: 0;
+        overflow: hidden;
+        border-color: rgba(74, 222, 128, 0.32);
+        border-radius: 999px;
+        background: rgba(9, 9, 11, 0.99);
+        box-shadow:
+          0 0 0 1px rgba(74, 222, 128, 0.06) inset,
+          0 14px 36px rgba(0, 0, 0, 0.4);
+        cursor: default;
+      }
+
+      .rod-toast[data-completing="true"] .rod-toast__content,
+      .rod-toast[data-completing="true"] .rod-toast__actions {
+        position: absolute;
+        opacity: 0;
+        transform: scale(0.92);
+        pointer-events: none;
+      }
+
+      .rod-toast[data-completing="true"] .rod-toast__icon {
+        justify-self: center;
+        width: 46px;
+        min-width: 46px;
+        height: 46px;
+        margin: 0;
+        color: rgba(74, 222, 128, 1);
+        transform: scale(1.12);
+      }
+
+      .rod-toast[data-completing="true"] .rod-toast__icon svg {
+        width: 23px;
+        height: 23px;
+      }
+
+      .rod-toast[data-completing="true"] .rod-icon-check-path {
+        stroke-dasharray: 24;
+        stroke-dashoffset: 24;
+        animation: rod-toast-check-draw 280ms 100ms ease-out forwards;
+      }
+
+      .rod-toast[data-success-exit="true"] {
+        opacity: 0;
+        transform: translate3d(0, -18px, 0) scale(0.86);
+      }
+
+      @keyframes rod-toast-check-draw {
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+
       @media (prefers-reduced-motion: reduce) {
         .rod-toast,
+        .rod-toast__content,
+        .rod-toast__actions,
+        .rod-toast__icon,
+        .rod-toast__expand svg,
         .rod-toast-stack__list::before,
         .rod-toast-stack__list::after {
-          transition: none;
+          transition-duration: 1ms !important;
+          animation-duration: 1ms !important;
         }
       }
     `;
@@ -921,7 +1190,13 @@
     const newestFirst = [...getActiveToastRecords()].reverse();
 
     for (let index = 0; index < newestFirst.length; index += 1) {
-      newestFirst[index].node.dataset.stackIndex = String(index);
+      const record = newestFirst[index];
+
+      record.node.dataset.stackIndex = String(index);
+
+      if (!record.node.dataset.itemExpanded) {
+        record.node.dataset.itemExpanded = "false";
+      }
     }
 
     const count = newestFirst.length;
@@ -971,36 +1246,104 @@
 
     if (!state.config.stacked || activeRecords.length <= 1) {
       state.stackExpanded = false;
+
+      for (const record of activeRecords) {
+        record.node.dataset.itemExpanded = "false";
+      }
+
       syncStackLayout();
       return;
     }
 
     state.stackExpanded = Boolean(expanded);
+
+    if (state.stackExpanded) {
+      const alreadyExpanded = activeRecords.some(
+        (record) => record.node.dataset.itemExpanded === "true",
+      );
+
+      if (!alreadyExpanded) {
+        const newest = [...activeRecords].sort(
+          (left, right) => right.createdAt - left.createdAt,
+        )[0];
+
+        if (newest) {
+          setExpandedToast(newest, true);
+        }
+      }
+    } else {
+      for (const record of activeRecords) {
+        record.node.dataset.itemExpanded = "false";
+      }
+    }
+
     syncStackLayout();
   }
 
-  function isStackInteractionTarget(target) {
-    if (!target || typeof target.closest !== "function") {
-      return false;
-    }
+  const INTERACTIVE_SELECTOR =
+    "button, a, summary, details, input, textarea, select, option, " +
+    "[contenteditable='true'], [role='button']";
 
-    return Boolean(
-      target.closest(
-        "button, a, summary, details, input, textarea, select, option, " +
-          "[contenteditable='true'], [role='button']",
-      ),
+  function eventHasInteractiveTarget(event) {
+    const path =
+      typeof event.composedPath === "function"
+        ? event.composedPath()
+        : [event.target];
+
+    return path.some((candidate) => {
+      return Boolean(
+        candidate &&
+          typeof candidate.matches === "function" &&
+          candidate.matches(INTERACTIVE_SELECTOR),
+      );
+    });
+  }
+
+  function getToastRecordByNode(node) {
+    return (
+      state.toasts.find((record) => {
+        return !record.removed && record.node === node;
+      }) || null
     );
   }
 
-  function handleStackClick(event) {
-    if (!state.config.stacked || state.stackExpanded) {
+  function setExpandedToast(record, expanded) {
+    if (!record || record.removed) {
       return;
     }
 
-    if (
-      getActiveToastRecords().length <= 1 ||
-      isStackInteractionTarget(event.target)
-    ) {
+    for (const candidate of getActiveToastRecords()) {
+      candidate.node.dataset.itemExpanded = String(
+        candidate === record ? Boolean(expanded) : false,
+      );
+    }
+
+    if (expanded) {
+      safeCall(
+        () =>
+          record.node.scrollIntoView({
+            block: "nearest",
+            inline: "nearest",
+            behavior: "smooth",
+          }),
+        undefined,
+      );
+    }
+  }
+
+  function toggleExpandedToast(record) {
+    if (!record || record.removed) {
+      return;
+    }
+
+    const shouldExpand =
+      record.node.dataset.itemExpanded !== "true";
+
+    setExpandedToast(record, shouldExpand);
+  }
+
+  function handleStackClick(event) {
+    if (!state.config.stacked || eventHasInteractiveTarget(event)) {
       return;
     }
 
@@ -1011,13 +1354,31 @@
 
     if (
       !toastNode ||
-      toastNode.dataset.stackIndex !== "0" ||
       toastNode.dataset.suppressStackClick === "true"
     ) {
       return;
     }
 
-    setStackExpanded(true);
+    const record = getToastRecordByNode(toastNode);
+
+    if (!record) {
+      return;
+    }
+
+    if (!state.stackExpanded) {
+      if (
+        getActiveToastRecords().length <= 1 ||
+        toastNode.dataset.stackIndex !== "0"
+      ) {
+        return;
+      }
+
+      setStackExpanded(true);
+      setExpandedToast(record, true);
+      return;
+    }
+
+    toggleExpandedToast(record);
   }
 
   function removeHostInteractionListeners() {
@@ -1030,6 +1391,144 @@
     }
 
     state.outsidePointerDownHandler = null;
+  }
+
+  function scheduleHostRepair() {
+    if (
+      !state.config.persistAcrossSpaNavigation ||
+      state.hostRepairFrame !== null
+    ) {
+      return;
+    }
+
+    const hostWindow = state.hostWindow || initialHostWindow;
+    const requestFrame =
+      typeof hostWindow.requestAnimationFrame === "function"
+        ? hostWindow.requestAnimationFrame.bind(hostWindow)
+        : (callback) => hostWindow.setTimeout(callback, 0);
+
+    state.hostRepairFrame = requestFrame(() => {
+      state.hostRepairFrame = null;
+
+      if (!getActiveToastRecords().length) {
+        return;
+      }
+
+      ensureHost();
+    });
+  }
+
+  function installSpaPersistence(hostWindow, hostDocument) {
+    if (
+      !state.config.persistAcrossSpaNavigation ||
+      state.spaCleanup
+    ) {
+      return;
+    }
+
+    const callbacks = [];
+
+    const navigationHandler = () => {
+      scheduleHostRepair();
+    };
+
+    hostWindow.addEventListener("popstate", navigationHandler);
+    hostWindow.addEventListener("hashchange", navigationHandler);
+    hostWindow.addEventListener(
+      "rod:toaster:navigation",
+      navigationHandler,
+    );
+
+    callbacks.push(() => {
+      hostWindow.removeEventListener("popstate", navigationHandler);
+      hostWindow.removeEventListener("hashchange", navigationHandler);
+      hostWindow.removeEventListener(
+        "rod:toaster:navigation",
+        navigationHandler,
+      );
+    });
+
+    const historyPatchSymbol = Symbol.for(
+      "rod.super-toaster.history-navigation-patch",
+    );
+
+    if (!safeCall(() => hostWindow[historyPatchSymbol], false)) {
+      const history = hostWindow.history;
+
+      if (history) {
+        for (const methodName of ["pushState", "replaceState"]) {
+          const original = history[methodName];
+
+          if (typeof original !== "function") {
+            continue;
+          }
+
+          history[methodName] = function patchedHistoryMethod(...args) {
+            const result = Reflect.apply(original, this, args);
+
+            safeCall(
+              () =>
+                hostWindow.dispatchEvent(
+                  new hostWindow.CustomEvent(
+                    "rod:toaster:navigation",
+                  ),
+                ),
+              undefined,
+            );
+
+            return result;
+          };
+        }
+
+        safeCall(
+          () =>
+            Object.defineProperty(
+              hostWindow,
+              historyPatchSymbol,
+              {
+                value: true,
+                configurable: true,
+              },
+            ),
+          undefined,
+        );
+      }
+    }
+
+    if (
+      typeof hostWindow.MutationObserver === "function" &&
+      hostDocument.documentElement
+    ) {
+      state.spaObserver = new hostWindow.MutationObserver(() => {
+        if (
+          getActiveToastRecords().length &&
+          state.hostElement &&
+          !state.hostElement.isConnected
+        ) {
+          scheduleHostRepair();
+        }
+      });
+
+      state.spaObserver.observe(
+        hostDocument.documentElement,
+        {
+          childList: true,
+        },
+      );
+
+      callbacks.push(() => {
+        state.spaObserver?.disconnect();
+        state.spaObserver = null;
+      });
+    }
+
+    state.spaCleanup = () => {
+      for (const callback of callbacks) {
+        safeCall(callback, undefined);
+      }
+
+      state.spaCleanup = null;
+    };
   }
 
   function destroyHost() {
@@ -1075,10 +1574,29 @@
       };
     }
 
-    const parent = hostDocument.body || hostDocument.documentElement;
+    const parent = hostDocument.documentElement || hostDocument.body;
 
     if (!parent) {
       return null;
+    }
+
+    if (
+      state.hostElement &&
+      !state.hostElement.isConnected &&
+      state.hostDocument === hostDocument &&
+      state.container &&
+      state.list
+    ) {
+      parent.appendChild(state.hostElement);
+      installSpaPersistence(hostWindow, hostDocument);
+      syncStackLayout();
+
+      return {
+        window: state.hostWindow,
+        document: state.hostDocument,
+        container: state.container,
+        list: state.list,
+      };
     }
 
     if (state.hostElement?.isConnected) {
@@ -1156,12 +1674,26 @@
 
     collapseButton.type = "button";
     collapseButton.className = "rod-toast-stack__toolbar-button";
-    collapseButton.textContent = "Collapse";
+    collapseButton.appendChild(
+      createSvgIcon(hostDocument, "chevrons-up", 14),
+    );
+    collapseButton.appendChild(
+      Object.assign(hostDocument.createElement("span"), {
+        textContent: "Collapse",
+      }),
+    );
     collapseButton.setAttribute("aria-label", "Collapse toast stack");
 
     clearButton.type = "button";
     clearButton.className = "rod-toast-stack__toolbar-button";
-    clearButton.textContent = "Clear";
+    clearButton.appendChild(
+      createSvgIcon(hostDocument, "x-circle", 14),
+    );
+    clearButton.appendChild(
+      Object.assign(hostDocument.createElement("span"), {
+        textContent: "Close all",
+      }),
+    );
     clearButton.setAttribute("aria-label", "Dismiss all toasts");
 
     list.className = "rod-toast-stack__list";
@@ -1176,8 +1708,12 @@
       event.preventDefault();
       event.stopPropagation();
 
-      for (const record of [...state.toasts]) {
-        record.dismiss(true);
+      const records = [...getActiveToastRecords()].reverse();
+
+      for (let index = 0; index < records.length; index += 1) {
+        hostWindow.setTimeout(() => {
+          records[index]?.dismiss(false);
+        }, index * 28);
       }
     });
 
@@ -1202,6 +1738,18 @@
     state.list = list;
     state.toolbar = toolbar;
     state.stackCountNode = toolbarLabel;
+
+    installSpaPersistence(hostWindow, hostDocument);
+
+    const existingRecords = [...getActiveToastRecords()].sort(
+      (left, right) => right.createdAt - left.createdAt,
+    );
+
+    for (const record of existingRecords) {
+      if (record.node && !record.node.isConnected) {
+        list.appendChild(record.node);
+      }
+    }
 
     const inspectorApi = getObjectInspectorApi();
 
@@ -1374,7 +1922,9 @@
   }
 
   function normalizeToastOptions(options) {
-    const type = hasOwn(TOAST_COLORS, options.type) ? options.type : "error";
+    const type = hasOwn(TOAST_COLORS, options.type)
+      ? options.type
+      : "default";
     const defaultDuration =
       type === "debug" ? state.config.debugDuration : state.config.duration;
 
@@ -1514,9 +2064,10 @@
 
   function createCloseButton(documentRef, dismiss) {
     const button = documentRef.createElement("button");
+
     button.type = "button";
     button.className = "rod-toast__close";
-    button.textContent = "×";
+    button.appendChild(createSvgIcon(documentRef, "x", 16));
     button.setAttribute("aria-label", "Close toast");
     button.title = "Close";
 
@@ -1529,17 +2080,28 @@
     return button;
   }
 
-  function isSwipeBlockedTarget(target) {
-    if (!target || typeof target.closest !== "function") {
-      return false;
-    }
+  function createExpandButton(documentRef, record) {
+    const button = documentRef.createElement("button");
 
-    return Boolean(
-      target.closest(
-        "button, a, summary, input, textarea, select, option, " +
-          "[contenteditable='true'], [role='button']",
-      ),
+    button.type = "button";
+    button.className = "rod-toast__expand";
+    button.appendChild(
+      createSvgIcon(documentRef, "chevron-down", 16),
     );
+    button.setAttribute("aria-label", "Expand toast");
+    button.title = "Expand or collapse";
+
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleExpandedToast(record);
+    });
+
+    return button;
+  }
+
+  function isSwipeBlockedEvent(event) {
+    return eventHasInteractiveTarget(event);
   }
 
   function installSwipeToDismiss(record, host) {
@@ -1635,7 +2197,7 @@
         record.removed ||
         event.isPrimary === false ||
         event.button > 0 ||
-        isSwipeBlockedTarget(event.target)
+        isSwipeBlockedEvent(event)
       ) {
         return;
       }
@@ -1757,7 +2319,7 @@
     node.style.setProperty("--rod-toast-accent", palette.accent);
 
     icon.className = "rod-toast__icon";
-    icon.textContent = palette.icon;
+    setSvgIcon(icon, host.document, palette.icon, 17);
     icon.setAttribute("aria-hidden", "true");
 
     content.className = "rod-toast__content";
@@ -1765,6 +2327,9 @@
     count.className = "rod-toast__count";
     count.textContent = "1";
     count.dataset.visible = "false";
+    node.dataset.itemExpanded = "false";
+    node.dataset.completing = "false";
+    node.dataset.successExit = "false";
 
     actions.appendChild(count);
     node.appendChild(icon);
@@ -1777,6 +2342,7 @@
     let remainingDuration = options.duration;
     let paused = false;
     let duplicateCount = 1;
+    let completing = false;
 
     const renderArgs = (nextArgs, nextOptions = options) => {
       content.replaceChildren();
@@ -1812,6 +2378,55 @@
       }
     };
 
+    const playSuccessExit = () => {
+      if (
+        completing ||
+        removed ||
+        !node.isConnected
+      ) {
+        return;
+      }
+
+      completing = true;
+      clearTimer();
+      setSvgIcon(icon, host.document, "check", 23);
+      node.dataset.swiping = "false";
+
+      const requestFrame =
+        typeof host.window.requestAnimationFrame === "function"
+          ? host.window.requestAnimationFrame.bind(host.window)
+          : (callback) => host.window.setTimeout(callback, 0);
+
+      requestFrame(() => {
+        if (!node.isConnected) {
+          cleanup();
+          return;
+        }
+
+        node.dataset.completing = "true";
+
+        host.window.setTimeout(() => {
+          if (!node.isConnected) {
+            cleanup();
+            return;
+          }
+
+          node.dataset.successExit = "true";
+
+          host.window.setTimeout(
+            cleanup,
+            Math.max(
+              80,
+              Number(state.config.successExitDuration) || 220,
+            ),
+          );
+        }, Math.max(
+          120,
+          Number(state.config.successCollapseDuration) || 360,
+        ));
+      });
+    };
+
     const dismiss = (immediate = false, swipe = null) => {
       if (removed || !node.isConnected) {
         cleanup();
@@ -1822,6 +2437,15 @@
 
       if (immediate) {
         cleanup();
+        return;
+      }
+
+      if (
+        !swipe &&
+        options.type === "success" &&
+        state.config.successExitAnimation
+      ) {
+        playSuccessExit();
         return;
       }
 
@@ -1910,7 +2534,7 @@
       const nextPalette = TOAST_COLORS[nextOptions.type];
 
       Object.assign(options, nextOptions);
-      icon.textContent = nextPalette.icon;
+      setSvgIcon(icon, host.document, nextPalette.icon, 17);
       node.style.setProperty("--rod-toast-bg", nextPalette.bg);
       node.style.setProperty("--rod-toast-border", nextPalette.border);
       node.style.setProperty("--rod-toast-text", nextPalette.text);
@@ -1960,8 +2584,14 @@
       },
     };
 
+    actions.appendChild(
+      createExpandButton(host.document, record),
+    );
+
     if (options.closeButton) {
-      actions.appendChild(createCloseButton(host.document, dismiss));
+      actions.appendChild(
+        createCloseButton(host.document, dismiss),
+      );
     }
 
     if (options.pauseOnInteraction) {
@@ -2140,9 +2770,20 @@
     return false;
   };
 
-  toast.dismissAll = () => {
-    for (const record of [...state.toasts]) {
-      record.dismiss(true);
+  toast.dismissAll = (immediate = false) => {
+    const records = [...getActiveToastRecords()].reverse();
+
+    for (let index = 0; index < records.length; index += 1) {
+      const record = records[index];
+
+      if (immediate) {
+        record.dismiss(true);
+        continue;
+      }
+
+      (state.hostWindow || initialHostWindow).setTimeout(() => {
+        record.dismiss(false);
+      }, index * 28);
     }
   };
 
@@ -2234,6 +2875,22 @@
     );
     state.config.stacked = Boolean(state.config.stacked);
     state.config.stackToolbar = Boolean(state.config.stackToolbar);
+    state.config.persistAcrossSpaNavigation = Boolean(
+      state.config.persistAcrossSpaNavigation,
+    );
+    state.config.successExitAnimation = Boolean(
+      state.config.successExitAnimation,
+    );
+    state.config.successCollapseDuration = Math.max(
+      120,
+      Number(state.config.successCollapseDuration) ||
+        DEFAULT_CONFIG.successCollapseDuration,
+    );
+    state.config.successExitDuration = Math.max(
+      80,
+      Number(state.config.successExitDuration) ||
+        DEFAULT_CONFIG.successExitDuration,
+    );
     state.config.coalescePersistent = Boolean(state.config.coalescePersistent);
     state.config.swipeToDismiss = Boolean(state.config.swipeToDismiss);
     state.config.virtualizeInspector = Boolean(state.config.virtualizeInspector);
@@ -2272,6 +2929,19 @@
       state.config.objectInspectorSrc = DEFAULT_CONFIG.objectInspectorSrc;
     }
 
+    if (!state.config.persistAcrossSpaNavigation && state.spaCleanup) {
+      state.spaCleanup();
+    } else if (
+      state.config.persistAcrossSpaNavigation &&
+      state.hostWindow &&
+      state.hostDocument
+    ) {
+      installSpaPersistence(
+        state.hostWindow,
+        state.hostDocument,
+      );
+    }
+
     if (state.container) {
       state.container.dataset.position = state.config.position;
       syncStackLayout();
@@ -2282,6 +2952,10 @@
 
   toast.getConfig = () => ({ ...state.config });
   toast.getHostMode = () => state.hostMode;
+  toast.repairHost = () => {
+    scheduleHostRepair();
+    return state.hostElement;
+  };
   toast.version = VERSION;
 
   Object.defineProperty(toast, "objectInspector", {
