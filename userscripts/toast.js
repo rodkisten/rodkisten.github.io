@@ -67,6 +67,7 @@
     swipeToDismiss: true,
     swipeThreshold: 72,
     swipeVelocity: 0.45,
+    showObjectLength: false,
   };
 
   const OPTION_KEYS = new Set([
