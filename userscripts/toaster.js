@@ -64,7 +64,7 @@
 
     // The expanded stack is always a bounded tray. Even persistent debug
     // toasts can never grow until they cover the whole viewport.
-    stackMaxHeight: 420,
+    stackMaxHeight: window.visualViewport.height - 18,
     stackViewportRatio: 0.48,
     stackToolbar: true,
 
@@ -82,8 +82,8 @@
     objectInspectorLoadTimeout: 15_000,
     inspectDepth: 80,
     inspectItems: 1000,
-    previewItems: 3,
-    showPrototype: true,
+    previewItems: 30
+    showPrototype: false,
     showNonEnumerable: false,
     showObjectLength: false,
     virtualizeInspector: true,
