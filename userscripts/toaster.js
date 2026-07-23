@@ -1,7 +1,7 @@
 (function Toaster(globalWindow) {
   "use strict";
 
-  const VERSION = "3.1.0";
+  const VERSION = "3.2.0";
   const TOAST_GLOBAL = "RodToaster";
   const INSPECTOR_GLOBAL = "RodObjectInspector";
   const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -64,7 +64,7 @@
 
     // The expanded stack is always a bounded tray. Even persistent debug
     // toasts can never grow until they cover the whole viewport.
-    stackMaxHeight: window.visualViewport.height - 18,
+    stackMaxHeight: 420,
     stackViewportRatio: 0.48,
     stackToolbar: true,
 
@@ -82,7 +82,7 @@
     objectInspectorLoadTimeout: 15_000,
     inspectDepth: 80,
     inspectItems: 1000,
-    previewItems: 30
+    previewItems: 30,
     showPrototype: false,
     showNonEnumerable: false,
     showObjectLength: false,
@@ -92,6 +92,12 @@
     virtualOverscan: 8,
     virtualMaxHeight: 360,
     unmountInspectorOnCollapse: true,
+
+    // The toaster UI is isolated in Shadow DOM by default. Light DOM is kept
+    // as an explicit compatibility fallback for restricted or exotic hosts.
+    useShadowRoot: true,
+    shadowRootMode: "closed",
+    fallbackToLightDom: true,
   };
 
   const OPTION_KEYS = new Set([
@@ -213,6 +219,8 @@
     hostDocument: null,
     hostElement: null,
     shadowRoot: null,
+    renderRoot: null,
+    hostMode: null,
     container: null,
     toasts: [],
     recordsById: new Map(),
@@ -745,7 +753,7 @@
   }
 
   function installInspectorStyle(api) {
-    if (!state.shadowRoot || !state.hostDocument) {
+    if (!state.renderRoot || !state.hostDocument) {
       return;
     }
 
@@ -754,7 +762,7 @@
     }
 
     const style = api.createStyle(state.hostDocument);
-    state.shadowRoot.appendChild(style);
+    state.renderRoot.appendChild(style);
     state.inspectorStyle = style;
   }
 
@@ -1034,6 +1042,8 @@
 
     state.hostElement = null;
     state.shadowRoot = null;
+    state.renderRoot = null;
+    state.hostMode = null;
     state.container = null;
     state.list = null;
     state.toolbar = null;
@@ -1088,7 +1098,41 @@
     hostElement.style.setProperty("z-index", String(MAX_Z_INDEX), "important");
     hostElement.style.setProperty("pointer-events", "none", "important");
 
-    const shadowRoot = hostElement.attachShadow({ mode: "closed" });
+    let shadowRoot = null;
+    let renderRoot = null;
+    let hostMode = "light-dom";
+
+    if (state.config.useShadowRoot) {
+      shadowRoot = safeCall(
+        () =>
+          hostElement.attachShadow({
+            mode: state.config.shadowRootMode,
+          }),
+        null,
+      );
+
+      if (shadowRoot) {
+        renderRoot = shadowRoot;
+        hostMode = "shadow";
+      } else if (!state.config.fallbackToLightDom) {
+        return null;
+      }
+    }
+
+    if (!renderRoot) {
+      renderRoot = hostElement;
+      hostMode = "light-dom";
+      hostElement.setAttribute(
+        "data-rod-toaster-fallback",
+        "light-dom",
+      );
+    }
+
+    hostElement.setAttribute(
+      "data-rod-toaster-host-mode",
+      hostMode,
+    );
+
     const container = hostDocument.createElement("div");
     const toolbar = hostDocument.createElement("div");
     const toolbarLabel = hostDocument.createElement("div");
@@ -1144,14 +1188,16 @@
     container.appendChild(toolbar);
     container.appendChild(list);
 
-    shadowRoot.appendChild(createStyles(hostDocument));
-    shadowRoot.appendChild(container);
+    renderRoot.appendChild(createStyles(hostDocument));
+    renderRoot.appendChild(container);
     parent.appendChild(hostElement);
 
     state.hostWindow = hostWindow;
     state.hostDocument = hostDocument;
     state.hostElement = hostElement;
     state.shadowRoot = shadowRoot;
+    state.renderRoot = renderRoot;
+    state.hostMode = hostMode;
     state.container = container;
     state.list = list;
     state.toolbar = toolbar;
@@ -2194,6 +2240,12 @@
     state.config.unmountInspectorOnCollapse = Boolean(
       state.config.unmountInspectorOnCollapse,
     );
+    state.config.useShadowRoot = Boolean(state.config.useShadowRoot);
+    state.config.fallbackToLightDom = Boolean(
+      state.config.fallbackToLightDom,
+    );
+    state.config.shadowRootMode =
+      state.config.shadowRootMode === "open" ? "open" : "closed";
 
     if (!allowedPositions.has(state.config.position)) {
       state.config.position = DEFAULT_CONFIG.position;
@@ -2229,6 +2281,7 @@
   };
 
   toast.getConfig = () => ({ ...state.config });
+  toast.getHostMode = () => state.hostMode;
   toast.version = VERSION;
 
   Object.defineProperty(toast, "objectInspector", {
