@@ -347,9 +347,9 @@
         color-scheme: dark;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
           "Liberation Mono", "Courier New", monospace;
-        font-size: 13px;
+        font-size: var(--rod-toaster-font-size, 13px);
         font-weight: 400;
-        line-height: 1.45;
+        line-height: var(--rod-toaster-line-height, 1.45);
       }
 
       .rod-toast-stack[data-position^="top"] {
@@ -526,7 +526,7 @@
         overflow: auto;
         padding: 12px 12px 12px 14px;
         border: 1px solid var(--rod-toast-border);
-        border-radius: 14px;
+        border-radius: var(--rod-toaster-border-radius, 14px);
         background: var(--rod-toast-bg);
         color: var(--rod-toast-text);
         box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42);
