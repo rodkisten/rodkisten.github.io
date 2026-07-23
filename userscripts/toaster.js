@@ -1,6 +1,7 @@
 (function Toaster(globalWindow) {
   "use strict";
 
+  // https://raw.githubusercontent.com/rodkisten/rodkisten.github.io/refs/heads/master/userscripts/object-inspector.js
   const VERSION = "3.0.0";
   const TOAST_GLOBAL = "RodToaster";
   const INSPECTOR_GLOBAL = "RodObjectInspector";
