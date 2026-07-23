@@ -201,7 +201,7 @@
 
     .rod-token--undefined,
     .rod-token--meta {
-      color: rgba(212, 212, 216, 1);
+      color: rgba(200, 200, 200, 1);
     }
 
     .rod-token--string {
