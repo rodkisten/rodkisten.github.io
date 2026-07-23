@@ -1,8 +1,7 @@
 (function Toaster(globalWindow) {
   "use strict";
 
-  // https://raw.githubusercontent.com/rodkisten/rodkisten.github.io/refs/heads/master/userscripts/object-inspector.js
-  const VERSION = "3.0.0";
+  const VERSION = "3.1.0";
   const TOAST_GLOBAL = "RodToaster";
   const INSPECTOR_GLOBAL = "RodObjectInspector";
   const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -62,6 +61,17 @@
     position: "top-center",
     stacked: true,
     stackVisible: 3,
+
+    // The expanded stack is always a bounded tray. Even persistent debug
+    // toasts can never grow until they cover the whole viewport.
+    stackMaxHeight: 420,
+    stackViewportRatio: 0.48,
+    stackToolbar: true,
+
+    // Persistent duplicate messages behave like a console counter instead of
+    // creating an endless wall of identical debug toasts.
+    coalescePersistent: true,
+
     swipeToDismiss: true,
     swipeThreshold: 72,
     swipeVelocity: 0.45,
@@ -210,6 +220,9 @@
     objectIds: new WeakMap(),
     nextObjectId: 1,
     stackExpanded: false,
+    list: null,
+    toolbar: null,
+    stackCountNode: null,
     outsidePointerDownHandler: null,
     inspectorPromise: null,
     inspectorApi: null,
@@ -314,13 +327,14 @@
       }
 
       .rod-toast-stack {
+        --rod-toast-stack-max-height: 420px;
+        --rod-toast-stack-max-viewport: 48dvh;
         position: fixed;
         z-index: ${MAX_Z_INDEX};
         isolation: isolate;
         display: flex;
         flex-direction: column;
-        gap: 10px;
-        max-height: calc(100dvh - 32px);
+        gap: 8px;
         pointer-events: none;
         color-scheme: dark;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
@@ -328,61 +342,6 @@
         font-size: 13px;
         font-weight: 400;
         line-height: 1.45;
-      }
-
-      .rod-toast-stack::before,
-      .rod-toast-stack::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        border: 1px solid rgba(82, 82, 91, 0.98);
-        border-radius: 14px;
-        background: rgba(24, 24, 27, 0.985);
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
-        opacity: 0;
-        transform-origin: top center;
-        pointer-events: none;
-        transition: opacity 180ms ease, transform 180ms ease;
-      }
-
-      .rod-toast-stack::before {
-        z-index: -1;
-      }
-
-      .rod-toast-stack::after {
-        z-index: -2;
-      }
-
-      .rod-toast-stack[data-expanded="false"][data-stack-depth="2"]::before,
-      .rod-toast-stack[data-expanded="false"][data-stack-depth="3"]::before {
-        opacity: 1;
-        transform: translateY(9px) scaleX(0.975);
-      }
-
-      .rod-toast-stack[data-expanded="false"][data-stack-depth="3"]::after {
-        opacity: 1;
-        transform: translateY(17px) scaleX(0.945);
-      }
-
-      .rod-toast-stack[data-expanded="true"] {
-        overflow-x: visible;
-        overflow-y: auto;
-        pointer-events: auto;
-        overscroll-behavior: contain;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: thin;
-      }
-
-      .rod-toast-stack[data-expanded="false"] {
-        overflow: visible;
-      }
-
-      .rod-toast-stack[data-expanded="false"] .rod-toast {
-        display: none;
-      }
-
-      .rod-toast-stack[data-expanded="false"] .rod-toast[data-stack-index="0"] {
-        display: grid;
       }
 
       .rod-toast-stack[data-position^="top"] {
@@ -396,6 +355,149 @@
         bottom: max(env(safe-area-inset-bottom, 0px), 16px);
         left: max(env(safe-area-inset-left, 0px), 16px);
         flex-direction: column-reverse;
+      }
+
+      .rod-toast-stack__toolbar {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-height: 38px;
+        padding: 6px 8px 6px 12px;
+        border: 1px solid rgba(82, 82, 91, 0.9);
+        border-radius: 12px;
+        background: rgba(24, 24, 27, 0.96);
+        color: rgba(228, 228, 231, 0.96);
+        box-shadow: 0 12px 34px rgba(0, 0, 0, 0.3);
+        backdrop-filter: blur(16px) saturate(1.15);
+        -webkit-backdrop-filter: blur(16px) saturate(1.15);
+        pointer-events: auto;
+        user-select: none;
+      }
+
+      .rod-toast-stack[data-expanded="true"][data-has-many="true"]
+        .rod-toast-stack__toolbar[data-enabled="true"] {
+        display: flex;
+      }
+
+      .rod-toast-stack__toolbar-label {
+        min-width: 0;
+        overflow: hidden;
+        color: rgba(212, 212, 216, 0.92);
+        font: 650 11px/1.2 ui-sans-serif, system-ui, sans-serif;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .rod-toast-stack__toolbar-actions {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .rod-toast-stack__toolbar-button {
+        appearance: none;
+        min-height: 28px;
+        padding: 0 9px;
+        border: 0;
+        border-radius: 8px;
+        outline: none;
+        background: transparent;
+        color: rgba(244, 244, 245, 0.88);
+        font: 650 11px/1 ui-sans-serif, system-ui, sans-serif;
+        touch-action: manipulation;
+        cursor: pointer;
+      }
+
+      .rod-toast-stack__toolbar-button:hover,
+      .rod-toast-stack__toolbar-button:focus-visible {
+        background: rgba(255, 255, 255, 0.09);
+      }
+
+      .rod-toast-stack__toolbar-button:focus-visible {
+        outline: 1px solid rgba(125, 211, 252, 1);
+        outline-offset: 1px;
+      }
+
+      .rod-toast-stack__list {
+        position: relative;
+        isolation: isolate;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        min-width: 0;
+        overflow: visible;
+        pointer-events: none;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+      }
+
+      .rod-toast-stack[data-position^="bottom"] .rod-toast-stack__list {
+        flex-direction: column-reverse;
+      }
+
+      .rod-toast-stack__list::before,
+      .rod-toast-stack__list::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border: 1px solid rgba(82, 82, 91, 0.98);
+        border-radius: 14px;
+        background: rgba(24, 24, 27, 0.985);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+        opacity: 0;
+        transform-origin: top center;
+        pointer-events: none;
+        transition: opacity 180ms ease, transform 180ms ease;
+      }
+
+      .rod-toast-stack__list::before {
+        z-index: -1;
+      }
+
+      .rod-toast-stack__list::after {
+        z-index: -2;
+      }
+
+      .rod-toast-stack[data-expanded="false"][data-stack-depth="2"]
+        .rod-toast-stack__list::before,
+      .rod-toast-stack[data-expanded="false"][data-stack-depth="3"]
+        .rod-toast-stack__list::before {
+        opacity: 1;
+        transform: translateY(9px) scaleX(0.975);
+      }
+
+      .rod-toast-stack[data-expanded="false"][data-stack-depth="3"]
+        .rod-toast-stack__list::after {
+        opacity: 1;
+        transform: translateY(17px) scaleX(0.945);
+      }
+
+      .rod-toast-stack[data-expanded="true"] .rod-toast-stack__list {
+        max-height: min(
+          var(--rod-toast-stack-max-height),
+          var(--rod-toast-stack-max-viewport)
+        );
+        overflow-x: hidden;
+        overflow-y: auto;
+        padding: 2px;
+        pointer-events: auto;
+        -webkit-overflow-scrolling: touch;
+        scroll-behavior: smooth;
+        scroll-padding-block: 8px;
+      }
+
+      .rod-toast-stack[data-expanded="false"] .rod-toast-stack__list {
+        overflow: visible;
+      }
+
+      .rod-toast-stack[data-expanded="false"] .rod-toast {
+        display: none;
+      }
+
+      .rod-toast-stack[data-expanded="false"] .rod-toast[data-stack-index="0"] {
+        display: grid;
       }
 
       .rod-toast {
@@ -567,8 +669,8 @@
 
       @media (prefers-reduced-motion: reduce) {
         .rod-toast,
-        .rod-toast-stack::before,
-        .rod-toast-stack::after {
+        .rod-toast-stack__list::before,
+        .rod-toast-stack__list::after {
           transition: none;
         }
       }
@@ -827,11 +929,33 @@
     const stackDepth = Math.min(count, stackVisible);
     const effectiveExpanded =
       !state.config.stacked || state.stackExpanded || count <= 1;
+    const viewportRatio = clamp(
+      Number(state.config.stackViewportRatio) || DEFAULT_CONFIG.stackViewportRatio,
+      0.2,
+      0.8,
+    );
 
     state.container.dataset.stacked = String(Boolean(state.config.stacked));
     state.container.dataset.expanded = String(effectiveExpanded);
     state.container.dataset.stackDepth = String(stackDepth);
     state.container.dataset.count = String(count);
+    state.container.dataset.hasMany = String(count > 1);
+    state.container.style.setProperty(
+      "--rod-toast-stack-max-height",
+      `${Math.max(180, Number(state.config.stackMaxHeight) || DEFAULT_CONFIG.stackMaxHeight)}px`,
+    );
+    state.container.style.setProperty(
+      "--rod-toast-stack-max-viewport",
+      `${Math.round(viewportRatio * 100)}dvh`,
+    );
+
+    if (state.toolbar) {
+      state.toolbar.dataset.enabled = String(Boolean(state.config.stackToolbar));
+    }
+
+    if (state.stackCountNode) {
+      state.stackCountNode.textContent = `${count} ${count === 1 ? "toast" : "toasts"}`;
+    }
   }
 
   function setStackExpanded(expanded) {
@@ -911,6 +1035,9 @@
     state.hostElement = null;
     state.shadowRoot = null;
     state.container = null;
+    state.list = null;
+    state.toolbar = null;
+    state.stackCountNode = null;
     state.inspectorRuntime = null;
     state.inspectorStyle = null;
     state.stackExpanded = false;
@@ -927,12 +1054,14 @@
     if (
       state.hostElement?.isConnected &&
       state.hostDocument === hostDocument &&
-      state.container
+      state.container &&
+      state.list
     ) {
       return {
         window: state.hostWindow,
         document: state.hostDocument,
         container: state.container,
+        list: state.list,
       };
     }
 
@@ -961,10 +1090,59 @@
 
     const shadowRoot = hostElement.attachShadow({ mode: "closed" });
     const container = hostDocument.createElement("div");
+    const toolbar = hostDocument.createElement("div");
+    const toolbarLabel = hostDocument.createElement("div");
+    const toolbarActions = hostDocument.createElement("div");
+    const collapseButton = hostDocument.createElement("button");
+    const clearButton = hostDocument.createElement("button");
+    const list = hostDocument.createElement("div");
+
     container.className = "rod-toast-stack";
     container.dataset.position = state.config.position;
     container.dataset.expanded = "true";
     container.dataset.stackDepth = "0";
+
+    toolbar.className = "rod-toast-stack__toolbar";
+    toolbar.dataset.enabled = String(Boolean(state.config.stackToolbar));
+
+    toolbarLabel.className = "rod-toast-stack__toolbar-label";
+    toolbarLabel.textContent = "0 toasts";
+
+    toolbarActions.className = "rod-toast-stack__toolbar-actions";
+
+    collapseButton.type = "button";
+    collapseButton.className = "rod-toast-stack__toolbar-button";
+    collapseButton.textContent = "Collapse";
+    collapseButton.setAttribute("aria-label", "Collapse toast stack");
+
+    clearButton.type = "button";
+    clearButton.className = "rod-toast-stack__toolbar-button";
+    clearButton.textContent = "Clear";
+    clearButton.setAttribute("aria-label", "Dismiss all toasts");
+
+    list.className = "rod-toast-stack__list";
+
+    collapseButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setStackExpanded(false);
+    });
+
+    clearButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      for (const record of [...state.toasts]) {
+        record.dismiss(true);
+      }
+    });
+
+    toolbarActions.appendChild(collapseButton);
+    toolbarActions.appendChild(clearButton);
+    toolbar.appendChild(toolbarLabel);
+    toolbar.appendChild(toolbarActions);
+    container.appendChild(toolbar);
+    container.appendChild(list);
 
     shadowRoot.appendChild(createStyles(hostDocument));
     shadowRoot.appendChild(container);
@@ -975,6 +1153,9 @@
     state.hostElement = hostElement;
     state.shadowRoot = shadowRoot;
     state.container = container;
+    state.list = list;
+    state.toolbar = toolbar;
+    state.stackCountNode = toolbarLabel;
 
     const inspectorApi = getObjectInspectorApi();
 
@@ -1021,7 +1202,7 @@
 
     syncStackLayout();
 
-    return { window: hostWindow, document: hostDocument, container };
+    return { window: hostWindow, document: hostDocument, container, list };
   }
 
   function createTextNode(documentRef, text, className) {
@@ -1327,6 +1508,7 @@
     let velocityX = 0;
     let velocityY = 0;
     let startScrollTop = 0;
+    let scrollOwner = node;
     let mode = "pending";
     let moved = false;
 
@@ -1421,7 +1603,8 @@
       lastTime = event.timeStamp || performance.now();
       velocityX = 0;
       velocityY = 0;
-      startScrollTop = node.scrollTop;
+      scrollOwner = state.stackExpanded && host.list ? host.list : node;
+      startScrollTop = scrollOwner.scrollTop;
       mode = "pending";
       moved = false;
       node.dataset.swiping = "true";
@@ -1452,7 +1635,10 @@
       }
 
       if (mode === "pending") {
-        const maxScrollTop = Math.max(0, node.scrollHeight - node.clientHeight);
+        const maxScrollTop = Math.max(
+          0,
+          scrollOwner.scrollHeight - scrollOwner.clientHeight,
+        );
         const verticalDominant = Math.abs(dy) > Math.abs(dx) * 1.25;
         const canScrollTowardTop = dy > 0 && startScrollTop > 0;
         const canScrollTowardBottom = dy < 0 && startScrollTop < maxScrollTop;
@@ -1466,8 +1652,11 @@
       }
 
       if (mode === "scroll") {
-        const maxScrollTop = Math.max(0, node.scrollHeight - node.clientHeight);
-        node.scrollTop = clamp(startScrollTop - dy, 0, maxScrollTop);
+        const maxScrollTop = Math.max(
+          0,
+          scrollOwner.scrollHeight - scrollOwner.clientHeight,
+        );
+        scrollOwner.scrollTop = clamp(startScrollTop - dy, 0, maxScrollTop);
         return;
       }
 
@@ -1572,7 +1761,7 @@
       node.remove();
       syncStackLayout();
 
-      if (!host.container.children.length) {
+      if (!host.list.children.length) {
         destroyHost();
       }
     };
@@ -1760,7 +1949,7 @@
     });
 
     renderArgs(args, options);
-    host.container.prepend(node);
+    host.list.prepend(node);
     state.toasts.push(record);
     installSwipeToDismiss(record, host);
     syncStackLayout();
@@ -1801,10 +1990,17 @@
       const existing = state.dedupeRecords.get(dedupeKey);
       const now = Date.now();
 
+      const isPersistentDuplicate =
+        Boolean(state.config.coalescePersistent) &&
+        options.duration <= 0 &&
+        existing?.options?.duration <= 0;
+      const isInsideDedupeWindow =
+        existing && now - existing.lastSeenAt <= options.dedupeWindow;
+
       if (
         existing &&
         !existing.removed &&
-        now - existing.lastSeenAt <= options.dedupeWindow
+        (isPersistentDuplicate || isInsideDedupeWindow)
       ) {
         existing.lastSeenAt = now;
         return existing.bumpDuplicate();
@@ -1952,6 +2148,15 @@
         Number(state.config.stackVisible) || DEFAULT_CONFIG.stackVisible,
       ),
     );
+    state.config.stackMaxHeight = Math.max(
+      180,
+      Number(state.config.stackMaxHeight) || DEFAULT_CONFIG.stackMaxHeight,
+    );
+    state.config.stackViewportRatio = clamp(
+      Number(state.config.stackViewportRatio) || DEFAULT_CONFIG.stackViewportRatio,
+      0.2,
+      0.8,
+    );
     state.config.swipeThreshold = Math.max(
       24,
       Number(state.config.swipeThreshold) || DEFAULT_CONFIG.swipeThreshold,
@@ -1982,6 +2187,8 @@
       Number(state.config.virtualMaxHeight) || DEFAULT_CONFIG.virtualMaxHeight,
     );
     state.config.stacked = Boolean(state.config.stacked);
+    state.config.stackToolbar = Boolean(state.config.stackToolbar);
+    state.config.coalescePersistent = Boolean(state.config.coalescePersistent);
     state.config.swipeToDismiss = Boolean(state.config.swipeToDismiss);
     state.config.virtualizeInspector = Boolean(state.config.virtualizeInspector);
     state.config.unmountInspectorOnCollapse = Boolean(
