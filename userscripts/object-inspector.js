@@ -12,7 +12,7 @@
   const DEFAULT_OPTIONS = {
     inspectDepth: 80,
     inspectItems: 1000,
-    previewItems: 3,
+    previewItems: 0,
     showPrototype: true,
     showNonEnumerable: false,
     showObjectLength: false,
