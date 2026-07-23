@@ -1,7 +1,7 @@
 (function Toaster(globalWindow) {
   "use strict";
 
-  const VERSION = "3.3.0";
+  const VERSION = "3.4.0";
   const TOAST_GLOBAL = "RodToaster";
   const INSPECTOR_GLOBAL = "RodObjectInspector";
   const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -99,6 +99,32 @@
       <path d="m9 9 6 6"></path>
       <path d="m15 9-6 6"></path>
     `,
+    "loader-circle": `
+      <path d="M21 12a9 9 0 1 1-6.22-8.56"></path>
+    `,
+    download: `
+      <path d="M12 3v12"></path>
+      <path d="m7 10 5 5 5-5"></path>
+      <path d="M5 21h14"></path>
+    `,
+    upload: `
+      <path d="M12 21V9"></path>
+      <path d="m7 14 5-5 5 5"></path>
+      <path d="M5 3h14"></path>
+    `,
+    refresh: `
+      <path d="M20 11a8 8 0 1 0 2 5"></path>
+      <path d="M20 4v7h-7"></path>
+    `,
+    clock: `
+      <circle cx="12" cy="12" r="9"></circle>
+      <path d="M12 7v5l3 2"></path>
+    `,
+    sparkles: `
+      <path d="m12 3-1.1 2.9L8 7l2.9 1.1L12 11l1.1-2.9L16 7l-2.9-1.1Z"></path>
+      <path d="m19 13-.7 1.8-1.8.7 1.8.7L19 18l.7-1.8 1.8-.7-1.8-.7Z"></path>
+      <path d="m5 14-.8 2.2L2 17l2.2.8L5 20l.8-2.2L8 17l-2.2-.8Z"></path>
+    `,
   };
 
   function createSvgIcon(documentRef, name, size = 18) {
@@ -156,6 +182,16 @@
     successCollapseDuration: 360,
     successExitDuration: 220,
 
+    // Loading toasts are persistent by default and can transition in-place
+    // through spinner, pulse, progress, and terminal states.
+    loadingDuration: 0,
+    loadingAnimation: "spinner",
+    loadingIcon: "loader-circle",
+    loadingSuccessDuration: 1400,
+    loadingErrorDuration: 7000,
+    loadingInfoDuration: 4000,
+    loadingWarningDuration: 6000,
+
     // Persistent duplicate messages behave like a console counter instead of
     // creating an endless wall of identical debug toasts.
     coalescePersistent: true,
@@ -212,6 +248,14 @@
     "virtualOverscan",
     "virtualMaxHeight",
     "unmountInspectorOnCollapse",
+    "loading",
+    "loadingState",
+    "title",
+    "description",
+    "icon",
+    "animation",
+    "progress",
+    "progressLabel",
   ]);
 
   function hasOwn(object, key) {
@@ -257,6 +301,111 @@
     }
 
     return String(value);
+  }
+
+  const LOADING_DESCRIPTOR_KEYS = new Set([
+    "title",
+    "description",
+    "icon",
+    "animation",
+    "progress",
+    "progressLabel",
+    "duration",
+    "id",
+    "dedupe",
+    "dedupeWindow",
+    "pauseOnInteraction",
+    "closeButton",
+    "role",
+    "swipeToDismiss",
+    "swipeThreshold",
+    "swipeVelocity",
+  ]);
+
+  function isPlainObject(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      return false;
+    }
+
+    const prototype = safeCall(
+      () => Object.getPrototypeOf(value),
+      null,
+    );
+
+    return prototype === Object.prototype || prototype === null;
+  }
+
+  function isLoadingDescriptor(value) {
+    if (!isPlainObject(value)) {
+      return false;
+    }
+
+    return Reflect.ownKeys(value).some((key) => {
+      return (
+        typeof key === "string" &&
+        LOADING_DESCRIPTOR_KEYS.has(key)
+      );
+    });
+  }
+
+  function normalizeProgress(value) {
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
+
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) {
+      return null;
+    }
+
+    const normalized = numeric > 1 ? numeric / 100 : numeric;
+
+    return clamp(normalized, 0, 1);
+  }
+
+  function normalizeLoadingAnimation(value) {
+    const allowed = new Set([
+      "spinner",
+      "pulse",
+      "progress",
+      "none",
+    ]);
+
+    return allowed.has(value) ? value : "spinner";
+  }
+
+  function parseLoadingInput(inputArgs, base = {}) {
+    const args = [...inputArgs];
+    const next = { ...base };
+
+    if (!args.length) {
+      return next;
+    }
+
+    const first = args.shift();
+
+    if (isLoadingDescriptor(first)) {
+      Object.assign(next, first);
+    } else if (first !== undefined && first !== null) {
+      next.title = String(first);
+    }
+
+    if (args.length) {
+      const second = args.shift();
+
+      if (isLoadingDescriptor(second)) {
+        Object.assign(next, second);
+      } else if (second !== undefined && second !== null) {
+        next.description = String(second);
+      }
+    }
+
+    if (args.length && isLoadingDescriptor(args[0])) {
+      Object.assign(next, args[0]);
+    }
+
+    return next;
   }
 
   function getHighestAccessibleWindow(startWindow) {
@@ -875,6 +1024,199 @@
 
       .rod-token--function {
         color: rgba(253, 224, 71, 1);
+      }
+
+      .rod-toast[data-loading="true"] {
+        align-items: center;
+      }
+
+      .rod-toast[data-loading="true"] .rod-toast__icon {
+        align-self: center;
+      }
+
+      .rod-toast[data-loading="true"][data-loading-icon="false"] {
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+
+      .rod-toast[data-loading="true"][data-loading-icon="false"]
+        .rod-toast__icon {
+        display: none;
+      }
+
+      .rod-toast[data-loading="true"][data-loading-content-empty="true"] {
+        grid-template-columns: auto auto;
+        justify-content: center;
+        width: fit-content;
+        min-width: 0;
+        max-width: min(100%, 280px);
+        margin-inline: auto;
+        padding-left: 11px;
+      }
+
+      .rod-toast[data-loading="true"][data-loading-content-empty="true"]
+        .rod-toast__content {
+        display: none;
+      }
+
+      .rod-toast[data-loading="true"][data-loading-content-empty="true"]
+        .rod-toast__actions {
+        position: static;
+        margin: 0;
+      }
+
+      .rod-toast__loading-copy {
+        display: grid;
+        gap: 3px;
+        min-width: 0;
+        width: 100%;
+      }
+
+      .rod-toast__loading-title {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        color: rgba(250, 250, 250, 0.94);
+        font: 600 13px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        letter-spacing: -0.006em;
+      }
+
+      .rod-toast__loading-description {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        color: rgba(161, 161, 170, 0.9);
+        font: 400 12px/1.45 ui-sans-serif, system-ui, -apple-system, sans-serif;
+      }
+
+      .rod-toast__progress {
+        display: grid;
+        gap: 5px;
+        width: 100%;
+        margin-top: 5px;
+      }
+
+      .rod-toast__progress-meta {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        min-height: 14px;
+        color: rgba(161, 161, 170, 0.78);
+        font: 500 10px/1 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .rod-toast__progress-track {
+        position: relative;
+        width: 100%;
+        height: 3px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .rod-toast__progress-bar {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: var(--rod-loading-progress, 0%);
+        border-radius: inherit;
+        background: rgba(244, 244, 245, 0.78);
+        transform-origin: left center;
+        transition: width 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+
+      .rod-toast[data-loading-animation="progress"]
+        .rod-toast__progress {
+        display: grid;
+      }
+
+      .rod-toast:not([data-loading-animation="progress"])
+        .rod-toast__progress {
+        display: none;
+      }
+
+      .rod-toast[data-loading-indeterminate="true"]
+        .rod-toast__progress-bar {
+        width: 38%;
+        animation:
+          rod-toast-progress-indeterminate
+          1.1s
+          cubic-bezier(0.4, 0, 0.2, 1)
+          infinite;
+      }
+
+      .rod-toast[data-loading-state="loading"]
+        [data-loading-spinner="true"] {
+        animation: rod-toast-spinner 850ms linear infinite;
+      }
+
+      .rod-toast[data-loading-state="loading"]
+        [data-loading-pulse="true"] {
+        animation:
+          rod-toast-pulse
+          1.35s
+          cubic-bezier(0.4, 0, 0.6, 1)
+          infinite;
+      }
+
+      .rod-toast[data-loading-state="loading"]
+        [data-loading-pulse="true"]::after {
+        content: "";
+        position: absolute;
+        width: 28px;
+        height: 28px;
+        border: 1px solid currentColor;
+        border-radius: 999px;
+        opacity: 0;
+        animation:
+          rod-toast-pulse-ring
+          1.35s
+          cubic-bezier(0.4, 0, 0.6, 1)
+          infinite;
+        pointer-events: none;
+      }
+
+      @keyframes rod-toast-spinner {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @keyframes rod-toast-pulse {
+        0%,
+        100% {
+          opacity: 0.55;
+          transform: scale(0.92);
+        }
+
+        50% {
+          opacity: 1;
+          transform: scale(1.08);
+        }
+      }
+
+      @keyframes rod-toast-pulse-ring {
+        0% {
+          opacity: 0.35;
+          transform: scale(0.55);
+        }
+
+        75%,
+        100% {
+          opacity: 0;
+          transform: scale(1.35);
+        }
+      }
+
+      @keyframes rod-toast-progress-indeterminate {
+        0% {
+          left: -42%;
+        }
+
+        50% {
+          left: 42%;
+        }
+
+        100% {
+          left: 104%;
+        }
       }
 
       .rod-toast[data-completing="true"] {
@@ -1925,8 +2267,25 @@
     const type = hasOwn(TOAST_COLORS, options.type)
       ? options.type
       : "default";
-    const defaultDuration =
-      type === "debug" ? state.config.debugDuration : state.config.duration;
+    const loading = Boolean(options.loading);
+    const defaultDuration = loading
+      ? state.config.loadingDuration
+      : type === "debug"
+        ? state.config.debugDuration
+        : state.config.duration;
+    const loadingAnimation = normalizeLoadingAnimation(
+      options.animation ??
+        options.loadingAnimation ??
+        state.config.loadingAnimation,
+    );
+    const progress = normalizeProgress(options.progress);
+    const icon =
+      options.icon === false || options.icon === null
+        ? false
+        : options.icon ||
+          (loading
+            ? state.config.loadingIcon
+            : TOAST_COLORS[type].icon);
 
     return {
       type,
@@ -1961,7 +2320,8 @@
       showPrototype: options.showPrototype ?? state.config.showPrototype,
       showNonEnumerable:
         options.showNonEnumerable ?? state.config.showNonEnumerable,
-      showObjectLength: options.showObjectLength ?? state.config.showObjectLength,
+      showObjectLength:
+        options.showObjectLength ?? state.config.showObjectLength,
       virtualizeInspector:
         options.virtualizeInspector ?? state.config.virtualizeInspector,
       virtualizeAfter: Number.isFinite(options.virtualizeAfter)
@@ -1979,6 +2339,28 @@
       unmountInspectorOnCollapse:
         options.unmountInspectorOnCollapse ??
         state.config.unmountInspectorOnCollapse,
+      loading,
+      loadingState:
+        options.loadingState === "settled"
+          ? "settled"
+          : "loading",
+      title:
+        options.title === undefined || options.title === null
+          ? ""
+          : String(options.title),
+      description:
+        options.description === undefined ||
+        options.description === null
+          ? ""
+          : String(options.description),
+      icon,
+      animation: loadingAnimation,
+      progress,
+      progressLabel:
+        options.progressLabel === undefined ||
+        options.progressLabel === null
+          ? null
+          : String(options.progressLabel),
     };
   }
 
@@ -2290,6 +2672,38 @@
     });
   }
 
+  function setToastIcon(node, documentRef, iconValue, fallbackName) {
+    node.replaceChildren();
+
+    if (iconValue === false || iconValue === null) {
+      return false;
+    }
+
+    if (
+      iconValue &&
+      typeof iconValue === "object" &&
+      typeof iconValue.cloneNode === "function"
+    ) {
+      node.appendChild(iconValue.cloneNode(true));
+      return true;
+    }
+
+    const iconName =
+      typeof iconValue === "string" && SVG_ICONS[iconValue]
+        ? iconValue
+        : fallbackName;
+
+    node.appendChild(
+      createSvgIcon(
+        documentRef,
+        iconName || "loader-circle",
+        17,
+      ),
+    );
+
+    return true;
+  }
+
   function createToastRecord(args, rawOptions) {
     const host = ensureHost();
 
@@ -2310,6 +2724,13 @@
     const content = host.document.createElement("div");
     const actions = host.document.createElement("div");
     const count = host.document.createElement("div");
+    const loadingCopy = host.document.createElement("div");
+    const loadingTitle = host.document.createElement("div");
+    const loadingDescription = host.document.createElement("div");
+    const progress = host.document.createElement("div");
+    const progressMeta = host.document.createElement("div");
+    const progressTrack = host.document.createElement("div");
+    const progressBar = host.document.createElement("div");
 
     node.className = "rod-toast";
     node.setAttribute("role", options.role);
@@ -2319,7 +2740,12 @@
     node.style.setProperty("--rod-toast-accent", palette.accent);
 
     icon.className = "rod-toast__icon";
-    setSvgIcon(icon, host.document, palette.icon, 17);
+    setToastIcon(
+      icon,
+      host.document,
+      options.icon,
+      palette.icon,
+    );
     icon.setAttribute("aria-hidden", "true");
 
     content.className = "rod-toast__content";
@@ -2327,6 +2753,22 @@
     count.className = "rod-toast__count";
     count.textContent = "1";
     count.dataset.visible = "false";
+
+    loadingCopy.className = "rod-toast__loading-copy";
+    loadingTitle.className = "rod-toast__loading-title";
+    loadingDescription.className = "rod-toast__loading-description";
+    progress.className = "rod-toast__progress";
+    progressMeta.className = "rod-toast__progress-meta";
+    progressTrack.className = "rod-toast__progress-track";
+    progressBar.className = "rod-toast__progress-bar";
+
+    progressTrack.appendChild(progressBar);
+    progress.appendChild(progressMeta);
+    progress.appendChild(progressTrack);
+    loadingCopy.appendChild(loadingTitle);
+    loadingCopy.appendChild(loadingDescription);
+    loadingCopy.appendChild(progress);
+
     node.dataset.itemExpanded = "false";
     node.dataset.completing = "false";
     node.dataset.successExit = "false";
@@ -2344,7 +2786,96 @@
     let duplicateCount = 1;
     let completing = false;
 
+    const renderLoading = (nextOptions = options) => {
+      const hasTitle = Boolean(nextOptions.title);
+      const hasDescription = Boolean(nextOptions.description);
+      const hasProgress =
+        nextOptions.animation === "progress";
+      const contentEmpty =
+        !hasTitle &&
+        !hasDescription &&
+        !hasProgress;
+      const hasIcon = setToastIcon(
+        icon,
+        host.document,
+        nextOptions.icon,
+        nextOptions.loadingState === "settled"
+          ? TOAST_COLORS[nextOptions.type].icon
+          : state.config.loadingIcon,
+      );
+
+      node.dataset.loading = "true";
+      node.dataset.loadingState = nextOptions.loadingState;
+      node.dataset.loadingAnimation = nextOptions.animation;
+      node.dataset.loadingIcon = String(hasIcon);
+      node.dataset.loadingContentEmpty = String(contentEmpty);
+      node.dataset.loadingIndeterminate = String(
+        hasProgress && nextOptions.progress === null,
+      );
+
+      icon.dataset.loadingSpinner = String(
+        nextOptions.loadingState === "loading" &&
+        nextOptions.animation === "spinner",
+      );
+      icon.dataset.loadingPulse = String(
+        nextOptions.loadingState === "loading" &&
+        nextOptions.animation === "pulse",
+      );
+
+      loadingTitle.textContent = nextOptions.title;
+      loadingTitle.hidden = !hasTitle;
+
+      loadingDescription.textContent = nextOptions.description;
+      loadingDescription.hidden = !hasDescription;
+
+      const normalizedProgress = nextOptions.progress;
+      const progressPercent =
+        normalizedProgress === null
+          ? 0
+          : Math.round(normalizedProgress * 100);
+
+      node.style.setProperty(
+        "--rod-loading-progress",
+        `${progressPercent}%`,
+      );
+
+      if (nextOptions.progressLabel !== null) {
+        progressMeta.textContent = nextOptions.progressLabel;
+      } else if (normalizedProgress !== null) {
+        progressMeta.textContent = `${progressPercent}%`;
+      } else {
+        progressMeta.textContent = "";
+      }
+
+      progressMeta.hidden =
+        !progressMeta.textContent ||
+        nextOptions.animation !== "progress";
+
+      content.replaceChildren(loadingCopy);
+    };
+
     const renderArgs = (nextArgs, nextOptions = options) => {
+      if (nextOptions.loading) {
+        renderLoading(nextOptions);
+        return;
+      }
+
+      node.dataset.loading = "false";
+      node.dataset.loadingState = "";
+      node.dataset.loadingAnimation = "";
+      node.dataset.loadingIcon = "true";
+      node.dataset.loadingContentEmpty = "false";
+      node.dataset.loadingIndeterminate = "false";
+      icon.dataset.loadingSpinner = "false";
+      icon.dataset.loadingPulse = "false";
+
+      setToastIcon(
+        icon,
+        host.document,
+        nextOptions.icon,
+        TOAST_COLORS[nextOptions.type].icon,
+      );
+
       content.replaceChildren();
 
       for (const value of nextArgs) {
@@ -2389,7 +2920,12 @@
 
       completing = true;
       clearTimer();
-      setSvgIcon(icon, host.document, "check", 23);
+      setToastIcon(
+        icon,
+        host.document,
+        "check",
+        "check",
+      );
       node.dataset.swiping = "false";
 
       const requestFrame =
@@ -2534,7 +3070,6 @@
       const nextPalette = TOAST_COLORS[nextOptions.type];
 
       Object.assign(options, nextOptions);
-      setSvgIcon(icon, host.document, nextPalette.icon, 17);
       node.style.setProperty("--rod-toast-bg", nextPalette.bg);
       node.style.setProperty("--rod-toast-border", nextPalette.border);
       node.style.setProperty("--rod-toast-text", nextPalette.text);
@@ -2543,6 +3078,53 @@
       renderArgs(nextArgs, nextOptions);
       resetTimer(nextOptions.duration);
       return controller;
+    };
+
+    const updateLoading = (inputArgs) => {
+      const parsed = parseLoadingInput(inputArgs);
+      const nextOptions = {
+        ...options,
+        ...parsed,
+        loading: true,
+        loadingState:
+          parsed.loadingState ||
+          options.loadingState ||
+          "loading",
+      };
+
+      return update([], nextOptions);
+    };
+
+    const settleLoading = (type, inputArgs = []) => {
+      const parsed = parseLoadingInput(inputArgs);
+      const durationByType = {
+        success: state.config.loadingSuccessDuration,
+        error: state.config.loadingErrorDuration,
+        info: state.config.loadingInfoDuration,
+        warning: state.config.loadingWarningDuration,
+      };
+      const semanticIcon =
+        parsed.icon !== undefined
+          ? parsed.icon
+          : TOAST_COLORS[type].icon;
+      const nextOptions = {
+        ...options,
+        ...parsed,
+        type,
+        loading: true,
+        loadingState: "settled",
+        animation: "none",
+        icon: semanticIcon,
+        progress:
+          type === "success"
+            ? 1
+            : parsed.progress ?? options.progress,
+        duration: Number.isFinite(parsed.duration)
+          ? Number(parsed.duration)
+          : durationByType[type] ?? state.config.duration,
+      };
+
+      return update([], nextOptions);
     };
 
     const bumpDuplicate = () => {
@@ -2562,6 +3144,8 @@
       lastSeenAt: Date.now(),
       dismiss,
       update,
+      updateLoading,
+      settleLoading,
       bumpDuplicate,
       get removed() {
         return removed;
@@ -2575,9 +3159,45 @@
       get element() {
         return node;
       },
+      get progress() {
+        return options.progress;
+      },
+      get state() {
+        return options.loading
+          ? options.loadingState
+          : options.type;
+      },
       update(...inputArgs) {
+        if (options.loading) {
+          return updateLoading(inputArgs);
+        }
+
         const parsed = parseArguments(inputArgs, null);
         return update(parsed.args, parsed.options);
+      },
+      setProgress(value, next = {}) {
+        return updateLoading([
+          {
+            ...next,
+            progress: value,
+            animation:
+              next.animation ||
+              options.animation ||
+              "progress",
+          },
+        ]);
+      },
+      success(...inputArgs) {
+        return settleLoading("success", inputArgs);
+      },
+      error(...inputArgs) {
+        return settleLoading("error", inputArgs);
+      },
+      info(...inputArgs) {
+        return settleLoading("info", inputArgs);
+      },
+      warning(...inputArgs) {
+        return settleLoading("warning", inputArgs);
       },
       dismiss() {
         dismiss();
@@ -2645,8 +3265,7 @@
     return { record, controller };
   }
 
-  function showToast(inputArgs, forcedType) {
-    const parsed = parseArguments(inputArgs, forcedType);
+  function showParsedToast(parsed) {
     const options = normalizeToastOptions(parsed.options);
 
     if (options.id) {
@@ -2654,6 +3273,16 @@
 
       if (existing && !existing.removed) {
         existing.lastSeenAt = Date.now();
+
+        if (options.loading || existing.options.loading) {
+          return existing.updateLoading([
+            {
+              ...parsed.options,
+              loading: true,
+            },
+          ]);
+        }
+
         return existing.update(parsed.args, parsed.options);
       }
     }
@@ -2671,7 +3300,8 @@
         options.duration <= 0 &&
         existing?.options?.duration <= 0;
       const isInsideDedupeWindow =
-        existing && now - existing.lastSeenAt <= options.dedupeWindow;
+        existing &&
+        now - existing.lastSeenAt <= options.dedupeWindow;
 
       if (
         existing &&
@@ -2683,7 +3313,10 @@
       }
     }
 
-    const created = createToastRecord(parsed.args, parsed.options);
+    const created = createToastRecord(
+      parsed.args,
+      parsed.options,
+    );
 
     if (!created) {
       return null;
@@ -2700,6 +3333,41 @@
     }
 
     return created.controller;
+  }
+
+  function showToast(inputArgs, forcedType) {
+    return showParsedToast(
+      parseArguments(inputArgs, forcedType),
+    );
+  }
+
+  function showLoadingToast(inputArgs) {
+    const descriptor = parseLoadingInput(inputArgs);
+    const options = {
+      ...descriptor,
+      type: descriptor.type || "default",
+      loading: true,
+      loadingState: "loading",
+      animation:
+        descriptor.animation ||
+        state.config.loadingAnimation,
+      icon:
+        descriptor.icon === undefined
+          ? state.config.loadingIcon
+          : descriptor.icon,
+      duration: Number.isFinite(descriptor.duration)
+        ? Number(descriptor.duration)
+        : state.config.loadingDuration,
+      dedupe:
+        descriptor.dedupe === undefined
+          ? false
+          : descriptor.dedupe,
+    };
+
+    return showParsedToast({
+      args: [],
+      options,
+    });
   }
 
   function showDebugToast(inputArgs) {
@@ -2721,6 +3389,7 @@
   toast.info = (...args) => showToast(args, "info");
   toast.success = (...args) => showToast(args, "success");
   toast.warning = (...args) => showToast(args, "warning");
+  toast.loading = (...args) => showLoadingToast(args);
   toast.debug = (...args) => showDebugToast(args);
   toast.inspect = (...args) => showDebugToast(args);
 
@@ -2747,9 +3416,55 @@
       return null;
     }
 
-    const parsed = parseArguments(inputArgs, null);
     record.lastSeenAt = Date.now();
+
+    if (record.options.loading) {
+      return record.updateLoading(inputArgs);
+    }
+
+    const parsed = parseArguments(inputArgs, null);
     return record.update(parsed.args, parsed.options);
+  };
+
+  toast.progress = (id, value, next = {}) => {
+    const record = state.recordsById.get(String(id));
+
+    if (!record || record.removed || !record.options.loading) {
+      return null;
+    }
+
+    return record.updateLoading([
+      {
+        ...next,
+        progress: value,
+        animation:
+          next.animation ||
+          record.options.animation ||
+          "progress",
+      },
+    ]);
+  };
+
+  toast.resolve = (id, type = "success", ...inputArgs) => {
+    const record = state.recordsById.get(String(id));
+
+    if (!record || record.removed || !record.options.loading) {
+      return null;
+    }
+
+    const normalizedType = [
+      "success",
+      "error",
+      "info",
+      "warning",
+    ].includes(type)
+      ? type
+      : "success";
+
+    return record.settleLoading(
+      normalizedType,
+      inputArgs,
+    );
   };
 
   toast.dismiss = (target) => {
@@ -2890,6 +3605,40 @@
       80,
       Number(state.config.successExitDuration) ||
         DEFAULT_CONFIG.successExitDuration,
+    );
+    state.config.loadingDuration = Number.isFinite(
+      Number(state.config.loadingDuration),
+    )
+      ? Number(state.config.loadingDuration)
+      : DEFAULT_CONFIG.loadingDuration;
+    state.config.loadingAnimation = normalizeLoadingAnimation(
+      state.config.loadingAnimation,
+    );
+    state.config.loadingIcon =
+      state.config.loadingIcon === false ||
+      state.config.loadingIcon === null
+        ? false
+        : state.config.loadingIcon ||
+          DEFAULT_CONFIG.loadingIcon;
+    state.config.loadingSuccessDuration = Math.max(
+      0,
+      Number(state.config.loadingSuccessDuration) ||
+        DEFAULT_CONFIG.loadingSuccessDuration,
+    );
+    state.config.loadingErrorDuration = Math.max(
+      0,
+      Number(state.config.loadingErrorDuration) ||
+        DEFAULT_CONFIG.loadingErrorDuration,
+    );
+    state.config.loadingInfoDuration = Math.max(
+      0,
+      Number(state.config.loadingInfoDuration) ||
+        DEFAULT_CONFIG.loadingInfoDuration,
+    );
+    state.config.loadingWarningDuration = Math.max(
+      0,
+      Number(state.config.loadingWarningDuration) ||
+        DEFAULT_CONFIG.loadingWarningDuration,
     );
     state.config.coalescePersistent = Boolean(state.config.coalescePersistent);
     state.config.swipeToDismiss = Boolean(state.config.swipeToDismiss);
