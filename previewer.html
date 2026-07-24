@@ -1,0 +1,844 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#0d1117">
+  <meta name="color-scheme" content="dark">
+  <title>Shortcut Code Viewer</title>
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/styles/github-dark.min.css">
+
+  <style>
+    :root {
+      color-scheme: dark;
+      --background: #0d1117;
+      --surface: rgba(22, 27, 34, 0.96);
+      --surface-raised: #21262d;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #2f81f7;
+      --danger: #f85149;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-right: env(safe-area-inset-right, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-left: env(safe-area-inset-left, 0px);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: var(--background);
+      color: var(--text);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button,
+    select {
+      min-height: 36px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: var(--surface-raised);
+      color: var(--text);
+      font: inherit;
+    }
+
+    button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 7px 11px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    button:active {
+      transform: scale(0.97);
+    }
+
+    button:disabled {
+      cursor: default;
+      opacity: 0.45;
+      transform: none;
+    }
+
+    select {
+      max-width: 130px;
+      padding: 6px 28px 6px 10px;
+    }
+
+    #app {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      width: 100%;
+      height: 100dvh;
+      min-height: 100%;
+      padding:
+        var(--safe-top)
+        var(--safe-right)
+        var(--safe-bottom)
+        var(--safe-left);
+    }
+
+    #toolbar {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      padding: 8px;
+      overflow-x: auto;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      scrollbar-width: none;
+    }
+
+    #toolbar::-webkit-scrollbar {
+      display: none;
+    }
+
+    #toolbar .spacer {
+      flex: 1 0 12px;
+    }
+
+    #filename {
+      flex: 0 1 220px;
+      min-width: 80px;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 12px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    #editor {
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    #statusbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 28px;
+      padding: 5px 10px;
+      overflow: hidden;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    #status {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #statusbar .spacer {
+      flex: 1;
+    }
+
+    .cm-editor {
+      height: 100%;
+      background: var(--background);
+      font-size: 14px;
+    }
+
+    .cm-editor.cm-focused {
+      outline: none;
+    }
+
+    .cm-scroller {
+      overscroll-behavior: contain;
+      font-family: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+      line-height: 1.55;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .cm-content {
+      min-height: 100%;
+      padding: 10px 0 max(20px, var(--safe-bottom));
+      caret-color: #58a6ff;
+    }
+
+    .cm-gutters {
+      border-right: 1px solid var(--border) !important;
+      background: #0d1117 !important;
+      color: #6e7681 !important;
+    }
+
+    .cm-activeLine,
+    .cm-activeLineGutter {
+      background: rgba(110, 118, 129, 0.12) !important;
+    }
+
+    .cm-foldGutter span {
+      color: var(--muted);
+    }
+
+    .cm-foldPlaceholder {
+      border: 1px solid var(--border) !important;
+      border-radius: 5px !important;
+      background: var(--surface-raised) !important;
+      color: var(--muted) !important;
+    }
+
+    #empty {
+      position: absolute;
+      inset: 50% auto auto 50%;
+      z-index: 2;
+      width: min(86vw, 430px);
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(22, 27, 34, 0.9);
+      color: var(--muted);
+      text-align: center;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    #empty strong {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--text);
+      font-size: 15px;
+    }
+
+    #fileInput {
+      display: none;
+    }
+
+    @media (max-width: 560px) {
+      #toolbar {
+        gap: 6px;
+        padding: 7px;
+      }
+
+      button,
+      select {
+        min-height: 34px;
+        font-size: 12px;
+      }
+
+      button {
+        padding-inline: 9px;
+      }
+
+      #filename {
+        display: none;
+      }
+
+      .cm-editor {
+        font-size: 13px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main id="app">
+    <header id="toolbar" aria-label="Ferramentas do editor">
+      <button id="openButton" type="button" title="Abrir arquivo">Abrir</button>
+      <button id="pasteButton" type="button" title="Colar da área de transferência">Colar</button>
+
+      <select id="language" aria-label="Linguagem">
+        <option value="auto">Auto</option>
+        <option value="json">JSON</option>
+        <option value="html">HTML</option>
+        <option value="css">CSS</option>
+        <option value="text">Texto</option>
+      </select>
+
+      <button id="formatButton" type="button" title="Formatar conteúdo">Formatar</button>
+      <button id="foldButton" type="button" title="Recolher tudo">Fold</button>
+      <button id="unfoldButton" type="button" title="Expandir tudo">Unfold</button>
+      <button id="copyButton" type="button" title="Copiar conteúdo">Copiar</button>
+
+      <span class="spacer"></span>
+      <span id="filename">Shortcut Code Viewer</span>
+    </header>
+
+    <section id="editor" aria-label="Editor de código">
+      <div id="empty">
+        <strong>Nenhum conteúdo recebido</strong>
+        Passe <code>?content=...</code>, use o hash, cole ou abra um arquivo.
+      </div>
+    </section>
+
+    <footer id="statusbar">
+      <span id="status">Pronto</span>
+      <span class="spacer"></span>
+      <span id="position">Ln 1, Col 1</span>
+      <span id="size">0 B</span>
+    </footer>
+  </main>
+
+  <input id="fileInput" type="file" accept=".json,.html,.htm,.css,.txt,text/plain,text/html,text/css,application/json">
+
+  <script type="module">
+    import { basicSetup } from "https://esm.sh/codemirror@6.0.2";
+    import { EditorState, Compartment } from "https://esm.sh/@codemirror/state@6.5.2";
+    import {
+      EditorView,
+      keymap,
+      lineWrapping
+    } from "https://esm.sh/@codemirror/view@6.38.1";
+    import {
+      foldAll,
+      unfoldAll,
+      foldGutter,
+      foldKeymap,
+      indentOnInput
+    } from "https://esm.sh/@codemirror/language@6.11.2";
+    import { json } from "https://esm.sh/@codemirror/lang-json@6.0.2";
+    import { html } from "https://esm.sh/@codemirror/lang-html@6.4.9";
+    import { css } from "https://esm.sh/@codemirror/lang-css@6.3.1";
+    import { oneDark } from "https://esm.sh/@codemirror/theme-one-dark@6.1.3";
+    import hljs from "https://esm.sh/highlight.js@11.11.1/lib/core";
+    import hljsJson from "https://esm.sh/highlight.js@11.11.1/lib/languages/json";
+    import hljsXml from "https://esm.sh/highlight.js@11.11.1/lib/languages/xml";
+    import hljsCss from "https://esm.sh/highlight.js@11.11.1/lib/languages/css";
+
+    hljs.registerLanguage("json", hljsJson);
+    hljs.registerLanguage("html", hljsXml);
+    hljs.registerLanguage("css", hljsCss);
+
+    const languageCompartment = new Compartment();
+    const editorElement = document.querySelector("#editor");
+    const emptyElement = document.querySelector("#empty");
+    const languageSelect = document.querySelector("#language");
+    const filenameElement = document.querySelector("#filename");
+    const statusElement = document.querySelector("#status");
+    const positionElement = document.querySelector("#position");
+    const sizeElement = document.querySelector("#size");
+    const fileInput = document.querySelector("#fileInput");
+
+    let currentLanguage = "text";
+    let currentFilename = "Shortcut Code Viewer";
+
+    const languageExtensions = {
+      json: json(),
+      html: html(),
+      css: css(),
+      text: []
+    };
+
+    const view = new EditorView({
+      parent: editorElement,
+      state: EditorState.create({
+        doc: "",
+        extensions: [
+          basicSetup,
+          oneDark,
+          lineWrapping,
+          foldGutter(),
+          indentOnInput(),
+          keymap.of(foldKeymap),
+          languageCompartment.of(languageExtensions.text),
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged || update.selectionSet) {
+              updateStatus(update.state);
+            }
+
+            if (update.docChanged) {
+              emptyElement.hidden = update.state.doc.length > 0;
+            }
+          }),
+          EditorView.theme({
+            "&": {
+              height: "100%"
+            },
+            ".cm-scroller": {
+              overflow: "auto"
+            }
+          })
+        ]
+      })
+    });
+
+    function decodeInput(value) {
+      if (!value) return "";
+
+      const variants = [
+        () => decodeURIComponent(value),
+        () => decodeURIComponent(value.replace(/\+/g, "%20")),
+        () => atob(value),
+        () => value
+      ];
+
+      for (const read of variants) {
+        try {
+          const result = read();
+          if (typeof result === "string") return result;
+        } catch {}
+      }
+
+      return value;
+    }
+
+    function readInitialPayload() {
+      const url = new URL(location.href);
+      const params = url.searchParams;
+
+      const queryContent =
+        params.get("content") ??
+        params.get("code") ??
+        params.get("text") ??
+        params.get("input");
+
+      if (queryContent !== null) {
+        return {
+          content: decodeInput(queryContent),
+          language: params.get("lang") || params.get("language") || "auto",
+          filename: params.get("filename") || params.get("name") || ""
+        };
+      }
+
+      const rawHash = location.hash.slice(1);
+
+      if (rawHash) {
+        const hashParams = new URLSearchParams(rawHash);
+
+        if (
+          hashParams.has("content") ||
+          hashParams.has("code") ||
+          hashParams.has("text") ||
+          hashParams.has("input")
+        ) {
+          return {
+            content: decodeInput(
+              hashParams.get("content") ??
+              hashParams.get("code") ??
+              hashParams.get("text") ??
+              hashParams.get("input")
+            ),
+            language:
+              hashParams.get("lang") ??
+              hashParams.get("language") ??
+              "auto",
+            filename:
+              hashParams.get("filename") ??
+              hashParams.get("name") ??
+              ""
+          };
+        }
+
+        return {
+          content: decodeInput(rawHash),
+          language: "auto",
+          filename: ""
+        };
+      }
+
+      const injected =
+        window.SHORTCUT_INPUT ??
+        window.shortcutInput ??
+        window.__SHORTCUT_INPUT__;
+
+      if (typeof injected === "string") {
+        return {
+          content: injected,
+          language: "auto",
+          filename: ""
+        };
+      }
+
+      if (injected && typeof injected === "object") {
+        return {
+          content:
+            injected.content ??
+            injected.code ??
+            injected.text ??
+            JSON.stringify(injected, null, 2),
+          language:
+            injected.language ??
+            injected.lang ??
+            "auto",
+          filename:
+            injected.filename ??
+            injected.name ??
+            ""
+        };
+      }
+
+      return {
+        content: "",
+        language: "auto",
+        filename: ""
+      };
+    }
+
+    function detectLanguage(content, filename = "") {
+      const extension = filename
+        .split(".")
+        .pop()
+        ?.toLowerCase();
+
+      if (extension === "json") return "json";
+      if (extension === "html" || extension === "htm") return "html";
+      if (extension === "css") return "css";
+
+      const trimmed = content.trim();
+
+      if (!trimmed) return "text";
+
+      try {
+        JSON.parse(trimmed);
+        return "json";
+      } catch {}
+
+      const detected = hljs.highlightAuto(trimmed, [
+        "json",
+        "html",
+        "css"
+      ]).language;
+
+      if (detected === "xml") return "html";
+      if (detected === "json") return "json";
+      if (detected === "css") return "css";
+
+      if (/^\s*(?:<!doctype\s+html|<html\b|<[a-z][\s\S]*>)/i.test(trimmed)) {
+        return "html";
+      }
+
+      if (
+        /(?:^|})\s*(?:@[\w-]+|[#.:[\]a-z][^{]+)\s*\{[\s\S]*:[^;{}]+;/i.test(
+          trimmed
+        )
+      ) {
+        return "css";
+      }
+
+      return "text";
+    }
+
+    function normalizeLanguage(language, content, filename = "") {
+      const normalized = String(language || "auto").toLowerCase();
+
+      if (normalized === "xml" || normalized === "htm") return "html";
+      if (normalized === "plaintext" || normalized === "plain") return "text";
+
+      if (normalized === "auto" || !(normalized in languageExtensions)) {
+        return detectLanguage(content, filename);
+      }
+
+      return normalized;
+    }
+
+    function setLanguage(language) {
+      currentLanguage = language;
+
+      view.dispatch({
+        effects: languageCompartment.reconfigure(
+          languageExtensions[language] ?? languageExtensions.text
+        )
+      });
+
+      languageSelect.value = language;
+      document.documentElement.dataset.language = language;
+    }
+
+    function setDocument(content, options = {}) {
+      const text =
+        typeof content === "string"
+          ? content
+          : JSON.stringify(content, null, 2);
+
+      currentFilename = options.filename || currentFilename;
+      filenameElement.textContent = currentFilename;
+
+      const language = normalizeLanguage(
+        options.language || "auto",
+        text,
+        currentFilename
+      );
+
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: view.state.doc.length,we
+          insert: text
+        },
+        selection: {
+          anchor: 0
+        },
+        scrollIntoView: true
+      });
+
+      setLanguage(language);
+      emptyElement.hidden = text.length > 0;
+      updateStatus(view.state);
+      setStatus(`Aberto como ${language.toUpperCase()}`);
+    }
+
+    function getDocument() {
+      return view.state.doc.toString();
+    }
+
+    function updateStatus(state) {
+      const selection = state.selection.main;
+      const line = state.doc.lineAt(selection.head);
+      const bytes = new Blob([state.doc.toString()]).size;
+
+      positionElement.textContent =
+        `Ln ${line.number}, Col ${selection.head - line.from + 1}`;
+
+      sizeElement.textContent = formatBytes(bytes);
+    }
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+    }
+
+    function setStatus(message, isError = false) {
+      statusElement.textContent = message;
+      statusElement.style.color = isError ? "var(--danger)" : "";
+    }
+
+    function formatDocument() {
+      const content = getDocument();
+
+      try {
+        if (currentLanguage === "json") {
+          setDocument(JSON.stringify(JSON.parse(content), null, 2), {
+            language: "json",
+            filename: currentFilename
+          });
+          setStatus("JSON formatado");
+          return;
+        }
+
+        if (currentLanguage === "css") {
+          setDocument(formatCss(content), {
+            language: "css",
+            filename: currentFilename
+          });
+          setStatus("CSS formatado");
+          return;
+        }
+
+        if (currentLanguage === "html") {
+          setDocument(formatHtml(content), {
+            language: "html",
+            filename: currentFilename
+          });
+          setStatus("HTML formatado");
+          return;
+        }
+
+        setStatus("Formatação disponível para JSON, HTML e CSS");
+      } catch (error) {
+        setStatus(`Não foi possível formatar: ${error.message}`, true);
+      }
+    }
+
+    function formatCss(source) {
+      return source
+        .replace(/\s*{\s*/g, " {\n")
+        .replace(/;\s*/g, ";\n")
+        .replace(/\s*}\s*/g, "\n}\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .split("\n")
+        .reduce(
+          (state, rawLine) => {
+            const line = rawLine.trim();
+
+            if (!line) {
+              if (state.lines.at(-1) !== "") state.lines.push("");
+              return state;
+            }
+
+            if (line.startsWith("}")) {
+              state.depth = Math.max(0, state.depth - 1);
+            }
+
+            state.lines.push(`${"  ".repeat(state.depth)}${line}`);
+
+            if (line.endsWith("{")) {
+              state.depth += 1;
+            }
+
+            return state;
+          },
+          { depth: 0, lines: [] }
+        )
+        .lines
+        .join("\n")
+        .trim();
+    }
+
+    function formatHtml(source) {
+      const tokens = source
+        .replace(/>\s*</g, "><")
+        .split(/(<[^>]+>)/g)
+        .filter(Boolean);
+
+      let depth = 0;
+      const lines = [];
+      const voidTag =
+        /^<(?:area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)\b/i;
+
+      for (const token of tokens) {
+        const value = token.trim();
+        if (!value) continue;
+
+        const closing = /^<\//.test(value);
+        const opening =
+          /^<[a-z][^>]*>$/i.test(value) &&
+          !/\/>$/.test(value) &&
+          !voidTag.test(value);
+        const special = /^<(?:!|[?])/.test(value);
+
+        if (closing) depth = Math.max(0, depth - 1);
+
+        lines.push(`${"  ".repeat(depth)}${value}`);
+
+        if (opening && !special && !closing) depth += 1;
+      }
+
+      return lines.join("\n");
+    }
+
+    async function pasteClipboard() {
+      try {
+        const text = await navigator.clipboard.readText();
+
+        if (!text) {
+          setStatus("A área de transferência está vazia");
+          return;
+        }
+
+        setDocument(text, {
+          language: "auto",
+          filename: "Clipboard"
+        });
+      } catch (error) {
+        setStatus(
+          "O Safari bloqueou a leitura. Toque no editor e use Colar.",
+          true
+        );
+      }
+    }
+
+    async function copyDocument() {
+      const content = getDocument();
+
+      try {
+        await navigator.clipboard.writeText(content);
+        setStatus("Conteúdo copiado");
+      } catch {
+        const textarea = document.createElement("textarea");
+        textarea.value = content;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.append(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        textarea.remove();
+        setStatus("Conteúdo copiado");
+      }
+    }
+
+    document.querySelector("#openButton").addEventListener("click", () => {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+
+      setDocument(await file.text(), {
+        language: "auto",
+        filename: file.name
+      });
+
+      fileInput.value = "";
+    });
+
+    document
+      .querySelector("#pasteButton")
+      .addEventListener("click", pasteClipboard);
+
+    document
+      .querySelector("#copyButton")
+      .addEventListener("click", copyDocument);
+
+    document
+      .querySelector("#formatButton")
+      .addEventListener("click", formatDocument);
+
+    document.querySelector("#foldButton").addEventListener("click", () => {
+      const changed = foldAll(view);
+      setStatus(changed ? "Blocos recolhidos" : "Nenhum bloco recolhível");
+    });
+
+    document.querySelector("#unfoldButton").addEventListener("click", () => {
+      const changed = unfoldAll(view);
+      setStatus(changed ? "Blocos expandidos" : "Nenhum bloco recolhido");
+    });
+
+    languageSelect.addEventListener("change", () => {
+      const selected = languageSelect.value;
+      const language =
+        selected === "auto"
+          ? detectLanguage(getDocument(), currentFilename)
+          : selected;
+
+      setLanguage(language);
+      setStatus(`Linguagem: ${language.toUpperCase()}`);
+    });
+
+    window.ShortcutCodeViewer = Object.freeze({
+      getValue: getDocument,
+      setValue(content, options = {}) {
+        setDocument(content, options);
+      },
+      setLanguage(language) {
+        setLanguage(
+          normalizeLanguage(language, getDocument(), currentFilename)
+        );
+      },
+      fold() {
+        return foldAll(view);
+      },
+      unfold() {
+        return unfoldAll(view);
+      },
+      focus() {
+        view.focus();
+      },
+      view
+    });
+
+    const initial = readInitialPayload();
+
+    if (initial.content) {
+      setDocument(initial.content, {
+        language: initial.language,
+        filename: initial.filename || "Shortcut Input"
+      });
+    } else {
+      updateStatus(view.state);
+    }
+  </script>
+</body>
+</html>
