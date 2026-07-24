@@ -1,7 +1,7 @@
 (function Toaster(globalWindow) {
   "use strict";
 
-  const VERSION = "3.4.0";
+  const VERSION = "3.5.0";
   const TOAST_GLOBAL = "RodToaster";
   const INSPECTOR_GLOBAL = "RodObjectInspector";
   const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -176,6 +176,10 @@
     // The host survives SPA route changes and is reattached if an app shell
     // replaces DOM nodes around it.
     persistAcrossSpaNavigation: true,
+
+    // Active loading tasks become a compact download-manager spinner when
+    // SPA navigation occurs. The manager can also be minimized manually.
+    minimizeOnSpaNavigation: true,
 
     // Success toasts collapse into a check circle before fading upward.
     successExitAnimation: true,
@@ -465,6 +469,8 @@
     objectIds: new WeakMap(),
     nextObjectId: 1,
     stackExpanded: false,
+    managerMinimized: false,
+    managerNode: null,
     list: null,
     toolbar: null,
     stackCountNode: null,
@@ -622,6 +628,102 @@
         bottom: max(env(safe-area-inset-bottom, 0px), 16px);
         left: max(env(safe-area-inset-left, 0px), 16px);
         flex-direction: column-reverse;
+      }
+
+
+      .rod-toast-stack__manager {
+        appearance: none;
+        display: none;
+        place-items: center;
+        align-self: center;
+        width: 44px;
+        min-width: 44px;
+        height: 44px;
+        padding: 0;
+        border: 1px solid var(--rod-border);
+        border-radius: 999px;
+        outline: none;
+        background: rgba(9, 9, 11, 0.985);
+        color: rgba(244, 244, 245, 0.9);
+        box-shadow:
+          0 1px 0 rgba(255, 255, 255, 0.045) inset,
+          0 14px 34px rgba(0, 0, 0, 0.42);
+        backdrop-filter: blur(18px) saturate(1.08);
+        -webkit-backdrop-filter: blur(18px) saturate(1.08);
+        pointer-events: auto;
+        touch-action: manipulation;
+        cursor: pointer;
+        transition:
+          transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+          background-color 180ms ease,
+          border-color 180ms ease;
+      }
+
+      .rod-toast-stack__manager:hover,
+      .rod-toast-stack__manager:focus-visible {
+        border-color: var(--rod-border-strong);
+        background: rgba(17, 17, 19, 0.99);
+        transform: scale(1.04);
+      }
+
+      .rod-toast-stack__manager:focus-visible {
+        outline: 1px solid rgba(255, 255, 255, 0.28);
+        outline-offset: 2px;
+      }
+
+      .rod-toast-stack__manager svg {
+        width: 19px;
+        height: 19px;
+        animation: rod-toast-spinner 850ms linear infinite;
+      }
+
+      .rod-toast-stack[data-manager-minimized="true"]
+        .rod-toast-stack__manager {
+        display: grid;
+      }
+
+      .rod-toast-stack[data-manager-minimized="true"]
+        .rod-toast-stack__toolbar,
+      .rod-toast-stack[data-manager-minimized="true"]
+        .rod-toast-stack__list {
+        display: none !important;
+      }
+
+      .rod-toast__minimize {
+        appearance: none;
+        display: none;
+        place-items: center;
+        width: 32px;
+        min-width: 32px;
+        height: 32px;
+        padding: 0;
+        border: 0;
+        border-radius: 8px;
+        outline: none;
+        background: transparent;
+        color: rgba(244, 244, 245, 0.62);
+        touch-action: manipulation;
+        cursor: pointer;
+      }
+
+      .rod-toast[data-loading="true"] .rod-toast__minimize {
+        display: grid;
+      }
+
+      .rod-toast__minimize:hover,
+      .rod-toast__minimize:focus-visible {
+        background: var(--rod-hover);
+        color: var(--rod-text-strong);
+      }
+
+      .rod-toast__minimize:focus-visible {
+        outline: 1px solid rgba(255, 255, 255, 0.28);
+        outline-offset: 1px;
+      }
+
+      .rod-toast__minimize svg {
+        width: 16px;
+        height: 16px;
       }
 
       .rod-toast-stack__toolbar {
@@ -1524,6 +1626,30 @@
     return state.toasts.filter((record) => !record.removed);
   }
 
+  function hasActiveLoadingRecords() {
+    return getActiveToastRecords().some((record) => {
+      return (
+        record.options.loading &&
+        record.options.loadingState === "loading"
+      );
+    });
+  }
+
+  function setManagerMinimized(minimized) {
+    const activeRecords = getActiveToastRecords();
+
+    state.managerMinimized =
+      Boolean(minimized) && activeRecords.length > 0;
+
+    syncStackLayout();
+
+    if (!state.managerMinimized && activeRecords.length > 1) {
+      setStackExpanded(true);
+    }
+
+    return state.managerMinimized;
+  }
+
   function syncStackLayout() {
     if (!state.container) {
       return;
@@ -1543,6 +1669,10 @@
 
     const count = newestFirst.length;
 
+    if (count === 0) {
+      state.managerMinimized = false;
+    }
+
     if (count <= 1) {
       state.stackExpanded = false;
     }
@@ -1561,6 +1691,9 @@
     );
 
     state.container.dataset.stacked = String(Boolean(state.config.stacked));
+    state.container.dataset.managerMinimized = String(
+      Boolean(state.managerMinimized),
+    );
     state.container.dataset.expanded = String(effectiveExpanded);
     state.container.dataset.stackDepth = String(stackDepth);
     state.container.dataset.count = String(count);
@@ -1771,6 +1904,13 @@
     const callbacks = [];
 
     const navigationHandler = () => {
+      if (
+        state.config.minimizeOnSpaNavigation &&
+        hasActiveLoadingRecords()
+      ) {
+        setManagerMinimized(true);
+      }
+
       scheduleHostRepair();
     };
 
@@ -1886,12 +2026,14 @@
     state.renderRoot = null;
     state.hostMode = null;
     state.container = null;
+    state.managerNode = null;
     state.list = null;
     state.toolbar = null;
     state.stackCountNode = null;
     state.inspectorRuntime = null;
     state.inspectorStyle = null;
     state.stackExpanded = false;
+    state.managerMinimized = false;
   }
 
   function ensureHost() {
@@ -1994,9 +2136,11 @@
     );
 
     const container = hostDocument.createElement("div");
+    const managerButton = hostDocument.createElement("button");
     const toolbar = hostDocument.createElement("div");
     const toolbarLabel = hostDocument.createElement("div");
     const toolbarActions = hostDocument.createElement("div");
+    const minimizeButton = hostDocument.createElement("button");
     const collapseButton = hostDocument.createElement("button");
     const clearButton = hostDocument.createElement("button");
     const list = hostDocument.createElement("div");
@@ -2005,6 +2149,26 @@
     container.dataset.position = state.config.position;
     container.dataset.expanded = "true";
     container.dataset.stackDepth = "0";
+    container.dataset.managerMinimized = String(
+      Boolean(state.managerMinimized),
+    );
+
+    managerButton.type = "button";
+    managerButton.className = "rod-toast-stack__manager";
+    managerButton.appendChild(
+      createSvgIcon(hostDocument, "loader-circle", 19),
+    );
+    managerButton.setAttribute(
+      "aria-label",
+      "Restore active toast tasks",
+    );
+    managerButton.title = "Restore active tasks";
+
+    managerButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setManagerMinimized(false);
+    });
 
     toolbar.className = "rod-toast-stack__toolbar";
     toolbar.dataset.enabled = String(Boolean(state.config.stackToolbar));
@@ -2013,6 +2177,21 @@
     toolbarLabel.textContent = "0 toasts";
 
     toolbarActions.className = "rod-toast-stack__toolbar-actions";
+
+    minimizeButton.type = "button";
+    minimizeButton.className = "rod-toast-stack__toolbar-button";
+    minimizeButton.appendChild(
+      createSvgIcon(hostDocument, "chevron-down", 14),
+    );
+    minimizeButton.appendChild(
+      Object.assign(hostDocument.createElement("span"), {
+        textContent: "Minimize",
+      }),
+    );
+    minimizeButton.setAttribute(
+      "aria-label",
+      "Minimize active toast tasks",
+    );
 
     collapseButton.type = "button";
     collapseButton.className = "rod-toast-stack__toolbar-button";
@@ -2040,6 +2219,12 @@
 
     list.className = "rod-toast-stack__list";
 
+    minimizeButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setManagerMinimized(true);
+    });
+
     collapseButton.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -2059,10 +2244,12 @@
       }
     });
 
+    toolbarActions.appendChild(minimizeButton);
     toolbarActions.appendChild(collapseButton);
     toolbarActions.appendChild(clearButton);
     toolbar.appendChild(toolbarLabel);
     toolbar.appendChild(toolbarActions);
+    container.appendChild(managerButton);
     container.appendChild(toolbar);
     container.appendChild(list);
 
@@ -2077,6 +2264,7 @@
     state.renderRoot = renderRoot;
     state.hostMode = hostMode;
     state.container = container;
+    state.managerNode = managerButton;
     state.list = list;
     state.toolbar = toolbar;
     state.stackCountNode = toolbarLabel;
@@ -2457,6 +2645,26 @@
       event.preventDefault();
       event.stopPropagation();
       dismiss();
+    });
+
+    return button;
+  }
+
+  function createMinimizeButton(documentRef) {
+    const button = documentRef.createElement("button");
+
+    button.type = "button";
+    button.className = "rod-toast__minimize";
+    button.appendChild(
+      createSvgIcon(documentRef, "chevron-down", 16),
+    );
+    button.setAttribute("aria-label", "Minimize active toast tasks");
+    button.title = "Minimize";
+
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setManagerMinimized(true);
     });
 
     return button;
@@ -3205,6 +3413,10 @@
     };
 
     actions.appendChild(
+      createMinimizeButton(host.document),
+    );
+
+    actions.appendChild(
       createExpandButton(host.document, record),
     );
 
@@ -3502,8 +3714,17 @@
     }
   };
 
-  toast.expand = () => setStackExpanded(true);
+  toast.expand = () => {
+    setManagerMinimized(false);
+    return setStackExpanded(true);
+  };
   toast.collapse = () => setStackExpanded(false);
+  toast.minimize = () => setManagerMinimized(true);
+  toast.restore = () => setManagerMinimized(false);
+  toast.toggleMinimized = () => {
+    return setManagerMinimized(!state.managerMinimized);
+  };
+  toast.isMinimized = () => Boolean(state.managerMinimized);
   toast.toggleStack = () => {
     setStackExpanded(!state.stackExpanded);
     return state.stackExpanded;
@@ -3592,6 +3813,9 @@
     state.config.stackToolbar = Boolean(state.config.stackToolbar);
     state.config.persistAcrossSpaNavigation = Boolean(
       state.config.persistAcrossSpaNavigation,
+    );
+    state.config.minimizeOnSpaNavigation = Boolean(
+      state.config.minimizeOnSpaNavigation,
     );
     state.config.successExitAnimation = Boolean(
       state.config.successExitAnimation,
