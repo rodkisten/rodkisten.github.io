@@ -2,12 +2,13 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+  >
   <meta name="theme-color" content="#0d1117">
   <meta name="color-scheme" content="dark">
-  <title>Shortcut Code Viewer</title>
-
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11.11.1/styles/github-dark.min.css">
+  <title>Previewer</title>
 
   <style>
     :root {
@@ -20,6 +21,7 @@
       --muted: #8b949e;
       --accent: #2f81f7;
       --danger: #f85149;
+      --success: #3fb950;
       --safe-top: env(safe-area-inset-top, 0px);
       --safe-right: env(safe-area-inset-right, 0px);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -38,7 +40,13 @@
       overflow: hidden;
       background: var(--background);
       color: var(--text);
-      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      font-family:
+        ui-sans-serif,
+        -apple-system,
+        BlinkMacSystemFont,
+        "SF Pro Text",
+        "Segoe UI",
+        sans-serif;
       -webkit-tap-highlight-color: transparent;
     }
 
@@ -73,8 +81,18 @@
     }
 
     select {
-      max-width: 130px;
+      max-width: 140px;
       padding: 6px 28px 6px 10px;
+    }
+
+    code {
+      font-family:
+        "SFMono-Regular",
+        "Cascadia Code",
+        "Roboto Mono",
+        Menlo,
+        Consolas,
+        monospace;
     }
 
     #app {
@@ -115,7 +133,7 @@
     }
 
     #filename {
-      flex: 0 1 220px;
+      flex: 0 1 240px;
       min-width: 80px;
       overflow: hidden;
       color: var(--muted);
@@ -124,10 +142,63 @@
       white-space: nowrap;
     }
 
-    #editor {
+    #editorHost {
+      position: relative;
       min-width: 0;
       min-height: 0;
       overflow: hidden;
+      background: var(--background);
+    }
+
+    #fallbackEditor {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding:
+        14px
+        14px
+        max(24px, var(--safe-bottom));
+      resize: none;
+      overflow: auto;
+      border: 0;
+      outline: 0;
+      background: var(--background);
+      color: var(--text);
+      caret-color: #58a6ff;
+      font:
+        14px/1.55
+        "SFMono-Regular",
+        "Cascadia Code",
+        "Roboto Mono",
+        Menlo,
+        Consolas,
+        monospace;
+      tab-size: 2;
+      white-space: pre;
+      overflow-wrap: normal;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    #empty {
+      position: absolute;
+      inset: 50% auto auto 50%;
+      z-index: 2;
+      width: min(86vw, 440px);
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(22, 27, 34, 0.94);
+      color: var(--muted);
+      text-align: center;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    #empty strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--text);
+      font-size: 15px;
     }
 
     #statusbar {
@@ -154,6 +225,10 @@
       flex: 1;
     }
 
+    #fileInput {
+      display: none;
+    }
+
     .cm-editor {
       height: 100%;
       background: var(--background);
@@ -165,8 +240,15 @@
     }
 
     .cm-scroller {
+      overflow: auto;
       overscroll-behavior: contain;
-      font-family: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+      font-family:
+        "SFMono-Regular",
+        "Cascadia Code",
+        "Roboto Mono",
+        Menlo,
+        Consolas,
+        monospace;
       line-height: 1.55;
       -webkit-overflow-scrolling: touch;
     }
@@ -199,32 +281,6 @@
       color: var(--muted) !important;
     }
 
-    #empty {
-      position: absolute;
-      inset: 50% auto auto 50%;
-      z-index: 2;
-      width: min(86vw, 430px);
-      padding: 18px;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      background: rgba(22, 27, 34, 0.9);
-      color: var(--muted);
-      text-align: center;
-      transform: translate(-50%, -50%);
-      pointer-events: none;
-    }
-
-    #empty strong {
-      display: block;
-      margin-bottom: 5px;
-      color: var(--text);
-      font-size: 15px;
-    }
-
-    #fileInput {
-      display: none;
-    }
-
     @media (max-width: 560px) {
       #toolbar {
         gap: 6px;
@@ -245,7 +301,8 @@
         display: none;
       }
 
-      .cm-editor {
+      .cm-editor,
+      #fallbackEditor {
         font-size: 13px;
       }
     }
@@ -255,8 +312,17 @@
 <body>
   <main id="app">
     <header id="toolbar" aria-label="Ferramentas do editor">
-      <button id="openButton" type="button" title="Abrir arquivo">Abrir</button>
-      <button id="pasteButton" type="button" title="Colar da área de transferência">Colar</button>
+      <button id="openButton" type="button" title="Abrir arquivo">
+        Abrir
+      </button>
+
+      <button
+        id="pasteButton"
+        type="button"
+        title="Colar da área de transferência"
+      >
+        Colar
+      </button>
 
       <select id="language" aria-label="Linguagem">
         <option value="auto">Auto</option>
@@ -266,579 +332,896 @@
         <option value="text">Texto</option>
       </select>
 
-      <button id="formatButton" type="button" title="Formatar conteúdo">Formatar</button>
-      <button id="foldButton" type="button" title="Recolher tudo">Fold</button>
-      <button id="unfoldButton" type="button" title="Expandir tudo">Unfold</button>
-      <button id="copyButton" type="button" title="Copiar conteúdo">Copiar</button>
+      <button id="formatButton" type="button" title="Formatar conteúdo">
+        Formatar
+      </button>
+
+      <button id="foldButton" type="button" title="Recolher tudo">
+        Fold
+      </button>
+
+      <button id="unfoldButton" type="button" title="Expandir tudo">
+        Unfold
+      </button>
+
+      <button id="copyButton" type="button" title="Copiar conteúdo">
+        Copiar
+      </button>
 
       <span class="spacer"></span>
-      <span id="filename">Shortcut Code Viewer</span>
+      <span id="filename">Previewer</span>
     </header>
 
-    <section id="editor" aria-label="Editor de código">
+    <section id="editorHost" aria-label="Editor de código">
+      <textarea
+        id="fallbackEditor"
+        autocomplete="off"
+        autocapitalize="off"
+        autocorrect="off"
+        spellcheck="false"
+        aria-label="Editor de texto"
+      ></textarea>
+
       <div id="empty">
         <strong>Nenhum conteúdo recebido</strong>
-        Passe <code>?content=...</code>, use o hash, cole ou abra um arquivo.
+        Use <code>?code=...</code>, <code>?content=...</code>, hash,
+        área de transferência ou abra um arquivo.
       </div>
     </section>
 
     <footer id="statusbar">
-      <span id="status">Pronto</span>
+      <span id="status">Inicializando</span>
       <span class="spacer"></span>
       <span id="position">Ln 1, Col 1</span>
       <span id="size">0 B</span>
     </footer>
   </main>
 
-  <input id="fileInput" type="file" accept=".json,.html,.htm,.css,.txt,text/plain,text/html,text/css,application/json">
+  <input
+    id="fileInput"
+    type="file"
+    accept=".json,.html,.htm,.css,.txt,text/plain,text/html,text/css,application/json"
+  >
 
-  <script type="module">
-    import { basicSetup } from "https://esm.sh/codemirror@6.0.2";
-    import { EditorState, Compartment } from "https://esm.sh/@codemirror/state@6.5.2";
-    import {
-      EditorView,
-      keymap,
-      lineWrapping
-    } from "https://esm.sh/@codemirror/view@6.38.1";
-    import {
-      foldAll,
-      unfoldAll,
-      foldGutter,
-      foldKeymap,
-      indentOnInput
-    } from "https://esm.sh/@codemirror/language@6.11.2";
-    import { json } from "https://esm.sh/@codemirror/lang-json@6.0.2";
-    import { html } from "https://esm.sh/@codemirror/lang-html@6.4.9";
-    import { css } from "https://esm.sh/@codemirror/lang-css@6.3.1";
-    import { oneDark } from "https://esm.sh/@codemirror/theme-one-dark@6.1.3";
-    import hljs from "https://esm.sh/highlight.js@11.11.1/lib/core";
-    import hljsJson from "https://esm.sh/highlight.js@11.11.1/lib/languages/json";
-    import hljsXml from "https://esm.sh/highlight.js@11.11.1/lib/languages/xml";
-    import hljsCss from "https://esm.sh/highlight.js@11.11.1/lib/languages/css";
+  <script>
+    (() => {
+      "use strict";
 
-    hljs.registerLanguage("json", hljsJson);
-    hljs.registerLanguage("html", hljsXml);
-    hljs.registerLanguage("css", hljsCss);
+      const state = {
+        view: null,
+        currentLanguage: "text",
+        currentFilename: "Previewer",
+        codeMirrorReady: false,
+        codeMirrorApi: null,
+      };
 
-    const languageCompartment = new Compartment();
-    const editorElement = document.querySelector("#editor");
-    const emptyElement = document.querySelector("#empty");
-    const languageSelect = document.querySelector("#language");
-    const filenameElement = document.querySelector("#filename");
-    const statusElement = document.querySelector("#status");
-    const positionElement = document.querySelector("#position");
-    const sizeElement = document.querySelector("#size");
-    const fileInput = document.querySelector("#fileInput");
+      const editorHost = document.querySelector("#editorHost");
+      const fallbackEditor = document.querySelector("#fallbackEditor");
+      const emptyElement = document.querySelector("#empty");
+      const languageSelect = document.querySelector("#language");
+      const filenameElement = document.querySelector("#filename");
+      const statusElement = document.querySelector("#status");
+      const positionElement = document.querySelector("#position");
+      const sizeElement = document.querySelector("#size");
+      const fileInput = document.querySelector("#fileInput");
+      const foldButton = document.querySelector("#foldButton");
+      const unfoldButton = document.querySelector("#unfoldButton");
 
-    let currentLanguage = "text";
-    let currentFilename = "Shortcut Code Viewer";
+      function readInitialPayload() {
+        const url = new URL(window.location.href);
 
-    const languageExtensions = {
-      json: json(),
-      html: html(),
-      css: css(),
-      text: []
-    };
+        const queryContent =
+          url.searchParams.get("code") ??
+          url.searchParams.get("content") ??
+          url.searchParams.get("text") ??
+          url.searchParams.get("input");
 
-    const view = new EditorView({
-      parent: editorElement,
-      state: EditorState.create({
-        doc: "",
-        extensions: [
-          basicSetup,
-          oneDark,
-          lineWrapping,
-          foldGutter(),
-          indentOnInput(),
-          keymap.of(foldKeymap),
-          languageCompartment.of(languageExtensions.text),
-          EditorView.updateListener.of((update) => {
-            if (update.docChanged || update.selectionSet) {
-              updateStatus(update.state);
-            }
-
-            if (update.docChanged) {
-              emptyElement.hidden = update.state.doc.length > 0;
-            }
-          }),
-          EditorView.theme({
-            "&": {
-              height: "100%"
-            },
-            ".cm-scroller": {
-              overflow: "auto"
-            }
-          })
-        ]
-      })
-    });
-
-    function decodeInput(value) {
-      if (!value) return "";
-
-      const variants = [
-        () => decodeURIComponent(value),
-        () => decodeURIComponent(value.replace(/\+/g, "%20")),
-        () => atob(value),
-        () => value
-      ];
-
-      for (const read of variants) {
-        try {
-          const result = read();
-          if (typeof result === "string") return result;
-        } catch {}
-      }
-
-      return value;
-    }
-
-    function readInitialPayload() {
-      const url = new URL(location.href);
-      const params = url.searchParams;
-
-      const queryContent =
-        params.get("content") ??
-        params.get("code") ??
-        params.get("text") ??
-        params.get("input");
-
-      if (queryContent !== null) {
-        return {
-          content: decodeInput(queryContent),
-          language: params.get("lang") || params.get("language") || "auto",
-          filename: params.get("filename") || params.get("name") || ""
-        };
-      }
-
-      const rawHash = location.hash.slice(1);
-
-      if (rawHash) {
-        const hashParams = new URLSearchParams(rawHash);
-
-        if (
-          hashParams.has("content") ||
-          hashParams.has("code") ||
-          hashParams.has("text") ||
-          hashParams.has("input")
-        ) {
+        if (queryContent !== null) {
           return {
-            content: decodeInput(
-              hashParams.get("content") ??
-              hashParams.get("code") ??
-              hashParams.get("text") ??
-              hashParams.get("input")
-            ),
+            content: queryContent,
             language:
-              hashParams.get("lang") ??
-              hashParams.get("language") ??
+              url.searchParams.get("lang") ??
+              url.searchParams.get("language") ??
               "auto",
             filename:
-              hashParams.get("filename") ??
-              hashParams.get("name") ??
-              ""
+              url.searchParams.get("filename") ??
+              url.searchParams.get("name") ??
+              "Shortcut Input",
+          };
+        }
+
+        const rawHash = window.location.hash.slice(1);
+
+        if (rawHash) {
+          const hashParams = new URLSearchParams(rawHash);
+
+          const hashContent =
+            hashParams.get("code") ??
+            hashParams.get("content") ??
+            hashParams.get("text") ??
+            hashParams.get("input");
+
+          if (hashContent !== null) {
+            return {
+              content: hashContent,
+              language:
+                hashParams.get("lang") ??
+                hashParams.get("language") ??
+                "auto",
+              filename:
+                hashParams.get("filename") ??
+                hashParams.get("name") ??
+                "Shortcut Input",
+            };
+          }
+
+          try {
+            return {
+              content: decodeURIComponent(rawHash),
+              language: "auto",
+              filename: "Shortcut Input",
+            };
+          } catch {
+            return {
+              content: rawHash,
+              language: "auto",
+              filename: "Shortcut Input",
+            };
+          }
+        }
+
+        const injected =
+          window.SHORTCUT_INPUT ??
+          window.shortcutInput ??
+          window.__SHORTCUT_INPUT__;
+
+        if (typeof injected === "string") {
+          return {
+            content: injected,
+            language: "auto",
+            filename: "Injected Input",
+          };
+        }
+
+        if (injected && typeof injected === "object") {
+          return {
+            content:
+              injected.content ??
+              injected.code ??
+              injected.text ??
+              JSON.stringify(injected, null, 2),
+            language:
+              injected.language ??
+              injected.lang ??
+              "auto",
+            filename:
+              injected.filename ??
+              injected.name ??
+              "Injected Input",
           };
         }
 
         return {
-          content: decodeInput(rawHash),
+          content: "",
           language: "auto",
-          filename: ""
+          filename: "Previewer",
         };
       }
 
-      const injected =
-        window.SHORTCUT_INPUT ??
-        window.shortcutInput ??
-        window.__SHORTCUT_INPUT__;
+      function detectLanguage(content, filename = "") {
+        const extension = filename
+          .split(".")
+          .pop()
+          ?.toLowerCase();
 
-      if (typeof injected === "string") {
-        return {
-          content: injected,
+        if (extension === "json") {
+          return "json";
+        }
+
+        if (extension === "html" || extension === "htm") {
+          return "html";
+        }
+
+        if (extension === "css") {
+          return "css";
+        }
+
+        const trimmed = content.trim();
+
+        if (!trimmed) {
+          return "text";
+        }
+
+        try {
+          JSON.parse(trimmed);
+          return "json";
+        } catch {}
+
+        if (
+          /^\s*(?:<!doctype\s+html|<html\b|<head\b|<body\b|<[a-z][^>]*>)/i.test(
+            trimmed,
+          )
+        ) {
+          return "html";
+        }
+
+        if (
+          /(?:^|})\s*(?:@[\w-]+|[#.:[\]a-z][^{]+)\s*\{[\s\S]*:[^;{}]+;/i.test(
+            trimmed,
+          )
+        ) {
+          return "css";
+        }
+
+        return "text";
+      }
+
+      function normalizeLanguage(language, content, filename = "") {
+        const normalized = String(language || "auto").toLowerCase();
+
+        if (normalized === "xml" || normalized === "htm") {
+          return "html";
+        }
+
+        if (
+          normalized === "plaintext" ||
+          normalized === "plain" ||
+          normalized === "txt"
+        ) {
+          return "text";
+        }
+
+        if (
+          normalized === "auto" ||
+          !["json", "html", "css", "text"].includes(normalized)
+        ) {
+          return detectLanguage(content, filename);
+        }
+
+        return normalized;
+      }
+
+      function getDocument() {
+        if (state.view) {
+          return state.view.state.doc.toString();
+        }
+
+        return fallbackEditor.value;
+      }
+
+      function setDocument(content, options = {}) {
+        const text =
+          typeof content === "string"
+            ? content
+            : JSON.stringify(content, null, 2);
+
+        state.currentFilename =
+          options.filename ||
+          state.currentFilename ||
+          "Previewer";
+
+        filenameElement.textContent = state.currentFilename;
+
+        const language = normalizeLanguage(
+          options.language || "auto",
+          text,
+          state.currentFilename,
+        );
+
+        state.currentLanguage = language;
+        languageSelect.value = language;
+
+        if (state.view) {
+          state.view.dispatch({
+            changes: {
+              from: 0,
+              to: state.view.state.doc.length,
+              insert: text,
+            },
+            selection: {
+              anchor: 0,
+            },
+            scrollIntoView: true,
+          });
+
+          setCodeMirrorLanguage(language);
+        } else {
+          fallbackEditor.value = text;
+          fallbackEditor.scrollTop = 0;
+          fallbackEditor.scrollLeft = 0;
+          fallbackEditor.selectionStart = 0;
+          fallbackEditor.selectionEnd = 0;
+        }
+
+        emptyElement.hidden = text.length > 0;
+        updateStatus();
+        setStatus(`Aberto como ${language.toUpperCase()}`);
+      }
+
+      function setCodeMirrorLanguage(language) {
+        if (
+          !state.view ||
+          !state.codeMirrorApi ||
+          !state.codeMirrorApi.languageCompartment
+        ) {
+          return;
+        }
+
+        const extension =
+          state.codeMirrorApi.languageExtensions[language] ??
+          state.codeMirrorApi.languageExtensions.text;
+
+        state.view.dispatch({
+          effects:
+            state.codeMirrorApi.languageCompartment.reconfigure(
+              extension,
+            ),
+        });
+      }
+
+      function setLanguage(language) {
+        const normalized = normalizeLanguage(
+          language,
+          getDocument(),
+          state.currentFilename,
+        );
+
+        state.currentLanguage = normalized;
+        languageSelect.value = normalized;
+        setCodeMirrorLanguage(normalized);
+        setStatus(`Linguagem: ${normalized.toUpperCase()}`);
+      }
+
+      function updateStatus() {
+        const content = getDocument();
+        const bytes = new Blob([content]).size;
+
+        sizeElement.textContent = formatBytes(bytes);
+
+        let position = 0;
+
+        if (state.view) {
+          position = state.view.state.selection.main.head;
+        } else {
+          position = fallbackEditor.selectionStart || 0;
+        }
+
+        const beforeCursor = content.slice(0, position);
+        const lines = beforeCursor.split("\n");
+        const line = lines.length;
+        const column = lines.at(-1).length + 1;
+
+        positionElement.textContent = `Ln ${line}, Col ${column}`;
+        emptyElement.hidden = content.length > 0;
+      }
+
+      function formatBytes(bytes) {
+        if (bytes < 1024) {
+          return `${bytes} B`;
+        }
+
+        if (bytes < 1024 ** 2) {
+          return `${(bytes / 1024).toFixed(1)} KB`;
+        }
+
+        return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+      }
+
+      function setStatus(message, type = "normal") {
+        statusElement.textContent = message;
+
+        if (type === "error") {
+          statusElement.style.color = "var(--danger)";
+          return;
+        }
+
+        if (type === "success") {
+          statusElement.style.color = "var(--success)";
+          return;
+        }
+
+        statusElement.style.color = "";
+      }
+
+      function formatDocument() {
+        const content = getDocument();
+
+        try {
+          if (state.currentLanguage === "json") {
+            const formatted = JSON.stringify(
+              JSON.parse(content),
+              null,
+              2,
+            );
+
+            setDocument(formatted, {
+              language: "json",
+              filename: state.currentFilename,
+            });
+
+            setStatus("JSON formatado", "success");
+            return;
+          }
+
+          if (state.currentLanguage === "css") {
+            setDocument(formatCss(content), {
+              language: "css",
+              filename: state.currentFilename,
+            });
+
+            setStatus("CSS formatado", "success");
+            return;
+          }
+
+          if (state.currentLanguage === "html") {
+            setDocument(formatHtml(content), {
+              language: "html",
+              filename: state.currentFilename,
+            });
+
+            setStatus("HTML formatado", "success");
+            return;
+          }
+
+          setStatus(
+            "Formatação disponível para JSON, HTML e CSS",
+          );
+        } catch (error) {
+          setStatus(
+            `Não foi possível formatar: ${error.message}`,
+            "error",
+          );
+        }
+      }
+
+      function formatCss(source) {
+        return source
+          .replace(/\s*{\s*/g, " {\n")
+          .replace(/;\s*/g, ";\n")
+          .replace(/\s*}\s*/g, "\n}\n")
+          .replace(/\n{3,}/g, "\n\n")
+          .split("\n")
+          .reduce(
+            (result, rawLine) => {
+              const line = rawLine.trim();
+
+              if (!line) {
+                if (result.lines.at(-1) !== "") {
+                  result.lines.push("");
+                }
+
+                return result;
+              }
+
+              if (line.startsWith("}")) {
+                result.depth = Math.max(0, result.depth - 1);
+              }
+
+              result.lines.push(
+                `${"  ".repeat(result.depth)}${line}`,
+              );
+
+              if (line.endsWith("{")) {
+                result.depth += 1;
+              }
+
+              return result;
+            },
+            {
+              depth: 0,
+              lines: [],
+            },
+          )
+          .lines.join("\n")
+          .trim();
+      }
+
+      function formatHtml(source) {
+        const tokens = source
+          .replace(/>\s*</g, "><")
+          .split(/(<[^>]+>)/g)
+          .filter(Boolean);
+
+        const voidTag =
+          /^<(?:area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)\b/i;
+
+        const lines = [];
+        let depth = 0;
+
+        for (const token of tokens) {
+          const value = token.trim();
+
+          if (!value) {
+            continue;
+          }
+
+          const closing = /^<\//.test(value);
+          const special = /^<(?:!|\?)/.test(value);
+          const opening =
+            /^<[a-z][^>]*>$/i.test(value) &&
+            !/\/>$/.test(value) &&
+            !voidTag.test(value) &&
+            !closing &&
+            !special;
+
+          if (closing) {
+            depth = Math.max(0, depth - 1);
+          }
+
+          lines.push(`${"  ".repeat(depth)}${value}`);
+
+          if (opening) {
+            depth += 1;
+          }
+        }
+
+        return lines.join("\n");
+      }
+
+      async function pasteClipboard() {
+        try {
+          const text = await navigator.clipboard.readText();
+
+          if (!text) {
+            setStatus(
+              "A área de transferência está vazia",
+            );
+            return;
+          }
+
+          setDocument(text, {
+            language: "auto",
+            filename: "Clipboard",
+          });
+
+          setStatus(
+            "Conteúdo colado",
+            "success",
+          );
+        } catch {
+          setStatus(
+            "O Safari bloqueou a leitura. Toque no editor e use Colar.",
+            "error",
+          );
+        }
+      }
+
+      async function copyDocument() {
+        const content = getDocument();
+
+        try {
+          await navigator.clipboard.writeText(content);
+          setStatus("Conteúdo copiado", "success");
+        } catch {
+          const textarea = document.createElement("textarea");
+
+          textarea.value = content;
+          textarea.style.position = "fixed";
+          textarea.style.opacity = "0";
+
+          document.body.append(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          textarea.remove();
+
+          setStatus("Conteúdo copiado", "success");
+        }
+      }
+
+      async function initializeCodeMirror() {
+        try {
+          setStatus("Carregando CodeMirror 6");
+
+          const [
+            codemirrorModule,
+            stateModule,
+            viewModule,
+            languageModule,
+            jsonModule,
+            htmlModule,
+            cssModule,
+            themeModule,
+          ] = await Promise.all([
+            import("https://esm.sh/codemirror@6.0.2?target=es2022"),
+            import("https://esm.sh/@codemirror/state@6.5.2?target=es2022"),
+            import("https://esm.sh/@codemirror/view@6.38.1?target=es2022"),
+            import("https://esm.sh/@codemirror/language@6.11.2?target=es2022"),
+            import("https://esm.sh/@codemirror/lang-json@6.0.2?target=es2022"),
+            import("https://esm.sh/@codemirror/lang-html@6.4.9?target=es2022"),
+            import("https://esm.sh/@codemirror/lang-css@6.3.1?target=es2022"),
+            import("https://esm.sh/@codemirror/theme-one-dark@6.1.3?target=es2022"),
+          ]);
+
+          const {
+            basicSetup,
+          } = codemirrorModule;
+
+          const {
+            EditorState,
+            Compartment,
+          } = stateModule;
+
+          const {
+            EditorView,
+            keymap,
+            lineWrapping,
+          } = viewModule;
+
+          const {
+            foldAll,
+            unfoldAll,
+            foldGutter,
+            foldKeymap,
+            indentOnInput,
+          } = languageModule;
+
+          const {
+            json,
+          } = jsonModule;
+
+          const {
+            html,
+          } = htmlModule;
+
+          const {
+            css,
+          } = cssModule;
+
+          const {
+            oneDark,
+          } = themeModule;
+
+          const languageCompartment = new Compartment();
+
+          const languageExtensions = {
+            json: json(),
+            html: html(),
+            css: css(),
+            text: [],
+          };
+
+          const currentContent = fallbackEditor.value;
+
+          fallbackEditor.hidden = true;
+
+          const view = new EditorView({
+            parent: editorHost,
+            state: EditorState.create({
+              doc: currentContent,
+              extensions: [
+                basicSetup,
+                oneDark,
+                lineWrapping,
+                foldGutter(),
+                indentOnInput(),
+                keymap.of(foldKeymap),
+                languageCompartment.of(
+                  languageExtensions[
+                    state.currentLanguage
+                  ] ?? languageExtensions.text,
+                ),
+                EditorView.updateListener.of((update) => {
+                  if (
+                    update.docChanged ||
+                    update.selectionSet
+                  ) {
+                    updateStatus();
+                  }
+                }),
+                EditorView.theme({
+                  "&": {
+                    height: "100%",
+                  },
+                  ".cm-scroller": {
+                    overflow: "auto",
+                  },
+                }),
+              ],
+            }),
+          });
+
+          state.view = view;
+          state.codeMirrorReady = true;
+          state.codeMirrorApi = {
+            foldAll,
+            unfoldAll,
+            languageCompartment,
+            languageExtensions,
+          };
+
+          foldButton.disabled = false;
+          unfoldButton.disabled = false;
+
+          updateStatus();
+          setStatus("CodeMirror 6 carregado", "success");
+        } catch (error) {
+          console.error(
+            "[Previewer] Falha ao carregar CodeMirror 6:",
+            error,
+          );
+
+          state.codeMirrorReady = false;
+          foldButton.disabled = true;
+          unfoldButton.disabled = true;
+
+          setStatus(
+            "CodeMirror falhou. Editor simples ativado.",
+            "error",
+          );
+        }
+      }
+
+      document
+        .querySelector("#openButton")
+        .addEventListener("click", () => {
+          fileInput.click();
+        });
+
+      fileInput.addEventListener("change", async () => {
+        const file = fileInput.files?.[0];
+
+        if (!file) {
+          return;
+        }
+
+        setDocument(await file.text(), {
           language: "auto",
-          filename: ""
-        };
-      }
+          filename: file.name,
+        });
 
-      if (injected && typeof injected === "object") {
-        return {
-          content:
-            injected.content ??
-            injected.code ??
-            injected.text ??
-            JSON.stringify(injected, null, 2),
-          language:
-            injected.language ??
-            injected.lang ??
-            "auto",
-          filename:
-            injected.filename ??
-            injected.name ??
-            ""
-        };
-      }
-
-      return {
-        content: "",
-        language: "auto",
-        filename: ""
-      };
-    }
-
-    function detectLanguage(content, filename = "") {
-      const extension = filename
-        .split(".")
-        .pop()
-        ?.toLowerCase();
-
-      if (extension === "json") return "json";
-      if (extension === "html" || extension === "htm") return "html";
-      if (extension === "css") return "css";
-
-      const trimmed = content.trim();
-
-      if (!trimmed) return "text";
-
-      try {
-        JSON.parse(trimmed);
-        return "json";
-      } catch {}
-
-      const detected = hljs.highlightAuto(trimmed, [
-        "json",
-        "html",
-        "css"
-      ]).language;
-
-      if (detected === "xml") return "html";
-      if (detected === "json") return "json";
-      if (detected === "css") return "css";
-
-      if (/^\s*(?:<!doctype\s+html|<html\b|<[a-z][\s\S]*>)/i.test(trimmed)) {
-        return "html";
-      }
-
-      if (
-        /(?:^|})\s*(?:@[\w-]+|[#.:[\]a-z][^{]+)\s*\{[\s\S]*:[^;{}]+;/i.test(
-          trimmed
-        )
-      ) {
-        return "css";
-      }
-
-      return "text";
-    }
-
-    function normalizeLanguage(language, content, filename = "") {
-      const normalized = String(language || "auto").toLowerCase();
-
-      if (normalized === "xml" || normalized === "htm") return "html";
-      if (normalized === "plaintext" || normalized === "plain") return "text";
-
-      if (normalized === "auto" || !(normalized in languageExtensions)) {
-        return detectLanguage(content, filename);
-      }
-
-      return normalized;
-    }
-
-    function setLanguage(language) {
-      currentLanguage = language;
-
-      view.dispatch({
-        effects: languageCompartment.reconfigure(
-          languageExtensions[language] ?? languageExtensions.text
-        )
+        fileInput.value = "";
       });
 
-      languageSelect.value = language;
-      document.documentElement.dataset.language = language;
-    }
+      document
+        .querySelector("#pasteButton")
+        .addEventListener("click", pasteClipboard);
 
-    function setDocument(content, options = {}) {
-      const text =
-        typeof content === "string"
-          ? content
-          : JSON.stringify(content, null, 2);
+      document
+        .querySelector("#copyButton")
+        .addEventListener("click", copyDocument);
 
-      currentFilename = options.filename || currentFilename;
-      filenameElement.textContent = currentFilename;
+      document
+        .querySelector("#formatButton")
+        .addEventListener("click", formatDocument);
 
-      const language = normalizeLanguage(
-        options.language || "auto",
-        text,
-        currentFilename
+      foldButton.addEventListener("click", () => {
+        if (
+          !state.view ||
+          !state.codeMirrorApi
+        ) {
+          setStatus(
+            "Fold exige o CodeMirror 6",
+            "error",
+          );
+          return;
+        }
+
+        const changed =
+          state.codeMirrorApi.foldAll(state.view);
+
+        setStatus(
+          changed
+            ? "Blocos recolhidos"
+            : "Nenhum bloco recolhível",
+        );
+      });
+
+      unfoldButton.addEventListener("click", () => {
+        if (
+          !state.view ||
+          !state.codeMirrorApi
+        ) {
+          setStatus(
+            "Unfold exige o CodeMirror 6",
+            "error",
+          );
+          return;
+        }
+
+        const changed =
+          state.codeMirrorApi.unfoldAll(state.view);
+
+        setStatus(
+          changed
+            ? "Blocos expandidos"
+            : "Nenhum bloco recolhido",
+        );
+      });
+
+      languageSelect.addEventListener("change", () => {
+        const selected = languageSelect.value;
+
+        const language =
+          selected === "auto"
+            ? detectLanguage(
+                getDocument(),
+                state.currentFilename,
+              )
+            : selected;
+
+        setLanguage(language);
+      });
+
+      fallbackEditor.addEventListener(
+        "input",
+        updateStatus,
       );
 
-      view.dispatch({
-        changes: {
-          from: 0,
-          to: view.state.doc.length,we
-          insert: text
+      fallbackEditor.addEventListener(
+        "keyup",
+        updateStatus,
+      );
+
+      fallbackEditor.addEventListener(
+        "click",
+        updateStatus,
+      );
+
+      window.ShortcutCodeViewer = Object.freeze({
+        getValue() {
+          return getDocument();
         },
-        selection: {
-          anchor: 0
+
+        setValue(content, options = {}) {
+          setDocument(content, options);
         },
-        scrollIntoView: true
+
+        setLanguage(language) {
+          setLanguage(language);
+        },
+
+        fold() {
+          if (
+            !state.view ||
+            !state.codeMirrorApi
+          ) {
+            return false;
+          }
+
+          return state.codeMirrorApi.foldAll(
+            state.view,
+          );
+        },
+
+        unfold() {
+          if (
+            !state.view ||
+            !state.codeMirrorApi
+          ) {
+            return false;
+          }
+
+          return state.codeMirrorApi.unfoldAll(
+            state.view,
+          );
+        },
+
+        focus() {
+          if (state.view) {
+            state.view.focus();
+            return;
+          }
+
+          fallbackEditor.focus();
+        },
+
+        isCodeMirrorReady() {
+          return state.codeMirrorReady;
+        },
       });
 
-      setLanguage(language);
-      emptyElement.hidden = text.length > 0;
-      updateStatus(view.state);
-      setStatus(`Aberto como ${language.toUpperCase()}`);
-    }
+      const initial = readInitialPayload();
 
-    function getDocument() {
-      return view.state.doc.toString();
-    }
-
-    function updateStatus(state) {
-      const selection = state.selection.main;
-      const line = state.doc.lineAt(selection.head);
-      const bytes = new Blob([state.doc.toString()]).size;
-
-      positionElement.textContent =
-        `Ln ${line.number}, Col ${selection.head - line.from + 1}`;
-
-      sizeElement.textContent = formatBytes(bytes);
-    }
-
-    function formatBytes(bytes) {
-      if (bytes < 1024) return `${bytes} B`;
-      if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
-      return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-    }
-
-    function setStatus(message, isError = false) {
-      statusElement.textContent = message;
-      statusElement.style.color = isError ? "var(--danger)" : "";
-    }
-
-    function formatDocument() {
-      const content = getDocument();
-
-      try {
-        if (currentLanguage === "json") {
-          setDocument(JSON.stringify(JSON.parse(content), null, 2), {
-            language: "json",
-            filename: currentFilename
-          });
-          setStatus("JSON formatado");
-          return;
-        }
-
-        if (currentLanguage === "css") {
-          setDocument(formatCss(content), {
-            language: "css",
-            filename: currentFilename
-          });
-          setStatus("CSS formatado");
-          return;
-        }
-
-        if (currentLanguage === "html") {
-          setDocument(formatHtml(content), {
-            language: "html",
-            filename: currentFilename
-          });
-          setStatus("HTML formatado");
-          return;
-        }
-
-        setStatus("Formatação disponível para JSON, HTML e CSS");
-      } catch (error) {
-        setStatus(`Não foi possível formatar: ${error.message}`, true);
-      }
-    }
-
-    function formatCss(source) {
-      return source
-        .replace(/\s*{\s*/g, " {\n")
-        .replace(/;\s*/g, ";\n")
-        .replace(/\s*}\s*/g, "\n}\n")
-        .replace(/\n{3,}/g, "\n\n")
-        .split("\n")
-        .reduce(
-          (state, rawLine) => {
-            const line = rawLine.trim();
-
-            if (!line) {
-              if (state.lines.at(-1) !== "") state.lines.push("");
-              return state;
-            }
-
-            if (line.startsWith("}")) {
-              state.depth = Math.max(0, state.depth - 1);
-            }
-
-            state.lines.push(`${"  ".repeat(state.depth)}${line}`);
-
-            if (line.endsWith("{")) {
-              state.depth += 1;
-            }
-
-            return state;
-          },
-          { depth: 0, lines: [] }
-        )
-        .lines
-        .join("\n")
-        .trim();
-    }
-
-    function formatHtml(source) {
-      const tokens = source
-        .replace(/>\s*</g, "><")
-        .split(/(<[^>]+>)/g)
-        .filter(Boolean);
-
-      let depth = 0;
-      const lines = [];
-      const voidTag =
-        /^<(?:area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr)\b/i;
-
-      for (const token of tokens) {
-        const value = token.trim();
-        if (!value) continue;
-
-        const closing = /^<\//.test(value);
-        const opening =
-          /^<[a-z][^>]*>$/i.test(value) &&
-          !/\/>$/.test(value) &&
-          !voidTag.test(value);
-        const special = /^<(?:!|[?])/.test(value);
-
-        if (closing) depth = Math.max(0, depth - 1);
-
-        lines.push(`${"  ".repeat(depth)}${value}`);
-
-        if (opening && !special && !closing) depth += 1;
-      }
-
-      return lines.join("\n");
-    }
-
-    async function pasteClipboard() {
-      try {
-        const text = await navigator.clipboard.readText();
-
-        if (!text) {
-          setStatus("A área de transferência está vazia");
-          return;
-        }
-
-        setDocument(text, {
-          language: "auto",
-          filename: "Clipboard"
-        });
-      } catch (error) {
-        setStatus(
-          "O Safari bloqueou a leitura. Toque no editor e use Colar.",
-          true
-        );
-      }
-    }
-
-    async function copyDocument() {
-      const content = getDocument();
-
-      try {
-        await navigator.clipboard.writeText(content);
-        setStatus("Conteúdo copiado");
-      } catch {
-        const textarea = document.createElement("textarea");
-        textarea.value = content;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        document.body.append(textarea);
-        textarea.select();
-        document.execCommand("copy");
-        textarea.remove();
-        setStatus("Conteúdo copiado");
-      }
-    }
-
-    document.querySelector("#openButton").addEventListener("click", () => {
-      fileInput.click();
-    });
-
-    fileInput.addEventListener("change", async () => {
-      const file = fileInput.files?.[0];
-      if (!file) return;
-
-      setDocument(await file.text(), {
-        language: "auto",
-        filename: file.name
-      });
-
-      fileInput.value = "";
-    });
-
-    document
-      .querySelector("#pasteButton")
-      .addEventListener("click", pasteClipboard);
-
-    document
-      .querySelector("#copyButton")
-      .addEventListener("click", copyDocument);
-
-    document
-      .querySelector("#formatButton")
-      .addEventListener("click", formatDocument);
-
-    document.querySelector("#foldButton").addEventListener("click", () => {
-      const changed = foldAll(view);
-      setStatus(changed ? "Blocos recolhidos" : "Nenhum bloco recolhível");
-    });
-
-    document.querySelector("#unfoldButton").addEventListener("click", () => {
-      const changed = unfoldAll(view);
-      setStatus(changed ? "Blocos expandidos" : "Nenhum bloco recolhido");
-    });
-
-    languageSelect.addEventListener("change", () => {
-      const selected = languageSelect.value;
-      const language =
-        selected === "auto"
-          ? detectLanguage(getDocument(), currentFilename)
-          : selected;
-
-      setLanguage(language);
-      setStatus(`Linguagem: ${language.toUpperCase()}`);
-    });
-
-    window.ShortcutCodeViewer = Object.freeze({
-      getValue: getDocument,
-      setValue(content, options = {}) {
-        setDocument(content, options);
-      },
-      setLanguage(language) {
-        setLanguage(
-          normalizeLanguage(language, getDocument(), currentFilename)
-        );
-      },
-      fold() {
-        return foldAll(view);
-      },
-      unfold() {
-        return unfoldAll(view);
-      },
-      focus() {
-        view.focus();
-      },
-      view
-    });
-
-    const initial = readInitialPayload();
-
-    if (initial.content) {
       setDocument(initial.content, {
         language: initial.language,
-        filename: initial.filename || "Shortcut Input"
+        filename: initial.filename,
       });
-    } else {
-      updateStatus(view.state);
-    }
+
+      foldButton.disabled = true;
+      unfoldButton.disabled = true;
+
+      initializeCodeMirror();
+    })();
   </script>
 </body>
 </html>
