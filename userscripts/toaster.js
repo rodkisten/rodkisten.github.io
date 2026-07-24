@@ -1,7 +1,7 @@
 (function Toaster(globalWindow) {
   "use strict";
 
-  const VERSION = "3.5.0";
+  const VERSION = "3.6.0";
   const TOAST_GLOBAL = "RodToaster";
   const INSPECTOR_GLOBAL = "RodObjectInspector";
   const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -124,6 +124,15 @@
       <path d="m12 3-1.1 2.9L8 7l2.9 1.1L12 11l1.1-2.9L16 7l-2.9-1.1Z"></path>
       <path d="m19 13-.7 1.8-1.8.7 1.8.7L19 18l.7-1.8 1.8-.7-1.8-.7Z"></path>
       <path d="m5 14-.8 2.2L2 17l2.2.8L5 20l.8-2.2L8 17l-2.2-.8Z"></path>
+    `,
+    history: `
+      <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+      <path d="M3 4v5h5"></path>
+      <path d="M12 7v5l3 2"></path>
+    `,
+    send: `
+      <path d="m22 2-7 20-4-9-9-4Z"></path>
+      <path d="M22 2 11 13"></path>
     `,
   };
 
@@ -260,6 +269,8 @@
     "animation",
     "progress",
     "progressLabel",
+    "dismissible",
+    "actions",
   ]);
 
   function hasOwn(object, key) {
@@ -1164,6 +1175,171 @@
         .rod-toast__actions {
         position: static;
         margin: 0;
+      }
+
+
+      .rod-toast[data-confirm="true"] {
+        min-width: min(420px, calc(100vw - 32px));
+        max-width: min(520px, calc(100vw - 32px));
+        touch-action: pan-y;
+      }
+
+      .rod-toast[data-confirm="true"] .rod-toast__content {
+        display: block;
+        width: 100%;
+      }
+
+      .rod-toast[data-confirm="true"] .rod-toast__icon {
+        align-self: flex-start;
+        margin-top: 2px;
+      }
+
+      .rod-toast[data-confirm="true"] .rod-toast__minimize,
+      .rod-toast[data-confirm="true"] .rod-toast__expand {
+        display: none !important;
+      }
+
+      .rod-toast__confirm {
+        display: grid;
+        gap: 14px;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .rod-toast__confirm-copy {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .rod-toast__confirm-title {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        color: rgba(250, 250, 250, 0.96);
+        font: 620 13px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        letter-spacing: -0.008em;
+      }
+
+      .rod-toast__confirm-description {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        color: rgba(161, 161, 170, 0.92);
+        font: 400 12px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
+      }
+
+      .rod-toast__confirm-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+        width: 100%;
+      }
+
+      .rod-toast__confirm-button {
+        appearance: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-height: 34px;
+        padding: 0 12px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        outline: none;
+        color: rgba(244, 244, 245, 0.9);
+        background: transparent;
+        font: 600 11px/1 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        touch-action: manipulation;
+        cursor: pointer;
+        transition:
+          background-color 160ms ease,
+          border-color 160ms ease,
+          color 160ms ease,
+          transform 160ms ease,
+          opacity 160ms ease;
+      }
+
+      .rod-toast__confirm-button:hover:not(:disabled),
+      .rod-toast__confirm-button:focus-visible:not(:disabled) {
+        transform: translateY(-1px);
+      }
+
+      .rod-toast__confirm-button:focus-visible {
+        outline: 1px solid rgba(255, 255, 255, 0.32);
+        outline-offset: 2px;
+      }
+
+      .rod-toast__confirm-button:disabled {
+        cursor: wait;
+        opacity: 0.56;
+        transform: none;
+      }
+
+      .rod-toast__confirm-button svg {
+        width: 15px;
+        height: 15px;
+        flex: 0 0 auto;
+      }
+
+      .rod-toast__confirm-button[data-busy="true"] svg {
+        animation: rod-toast-spinner 850ms linear infinite;
+      }
+
+      .rod-toast__confirm-button[data-variant="primary"] {
+        border-color: rgba(250, 250, 250, 0.96);
+        background: rgba(250, 250, 250, 0.96);
+        color: rgba(9, 9, 11, 0.98);
+      }
+
+      .rod-toast__confirm-button[data-variant="primary"]:hover:not(:disabled),
+      .rod-toast__confirm-button[data-variant="primary"]:focus-visible:not(:disabled) {
+        border-color: rgba(255, 255, 255, 1);
+        background: rgba(255, 255, 255, 1);
+      }
+
+      .rod-toast__confirm-button[data-variant="secondary"] {
+        border-color: var(--rod-border);
+        background: rgba(255, 255, 255, 0.055);
+        color: rgba(244, 244, 245, 0.86);
+      }
+
+      .rod-toast__confirm-button[data-variant="secondary"]:hover:not(:disabled),
+      .rod-toast__confirm-button[data-variant="secondary"]:focus-visible:not(:disabled) {
+        border-color: var(--rod-border-strong);
+        background: rgba(255, 255, 255, 0.085);
+      }
+
+      .rod-toast__confirm-button[data-variant="danger"] {
+        border-color: rgba(248, 113, 113, 0.3);
+        background: rgba(127, 29, 29, 0.22);
+        color: rgba(252, 165, 165, 0.98);
+      }
+
+      .rod-toast__confirm-button[data-variant="danger"]:hover:not(:disabled),
+      .rod-toast__confirm-button[data-variant="danger"]:focus-visible:not(:disabled) {
+        border-color: rgba(248, 113, 113, 0.46);
+        background: rgba(127, 29, 29, 0.32);
+      }
+
+      .rod-toast__confirm-button[data-variant="ghost"] {
+        color: rgba(212, 212, 216, 0.8);
+      }
+
+      .rod-toast__confirm-button[data-variant="ghost"]:hover:not(:disabled),
+      .rod-toast__confirm-button[data-variant="ghost"]:focus-visible:not(:disabled) {
+        background: var(--rod-hover);
+        color: var(--rod-text-strong);
+      }
+
+      @media (max-width: 520px) {
+        .rod-toast__confirm-actions {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+
+        .rod-toast__confirm-button {
+          width: 100%;
+        }
       }
 
       .rod-toast__loading-copy {
@@ -2487,9 +2663,14 @@
         : state.config.dedupeWindow,
       pauseOnInteraction:
         options.pauseOnInteraction ?? state.config.pauseOnInteraction,
-      closeButton: options.closeButton ?? state.config.closeButton,
+      dismissible: options.dismissible !== false,
+      closeButton:
+        options.dismissible !== false &&
+        (options.closeButton ?? state.config.closeButton),
       role: options.role || (type === "error" ? "alert" : "status"),
-      swipeToDismiss: options.swipeToDismiss ?? state.config.swipeToDismiss,
+      swipeToDismiss:
+        options.dismissible !== false &&
+        (options.swipeToDismiss ?? state.config.swipeToDismiss),
       swipeThreshold: Number.isFinite(options.swipeThreshold)
         ? Math.max(24, Number(options.swipeThreshold))
         : state.config.swipeThreshold,
@@ -2549,6 +2730,10 @@
         options.progressLabel === null
           ? null
           : String(options.progressLabel),
+      onDismiss:
+        typeof options.onDismiss === "function"
+          ? options.onDismiss
+          : null,
     };
   }
 
@@ -3108,6 +3293,7 @@
 
       removed = true;
       clearTimer();
+      safeCall(() => options.onDismiss?.(), undefined);
       removeRecord(record);
       node.remove();
       syncStackLayout();
@@ -3451,6 +3637,10 @@
         return;
       }
 
+      if (!options.dismissible) {
+        return;
+      }
+
       event.preventDefault();
       event.stopPropagation();
       dismiss();
@@ -3582,6 +3772,283 @@
     });
   }
 
+
+  function normalizeConfirmActions(actions) {
+    const source = Array.isArray(actions) && actions.length
+      ? actions
+      : [
+          {
+            id: "cancel",
+            label: "Cancel",
+            icon: "circle-x",
+            variant: "secondary",
+            value: false,
+          },
+          {
+            id: "confirm",
+            label: "Confirm",
+            icon: "check",
+            variant: "primary",
+            value: true,
+          },
+        ];
+
+    return source
+      .filter((action) => action && typeof action === "object")
+      .map((action, index) => ({
+        id:
+          action.id === undefined || action.id === null
+            ? `action-${index + 1}`
+            : String(action.id),
+        label:
+          action.label === undefined || action.label === null
+            ? String(action.id || `Action ${index + 1}`)
+            : String(action.label),
+        icon:
+          action.icon === false || action.icon === null
+            ? false
+            : action.icon || null,
+        variant: [
+          "primary",
+          "secondary",
+          "danger",
+          "ghost",
+        ].includes(action.variant)
+          ? action.variant
+          : "secondary",
+        disabled: Boolean(action.disabled),
+        close: action.close !== false,
+        handle:
+          typeof action.handle === "function"
+            ? action.handle
+            : null,
+        hasValue: hasOwn(action, "value"),
+        value: action.value,
+        raw: action,
+      }));
+  }
+
+  function showConfirmToast(descriptor = {}) {
+    const options = isPlainObject(descriptor)
+      ? descriptor
+      : { title: String(descriptor ?? "") };
+    const confirmActions = normalizeConfirmActions(options.actions);
+    const dismissValue = hasOwn(options, "dismissValue")
+      ? options.dismissValue
+      : false;
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let controller = null;
+
+      const settleDismissed = () => {
+        if (settled) return;
+        settled = true;
+        resolve(dismissValue);
+      };
+
+      const created = createToastRecord([], {
+        type: hasOwn(TOAST_COLORS, options.type)
+          ? options.type
+          : "default",
+        title: options.title,
+        description: options.description,
+        icon: options.icon === undefined ? "circle" : options.icon,
+        duration: Number.isFinite(options.duration)
+          ? Number(options.duration)
+          : 0,
+        id: options.id,
+        dedupe: false,
+        pauseOnInteraction:
+          options.pauseOnInteraction ?? true,
+        dismissible: options.dismissible !== false,
+        closeButton:
+          options.dismissible !== false &&
+          (options.closeButton ?? true),
+        swipeToDismiss:
+          options.dismissible !== false &&
+          (options.swipeToDismiss ?? true),
+        role: options.role || "alertdialog",
+        onDismiss: settleDismissed,
+      });
+
+      if (!created) {
+        resolve(dismissValue);
+        return;
+      }
+
+      controller = created.controller;
+      const record = created.record;
+      const node = controller.element;
+      const content = node.querySelector(".rod-toast__content");
+      const iconNode = node.querySelector(".rod-toast__icon");
+
+      node.dataset.confirm = "true";
+      node.setAttribute("aria-modal", "false");
+
+      if (!content) {
+        settled = true;
+        controller.dismiss();
+        resolve(dismissValue);
+        return;
+      }
+
+      const root = node.ownerDocument.createElement("div");
+      const copy = node.ownerDocument.createElement("div");
+      const title = node.ownerDocument.createElement("div");
+      const description = node.ownerDocument.createElement("div");
+      const actionsNode = node.ownerDocument.createElement("div");
+
+      root.className = "rod-toast__confirm";
+      copy.className = "rod-toast__confirm-copy";
+      title.className = "rod-toast__confirm-title";
+      description.className = "rod-toast__confirm-description";
+      actionsNode.className = "rod-toast__confirm-actions";
+
+      title.textContent = String(options.title || "");
+      title.hidden = !title.textContent;
+      description.textContent = String(options.description || "");
+      description.hidden = !description.textContent;
+
+      copy.appendChild(title);
+      copy.appendChild(description);
+      root.appendChild(copy);
+      root.appendChild(actionsNode);
+      content.replaceChildren(root);
+
+      const buttons = [];
+
+      const setButtonsBusy = (activeButton, busy) => {
+        for (const button of buttons) {
+          button.disabled = busy || button.dataset.initialDisabled === "true";
+          button.dataset.busy = String(busy && button === activeButton);
+        }
+      };
+
+      const finish = (value, shouldClose = true) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+
+        if (shouldClose) {
+          controller.dismiss();
+        }
+      };
+
+      const fail = (error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+        controller.dismiss(true);
+      };
+
+      for (const action of confirmActions) {
+        const button = node.ownerDocument.createElement("button");
+        const label = node.ownerDocument.createElement("span");
+
+        button.type = "button";
+        button.className = "rod-toast__confirm-button";
+        button.dataset.actionId = action.id;
+        button.dataset.variant = action.variant;
+        button.dataset.busy = "false";
+        button.dataset.initialDisabled = String(action.disabled);
+        button.disabled = action.disabled;
+
+        if (action.icon) {
+          button.appendChild(
+            createSvgIcon(node.ownerDocument, action.icon, 15),
+          );
+        }
+
+        label.textContent = action.label;
+        button.appendChild(label);
+
+        button.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+
+          if (settled || button.disabled) return;
+
+          const originalIcon = button.querySelector("svg")?.cloneNode(true);
+          setButtonsBusy(button, true);
+
+          if (originalIcon) {
+            button.replaceChild(
+              createSvgIcon(node.ownerDocument, "loader-circle", 15),
+              button.querySelector("svg"),
+            );
+          } else {
+            button.insertBefore(
+              createSvgIcon(node.ownerDocument, "loader-circle", 15),
+              label,
+            );
+          }
+
+          try {
+            let result;
+
+            if (action.handle) {
+              result = await action.handle({
+                action: action.raw,
+                controller,
+                event,
+                toast,
+              });
+            }
+
+            if (result === undefined) {
+              result = action.hasValue ? action.value : action.id;
+            }
+
+            if (action.close) {
+              finish(result, true);
+              return;
+            }
+
+            if (button.querySelector("svg")) {
+              button.querySelector("svg").remove();
+            }
+
+            if (originalIcon) {
+              button.insertBefore(originalIcon, label);
+            }
+
+            setButtonsBusy(button, false);
+          } catch (error) {
+            fail(error);
+          }
+        });
+
+        actionsNode.appendChild(button);
+        buttons.push(button);
+      }
+
+      setManagerMinimized(false);
+      syncStackLayout();
+
+      const preferredButton =
+        buttons.find((button) => {
+          return (
+            !button.disabled &&
+            button.dataset.variant === "primary"
+          );
+        }) || buttons.find((button) => !button.disabled);
+
+      const hostWindow = state.hostWindow || initialHostWindow;
+      const requestFrame =
+        typeof hostWindow.requestAnimationFrame === "function"
+          ? hostWindow.requestAnimationFrame.bind(hostWindow)
+          : (callback) => hostWindow.setTimeout(callback, 0);
+
+      requestFrame(() => {
+        preferredButton?.focus?.({ preventScroll: true });
+        iconNode?.setAttribute("aria-hidden", "true");
+      });
+
+      record.confirmActions = confirmActions;
+    });
+  }
+
   function showDebugToast(inputArgs) {
     const parsed = parseArguments(inputArgs, "debug");
 
@@ -3602,6 +4069,7 @@
   toast.success = (...args) => showToast(args, "success");
   toast.warning = (...args) => showToast(args, "warning");
   toast.loading = (...args) => showLoadingToast(args);
+  toast.confirm = (descriptor = {}) => showConfirmToast(descriptor);
   toast.debug = (...args) => showDebugToast(args);
   toast.inspect = (...args) => showDebugToast(args);
 
