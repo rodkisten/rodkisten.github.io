@@ -6,6 +6,7 @@ event.waitUntil(
 caches.open(CACHE).then(cache => cache.addAll([
 "./",
 "./index.html",
+  "./previewer.html",
 "./manifest.webmanifest"
 ]))
 );
