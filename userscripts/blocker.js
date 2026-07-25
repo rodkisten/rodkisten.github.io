@@ -1973,7 +1973,7 @@
     version: SCRIPT.version,
     ACTIONS,
     FETCH_ACTIONS,
-    SCRIPT_ACTIONS,
+    SCRIPT_ACTIONS, 
     SCRIPT_KINDS,
     RULE_TYPES,
     SELECT_STEPS,
