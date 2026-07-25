@@ -1,7 +1,7 @@
 (function Toaster(globalWindow) {
   "use strict";
 
-  const VERSION = "4.0.0";
+  const VERSION = "4.1.0";
   const TOAST_GLOBAL = "RodToaster";
   const INSPECTOR_GLOBAL = "RodObjectInspector";
   const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -11,47 +11,56 @@
 
   const TOAST_COLORS = {
     default: {
-      bg: "rgba(9, 9, 11, 0.975)",
-      border: "rgba(255, 255, 255, 0.12)",
-      text: "rgba(244, 244, 245, 0.88)",
-      accent: "rgba(244, 244, 245, 0.76)",
+      bg: "rgba(23, 23, 23, 0.985)",
+      border: "rgba(255, 255, 255, 0.11)",
+      text: "rgba(232, 232, 232, 0.96)",
+      accent: "rgba(244, 244, 245, 0.9)",
       icon: "circle",
     },
     error: {
-      bg: "rgba(9, 9, 11, 0.975)",
-      border: "rgba(255, 255, 255, 0.12)",
-      text: "rgba(244, 244, 245, 0.88)",
-      accent: "rgba(248, 113, 113, 0.96)",
+      bg: "rgba(23, 23, 23, 0.985)",
+      border: "rgba(251, 113, 133, 0.2)",
+      text: "rgba(244, 244, 245, 0.96)",
+      accent: "rgba(251, 154, 166, 0.98)",
       icon: "circle-x",
     },
     info: {
-      bg: "rgba(9, 9, 11, 0.975)",
-      border: "rgba(255, 255, 255, 0.12)",
-      text: "rgba(244, 244, 245, 0.88)",
-      accent: "rgba(147, 197, 253, 0.96)",
+      bg: "rgba(23, 23, 23, 0.985)",
+      border: "rgba(186, 230, 253, 0.16)",
+      text: "rgba(244, 244, 245, 0.96)",
+      accent: "rgba(186, 230, 253, 0.96)",
       icon: "info",
     },
     success: {
-      bg: "rgba(9, 9, 11, 0.975)",
+      bg: "rgba(23, 23, 23, 0.985)",
       border: "rgba(255, 255, 255, 0.12)",
-      text: "rgba(244, 244, 245, 0.88)",
-      accent: "rgba(74, 222, 128, 0.98)",
+      text: "rgba(244, 244, 245, 0.96)",
+      accent: "rgba(250, 250, 250, 0.98)",
       icon: "check",
     },
     warning: {
-      bg: "rgba(9, 9, 11, 0.975)",
-      border: "rgba(255, 255, 255, 0.12)",
-      text: "rgba(244, 244, 245, 0.88)",
-      accent: "rgba(250, 204, 21, 0.96)",
+      bg: "rgba(23, 23, 23, 0.985)",
+      border: "rgba(250, 204, 21, 0.2)",
+      text: "rgba(244, 244, 245, 0.96)",
+      accent: "rgba(250, 212, 119, 0.98)",
       icon: "triangle-alert",
     },
     debug: {
-      bg: "rgba(9, 9, 11, 0.975)",
-      border: "rgba(255, 255, 255, 0.12)",
-      text: "rgba(244, 244, 245, 0.88)",
-      accent: "rgba(228, 228, 231, 0.76)",
+      bg: "rgba(23, 23, 23, 0.985)",
+      border: "rgba(255, 255, 255, 0.11)",
+      text: "rgba(232, 232, 232, 0.96)",
+      accent: "rgba(212, 212, 216, 0.94)",
       icon: "terminal",
     },
+  };
+
+  const LIGHT_TOAST_COLORS = {
+    default: { bg: "rgba(255, 255, 255, 0.985)", border: "rgba(24, 24, 27, 0.11)", text: "rgba(39, 39, 42, 0.94)", accent: "rgba(39, 39, 42, 0.84)" },
+    error: { bg: "rgba(255, 255, 255, 0.985)", border: "rgba(190, 18, 60, 0.16)", text: "rgba(39, 39, 42, 0.96)", accent: "rgba(190, 18, 60, 0.94)" },
+    info: { bg: "rgba(255, 255, 255, 0.985)", border: "rgba(3, 105, 161, 0.15)", text: "rgba(39, 39, 42, 0.96)", accent: "rgba(3, 105, 161, 0.9)" },
+    success: { bg: "rgba(255, 255, 255, 0.985)", border: "rgba(24, 24, 27, 0.12)", text: "rgba(39, 39, 42, 0.96)", accent: "rgba(24, 24, 27, 0.94)" },
+    warning: { bg: "rgba(255, 255, 255, 0.985)", border: "rgba(161, 98, 7, 0.17)", text: "rgba(39, 39, 42, 0.96)", accent: "rgba(161, 98, 7, 0.94)" },
+    debug: { bg: "rgba(255, 255, 255, 0.985)", border: "rgba(24, 24, 27, 0.11)", text: "rgba(39, 39, 42, 0.94)", accent: "rgba(63, 63, 70, 0.86)" },
   };
 
   const SVG_ICONS = {
@@ -217,6 +226,11 @@
     pauseOnInteraction: true,
     closeButton: true,
     position: "top-center",
+
+    // "auto" follows prefers-color-scheme. Explicit "dark" and "light"
+    // themes update every active toast without recreating the host.
+    theme: "auto",
+
     stacked: true,
     stackVisible: 3,
 
@@ -541,6 +555,9 @@
     nextObjectId: 1,
     stackExpanded: false,
     managerMinimized: false,
+    resolvedTheme: "dark",
+    themeMediaQuery: null,
+    themeCleanup: null,
     managerNode: null,
     list: null,
     toolbar: null,
@@ -559,6 +576,130 @@
     spaCleanup: null,
     hostRepairFrame: null,
   };
+
+
+  function normalizeTheme(value) {
+    return ["auto", "dark", "light"].includes(value)
+      ? value
+      : "auto";
+  }
+
+  function resolveTheme(value = state.config.theme) {
+    const normalized = normalizeTheme(value);
+
+    if (normalized === "dark" || normalized === "light") {
+      return normalized;
+    }
+
+    const hostWindow = state.hostWindow || initialHostWindow;
+    const prefersLight = safeCall(
+      () =>
+        hostWindow.matchMedia?.(
+          "(prefers-color-scheme: light)",
+        )?.matches === true,
+      false,
+    );
+
+    return prefersLight ? "light" : "dark";
+  }
+
+  function getToastPalette(type) {
+    const semanticType = hasOwn(TOAST_COLORS, type)
+      ? type
+      : "default";
+
+    return state.resolvedTheme === "light"
+      ? {
+          ...TOAST_COLORS[semanticType],
+          ...LIGHT_TOAST_COLORS[semanticType],
+        }
+      : TOAST_COLORS[semanticType];
+  }
+
+  function applyToastPalette(node, type) {
+    if (!node) return;
+
+    const semanticType = hasOwn(TOAST_COLORS, type)
+      ? type
+      : "default";
+    const palette = getToastPalette(semanticType);
+
+    node.style.setProperty("--rod-toast-bg", palette.bg);
+    node.style.setProperty("--rod-toast-border", palette.border);
+    node.style.setProperty("--rod-toast-text", palette.text);
+    node.style.setProperty("--rod-toast-accent", palette.accent);
+    node.dataset.type = semanticType;
+  }
+
+  function syncTheme() {
+    const previous = state.resolvedTheme;
+    state.resolvedTheme = resolveTheme();
+
+    if (state.container) {
+      state.container.dataset.theme = state.resolvedTheme;
+    }
+
+    if (state.hostElement) {
+      state.hostElement.dataset.rodToasterTheme = state.resolvedTheme;
+    }
+
+    for (const record of getActiveToastRecords()) {
+      applyToastPalette(record.node, record.options.type);
+    }
+
+    return previous !== state.resolvedTheme;
+  }
+
+  function installThemeObserver() {
+    state.themeCleanup?.();
+    state.themeCleanup = null;
+    state.themeMediaQuery = null;
+
+    if (state.config.theme !== "auto") {
+      syncTheme();
+      return;
+    }
+
+    const hostWindow = state.hostWindow || initialHostWindow;
+    const mediaQuery = safeCall(
+      () =>
+        hostWindow.matchMedia?.(
+          "(prefers-color-scheme: light)",
+        ) || null,
+      null,
+    );
+
+    if (!mediaQuery) {
+      syncTheme();
+      return;
+    }
+
+    const handleChange = () => {
+      const changed = syncTheme();
+
+      if (changed && state.api) {
+        emitEvent("theme:change", {
+          theme: state.config.theme,
+          resolvedTheme: state.resolvedTheme,
+        });
+      }
+    };
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleChange);
+      state.themeCleanup = () => {
+        mediaQuery.removeEventListener("change", handleChange);
+      };
+    } else if (typeof mediaQuery.addListener === "function") {
+      mediaQuery.addListener(handleChange);
+      state.themeCleanup = () => {
+        mediaQuery.removeListener(handleChange);
+      };
+    }
+
+    state.themeMediaQuery = mediaQuery;
+    syncTheme();
+  }
 
   try {
     Object.defineProperty(initialHostWindow, STATE_SYMBOL, {
@@ -1938,6 +2079,196 @@
         }
       }
 
+
+      /* Polished dark/light visual system inspired by native notification cards. */
+      .rod-toast-stack {
+        --rod-surface: rgba(23, 23, 23, 0.985);
+        --rod-surface-raised: rgba(28, 28, 29, 0.992);
+        --rod-border: rgba(255, 255, 255, 0.105);
+        --rod-border-strong: rgba(255, 255, 255, 0.18);
+        --rod-text: rgba(232, 232, 232, 0.96);
+        --rod-text-strong: rgba(255, 255, 255, 0.985);
+        --rod-muted: rgba(163, 163, 163, 0.9);
+        --rod-muted-soft: rgba(132, 132, 137, 0.84);
+        --rod-hover: rgba(255, 255, 255, 0.07);
+        --rod-overlay: rgba(255, 255, 255, 0.05);
+        --rod-focus: rgba(255, 255, 255, 0.34);
+        --rod-shadow: 0 1px 0 rgba(255,255,255,.055) inset, 0 2px 3px rgba(0,0,0,.2), 0 18px 46px rgba(0,0,0,.38);
+        --rod-shadow-raised: 0 1px 0 rgba(255,255,255,.07) inset, 0 4px 8px rgba(0,0,0,.22), 0 28px 66px rgba(0,0,0,.46);
+        --rod-ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+        --rod-ease-soft: cubic-bezier(0.22, 0.61, 0.36, 1);
+        --rod-toast-width: min(580px, calc(100vw - 28px));
+        align-items: center;
+        gap: 11px;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: var(--rod-toaster-font-size, 15px);
+        line-height: var(--rod-toaster-line-height, 1.48);
+      }
+
+      .rod-toast-stack[data-theme="dark"] { color-scheme: dark; }
+
+      .rod-toast-stack[data-theme="light"] {
+        --rod-surface: rgba(255, 255, 255, 0.985);
+        --rod-surface-raised: rgba(255, 255, 255, 0.998);
+        --rod-border: rgba(24, 24, 27, 0.105);
+        --rod-border-strong: rgba(24, 24, 27, 0.17);
+        --rod-text: rgba(39, 39, 42, 0.94);
+        --rod-text-strong: rgba(9, 9, 11, 0.98);
+        --rod-muted: rgba(82, 82, 91, 0.82);
+        --rod-muted-soft: rgba(113, 113, 122, 0.78);
+        --rod-hover: rgba(24, 24, 27, 0.065);
+        --rod-overlay: rgba(24, 24, 27, 0.045);
+        --rod-focus: rgba(24, 24, 27, 0.32);
+        --rod-shadow: 0 1px 0 rgba(255,255,255,.96) inset, 0 1px 3px rgba(15,23,42,.08), 0 18px 48px rgba(15,23,42,.15);
+        --rod-shadow-raised: 0 1px 0 rgba(255,255,255,1) inset, 0 3px 8px rgba(15,23,42,.09), 0 28px 64px rgba(15,23,42,.18);
+        color-scheme: light;
+      }
+
+      .rod-toast-stack[data-position="top-left"],
+      .rod-toast-stack[data-position="bottom-left"] { align-items: flex-start; }
+      .rod-toast-stack[data-position="top-right"],
+      .rod-toast-stack[data-position="bottom-right"] { align-items: flex-end; }
+
+      .rod-toast-stack__list,
+      .rod-toast-stack__toolbar { width: var(--rod-toast-width); }
+
+      .rod-toast-stack__toolbar {
+        min-height: 48px;
+        padding: 7px 8px 7px 16px;
+        border-color: var(--rod-border);
+        border-radius: 16px;
+        background: color-mix(in srgb, var(--rod-surface) 94%, transparent);
+        color: var(--rod-text);
+        box-shadow: var(--rod-shadow);
+        backdrop-filter: blur(26px) saturate(1.3);
+        -webkit-backdrop-filter: blur(26px) saturate(1.3);
+        animation: rod-toast-toolbar-enter 360ms var(--rod-ease-spring) both;
+      }
+
+      .rod-toast-stack__toolbar-label { color: var(--rod-muted); font: 650 12px/1.2 ui-sans-serif, system-ui, sans-serif; }
+      .rod-toast-stack__toolbar-button { min-height: 34px; padding: 0 11px; border: 1px solid transparent; border-radius: 10px; color: var(--rod-muted); font: 650 11px/1 ui-sans-serif, system-ui, sans-serif; transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, transform 220ms var(--rod-ease-spring); }
+      .rod-toast-stack__toolbar-button:hover, .rod-toast-stack__toolbar-button:focus-visible { border-color: var(--rod-border); background: var(--rod-hover); color: var(--rod-text-strong); transform: translateY(-1px); }
+
+      .rod-toast-stack__manager {
+        width: 50px; min-width: 50px; height: 50px;
+        border-color: var(--rod-border);
+        background: var(--rod-surface);
+        color: var(--rod-text-strong);
+        box-shadow: var(--rod-shadow-raised);
+        backdrop-filter: blur(28px) saturate(1.28);
+        -webkit-backdrop-filter: blur(28px) saturate(1.28);
+        animation: rod-toast-manager-enter 480ms var(--rod-ease-spring) both;
+        transition: transform 300ms var(--rod-ease-spring), background-color 180ms ease, border-color 180ms ease, box-shadow 220ms ease;
+      }
+      .rod-toast-stack__manager:hover, .rod-toast-stack__manager:focus-visible { border-color: var(--rod-border-strong); background: var(--rod-surface-raised); transform: translateY(-2px) scale(1.04); }
+      .rod-toast-stack__manager-count { top: -4px; right: -5px; min-width: 19px; height: 19px; border: 2px solid var(--rod-surface); background: var(--rod-text-strong); color: var(--rod-surface); font: 750 9px/15px ui-sans-serif, system-ui, sans-serif; }
+
+      .rod-toast-stack__list { gap: 11px; }
+      .rod-toast-stack__list::before, .rod-toast-stack__list::after { border-color: var(--rod-border); border-radius: 22px; background: var(--rod-surface); box-shadow: var(--rod-shadow); transition: opacity 240ms ease, transform 480ms var(--rod-ease-spring); }
+      .rod-toast-stack[data-expanded="false"][data-stack-depth="2"] .rod-toast-stack__list::before,
+      .rod-toast-stack[data-expanded="false"][data-stack-depth="3"] .rod-toast-stack__list::before { opacity: .94; transform: translateY(12px) scaleX(.95); }
+      .rod-toast-stack[data-expanded="false"][data-stack-depth="3"] .rod-toast-stack__list::after { opacity: .76; transform: translateY(22px) scaleX(.89); }
+
+      .rod-toast {
+        align-items: center;
+        gap: 15px;
+        min-height: 78px;
+        padding: 17px 14px 17px 18px;
+        border-color: var(--rod-toast-border);
+        border-radius: var(--rod-toaster-border-radius, 22px);
+        background: linear-gradient(180deg, color-mix(in srgb, var(--rod-toast-bg) 98%, white 2%), var(--rod-toast-bg));
+        color: var(--rod-toast-text);
+        box-shadow: var(--rod-shadow);
+        opacity: 0;
+        filter: blur(5px);
+        transform: translate3d(0, -18px, 0) scale(.965);
+        transform-origin: top center;
+        transition: opacity 260ms ease, filter 360ms ease, transform 500ms var(--rod-ease-spring), border-color 180ms ease, background-color 180ms ease, box-shadow 220ms ease, width 420ms var(--rod-ease-spring), min-width 420ms var(--rod-ease-spring), height 420ms var(--rod-ease-spring), padding 420ms var(--rod-ease-spring), border-radius 420ms var(--rod-ease-spring);
+        backdrop-filter: blur(30px) saturate(1.35);
+        -webkit-backdrop-filter: blur(30px) saturate(1.35);
+      }
+      .rod-toast-stack[data-position^="bottom"] .rod-toast { transform: translate3d(0, 18px, 0) scale(.965); transform-origin: bottom center; }
+      .rod-toast::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(118deg, rgba(255,255,255,.055), transparent 28%, transparent 72%, rgba(255,255,255,.018)); opacity: .7; pointer-events: none; }
+      .rod-toast[data-visible="true"] { opacity: 1; filter: blur(0); transform: translate3d(0,0,0) scale(1); }
+      .rod-toast:hover { border-color: color-mix(in srgb, var(--rod-toast-border) 72%, var(--rod-text-strong) 28%); box-shadow: var(--rod-shadow-raised); }
+      .rod-toast-stack[data-theme="light"] .rod-toast { background: linear-gradient(180deg, rgba(255,255,255,.998), rgba(250,250,250,.992)); }
+      .rod-toast-stack[data-theme="light"] .rod-toast::before { background: linear-gradient(118deg, rgba(255,255,255,.92), transparent 34%, transparent 74%, rgba(24,24,27,.018)); }
+
+      .rod-toast-stack[data-expanded="true"][data-has-many="true"] .rod-toast[data-item-expanded="false"] { max-height: 64px; min-height: 64px; }
+      .rod-toast-stack[data-expanded="true"][data-has-many="true"] .rod-toast[data-item-expanded="true"] { border-color: var(--rod-border-strong); background: var(--rod-surface-raised); box-shadow: var(--rod-shadow-raised); }
+
+      .rod-toast__icon { width: 26px; min-width: 26px; height: 26px; margin-top: 0; color: var(--rod-toast-accent); transition: color 180ms ease, opacity 180ms ease, transform 420ms var(--rod-ease-spring); }
+      .rod-toast__icon svg { width: 22px; height: 22px; stroke-width: 1.9; }
+      .rod-toast[data-visible="true"] .rod-toast__icon { animation: rod-toast-icon-enter 520ms 90ms var(--rod-ease-spring) both; }
+      .rod-toast__content { position: relative; z-index: 1; gap: 4px 8px; font-size: 15px; font-weight: 440; letter-spacing: -.012em; line-height: 1.5; }
+      .rod-toast__actions { position: relative; z-index: 2; top: auto; gap: 4px; margin: 0; }
+
+      .rod-toast__close, .rod-toast__expand, .rod-toast__minimize { width: 38px; min-width: 38px; height: 38px; border: 1px solid transparent; border-radius: 12px; color: var(--rod-muted); transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, transform 260ms var(--rod-ease-spring); }
+      .rod-toast__close:hover, .rod-toast__close:focus-visible, .rod-toast__expand:hover, .rod-toast__expand:focus-visible, .rod-toast__minimize:hover, .rod-toast__minimize:focus-visible { border-color: var(--rod-border); background: var(--rod-hover); color: var(--rod-text-strong); transform: scale(1.04); }
+      .rod-toast__close:active, .rod-toast__expand:active, .rod-toast__minimize:active { transform: scale(.95); }
+      .rod-toast__count { min-width: 27px; height: 27px; border-color: var(--rod-border); background: var(--rod-overlay); color: var(--rod-muted); font: 700 10px/25px ui-sans-serif, system-ui, sans-serif; }
+
+      .rod-toast__loading-title, .rod-toast__confirm-title, .rod-toast__rich-title, .rod-toast__interactive-title, .rod-toast__task-title { color: var(--rod-text-strong) !important; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important; font-size: 15px !important; font-weight: 680 !important; line-height: 1.34 !important; letter-spacing: -.02em !important; }
+      .rod-toast__loading-description, .rod-toast__confirm-description, .rod-toast__rich-description, .rod-toast__interactive-description, .rod-toast__task-description { color: var(--rod-muted) !important; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important; font-size: 13px !important; font-weight: 430 !important; line-height: 1.5 !important; letter-spacing: -.01em !important; }
+      .rod-toast__loading-copy, .rod-toast__confirm-copy, .rod-toast__rich-copy, .rod-toast__interactive-copy { gap: 6px; }
+
+      .rod-toast__progress { gap: 7px; margin-top: 8px; }
+      .rod-toast__progress-meta { color: var(--rod-muted-soft); font: 650 10px/1 ui-sans-serif, system-ui, sans-serif; }
+      .rod-toast__progress-track { height: 4px; background: var(--rod-overlay); }
+      .rod-toast__progress-bar { background: linear-gradient(90deg, color-mix(in srgb, var(--rod-toast-accent) 84%, transparent), var(--rod-toast-accent)); box-shadow: 0 0 12px color-mix(in srgb, var(--rod-toast-accent) 24%, transparent); transition: width 420ms var(--rod-ease-soft); }
+
+      .rod-toast[data-confirm="true"], .rod-toast[data-rich="true"], .rod-toast[data-interactive="true"], .rod-toast[data-task="true"] { min-width: min(470px, calc(100vw - 28px)); max-width: min(620px, calc(100vw - 28px)); padding-block: 19px; }
+      .rod-toast__confirm, .rod-toast__rich, .rod-toast__interactive { gap: 17px; }
+      .rod-toast__confirm-actions, .rod-toast__rich-actions, .rod-toast__interactive-actions { gap: 9px; }
+
+      .rod-toast__confirm-button, .rod-toast__rich-button, .rod-toast__interactive-button { min-height: 40px; padding: 0 15px; border-radius: 12px; font: 650 12px/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: -.008em; box-shadow: 0 1px 0 rgba(255,255,255,.04) inset; transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, opacity 160ms ease, box-shadow 180ms ease, transform 280ms var(--rod-ease-spring); }
+      .rod-toast__confirm-button:hover:not(:disabled), .rod-toast__confirm-button:focus-visible:not(:disabled), .rod-toast__rich-button:hover:not(:disabled), .rod-toast__rich-button:focus-visible:not(:disabled), .rod-toast__interactive-button:hover:not(:disabled), .rod-toast__interactive-button:focus-visible:not(:disabled) { transform: translateY(-2px); }
+      .rod-toast__confirm-button:active:not(:disabled), .rod-toast__rich-button:active:not(:disabled), .rod-toast__interactive-button:active:not(:disabled) { transform: translateY(0) scale(.98); }
+      .rod-toast__confirm-button[data-variant="primary"], .rod-toast__rich-button[data-variant="primary"], .rod-toast__interactive-button[data-variant="primary"] { border-color: var(--rod-text-strong); background: var(--rod-text-strong); color: var(--rod-surface); box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 7px 20px rgba(0,0,0,.16); }
+      .rod-toast__confirm-button[data-variant="secondary"], .rod-toast__rich-button[data-variant="secondary"], .rod-toast__interactive-button[data-variant="secondary"] { border-color: var(--rod-border); background: var(--rod-overlay); color: var(--rod-text); }
+      .rod-toast__confirm-button[data-variant="ghost"], .rod-toast__rich-button[data-variant="ghost"], .rod-toast__interactive-button[data-variant="ghost"] { color: var(--rod-muted); }
+
+      .rod-toast__details, .rod-toast__interactive-field input, .rod-toast__interactive-field textarea, .rod-toast__interactive-field select { border-color: var(--rod-border) !important; background: var(--rod-overlay) !important; color: var(--rod-text) !important; border-radius: 12px !important; }
+      .rod-toast__details summary, .rod-toast__interactive-label, .rod-toast__checkbox-label { color: var(--rod-muted) !important; }
+      .rod-toast__interactive-field input:focus, .rod-toast__interactive-field textarea:focus, .rod-toast__interactive-field select:focus { border-color: var(--rod-border-strong) !important; box-shadow: 0 0 0 4px color-mix(in srgb, var(--rod-focus) 18%, transparent) !important; }
+
+      .rod-toast__task-controls button { border-color: var(--rod-border) !important; background: var(--rod-overlay) !important; color: var(--rod-muted) !important; border-radius: 11px !important; transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease, transform 260ms var(--rod-ease-spring) !important; }
+      .rod-toast__task-controls button:hover, .rod-toast__task-controls button:focus-visible { border-color: var(--rod-border-strong) !important; background: var(--rod-hover) !important; color: var(--rod-text-strong) !important; transform: translateY(-1px); }
+
+      .rod-toast[data-completing="true"] { width: 54px; min-width: 54px; max-width: 54px; height: 54px; min-height: 54px; max-height: 54px; border-color: color-mix(in srgb, var(--rod-toast-accent) 28%, transparent); background: var(--rod-surface); box-shadow: var(--rod-shadow-raised); }
+      .rod-toast[data-completing="true"] .rod-toast__icon { width: 54px; min-width: 54px; height: 54px; color: var(--rod-toast-accent); }
+      .rod-toast[data-success-exit="true"] { opacity: 0; filter: blur(5px); transform: translate3d(0,-22px,0) scale(.82); }
+      .rod-toast-stack[data-position^="bottom"] .rod-toast[data-success-exit="true"] { transform: translate3d(0,22px,0) scale(.82); }
+
+      .rod-toast-stack[data-theme="light"] .rod-token--null { color: rgb(126,34,206); }
+      .rod-toast-stack[data-theme="light"] .rod-token--undefined, .rod-toast-stack[data-theme="light"] .rod-token--meta { color: rgb(82,82,91); }
+      .rod-toast-stack[data-theme="light"] .rod-token--string { color: rgb(180,83,9); }
+      .rod-toast-stack[data-theme="light"] .rod-token--number { color: rgb(63,98,18); }
+      .rod-toast-stack[data-theme="light"] .rod-token--boolean { color: rgb(3,105,161); }
+      .rod-toast-stack[data-theme="light"] .rod-token--symbol { color: rgb(15,118,110); }
+      .rod-toast-stack[data-theme="light"] .rod-token--function { color: rgb(161,98,7); }
+
+      @keyframes rod-toast-icon-enter {
+        0% { opacity: 0; transform: scale(.72) rotate(-9deg); }
+        62% { opacity: 1; transform: scale(1.08) rotate(1deg); }
+        100% { opacity: 1; transform: scale(1) rotate(0); }
+      }
+      @keyframes rod-toast-toolbar-enter { from { opacity: 0; transform: translateY(-8px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+      @keyframes rod-toast-manager-enter { 0% { opacity: 0; transform: translateY(-10px) scale(.72); } 70% { opacity: 1; transform: translateY(1px) scale(1.06); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+
+      @media (max-width: 560px) {
+        .rod-toast-stack { --rod-toast-width: calc(100vw - 20px); }
+        .rod-toast-stack[data-position^="top"] { top: max(env(safe-area-inset-top, 0px), 10px); right: 10px; left: 10px; }
+        .rod-toast-stack[data-position^="bottom"] { right: 10px; bottom: max(env(safe-area-inset-bottom, 0px), 10px); left: 10px; }
+        .rod-toast { min-height: 72px; gap: 12px; padding: 15px 10px 15px 15px; border-radius: 20px; }
+        .rod-toast__icon { width: 24px; min-width: 24px; height: 24px; }
+        .rod-toast__icon svg { width: 21px; height: 21px; }
+        .rod-toast__content { font-size: 14px; }
+        .rod-toast[data-confirm="true"], .rod-toast[data-rich="true"], .rod-toast[data-interactive="true"], .rod-toast[data-task="true"] { min-width: 0; max-width: none; }
+        .rod-toast__confirm-actions, .rod-toast__rich-actions, .rod-toast__interactive-actions { display: grid; grid-template-columns: 1fr; }
+        .rod-toast__confirm-button, .rod-toast__rich-button, .rod-toast__interactive-button { width: 100%; }
+      }
+
       @media (prefers-reduced-motion: reduce) {
         .rod-toast,
         .rod-toast__content,
@@ -2631,6 +2962,9 @@
   function destroyHost() {
     removeHostInteractionListeners();
     state.inspectorRuntime?.clearHighlight?.();
+    state.themeCleanup?.();
+    state.themeCleanup = null;
+    state.themeMediaQuery = null;
 
     if (state.hostElement?.isConnected) {
       state.hostElement.remove();
@@ -2764,6 +3098,7 @@
 
     container.className = "rod-toast-stack";
     container.dataset.position = state.config.position;
+    container.dataset.theme = state.resolvedTheme;
     container.dataset.expanded = "true";
     container.dataset.stackDepth = "0";
     container.dataset.managerMinimized = String(
@@ -2891,6 +3226,8 @@
     state.toolbar = toolbar;
     state.stackCountNode = toolbarLabel;
 
+    installThemeObserver();
+    syncTheme();
     installSpaPersistence(hostWindow, hostDocument);
 
     const existingRecords = [...getActiveToastRecords()].sort(
@@ -3569,7 +3906,6 @@
     enforceToastLimit();
 
     const options = normalizeToastOptions(rawOptions);
-    const palette = TOAST_COLORS[options.type];
     const node = host.document.createElement("div");
     const icon = host.document.createElement("div");
     const content = host.document.createElement("div");
@@ -3585,10 +3921,7 @@
 
     node.className = "rod-toast";
     node.setAttribute("role", options.role);
-    node.style.setProperty("--rod-toast-bg", palette.bg);
-    node.style.setProperty("--rod-toast-border", palette.border);
-    node.style.setProperty("--rod-toast-text", palette.text);
-    node.style.setProperty("--rod-toast-accent", palette.accent);
+    applyToastPalette(node, options.type);
 
     icon.className = "rod-toast__icon";
     setToastIcon(
@@ -3938,13 +4271,8 @@
         ...options,
         ...nextRawOptions,
       });
-      const nextPalette = TOAST_COLORS[nextOptions.type];
-
       Object.assign(options, nextOptions);
-      node.style.setProperty("--rod-toast-bg", nextPalette.bg);
-      node.style.setProperty("--rod-toast-border", nextPalette.border);
-      node.style.setProperty("--rod-toast-text", nextPalette.text);
-      node.style.setProperty("--rod-toast-accent", nextPalette.accent);
+      applyToastPalette(node, nextOptions.type);
       node.setAttribute("role", nextOptions.role);
       renderArgs(nextArgs, nextOptions);
       resetTimer(nextOptions.duration);
@@ -6393,6 +6721,7 @@
       120,
       Number(state.config.virtualMaxHeight) || DEFAULT_CONFIG.virtualMaxHeight,
     );
+    state.config.theme = normalizeTheme(state.config.theme);
     state.config.stacked = Boolean(state.config.stacked);
     state.config.stackToolbar = Boolean(state.config.stackToolbar);
     state.config.persistAcrossSpaNavigation = Boolean(
@@ -6516,15 +6845,56 @@
       );
     }
 
+    installThemeObserver();
+    syncTheme();
+
     if (state.container) {
       state.container.dataset.position = state.config.position;
       syncStackLayout();
     }
 
-    return { ...state.config };
+    return {
+      ...state.config,
+      resolvedTheme: state.resolvedTheme,
+    };
   };
 
-  toast.getConfig = () => ({ ...state.config });
+
+  toast.setTheme = (theme) => {
+    const previousTheme = state.config.theme;
+    const previousResolvedTheme = state.resolvedTheme;
+
+    state.config.theme = normalizeTheme(theme);
+    installThemeObserver();
+    syncTheme();
+
+    emitEvent("theme:change", {
+      previousTheme,
+      previousResolvedTheme,
+      theme: state.config.theme,
+      resolvedTheme: state.resolvedTheme,
+    });
+
+    return state.resolvedTheme;
+  };
+
+  toast.getTheme = () => ({
+    theme: state.config.theme,
+    resolvedTheme: state.resolvedTheme,
+  });
+
+  toast.toggleTheme = () => {
+    return toast.setTheme(
+      state.resolvedTheme === "dark"
+        ? "light"
+        : "dark",
+    );
+  };
+
+  toast.getConfig = () => ({
+    ...state.config,
+    resolvedTheme: state.resolvedTheme,
+  });
   toast.getHostMode = () => state.hostMode;
   toast.repairHost = () => {
     scheduleHostRepair();
