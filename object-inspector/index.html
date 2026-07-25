@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#09090b" />
+    <meta
+      name="description"
+      content="Rod Object Inspector — explore objetos JavaScript, DOM, Maps, Sets, erros e estruturas complexas sem perder o contexto."
+    />
+    <title>Rod Object Inspector</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Pular para o conteúdo</a>
+
+    <div class="page-noise" aria-hidden="true"></div>
+    <div class="page-glow page-glow--one" aria-hidden="true"></div>
+    <div class="page-glow page-glow--two" aria-hidden="true"></div>
+
+    <header class="site-header" data-header>
+      <div class="shell site-header__inner">
+        <a class="brand" href="#top" aria-label="Rod Object Inspector, início">
+          <span class="brand__mark" aria-hidden="true">{ }</span>
+          <span class="brand__text">rod/object-inspector</span>
+          <span class="version-chip" data-version>v3.1.0</span>
+        </a>
+
+        <nav class="site-nav" aria-label="Navegação principal">
+          <a href="#playground">playground</a>
+          <a href="#features">features</a>
+          <a href="#api">api</a>
+        </nav>
+
+        <div class="header-actions">
+          <button class="icon-button" type="button" data-theme-toggle aria-label="Alternar tema">
+            <span class="theme-icon theme-icon--sun" aria-hidden="true">☀</span>
+            <span class="theme-icon theme-icon--moon" aria-hidden="true">☾</span>
+          </button>
+          <a class="button button--compact button--ghost" href="#install">instalar</a>
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero shell" id="top">
+        <div class="hero__copy reveal">
+          <div class="eyebrow">
+            <span class="status-dot" aria-hidden="true"></span>
+            inspector nativo para qualquer runtime web
+          </div>
+
+          <h1>
+            Veja o objeto.
+            <span class="gradient-text">Entenda o sistema.</span>
+          </h1>
+
+          <p class="hero__lead">
+            Um inspector JavaScript rápido, seguro e embutível para objetos,
+            DOM, coleções, erros e grafos complexos. Sem framework. Sem caixa-preta.
+          </p>
+
+          <div class="hero__actions">
+            <a class="button button--primary" href="#playground">
+              abrir playground
+              <span aria-hidden="true">↘</span>
+            </a>
+            <button class="button button--ghost" type="button" data-copy-install>
+              <span aria-hidden="true">⧉</span>
+              copiar instalação
+            </button>
+          </div>
+
+          <div class="hero__meta" aria-label="Destaques técnicos">
+            <span>zero dependencies</span>
+            <span>iframe aware</span>
+            <span>virtualized</span>
+            <span>keyboard ready</span>
+          </div>
+        </div>
+
+        <div class="hero__visual reveal reveal--delay" aria-label="Prévia do inspector">
+          <div class="terminal-card terminal-card--hero">
+            <div class="terminal-card__bar">
+              <div class="traffic-lights" aria-hidden="true">
+                <span></span><span></span><span></span>
+              </div>
+              <span class="terminal-card__title">runtime.preview.js</span>
+              <span class="terminal-card__status">live</span>
+            </div>
+
+            <div class="hero-code" aria-hidden="true">
+              <div><span class="code-purple">const</span> runtime = <span class="code-blue">{</span></div>
+              <div class="indent"><span class="code-cyan">engine</span>: <span class="code-orange">"Rod Inspector"</span>,</div>
+              <div class="indent"><span class="code-cyan">state</span>: <span class="code-blue">{</span></div>
+              <div class="indent indent--two"><span class="code-cyan">connected</span>: <span class="code-blue">true</span>,</div>
+              <div class="indent indent--two"><span class="code-cyan">nodes</span>: <span class="code-lime">1284</span>,</div>
+              <div class="indent indent--two"><span class="code-cyan">latency</span>: <span class="code-lime">3.4</span>,</div>
+              <div class="indent"><span class="code-blue">}</span>,</div>
+              <div class="indent"><span class="code-cyan">features</span>: <span class="code-blue">[</span></div>
+              <div class="indent indent--two"><span class="code-orange">"search"</span>, <span class="code-orange">"diff"</span>, <span class="code-orange">"live"</span>,</div>
+              <div class="indent indent--two"><span class="code-orange">"virtualization"</span>, <span class="code-orange">"dom"</span></div>
+              <div class="indent"><span class="code-blue">]</span></div>
+              <div><span class="code-blue">}</span>;</div>
+            </div>
+
+            <div class="object-tree" aria-hidden="true">
+              <div class="tree-line"><span class="tree-arrow">▾</span><span class="tree-type">Object</span><span class="tree-id">#42</span><span>{…}</span></div>
+              <div class="tree-line tree-line--nested"><span class="tree-arrow">▾</span><span class="tree-key">state</span><span>:</span><span class="tree-type">Object</span><span>{…}</span></div>
+              <div class="tree-line tree-line--deep"><span class="tree-arrow tree-arrow--empty"></span><span class="tree-key">connected</span><span>:</span><span class="tree-boolean">true</span></div>
+              <div class="tree-line tree-line--deep"><span class="tree-arrow tree-arrow--empty"></span><span class="tree-key">nodes</span><span>:</span><span class="tree-number">1284</span></div>
+              <div class="tree-line tree-line--nested"><span class="tree-arrow">▸</span><span class="tree-key">features</span><span>:</span><span class="tree-type">Array(5)</span><span>[…]</span></div>
+              <div class="tree-line tree-line--nested"><span class="tree-arrow">▸</span><span class="tree-key">element</span><span>:</span><span class="tree-dom">&lt;main#app.shell&gt;</span><button tabindex="-1">◎</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="metrics shell" aria-label="Métricas do projeto">
+        <article class="metric-card reveal">
+          <strong>0</strong>
+          <span>dependências</span>
+        </article>
+        <article class="metric-card reveal">
+          <strong>1k+</strong>
+          <span>itens virtuais</span>
+        </article>
+        <article class="metric-card reveal">
+          <strong>∞</strong>
+          <span>grafos circulares</span>
+        </article>
+        <article class="metric-card reveal">
+          <strong>3</strong>
+          <span>temas nativos</span>
+        </article>
+      </section>
+
+      <section class="section shell" id="playground">
+        <div class="section-heading reveal">
+          <div>
+            <span class="section-index">01 / playground</span>
+            <h2>Mexa no objeto.<br />Veja tudo reagir.</h2>
+          </div>
+          <p>
+            Edite os dados, busque caminhos, gere snapshots e acompanhe a árvore
+            real renderizada pelo inspector.
+          </p>
+        </div>
+
+        <div class="playground reveal">
+          <div class="playground__toolbar">
+            <div class="segmented-control" role="tablist" aria-label="Modo do playground">
+              <button class="is-active" type="button" data-playground-tab="inspect" role="tab" aria-selected="true">inspect</button>
+              <button type="button" data-playground-tab="search" role="tab" aria-selected="false">search</button>
+              <button type="button" data-playground-tab="diff" role="tab" aria-selected="false">diff</button>
+            </div>
+
+            <div class="playground__actions">
+              <button class="mini-button" type="button" data-refresh-demo title="Atualizar inspector">↻ refresh</button>
+              <button class="mini-button" type="button" data-mutate-demo title="Alterar dados">⌁ mutate</button>
+              <label class="switch-label">
+                <input type="checkbox" data-live-toggle />
+                <span class="switch" aria-hidden="true"></span>
+                live
+              </label>
+            </div>
+          </div>
+
+          <div class="playground__grid">
+            <div class="editor-pane">
+              <div class="pane-label">
+                <span>demo-object.js</span>
+                <span data-editor-status>valid object</span>
+              </div>
+              <textarea data-object-editor spellcheck="false" aria-label="Objeto JavaScript editável"></textarea>
+              <div class="editor-footer">
+                <span>JavaScript expression</span>
+                <span><kbd>⌘</kbd> + <kbd>Enter</kbd> executar</span>
+              </div>
+            </div>
+
+            <div class="result-pane">
+              <div class="pane-label">
+                <span data-result-title>object inspector</span>
+                <div class="pane-label__right">
+                  <span class="pulse-label"><i></i> runtime</span>
+                  <button class="icon-copy" type="button" data-copy-object title="Copiar objeto">⧉</button>
+                </div>
+              </div>
+
+              <div class="search-panel" data-search-panel hidden>
+                <label>
+                  <span>buscar por chave, valor ou caminho</span>
+                  <input type="search" data-search-input placeholder="ex.: profile, #app, Map" autocomplete="off" />
+                </label>
+                <div class="search-results" data-search-results></div>
+              </div>
+
+              <div class="diff-panel" data-diff-panel hidden>
+                <div class="diff-summary">
+                  <span class="diff-pill diff-pill--added"><b data-diff-added>0</b> added</span>
+                  <span class="diff-pill diff-pill--changed"><b data-diff-changed>0</b> changed</span>
+                  <span class="diff-pill diff-pill--removed"><b data-diff-removed>0</b> removed</span>
+                </div>
+                <div class="diff-results" data-diff-results>
+                  <p>Crie um snapshot e depois altere o objeto.</p>
+                </div>
+                <button class="mini-button" type="button" data-snapshot>◉ create snapshot</button>
+              </div>
+
+              <div class="inspector-host" data-inspector-host></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section shell" id="features">
+        <div class="section-heading reveal">
+          <div>
+            <span class="section-index">02 / capabilities</span>
+            <h2>Ferramentas de precisão.<br />Sem peso morto.</h2>
+          </div>
+          <p>
+            Cada recurso foi desenhado para revelar mais contexto sem transformar
+            o console em um labirinto de pixels.
+          </p>
+        </div>
+
+        <div class="feature-grid">
+          <article class="feature-card feature-card--wide reveal">
+            <div class="feature-icon">⌕</div>
+            <div>
+              <span class="feature-kicker">deep search</span>
+              <h3>Encontre qualquer caminho</h3>
+              <p>Pesquise chaves, valores, tipos e caminhos completos sem expandir a árvore inteira.</p>
+            </div>
+            <div class="feature-demo feature-demo--search" aria-hidden="true">
+              <span>⌕ profile</span>
+              <div><b>$.users[3].profile</b><small>Object { name, role }</small></div>
+              <div><b>$.session.profileId</b><small>"usr_8f2a"</small></div>
+            </div>
+          </article>
+
+          <article class="feature-card reveal">
+            <div class="feature-icon">◌</div>
+            <span class="feature-kicker">live mode</span>
+            <h3>Estado em movimento</h3>
+            <p>Atualize a árvore mantendo ramos profundos abertos e o contexto visual intacto.</p>
+            <div class="live-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          </article>
+
+          <article class="feature-card reveal">
+            <div class="feature-icon">±</div>
+            <span class="feature-kicker">snapshots + diff</span>
+            <h3>Veja o que mudou</h3>
+            <p>Compare snapshots e destaque propriedades adicionadas, removidas ou alteradas.</p>
+            <div class="mini-diff" aria-hidden="true">
+              <span class="mini-diff__remove">- status: "idle"</span>
+              <span class="mini-diff__add">+ status: "ready"</span>
+            </div>
+          </article>
+
+          <article class="feature-card reveal">
+            <div class="feature-icon">⌘</div>
+            <span class="feature-kicker">keyboard</span>
+            <h3>Navegação sem mouse</h3>
+            <p>Use setas, Enter, Home, End e atalhos para percorrer árvores extensas.</p>
+            <div class="keys" aria-hidden="true"><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd><kbd>↵</kbd></div>
+          </article>
+
+          <article class="feature-card feature-card--wide reveal">
+            <div class="feature-icon">◇</div>
+            <div>
+              <span class="feature-kicker">special viewers</span>
+              <h3>Cada estrutura fala sua língua</h3>
+              <p>DOM, Promise, Map, Set, Error, URL, Headers, Request, Response, buffers e typed arrays.</p>
+            </div>
+            <div class="type-cloud" aria-hidden="true">
+              <span>Promise</span><span>Map</span><span>Set</span><span>HTMLElement</span><span>Uint8Array</span><span>Response</span><span>Error</span><span>URL</span>
+            </div>
+          </article>
+
+          <article class="feature-card reveal">
+            <div class="feature-icon">✎</div>
+            <span class="feature-kicker">protected editing</span>
+            <h3>Edite com freio de mão</h3>
+            <p>Altere propriedades writable e setters apenas quando a edição estiver habilitada.</p>
+            <div class="edit-demo" aria-hidden="true"><span>count</span><input value="42" tabindex="-1" /><button tabindex="-1">apply</button></div>
+          </article>
+
+          <article class="feature-card reveal">
+            <div class="feature-icon">↯</div>
+            <span class="feature-kicker">virtualization</span>
+            <h3>Milhares de linhas, leves</h3>
+            <p>Renderização virtual com overscan, altura dinâmica e preservação de estado.</p>
+            <div class="virtual-stack" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+          </article>
+
+          <article class="feature-card reveal">
+            <div class="feature-icon">◎</div>
+            <span class="feature-kicker">dom inspector</span>
+            <h3>Aponte para o elemento</h3>
+            <p>Destaque nós na página, atravesse iframes e centralize o alvo automaticamente.</p>
+            <div class="dom-demo" aria-hidden="true"><span>&lt;main#app.shell&gt;</span><i></i></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section shell" id="api">
+        <div class="section-heading reveal">
+          <div>
+            <span class="section-index">03 / api</span>
+            <h2>Uma API pequena.<br />Um campo de visão enorme.</h2>
+          </div>
+          <p>
+            Crie uma instância, renderize qualquer valor e encaixe o resultado
+            onde sua interface precisar.
+          </p>
+        </div>
+
+        <div class="api-layout reveal">
+          <div class="api-tabs" role="tablist" aria-label="Exemplos de API">
+            <button class="is-active" type="button" data-code-tab="basic" role="tab" aria-selected="true">basic</button>
+            <button type="button" data-code-tab="options" role="tab" aria-selected="false">options</button>
+            <button type="button" data-code-tab="dom" role="tab" aria-selected="false">dom</button>
+            <button type="button" data-code-tab="runtime" role="tab" aria-selected="false">runtime</button>
+          </div>
+
+          <div class="code-window">
+            <div class="code-window__bar">
+              <span>example.js</span>
+              <button type="button" data-copy-code>copy</button>
+            </div>
+            <pre><code data-code-output></code></pre>
+          </div>
+
+          <aside class="api-reference">
+            <span class="api-reference__label">instance methods</span>
+            <dl>
+              <div><dt>render(value)</dt><dd>HTMLElement</dd></div>
+              <div><dt>getObjectPreview(value)</dt><dd>string</dd></div>
+              <div><dt>highlightElement(node)</dt><dd>void</dd></div>
+              <div><dt>clearHighlight()</dt><dd>void</dd></div>
+              <div><dt>ensureStyle(document)</dt><dd>HTMLStyleElement</dd></div>
+              <div><dt>destroy()</dt><dd>void</dd></div>
+            </dl>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section section--install shell" id="install">
+        <div class="install-card reveal">
+          <div>
+            <span class="section-index">04 / ship it</span>
+            <h2>Copie. Importe. Inspecione.</h2>
+            <p>Um arquivo, nenhuma dependência e compatibilidade com qualquer página.</p>
+          </div>
+          <div class="install-command">
+            <code>&lt;script src="./rod-object-inspector.js"&gt;&lt;/script&gt;</code>
+            <button type="button" data-copy-install aria-label="Copiar instalação">⧉</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="shell site-footer__inner">
+        <a class="brand" href="#top"><span class="brand__mark">{ }</span><span class="brand__text">rod/object-inspector</span></a>
+        <p>built for objects that refuse to stay small.</p>
+        <a href="#top">back to top ↑</a>
+      </div>
+    </footer>
+
+    <div class="toast" data-toast role="status" aria-live="polite"></div>
+
+    <script src="./rod-object-inspector.js"></script>
+    <script src="./landing.js"></script>
+  </body>
+</html>
