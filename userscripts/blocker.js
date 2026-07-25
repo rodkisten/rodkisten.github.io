@@ -7,7 +7,7 @@
 
   const SCRIPT = Object.freeze({
     name: 'Blocker',
-    version: '1.0.0',
+    version: '2.0.0',
     globalName: 'Blocker',
     queueName: 'BlockerQueue',
   });
@@ -26,6 +26,14 @@
     navigationDebounceMs: 30,
     maximumTextCandidates: 10_000,
     interceptFetch: true,
+    interceptScripts: true,
+    interceptXHR: true,
+    interceptWorkers: true,
+    interceptDynamicCode: true,
+    interceptDocumentWrite: true,
+    interceptScriptPreloads: true,
+    interceptWebAssembly: true,
+    logAllScripts: false,
     logAllFetches: false,
     logFetchBodies: false,
     maximumLoggedBodyLength: 2_000,
@@ -58,6 +66,31 @@
   const RULE_TYPES = Object.freeze({
     DOM: 'dom',
     FETCH: 'fetch',
+    SCRIPT: 'script',
+  });
+
+  const SCRIPT_ACTIONS = Object.freeze({
+    ALLOW: 'allow',
+    BLOCK: 'block',
+    REDIRECT: 'redirect',
+    MODIFY: 'modify',
+    CUSTOM: 'custom',
+  });
+
+  const SCRIPT_KINDS = Object.freeze({
+    ELEMENT: 'script-element',
+    INLINE: 'inline-script',
+    XHR: 'xhr',
+    WORKER: 'worker',
+    SHARED_WORKER: 'shared-worker',
+    SERVICE_WORKER: 'service-worker',
+    EVAL: 'eval',
+    FUNCTION: 'function',
+    TIMER: 'timer',
+    DOCUMENT_WRITE: 'document-write',
+    PRELOAD: 'script-preload',
+    MODULE_PRELOAD: 'module-preload',
+    WEBASSEMBLY: 'webassembly',
   });
 
   const SELECT_STEPS = Object.freeze({
@@ -115,6 +148,7 @@
     error: ['background:#b91c1c;color:#fff;', 'color:#ef4444;'],
     dom: ['background:#0f766e;color:#fff;', 'color:#14b8a6;'],
     fetch: ['background:#6d28d9;color:#fff;', 'color:#a78bfa;'],
+    script: ['background:#9f1239;color:#fff;', 'color:#fb7185;'],
     select: ['background:#4338ca;color:#fff;', 'color:#8b5cf6;'],
     plugin: ['background:#be185d;color:#fff;', 'color:#ec4899;'],
     loader: ['background:#334155;color:#fff;', 'color:#94a3b8;'],
@@ -126,6 +160,7 @@
     navigationInstalled: false,
     shadowHookInstalled: false,
     fetchInstalled: false,
+    scriptInterceptorsInstalled: false,
     currentUrl: location.href,
     observerTimer: null,
     navigationTimer: null,
@@ -135,10 +170,12 @@
     rulesById: new Map(),
     domRules: [],
     fetchRules: [],
+    scriptRules: [],
     processedElements: new WeakMap(),
     observedRoots: new WeakSet(),
     observers: new Set(),
     originalFetch: null,
+    originals: new Map(),
     originalAttachShadow: null,
     originalHistoryMethods: new Map(),
   };
@@ -867,6 +904,450 @@
     return actual === pattern;
   }
 
+
+  /**
+   * Creates a script/resource rule without registering it.
+   *
+   * @example
+   * Blocker.blockScript({ src: /googletagmanager|google-analytics/i });
+   */
+  function blockScript(match, options = {}) {
+    return { type: RULE_TYPES.SCRIPT, match, action: SCRIPT_ACTIONS.BLOCK, ...options };
+  }
+
+  function allowScript(match, options = {}) {
+    return { type: RULE_TYPES.SCRIPT, match, action: SCRIPT_ACTIONS.ALLOW, ...options };
+  }
+
+  function redirectScript(match, redirect, options = {}) {
+    return { type: RULE_TYPES.SCRIPT, match, action: SCRIPT_ACTIONS.REDIRECT, redirect, ...options };
+  }
+
+  function modifyScript(match, modify, options = {}) {
+    return { type: RULE_TYPES.SCRIPT, match, action: SCRIPT_ACTIONS.MODIFY, modify, ...options };
+  }
+
+  function customScriptRule(match, handler, options = {}) {
+    return { type: RULE_TYPES.SCRIPT, match, action: SCRIPT_ACTIONS.CUSTOM, handler, ...options };
+  }
+
+  function addScriptRule(rule, options = {}) {
+    return addRule({ type: RULE_TYPES.SCRIPT, ...rule }, options);
+  }
+
+  function addScriptRules(rules, options = {}) {
+    return addRules(rules.map((rule) => ({ type: RULE_TYPES.SCRIPT, ...rule })), options);
+  }
+
+  function matchValue(actual, expected, context) {
+    if (expected == null) return true;
+    if (Array.isArray(expected)) return expected.some((entry) => matchValue(actual, entry, context));
+    if (expected instanceof RegExp) {
+      expected.lastIndex = 0;
+      return expected.test(String(actual ?? ''));
+    }
+    if (typeof expected === 'function') return Boolean(expected(actual, context));
+    return String(actual ?? '') === String(expected);
+  }
+
+  function createScriptContext(kind, values = {}) {
+    const rawUrl = values.url || values.src || '';
+    let parsedUrl = null;
+
+    try {
+      if (rawUrl) parsedUrl = new URL(String(rawUrl), location.href);
+    } catch {}
+
+    return {
+      kind,
+      url: parsedUrl?.href || String(rawUrl || ''),
+      src: parsedUrl?.href || String(rawUrl || ''),
+      hostname: parsedUrl?.hostname || '',
+      host: parsedUrl?.host || '',
+      pathname: parsedUrl?.pathname || '',
+      origin: parsedUrl?.origin || '',
+      inline: values.inline ?? values.code ?? '',
+      code: values.code ?? values.inline ?? '',
+      type: values.type || '',
+      method: String(values.method || '').toUpperCase(),
+      element: values.element || null,
+      args: values.args || [],
+      options: values.options,
+      page: getPageContext(),
+      ...values,
+    };
+  }
+
+  function matchesScriptRule(rule, context) {
+    if (rule.enabled === false) return false;
+    if (rule.kind != null && !matchValue(context.kind, rule.kind, context)) return false;
+    if (rule.host != null && !matchesHost(location.hostname, rule.host, getPageContext())) return false;
+
+    const match = rule.match;
+    if (match == null) return true;
+    if (typeof match === 'string') return context.url.includes(match) || context.code.includes(match);
+    if (match instanceof RegExp) {
+      match.lastIndex = 0;
+      return match.test(context.url || context.code);
+    }
+    if (typeof match === 'function') return Boolean(match(context));
+    if (Array.isArray(match)) return match.some((entry) => matchesScriptRule({ ...rule, match: entry }, context));
+    if (typeof match !== 'object') return false;
+
+    if (match.kind != null && !matchValue(context.kind, match.kind, context)) return false;
+    if (match.src != null && !matchValue(context.src, match.src, context)) return false;
+    if (match.url != null && !matchValue(context.url, match.url, context)) return false;
+    if (match.hostname != null && !matchesHost(context.hostname, match.hostname, context)) return false;
+    if (match.pathname != null && !matchValue(context.pathname, match.pathname, context)) return false;
+    if (match.inline != null && !matchValue(context.inline, match.inline, context)) return false;
+    if (match.code != null && !matchValue(context.code, match.code, context)) return false;
+    if (match.type != null && !matchValue(context.type, match.type, context)) return false;
+    if (match.method != null && !matchValue(context.method, String(match.method).toUpperCase(), context)) return false;
+    if (typeof match.test === 'function' && !match.test(context)) return false;
+    return true;
+  }
+
+  function evaluateScriptRules(context) {
+    const result = {
+      action: SCRIPT_ACTIONS.ALLOW,
+      context,
+      matchedRules: [],
+      redirect: null,
+      replacement: null,
+      customResult: null,
+    };
+
+    for (const rule of INTERNAL.scriptRules) {
+      let matched = false;
+      try {
+        matched = matchesScriptRule(rule, context);
+      } catch (error) {
+        debug.error('script', `Matcher failed for "${rule.name || rule.id}".`, error);
+      }
+      if (!matched) continue;
+
+      result.matchedRules.push(rule);
+      const action = rule.action || SCRIPT_ACTIONS.BLOCK;
+
+      if (action === SCRIPT_ACTIONS.CUSTOM && typeof rule.handler === 'function') {
+        try {
+          result.customResult = rule.handler(context, result);
+          if (result.customResult?.action) result.action = result.customResult.action;
+          if (result.customResult?.redirect) result.redirect = result.customResult.redirect;
+          if (Object.prototype.hasOwnProperty.call(result.customResult || {}, 'replacement')) result.replacement = result.customResult.replacement;
+        } catch (error) {
+          debug.error('script', `Custom handler failed for "${rule.name || rule.id}".`, error);
+        }
+      } else if (action === SCRIPT_ACTIONS.REDIRECT) {
+        result.action = action;
+        result.redirect = typeof rule.redirect === 'function' ? rule.redirect(context) : rule.redirect;
+      } else if (action === SCRIPT_ACTIONS.MODIFY) {
+        result.action = action;
+        result.replacement = typeof rule.modify === 'function' ? rule.modify(context) : rule.modify;
+      } else {
+        result.action = action;
+      }
+
+      if (rule.continue !== true || result.action === SCRIPT_ACTIONS.ALLOW) break;
+    }
+
+    if (CONFIG.logAllScripts || result.matchedRules.length) {
+      const level = result.action === SCRIPT_ACTIONS.BLOCK ? 'warn' : 'debug';
+      writeGroup(level, 'script', `${context.kind} ${result.action}: ${context.url || truncateCode(context.code)}`, () => {
+        console.log('Context:', context);
+        console.log('Matched rules:', result.matchedRules.map(({ id, name, action }) => ({ id, name, action })));
+      });
+    }
+
+    dispatchEvent('script', {
+      kind: context.kind,
+      url: context.url,
+      action: result.action,
+      matchedRuleIds: result.matchedRules.map((rule) => rule.id),
+    });
+
+    return result;
+  }
+
+  function truncateCode(code, maximum = 120) {
+    const normalized = String(code || '').replace(/\s+/g, ' ').trim();
+    return normalized.length > maximum ? `${normalized.slice(0, maximum)}…` : normalized;
+  }
+
+  function rememberOriginal(key, value) {
+    if (!INTERNAL.originals.has(key)) INTERNAL.originals.set(key, value);
+    return value;
+  }
+
+  function preventScriptElement(script, reason = 'blocked') {
+    try {
+      script.type = 'application/x-blocker-blocked';
+      script.dataset.blockerStatus = reason;
+      script.removeAttribute('src');
+      script.textContent = '';
+    } catch {}
+  }
+
+  function inspectScriptElement(script) {
+    const src = script.getAttribute('src') || script.src || '';
+    const context = createScriptContext(src ? SCRIPT_KINDS.ELEMENT : SCRIPT_KINDS.INLINE, {
+      src,
+      url: src,
+      inline: src ? '' : script.textContent || '',
+      code: src ? '' : script.textContent || '',
+      type: script.getAttribute('type') || '',
+      element: script,
+    });
+    return evaluateScriptRules(context);
+  }
+
+  function applyScriptElementDecision(script, decision) {
+    if (decision.action === SCRIPT_ACTIONS.BLOCK) {
+      preventScriptElement(script);
+      return false;
+    }
+    if (decision.action === SCRIPT_ACTIONS.REDIRECT && decision.redirect) {
+      script.src = new URL(String(decision.redirect), location.href).href;
+    }
+    if (decision.action === SCRIPT_ACTIONS.MODIFY && decision.replacement != null) {
+      if (script.src) script.removeAttribute('src');
+      script.textContent = String(decision.replacement);
+    }
+    return true;
+  }
+
+  function inspectNodeForScripts(node) {
+    if (!(node instanceof Node)) return true;
+    const scripts = [];
+    const links = [];
+    if (node instanceof HTMLScriptElement) scripts.push(node);
+    if (node instanceof HTMLLinkElement) links.push(node);
+    if (node instanceof Element || node instanceof DocumentFragment) {
+      scripts.push(...node.querySelectorAll?.('script') || []);
+      links.push(...node.querySelectorAll?.('link[rel="preload"][as="script"],link[rel="modulepreload"]') || []);
+    }
+    for (const script of scripts) {
+      if (!applyScriptElementDecision(script, inspectScriptElement(script))) return false;
+    }
+    for (const link of links) inspectScriptPreload(link);
+    return true;
+  }
+
+  function inspectScriptPreload(link) {
+    const rel = String(link.rel || '').toLowerCase();
+    const kind = rel === 'modulepreload' ? SCRIPT_KINDS.MODULE_PRELOAD : SCRIPT_KINDS.PRELOAD;
+    const decision = evaluateScriptRules(createScriptContext(kind, { src: link.href, url: link.href, element: link, type: rel }));
+    if (decision.action === SCRIPT_ACTIONS.BLOCK) {
+      link.removeAttribute('href');
+      link.dataset.blockerStatus = 'blocked';
+      return false;
+    }
+    if (decision.action === SCRIPT_ACTIONS.REDIRECT && decision.redirect) link.href = new URL(String(decision.redirect), location.href).href;
+    return true;
+  }
+
+  function installDomScriptInterceptors() {
+    const methods = ['appendChild', 'insertBefore', 'replaceChild'];
+    for (const methodName of methods) {
+      const original = rememberOriginal(`Node.${methodName}`, Node.prototype[methodName]);
+      Node.prototype[methodName] = function blockerNodeInsertion(node, ...rest) {
+        inspectNodeForScripts(node);
+        return Reflect.apply(original, this, [node, ...rest]);
+      };
+    }
+
+    for (const methodName of ['append', 'prepend', 'before', 'after', 'replaceWith']) {
+      const prototype = methodName === 'append' || methodName === 'prepend' ? Element.prototype : Element.prototype;
+      const original = prototype[methodName];
+      if (typeof original !== 'function') continue;
+      rememberOriginal(`Element.${methodName}`, original);
+      prototype[methodName] = function blockerElementInsertion(...nodes) {
+        for (const node of nodes) inspectNodeForScripts(node);
+        return Reflect.apply(original, this, nodes);
+      };
+    }
+
+    const originalSetAttribute = rememberOriginal('Element.setAttribute', Element.prototype.setAttribute);
+    Element.prototype.setAttribute = function blockerSetAttribute(name, value) {
+      if (this instanceof HTMLScriptElement && String(name).toLowerCase() === 'src') {
+        const decision = evaluateScriptRules(createScriptContext(SCRIPT_KINDS.ELEMENT, { src: value, url: value, element: this, type: this.type }));
+        if (decision.action === SCRIPT_ACTIONS.BLOCK) {
+          preventScriptElement(this);
+          return;
+        }
+        if (decision.action === SCRIPT_ACTIONS.REDIRECT && decision.redirect) value = decision.redirect;
+      }
+      return Reflect.apply(originalSetAttribute, this, [name, value]);
+    };
+
+    const srcDescriptor = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
+    if (srcDescriptor?.set && srcDescriptor.get) {
+      rememberOriginal('HTMLScriptElement.src', srcDescriptor);
+      Object.defineProperty(HTMLScriptElement.prototype, 'src', {
+        configurable: srcDescriptor.configurable,
+        enumerable: srcDescriptor.enumerable,
+        get: srcDescriptor.get,
+        set(value) {
+          const decision = evaluateScriptRules(createScriptContext(SCRIPT_KINDS.ELEMENT, { src: value, url: value, element: this, type: this.type }));
+          if (decision.action === SCRIPT_ACTIONS.BLOCK) {
+            preventScriptElement(this);
+            return;
+          }
+          const nextValue = decision.action === SCRIPT_ACTIONS.REDIRECT && decision.redirect ? decision.redirect : value;
+          return Reflect.apply(srcDescriptor.set, this, [nextValue]);
+        },
+      });
+    }
+
+    document.addEventListener('beforescriptexecute', (event) => {
+      const script = event.target;
+      if (!(script instanceof HTMLScriptElement)) return;
+      if (!applyScriptElementDecision(script, inspectScriptElement(script))) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    }, true);
+
+    document.addEventListener('beforeload', (event) => {
+      const target = event.target;
+      if (target instanceof HTMLScriptElement && !applyScriptElementDecision(target, inspectScriptElement(target))) event.preventDefault();
+      if (target instanceof HTMLLinkElement && !inspectScriptPreload(target)) event.preventDefault();
+    }, true);
+  }
+
+  function installXHRInterceptor() {
+    if (!CONFIG.interceptXHR || typeof XMLHttpRequest !== 'function') return;
+    const open = rememberOriginal('XMLHttpRequest.open', XMLHttpRequest.prototype.open);
+    const send = rememberOriginal('XMLHttpRequest.send', XMLHttpRequest.prototype.send);
+
+    XMLHttpRequest.prototype.open = function blockerXhrOpen(method, url, ...rest) {
+      this.__blockerXHR = { method, url, rest };
+      return Reflect.apply(open, this, [method, url, ...rest]);
+    };
+    XMLHttpRequest.prototype.send = function blockerXhrSend(body) {
+      const meta = this.__blockerXHR || {};
+      const decision = evaluateScriptRules(createScriptContext(SCRIPT_KINDS.XHR, { method: meta.method, url: meta.url, src: meta.url, body, xhr: this }));
+      if (decision.action === SCRIPT_ACTIONS.BLOCK) {
+        queueMicrotask(() => {
+          try { this.abort(); } catch {}
+          this.dispatchEvent(new Event('error'));
+          this.dispatchEvent(new Event('loadend'));
+        });
+        return;
+      }
+      if (decision.action === SCRIPT_ACTIONS.REDIRECT && decision.redirect) {
+        Reflect.apply(open, this, [meta.method || 'GET', decision.redirect, ...(meta.rest || [])]);
+      }
+      return Reflect.apply(send, this, [body]);
+    };
+  }
+
+  function installWorkerInterceptors() {
+    if (!CONFIG.interceptWorkers) return;
+    for (const [name, kind] of [['Worker', SCRIPT_KINDS.WORKER], ['SharedWorker', SCRIPT_KINDS.SHARED_WORKER]]) {
+      const Original = globalWindow[name];
+      if (typeof Original !== 'function') continue;
+      rememberOriginal(name, Original);
+      const Wrapped = function BlockerWorker(url, options) {
+        const decision = evaluateScriptRules(createScriptContext(kind, { url, src: url, options }));
+        if (decision.action === SCRIPT_ACTIONS.BLOCK) throw new DOMException(`Blocked by ${SCRIPT.name}`, 'SecurityError');
+        const nextUrl = decision.action === SCRIPT_ACTIONS.REDIRECT && decision.redirect ? decision.redirect : url;
+        return Reflect.construct(Original, [nextUrl, options].filter((value, index) => index === 0 || value !== undefined), new.target || Original);
+      };
+      Object.setPrototypeOf(Wrapped, Original);
+      Wrapped.prototype = Original.prototype;
+      globalWindow[name] = Wrapped;
+    }
+
+    const register = navigator.serviceWorker?.register;
+    if (typeof register === 'function') {
+      rememberOriginal('ServiceWorker.register', register);
+      navigator.serviceWorker.register = function blockerServiceWorkerRegister(url, options) {
+        const decision = evaluateScriptRules(createScriptContext(SCRIPT_KINDS.SERVICE_WORKER, { url, src: url, options }));
+        if (decision.action === SCRIPT_ACTIONS.BLOCK) return Promise.reject(new DOMException(`Blocked by ${SCRIPT.name}`, 'SecurityError'));
+        const nextUrl = decision.action === SCRIPT_ACTIONS.REDIRECT && decision.redirect ? decision.redirect : url;
+        return Reflect.apply(register, this, [nextUrl, options]);
+      };
+    }
+  }
+
+  function installDynamicCodeInterceptors() {
+    if (!CONFIG.interceptDynamicCode) return;
+    const originalEval = rememberOriginal('eval', globalWindow.eval);
+    globalWindow.eval = function blockerEval(code) {
+      const decision = evaluateScriptRules(createScriptContext(SCRIPT_KINDS.EVAL, { code, inline: code }));
+      if (decision.action === SCRIPT_ACTIONS.BLOCK) return undefined;
+      const nextCode = decision.action === SCRIPT_ACTIONS.MODIFY && decision.replacement != null ? decision.replacement : code;
+      return Reflect.apply(originalEval, this, [nextCode]);
+    };
+
+    const OriginalFunction = rememberOriginal('Function', globalWindow.Function);
+    const BlockerFunction = function (...args) {
+      const code = args.at(-1) || '';
+      const decision = evaluateScriptRules(createScriptContext(SCRIPT_KINDS.FUNCTION, { code, inline: code, args }));
+      if (decision.action === SCRIPT_ACTIONS.BLOCK) return function blockedDynamicFunction() {};
+      if (decision.action === SCRIPT_ACTIONS.MODIFY && decision.replacement != null) args[args.length - 1] = String(decision.replacement);
+      return Reflect.construct(OriginalFunction, args, new.target || OriginalFunction);
+    };
+    Object.setPrototypeOf(BlockerFunction, OriginalFunction);
+    BlockerFunction.prototype = OriginalFunction.prototype;
+    globalWindow.Function = BlockerFunction;
+
+    for (const timerName of ['setTimeout', 'setInterval']) {
+      const original = rememberOriginal(timerName, globalWindow[timerName]);
+      globalWindow[timerName] = function blockerTimer(handler, timeout, ...args) {
+        if (typeof handler === 'string') {
+          const decision = evaluateScriptRules(createScriptContext(SCRIPT_KINDS.TIMER, { code: handler, inline: handler, timer: timerName, timeout }));
+          if (decision.action === SCRIPT_ACTIONS.BLOCK) return 0;
+          if (decision.action === SCRIPT_ACTIONS.MODIFY && decision.replacement != null) handler = String(decision.replacement);
+        }
+        return Reflect.apply(original, this, [handler, timeout, ...args]);
+      };
+    }
+  }
+
+  function installDocumentWriteInterceptor() {
+    if (!CONFIG.interceptDocumentWrite) return;
+    for (const methodName of ['write', 'writeln']) {
+      const original = document[methodName];
+      if (typeof original !== 'function') continue;
+      rememberOriginal(`document.${methodName}`, original);
+      document[methodName] = function blockerDocumentWrite(...parts) {
+        const html = parts.join(methodName === 'writeln' ? '\n' : '');
+        const decision = evaluateScriptRules(createScriptContext(SCRIPT_KINDS.DOCUMENT_WRITE, { code: html, inline: html, html }));
+        if (decision.action === SCRIPT_ACTIONS.BLOCK) return;
+        const nextHtml = decision.action === SCRIPT_ACTIONS.MODIFY && decision.replacement != null ? String(decision.replacement) : html;
+        return Reflect.apply(original, this, [nextHtml]);
+      };
+    }
+  }
+
+  function installWebAssemblyInterceptors() {
+    if (!CONFIG.interceptWebAssembly || !globalWindow.WebAssembly) return;
+    for (const methodName of ['instantiate', 'instantiateStreaming', 'compile', 'compileStreaming']) {
+      const original = globalWindow.WebAssembly[methodName];
+      if (typeof original !== 'function') continue;
+      rememberOriginal(`WebAssembly.${methodName}`, original);
+      globalWindow.WebAssembly[methodName] = function blockerWebAssembly(...args) {
+        const decision = evaluateScriptRules(createScriptContext(SCRIPT_KINDS.WEBASSEMBLY, { args, source: args[0] }));
+        if (decision.action === SCRIPT_ACTIONS.BLOCK) return Promise.reject(new WebAssembly.CompileError(`Blocked by ${SCRIPT.name}`));
+        return Reflect.apply(original, this, args);
+      };
+    }
+  }
+
+  function installScriptInterceptors() {
+    if (INTERNAL.scriptInterceptorsInstalled || !CONFIG.interceptScripts) return;
+    INTERNAL.scriptInterceptorsInstalled = true;
+    installDomScriptInterceptors();
+    installXHRInterceptor();
+    installWorkerInterceptors();
+    installDynamicCodeInterceptors();
+    installDocumentWriteInterceptor();
+    installWebAssemblyInterceptors();
+    debug.success('script', 'Script and executable-resource interceptors installed.');
+  }
+
   function normalizeRule(rule) {
     if (!rule || typeof rule !== 'object') {
       throw new TypeError('Blocker rules must be objects.');
@@ -883,8 +1364,10 @@
     normalized.id ||= `${normalized.type}-${Date.now().toString(36)}-${INTERNAL.ruleSequence.toString(36)}`;
     normalized.name ||= normalized.id;
 
-    if (normalized.type === RULE_TYPES.FETCH && !normalized.action) {
-      normalized.action = FETCH_ACTIONS.BLOCK;
+    if (normalized.type === RULE_TYPES.FETCH && !normalized.action) normalized.action = FETCH_ACTIONS.BLOCK;
+    if (normalized.type === RULE_TYPES.SCRIPT && !normalized.action) normalized.action = SCRIPT_ACTIONS.BLOCK;
+    if (![RULE_TYPES.DOM, RULE_TYPES.FETCH, RULE_TYPES.SCRIPT].includes(normalized.type)) {
+      throw new TypeError(`Unsupported rule type: ${normalized.type}`);
     }
 
     return normalized;
@@ -903,7 +1386,12 @@
     }
 
     INTERNAL.rulesById.set(normalized.id, normalized);
-    (normalized.type === RULE_TYPES.FETCH ? INTERNAL.fetchRules : INTERNAL.domRules).push(normalized);
+    const collection = normalized.type === RULE_TYPES.FETCH
+      ? INTERNAL.fetchRules
+      : normalized.type === RULE_TYPES.SCRIPT
+        ? INTERNAL.scriptRules
+        : INTERNAL.domRules;
+    collection.push(normalized);
 
     debug.success('plugin', `Added ${normalized.type} rule "${normalized.name}" (${normalized.id}).`);
     dispatchEvent('rule-added', { rule: normalized });
@@ -945,7 +1433,11 @@
     }
 
     INTERNAL.rulesById.delete(id);
-    const collection = rule.type === RULE_TYPES.FETCH ? INTERNAL.fetchRules : INTERNAL.domRules;
+    const collection = rule.type === RULE_TYPES.FETCH
+      ? INTERNAL.fetchRules
+      : rule.type === RULE_TYPES.SCRIPT
+        ? INTERNAL.scriptRules
+        : INTERNAL.domRules;
     const index = collection.indexOf(rule);
 
     if (index >= 0) {
@@ -1451,6 +1943,7 @@
 
     if (CONFIG.interceptFetch && !INTERNAL.fetchInstalled) installFetchInterceptor();
     if (!CONFIG.interceptFetch && INTERNAL.fetchInstalled) uninstallFetchInterceptor();
+    if (CONFIG.interceptScripts && !INTERNAL.scriptInterceptorsInstalled) installScriptInterceptors();
 
     debug.info('plugin', 'Configuration updated.', { ...CONFIG });
     return { ...CONFIG };
@@ -1480,6 +1973,8 @@
     version: SCRIPT.version,
     ACTIONS,
     FETCH_ACTIONS,
+    SCRIPT_ACTIONS,
+    SCRIPT_KINDS,
     RULE_TYPES,
     SELECT_STEPS,
     SelectQuery,
@@ -1499,6 +1994,13 @@
     removeClass,
     unwrap,
     customAction,
+    blockScript,
+    allowScript,
+    redirectScript,
+    modifyScript,
+    customScriptRule,
+    addScriptRule,
+    addScriptRules,
     addRule,
     addRules,
     getRule,
@@ -1513,6 +2015,7 @@
     getPageContext,
     installFetchInterceptor,
     uninstallFetchInterceptor,
+    installScriptInterceptors,
     debug,
     get ready() {
       return INTERNAL.initialized;
@@ -1525,6 +2028,9 @@
     },
     get fetchRules() {
       return [...INTERNAL.fetchRules];
+    },
+    get scriptRules() {
+      return [...INTERNAL.scriptRules];
     },
     get originalFetch() {
       return INTERNAL.originalFetch;
@@ -1549,6 +2055,7 @@
     INTERNAL.initialized = true;
     installStyles();
     installFetchInterceptor();
+    installScriptInterceptors();
     installShadowHook();
     installNavigationHooks();
 
@@ -1693,7 +2200,112 @@
    *   },
    * });
    *
-   * 13. Register rules before Blocker loads
+   * 13. Block external scripts and script preloads
+   *
+   * Blocker.addScriptRule({
+   *   id: 'block-google-tracking-scripts',
+   *   name: 'Block Google tracking scripts',
+   *   match: {
+   *     kind: [
+   *       Blocker.SCRIPT_KINDS.ELEMENT,
+   *       Blocker.SCRIPT_KINDS.PRELOAD,
+   *       Blocker.SCRIPT_KINDS.MODULE_PRELOAD,
+   *     ],
+   *     src: /googletagmanager|google-analytics|doubleclick/i,
+   *   },
+   *   action: Blocker.SCRIPT_ACTIONS.BLOCK,
+   * });
+   *
+   * 14. Block inline scripts containing a known bootstrap marker
+   *
+   * Blocker.addScriptRule({
+   *   id: 'block-inline-tracker-bootstrap',
+   *   match: {
+   *     kind: Blocker.SCRIPT_KINDS.INLINE,
+   *     inline: /window\.__trackerBootstrap|gtag\(/i,
+   *   },
+   *   action: Blocker.SCRIPT_ACTIONS.BLOCK,
+   * });
+   *
+   * 15. Block XHR requests used to download executable code
+   *
+   * Blocker.addScriptRule({
+   *   id: 'block-remote-eval-payload',
+   *   match: {
+   *     kind: Blocker.SCRIPT_KINDS.XHR,
+   *     pathname: /\/(?:bundle|payload|loader)\.js$/i,
+   *   },
+   *   action: Blocker.SCRIPT_ACTIONS.BLOCK,
+   * });
+   *
+   * 16. Block Worker, SharedWorker and Service Worker scripts
+   *
+   * Blocker.addScriptRule({
+   *   id: 'block-background-tracker-workers',
+   *   match: {
+   *     kind: [
+   *       Blocker.SCRIPT_KINDS.WORKER,
+   *       Blocker.SCRIPT_KINDS.SHARED_WORKER,
+   *       Blocker.SCRIPT_KINDS.SERVICE_WORKER,
+   *     ],
+   *     src: /tracker|analytics|fingerprint/i,
+   *   },
+   *   action: Blocker.SCRIPT_ACTIONS.BLOCK,
+   * });
+   *
+   * 17. Block dynamic code execution
+   *
+   * Blocker.addScriptRules([
+   *   {
+   *     id: 'block-suspicious-eval',
+   *     match: {
+   *       kind: Blocker.SCRIPT_KINDS.EVAL,
+   *       code: /document\.cookie|localStorage|fingerprint/i,
+   *     },
+   *   },
+   *   {
+   *     id: 'block-suspicious-function-constructor',
+   *     match: {
+   *       kind: Blocker.SCRIPT_KINDS.FUNCTION,
+   *       code: /fetch\(.+eval|WebSocket/i,
+   *     },
+   *   },
+   * ]);
+   *
+   * 18. Redirect a script to a local compatibility shim
+   *
+   * Blocker.addScriptRule({
+   *   id: 'redirect-broken-sdk',
+   *   match: { src: 'https://cdn.example.com/sdk.js' },
+   *   action: Blocker.SCRIPT_ACTIONS.REDIRECT,
+   *   redirect: 'https://rod.migos.club/shims/sdk.js',
+   * });
+   *
+   * 19. Helper form
+   *
+   * Blocker.addRule(
+   *   Blocker.blockScript(
+   *     {
+   *       kind: Blocker.SCRIPT_KINDS.DOCUMENT_WRITE,
+   *       code: /<script[^>]+advertising/i,
+   *     },
+   *     {
+   *       id: 'block-document-write-ad-script',
+   *       name: 'Block advertising scripts written by document.write',
+   *     },
+   *   ),
+   * );
+   *
+   * Important browser limitation:
+   * JavaScript cannot universally replace the native dynamic import() operator.
+   * Parser-inserted scripts may also execute before MutationObserver sees them.
+   * Blocker therefore intercepts dynamic DOM insertion, src assignment,
+   * setAttribute(), beforeload/beforescriptexecute when supported, workers,
+   * XHR, eval, Function, string timers, document.write, script preloads and
+   * WebAssembly. For guaranteed network-level blocking, use a browser content
+   * blocker, extension request filter or Content-Security-Policy as well.
+   *
+   * 20. Register rules before Blocker loads
    *
    * window.BlockerQueue ||= [];
    * window.BlockerQueue.push((Blocker) => {
