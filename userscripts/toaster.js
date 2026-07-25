@@ -1,7 +1,7 @@
 (function Toaster(globalWindow) {
   "use strict";
 
-  const VERSION = "3.6.0";
+  const VERSION = "4.0.0";
   const TOAST_GLOBAL = "RodToaster";
   const INSPECTOR_GLOBAL = "RodObjectInspector";
   const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -134,6 +134,50 @@
       <path d="m22 2-7 20-4-9-9-4Z"></path>
       <path d="M22 2 11 13"></path>
     `,
+    copy: `
+      <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+    `,
+    pause: `
+      <path d="M9 5v14"></path>
+      <path d="M15 5v14"></path>
+    `,
+    play: `
+      <path d="m8 5 11 7-11 7Z"></path>
+    `,
+    square: `
+      <rect x="5" y="5" width="14" height="14" rx="2"></rect>
+    `,
+    list: `
+      <path d="M8 6h13"></path>
+      <path d="M8 12h13"></path>
+      <path d="M8 18h13"></path>
+      <path d="M3 6h.01"></path>
+      <path d="M3 12h.01"></path>
+      <path d="M3 18h.01"></path>
+    `,
+    folder: `
+      <path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3Z"></path>
+    `,
+    eye: `
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path>
+      <circle cx="12" cy="12" r="3"></circle>
+    `,
+    trash: `
+      <path d="M3 6h18"></path>
+      <path d="M8 6V4h8v2"></path>
+      <path d="m19 6-1 15H6L5 6"></path>
+      <path d="M10 11v5"></path>
+      <path d="M14 11v5"></path>
+    `,
+    undo: `
+      <path d="M9 7 4 12l5 5"></path>
+      <path d="M20 17a7 7 0 0 0-7-7H4"></path>
+    `,
+    settings: `
+      <circle cx="12" cy="12" r="3"></circle>
+      <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1V21H9.6v-.09a1.7 1.7 0 0 0-1.1-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1-.4H3V9.6h.09a1.7 1.7 0 0 0 1.55-1.1 1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1V3h4v.09a1.7 1.7 0 0 0 1.1 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.15.36.36.7.6 1 .27.3.63.5 1 .6h.09v4H21a1.7 1.7 0 0 0-1.6.4Z"></path>
+    `,
   };
 
   function createSvgIcon(documentRef, name, size = 18) {
@@ -189,6 +233,15 @@
     // Active loading tasks become a compact download-manager spinner when
     // SPA navigation occurs. The manager can also be minimized manually.
     minimizeOnSpaNavigation: true,
+
+    // Task persistence restores visual state after a real page reload. Running
+    // promises cannot be resurrected, so restored active tasks become paused.
+    persistTasks: false,
+    restoreTasksOnLoad: true,
+    taskStorage: "sessionStorage",
+    taskStorageKey: "__rod_super_toaster_tasks_v1__",
+    maxPersistedTasks: 50,
+    taskTerminalRetention: 86_400_000,
 
     // Success toasts collapse into a check circle before fading upward.
     successExitAnimation: true,
@@ -271,6 +324,10 @@
     "progressLabel",
     "dismissible",
     "actions",
+    "scope",
+    "metadata",
+    "details",
+    "onDismiss",
   ]);
 
   function hasOwn(object, key) {
@@ -335,6 +392,9 @@
     "swipeToDismiss",
     "swipeThreshold",
     "swipeVelocity",
+    "scope",
+    "metadata",
+    "onDismiss",
   ]);
 
   function isPlainObject(value) {
@@ -485,6 +545,11 @@
     list: null,
     toolbar: null,
     stackCountNode: null,
+    managerCountNode: null,
+    listeners: new Map(),
+    tasks: new Map(),
+    groups: new Map(),
+    restoredTasks: false,
     outsidePointerDownHandler: null,
     inspectorPromise: null,
     inspectorApi: null,
@@ -644,6 +709,7 @@
 
       .rod-toast-stack__manager {
         appearance: none;
+        position: relative;
         display: none;
         place-items: center;
         align-self: center;
@@ -686,6 +752,27 @@
         width: 19px;
         height: 19px;
         animation: rod-toast-spinner 850ms linear infinite;
+      }
+
+      .rod-toast-stack__manager-count {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        display: none;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border: 1px solid rgba(9, 9, 11, 0.98);
+        border-radius: 999px;
+        background: rgba(250, 250, 250, 0.98);
+        color: rgba(9, 9, 11, 0.98);
+        font: 700 9px/16px ui-sans-serif, system-ui, sans-serif;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .rod-toast-stack__manager-count[data-visible="true"] {
+        display: block;
       }
 
       .rod-toast-stack[data-manager-minimized="true"]
@@ -1342,6 +1429,298 @@
         }
       }
 
+
+      .rod-toast[data-rich="true"],
+      .rod-toast[data-interactive="true"] {
+        min-width: min(420px, calc(100vw - 32px));
+        max-width: min(560px, calc(100vw - 32px));
+        touch-action: pan-y;
+      }
+
+      .rod-toast[data-rich="true"] .rod-toast__content,
+      .rod-toast[data-interactive="true"] .rod-toast__content {
+        display: block;
+        width: 100%;
+      }
+
+      .rod-toast[data-rich="true"] .rod-toast__minimize,
+      .rod-toast[data-interactive="true"] .rod-toast__minimize,
+      .rod-toast[data-rich="true"] .rod-toast__expand,
+      .rod-toast[data-interactive="true"] .rod-toast__expand {
+        display: none !important;
+      }
+
+      .rod-toast__rich,
+      .rod-toast__interactive {
+        display: grid;
+        gap: 12px;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .rod-toast__rich-copy,
+      .rod-toast__interactive-copy {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .rod-toast__rich-title,
+      .rod-toast__interactive-title {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        color: rgba(250, 250, 250, 0.96);
+        font: 620 13px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        letter-spacing: -0.008em;
+      }
+
+      .rod-toast__rich-description,
+      .rod-toast__interactive-description {
+        min-width: 0;
+        overflow-wrap: anywhere;
+        color: rgba(161, 161, 170, 0.92);
+        font: 400 12px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
+      }
+
+      .rod-toast__details {
+        overflow: hidden;
+        border: 1px solid var(--rod-border);
+        border-radius: 9px;
+        background: rgba(255, 255, 255, 0.035);
+      }
+
+      .rod-toast__details summary {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-height: 34px;
+        padding: 0 10px;
+        color: rgba(212, 212, 216, 0.84);
+        font: 600 11px/1 ui-sans-serif, system-ui, sans-serif;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .rod-toast__details summary::marker {
+        color: rgba(161, 161, 170, 0.7);
+      }
+
+      .rod-toast__details-body {
+        max-height: 280px;
+        overflow: auto;
+        padding: 10px;
+        border-top: 1px solid var(--rod-border);
+        color: rgba(228, 228, 231, 0.86);
+        font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        scrollbar-width: thin;
+      }
+
+      .rod-toast__action-bar,
+      .rod-toast__task-actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 7px;
+        width: 100%;
+      }
+
+      .rod-toast__task-actions {
+        margin-top: 7px;
+      }
+
+      .rod-toast__action-button,
+      .rod-toast__task-button {
+        appearance: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 32px;
+        padding: 0 10px;
+        border: 1px solid var(--rod-border);
+        border-radius: 8px;
+        outline: none;
+        background: rgba(255, 255, 255, 0.045);
+        color: rgba(244, 244, 245, 0.86);
+        font: 600 10px/1 ui-sans-serif, system-ui, sans-serif;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+
+      .rod-toast__action-button:hover:not(:disabled),
+      .rod-toast__task-button:hover:not(:disabled),
+      .rod-toast__action-button:focus-visible:not(:disabled),
+      .rod-toast__task-button:focus-visible:not(:disabled) {
+        border-color: var(--rod-border-strong);
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .rod-toast__action-button:focus-visible,
+      .rod-toast__task-button:focus-visible {
+        outline: 1px solid rgba(255, 255, 255, 0.3);
+        outline-offset: 2px;
+      }
+
+      .rod-toast__action-button:disabled,
+      .rod-toast__task-button:disabled {
+        opacity: 0.5;
+        cursor: wait;
+      }
+
+      .rod-toast__action-button svg,
+      .rod-toast__task-button svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      .rod-toast__action-button[data-busy="true"] svg,
+      .rod-toast__task-button[data-busy="true"] svg {
+        animation: rod-toast-spinner 850ms linear infinite;
+      }
+
+      .rod-toast__action-button[data-variant="primary"] {
+        border-color: rgba(250, 250, 250, 0.96);
+        background: rgba(250, 250, 250, 0.96);
+        color: rgba(9, 9, 11, 0.98);
+      }
+
+      .rod-toast__action-button[data-variant="danger"] {
+        border-color: rgba(248, 113, 113, 0.3);
+        background: rgba(127, 29, 29, 0.22);
+        color: rgba(252, 165, 165, 0.98);
+      }
+
+      .rod-toast__action-button[data-variant="ghost"] {
+        border-color: transparent;
+        background: transparent;
+        color: rgba(212, 212, 216, 0.78);
+      }
+
+      .rod-toast__field {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+      }
+
+      .rod-toast__field-label {
+        color: rgba(212, 212, 216, 0.84);
+        font: 600 10px/1.2 ui-sans-serif, system-ui, sans-serif;
+      }
+
+      .rod-toast__input,
+      .rod-toast__select,
+      .rod-toast__textarea {
+        appearance: none;
+        width: 100%;
+        min-width: 0;
+        min-height: 36px;
+        padding: 8px 10px;
+        border: 1px solid var(--rod-border);
+        border-radius: 8px;
+        outline: none;
+        background: rgba(255, 255, 255, 0.045);
+        color: rgba(250, 250, 250, 0.94);
+        font: 12px/1.45 ui-sans-serif, system-ui, -apple-system, sans-serif;
+      }
+
+      .rod-toast__textarea {
+        min-height: 92px;
+        resize: vertical;
+      }
+
+      .rod-toast__input:focus,
+      .rod-toast__select:focus,
+      .rod-toast__textarea:focus {
+        border-color: rgba(147, 197, 253, 0.62);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+      }
+
+      .rod-toast__checkboxes {
+        display: grid;
+        gap: 7px;
+      }
+
+      .rod-toast__checkbox {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        color: rgba(212, 212, 216, 0.88);
+        font: 11px/1.45 ui-sans-serif, system-ui, sans-serif;
+        cursor: pointer;
+      }
+
+      .rod-toast__checkbox input {
+        width: 15px;
+        height: 15px;
+        margin: 1px 0 0;
+        accent-color: rgba(250, 250, 250, 0.96);
+      }
+
+      .rod-toast__validation {
+        display: none;
+        padding: 7px 9px;
+        border: 1px solid rgba(248, 113, 113, 0.24);
+        border-radius: 8px;
+        background: rgba(127, 29, 29, 0.16);
+        color: rgba(252, 165, 165, 0.96);
+        font: 500 10px/1.45 ui-sans-serif, system-ui, sans-serif;
+      }
+
+      .rod-toast__validation[data-visible="true"] {
+        display: block;
+      }
+
+      .rod-toast__countdown {
+        display: none;
+        gap: 5px;
+        color: rgba(161, 161, 170, 0.82);
+        font: 500 10px/1.2 ui-sans-serif, system-ui, sans-serif;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .rod-toast__countdown[data-visible="true"] {
+        display: grid;
+      }
+
+      .rod-toast__countdown-track {
+        position: relative;
+        height: 3px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .rod-toast__countdown-bar {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: var(--rod-countdown-progress, 100%);
+        border-radius: inherit;
+        background: rgba(244, 244, 245, 0.62);
+        transition: width 250ms linear;
+      }
+
+      .rod-toast__task-status {
+        color: rgba(161, 161, 170, 0.76);
+        font: 600 9px/1 ui-sans-serif, system-ui, sans-serif;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      @media (max-width: 520px) {
+        .rod-toast__action-bar,
+        .rod-toast__task-actions {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+
+        .rod-toast__action-button,
+        .rod-toast__task-button {
+          width: 100%;
+        }
+      }
+
       .rod-toast__loading-copy {
         display: grid;
         gap: 3px;
@@ -1798,6 +2177,43 @@
     return state.inspectorPromise;
   }
 
+  function emitEvent(eventName, payload = {}) {
+    const event = {
+      event: eventName,
+      timestamp: Date.now(),
+      ...payload,
+    };
+    const listeners = [
+      ...(state.listeners.get(eventName) || []),
+      ...(state.listeners.get("*") || []),
+    ];
+
+    for (const listener of listeners) {
+      safeCall(() => listener(event), undefined);
+    }
+
+    return event;
+  }
+
+  function addEventListenerInternal(eventName, listener) {
+    if (typeof listener !== "function") {
+      return () => {};
+    }
+
+    const name = String(eventName || "*");
+    const bucket = state.listeners.get(name) || new Set();
+    bucket.add(listener);
+    state.listeners.set(name, bucket);
+
+    return () => {
+      bucket.delete(listener);
+
+      if (!bucket.size) {
+        state.listeners.delete(name);
+      }
+    };
+  }
+
   function getActiveToastRecords() {
     return state.toasts.filter((record) => !record.removed);
   }
@@ -1888,7 +2304,30 @@
     }
 
     if (state.stackCountNode) {
-      state.stackCountNode.textContent = `${count} ${count === 1 ? "toast" : "toasts"}`;
+      const taskCount = newestFirst.filter((record) => {
+        return Boolean(record.options.metadata?.taskId);
+      }).length;
+      state.stackCountNode.textContent = taskCount
+        ? `${taskCount} ${taskCount === 1 ? "task" : "tasks"} · ${count} ${count === 1 ? "toast" : "toasts"}`
+        : `${count} ${count === 1 ? "toast" : "toasts"}`;
+    }
+
+    if (state.managerCountNode) {
+      const taskCount = newestFirst.filter((record) => {
+        return Boolean(record.options.metadata?.taskId);
+      }).length;
+      const visibleCount = taskCount || count;
+      state.managerCountNode.textContent = String(visibleCount);
+      state.managerCountNode.dataset.visible = String(visibleCount > 1);
+    }
+
+    if (state.managerNode) {
+      const taskCount = newestFirst.filter((record) => {
+        return Boolean(record.options.metadata?.taskId);
+      }).length;
+      state.managerNode.title = taskCount
+        ? `Restore ${taskCount} active ${taskCount === 1 ? "task" : "tasks"}`
+        : "Restore active toasts";
     }
   }
 
@@ -2203,6 +2642,7 @@
     state.hostMode = null;
     state.container = null;
     state.managerNode = null;
+    state.managerCountNode = null;
     state.list = null;
     state.toolbar = null;
     state.stackCountNode = null;
@@ -2313,6 +2753,7 @@
 
     const container = hostDocument.createElement("div");
     const managerButton = hostDocument.createElement("button");
+    const managerCount = hostDocument.createElement("span");
     const toolbar = hostDocument.createElement("div");
     const toolbarLabel = hostDocument.createElement("div");
     const toolbarActions = hostDocument.createElement("div");
@@ -2334,6 +2775,10 @@
     managerButton.appendChild(
       createSvgIcon(hostDocument, "loader-circle", 19),
     );
+    managerCount.className = "rod-toast-stack__manager-count";
+    managerCount.textContent = "0";
+    managerCount.dataset.visible = "false";
+    managerButton.appendChild(managerCount);
     managerButton.setAttribute(
       "aria-label",
       "Restore active toast tasks",
@@ -2415,7 +2860,7 @@
 
       for (let index = 0; index < records.length; index += 1) {
         hostWindow.setTimeout(() => {
-          records[index]?.dismiss(false);
+          records[index]?.dismiss(false, null, "dismissAll");
         }, index * 28);
       }
     });
@@ -2441,6 +2886,7 @@
     state.hostMode = hostMode;
     state.container = container;
     state.managerNode = managerButton;
+    state.managerCountNode = managerCount;
     state.list = list;
     state.toolbar = toolbar;
     state.stackCountNode = toolbarLabel;
@@ -2730,6 +3176,14 @@
         options.progressLabel === null
           ? null
           : String(options.progressLabel),
+      scope:
+        options.scope === undefined || options.scope === null
+          ? null
+          : String(options.scope),
+      metadata:
+        options.metadata && typeof options.metadata === "object"
+          ? options.metadata
+          : null,
       onDismiss:
         typeof options.onDismiss === "function"
           ? options.onDismiss
@@ -2780,7 +3234,7 @@
       return `${typeof value}:${safePrimitiveText(value, false)}`;
     });
 
-    return `${options.type}|${signatures.join("|")}`;
+    return `${options.scope || "global"}|${options.type}|${signatures.join("|")}`;
   }
 
   function removeRecord(record) {
@@ -2813,7 +3267,7 @@
         break;
       }
 
-      oldest.dismiss(true);
+      oldest.dismiss(true, null, "limit");
     }
   }
 
@@ -2950,12 +3404,16 @@
       }
 
       if (shouldDismiss) {
-        record.dismiss(false, {
-          dx,
-          dy,
-          velocityX,
-          velocityY,
-        });
+        record.dismiss(
+          false,
+          {
+            dx,
+            dy,
+            velocityX,
+            velocityY,
+          },
+          "swipe",
+        );
         return;
       }
 
@@ -3178,6 +3636,7 @@
     let paused = false;
     let duplicateCount = 1;
     let completing = false;
+    let dismissReason = "programmatic";
 
     const renderLoading = (nextOptions = options) => {
       const hasTitle = Boolean(nextOptions.title);
@@ -3286,16 +3745,24 @@
       }
     };
 
-    const cleanup = () => {
+    const cleanup = (reason = dismissReason) => {
       if (removed) {
         return;
       }
 
       removed = true;
+      dismissReason = reason || dismissReason || "programmatic";
       clearTimer();
-      safeCall(() => options.onDismiss?.(), undefined);
+      const dismissEvent = {
+        reason: dismissReason,
+        record,
+        controller,
+        scope: options.scope,
+      };
+      safeCall(() => options.onDismiss?.(dismissEvent), undefined);
       removeRecord(record);
       node.remove();
+      emitEvent("dismiss", dismissEvent);
       syncStackLayout();
 
       if (!host.list.children.length) {
@@ -3357,9 +3824,15 @@
       });
     };
 
-    const dismiss = (immediate = false, swipe = null) => {
+    const dismiss = (
+      immediate = false,
+      swipe = null,
+      reason = "programmatic",
+    ) => {
+      dismissReason = reason || "programmatic";
+
       if (removed || !node.isConnected) {
-        cleanup();
+        cleanup(dismissReason);
         return;
       }
 
@@ -3420,7 +3893,10 @@
       }
 
       timerStartedAt = Date.now();
-      removalTimer = host.window.setTimeout(dismiss, remainingDuration);
+      removalTimer = host.window.setTimeout(
+        () => dismiss(false, null, "timeout"),
+        remainingDuration,
+      );
     };
 
     const pauseTimer = () => {
@@ -3457,6 +3933,7 @@
     };
 
     const update = (nextArgs, nextRawOptions = {}) => {
+      const previous = { ...options };
       const nextOptions = normalizeToastOptions({
         ...options,
         ...nextRawOptions,
@@ -3471,6 +3948,14 @@
       node.setAttribute("role", nextOptions.role);
       renderArgs(nextArgs, nextOptions);
       resetTimer(nextOptions.duration);
+      emitEvent("update", {
+        record,
+        controller,
+        previous,
+        options: { ...options },
+        args: nextArgs,
+        scope: options.scope,
+      });
       return controller;
     };
 
@@ -3593,8 +4078,13 @@
       warning(...inputArgs) {
         return settleLoading("warning", inputArgs);
       },
-      dismiss() {
-        dismiss();
+      dismiss(reason = "programmatic", immediate = false) {
+        if (typeof reason === "boolean") {
+          immediate = reason;
+          reason = "programmatic";
+        }
+
+        dismiss(Boolean(immediate), null, String(reason || "programmatic"));
       },
     };
 
@@ -3608,7 +4098,10 @@
 
     if (options.closeButton) {
       actions.appendChild(
-        createCloseButton(host.document, dismiss),
+        createCloseButton(
+          host.document,
+          () => dismiss(false, null, "close"),
+        ),
       );
     }
 
@@ -3643,12 +4136,19 @@
 
       event.preventDefault();
       event.stopPropagation();
-      dismiss();
+      dismiss(false, null, "escape");
     });
 
     renderArgs(args, options);
     host.list.prepend(node);
     state.toasts.push(record);
+    emitEvent("create", {
+      record,
+      controller,
+      options: { ...options },
+      args,
+      scope: options.scope,
+    });
     installSwipeToDismiss(record, host);
     syncStackLayout();
 
@@ -3773,25 +4273,11 @@
   }
 
 
-  function normalizeConfirmActions(actions) {
+
+  function normalizeActionDescriptors(actions, fallbackActions = []) {
     const source = Array.isArray(actions) && actions.length
       ? actions
-      : [
-          {
-            id: "cancel",
-            label: "Cancel",
-            icon: "circle-x",
-            variant: "secondary",
-            value: false,
-          },
-          {
-            id: "confirm",
-            label: "Confirm",
-            icon: "check",
-            variant: "primary",
-            value: true,
-          },
-        ];
+      : fallbackActions;
 
     return source
       .filter((action) => action && typeof action === "object")
@@ -3804,76 +4290,274 @@
           action.label === undefined || action.label === null
             ? String(action.id || `Action ${index + 1}`)
             : String(action.label),
+        labelTemplate:
+          action.label === undefined || action.label === null
+            ? String(action.id || `Action ${index + 1}`)
+            : String(action.label),
+        loadingLabel:
+          action.loadingLabel === undefined || action.loadingLabel === null
+            ? null
+            : String(action.loadingLabel),
+        successLabel:
+          action.successLabel === undefined || action.successLabel === null
+            ? null
+            : String(action.successLabel),
         icon:
           action.icon === false || action.icon === null
             ? false
             : action.icon || null,
-        variant: [
-          "primary",
-          "secondary",
-          "danger",
-          "ghost",
-        ].includes(action.variant)
+        variant: ["primary", "secondary", "danger", "ghost"].includes(
+          action.variant,
+        )
           ? action.variant
           : "secondary",
         disabled: Boolean(action.disabled),
-        close: action.close !== false,
+        disabledUntilCountdown: Boolean(action.disabledUntilCountdown),
+        close: action.close !== false && action.keepOpen !== true,
+        keepOpen: action.keepOpen === true || action.close === false,
         handle:
           typeof action.handle === "function"
             ? action.handle
             : null,
         hasValue: hasOwn(action, "value"),
         value: action.value,
+        shortcut:
+          action.shortcut === undefined || action.shortcut === null
+            ? null
+            : String(action.shortcut),
         raw: action,
       }));
   }
 
-  function showConfirmToast(descriptor = {}) {
+  function normalizeShortcutName(value) {
+    return String(value || "")
+      .split("+")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const lower = part.toLowerCase();
+        if (lower === "cmd" || lower === "command") return "Meta";
+        if (lower === "ctrl" || lower === "control") return "Control";
+        if (lower === "alt" || lower === "option") return "Alt";
+        if (lower === "shift") return "Shift";
+        if (lower === "esc") return "Escape";
+        if (lower === "return") return "Enter";
+        return part.length === 1 ? part.toUpperCase() : part;
+      })
+      .sort((left, right) => {
+        const order = ["Control", "Alt", "Shift", "Meta"];
+        const leftIndex = order.indexOf(left);
+        const rightIndex = order.indexOf(right);
+        if (leftIndex >= 0 || rightIndex >= 0) {
+          return (leftIndex < 0 ? 99 : leftIndex) - (rightIndex < 0 ? 99 : rightIndex);
+        }
+        return 0;
+      })
+      .join("+");
+  }
+
+  function shortcutFromEvent(event) {
+    const parts = [];
+    if (event.ctrlKey) parts.push("Control");
+    if (event.altKey) parts.push("Alt");
+    if (event.shiftKey) parts.push("Shift");
+    if (event.metaKey) parts.push("Meta");
+    parts.push(event.key.length === 1 ? event.key.toUpperCase() : event.key);
+    return normalizeShortcutName(parts.join("+"));
+  }
+
+  function createDetailsNode(documentRef, details, label = "Details") {
+    if (details === undefined || details === null || details === false) {
+      return null;
+    }
+
+    const root = documentRef.createElement("details");
+    const summary = documentRef.createElement("summary");
+    const body = documentRef.createElement("div");
+
+    root.className = "rod-toast__details";
+    summary.textContent = String(label || "Details");
+    body.className = "rod-toast__details-body";
+
+    if (typeof details === "string") {
+      body.textContent = details;
+    } else {
+      body.appendChild(
+        renderToastValue(details, documentRef, state.config),
+      );
+    }
+
+    root.appendChild(summary);
+    root.appendChild(body);
+    return root;
+  }
+
+  async function copyText(value) {
+    const text = String(value ?? "");
+    const hostWindow = state.hostWindow || initialHostWindow;
+    const hostDocument = state.hostDocument || hostWindow.document;
+
+    if (hostWindow.navigator?.clipboard?.writeText) {
+      await hostWindow.navigator.clipboard.writeText(text);
+      return true;
+    }
+
+    const textarea = hostDocument.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.left = "-99999px";
+    hostDocument.body?.appendChild(textarea);
+    textarea.select();
+    const copied = safeCall(() => hostDocument.execCommand("copy"), false);
+    textarea.remove();
+    return copied;
+  }
+
+  function buildCheckboxes(documentRef, checkbox) {
+    const source = Array.isArray(checkbox)
+      ? checkbox
+      : checkbox
+        ? [checkbox]
+        : [];
+
+    if (!source.length) {
+      return {
+        node: null,
+        getValue: () => ({}),
+      };
+    }
+
+    const root = documentRef.createElement("div");
+    const inputs = new Map();
+    root.className = "rod-toast__checkboxes";
+
+    source.forEach((item, index) => {
+      const descriptor = typeof item === "string"
+        ? { id: `checkbox-${index + 1}`, label: item }
+        : item || {};
+      const id = String(descriptor.id || `checkbox-${index + 1}`);
+      const label = documentRef.createElement("label");
+      const input = documentRef.createElement("input");
+      const copy = documentRef.createElement("span");
+
+      label.className = "rod-toast__checkbox";
+      input.type = "checkbox";
+      input.checked = Boolean(descriptor.checked);
+      input.disabled = Boolean(descriptor.disabled);
+      input.dataset.checkboxId = id;
+      copy.textContent = String(descriptor.label || id);
+      label.appendChild(input);
+      label.appendChild(copy);
+      root.appendChild(label);
+      inputs.set(id, input);
+    });
+
+    return {
+      node: root,
+      getValue() {
+        return Object.fromEntries(
+          [...inputs.entries()].map(([id, input]) => [id, input.checked]),
+        );
+      },
+    };
+  }
+
+  function formatDialogResult(options, value, reason, actionId, values) {
+    if (!options.returnMeta) {
+      return value;
+    }
+
+    const result = {
+      value,
+      reason,
+      actionId: actionId || null,
+    };
+
+    if (values && typeof values === "object") {
+      Object.assign(result, values);
+    }
+
+    return result;
+  }
+
+  function showActionDialog(descriptor = {}, settings = {}) {
     const options = isPlainObject(descriptor)
       ? descriptor
       : { title: String(descriptor ?? "") };
-    const confirmActions = normalizeConfirmActions(options.actions);
+    const fallbackActions = settings.fallbackActions || [
+      {
+        id: "cancel",
+        label: "Cancel",
+        icon: "circle-x",
+        variant: "secondary",
+        value: settings.dismissValue ?? false,
+      },
+      {
+        id: "confirm",
+        label: "Confirm",
+        icon: "check",
+        variant: "primary",
+        value: true,
+      },
+    ];
+    const actions = normalizeActionDescriptors(options.actions, fallbackActions);
     const dismissValue = hasOwn(options, "dismissValue")
       ? options.dismissValue
-      : false;
+      : settings.dismissValue ?? false;
 
     return new Promise((resolve, reject) => {
       let settled = false;
       let controller = null;
+      let created = null;
+      let countdownTimer = null;
+      let remainingSeconds = 0;
+      let initialSeconds = 0;
+      const cleanupCallbacks = [];
 
-      const settleDismissed = () => {
+      const finish = (value, reason = "action", actionId = null) => {
         if (settled) return;
         settled = true;
-        resolve(dismissValue);
+        if (countdownTimer !== null) {
+          (state.hostWindow || initialHostWindow).clearInterval(countdownTimer);
+        }
+        cleanupCallbacks.forEach((callback) => safeCall(callback, undefined));
+        const values = settings.getValues?.() || {};
+        resolve(formatDialogResult(options, value, reason, actionId, values));
       };
 
-      const created = createToastRecord([], {
+      const settleDismissed = ({ reason = "dismiss" } = {}) => {
+        finish(dismissValue, reason, null);
+      };
+
+      created = createToastRecord([], {
         type: hasOwn(TOAST_COLORS, options.type)
           ? options.type
-          : "default",
+          : settings.type || "default",
         title: options.title,
         description: options.description,
-        icon: options.icon === undefined ? "circle" : options.icon,
+        icon:
+          options.icon === undefined
+            ? settings.icon || "circle"
+            : options.icon,
         duration: Number.isFinite(options.duration)
           ? Number(options.duration)
-          : 0,
+          : settings.duration ?? 0,
         id: options.id,
+        scope: options.scope,
+        metadata: options.metadata,
         dedupe: false,
-        pauseOnInteraction:
-          options.pauseOnInteraction ?? true,
+        pauseOnInteraction: options.pauseOnInteraction ?? true,
         dismissible: options.dismissible !== false,
         closeButton:
-          options.dismissible !== false &&
-          (options.closeButton ?? true),
+          options.dismissible !== false && (options.closeButton ?? true),
         swipeToDismiss:
-          options.dismissible !== false &&
-          (options.swipeToDismiss ?? true),
+          options.dismissible !== false && (options.swipeToDismiss ?? true),
         role: options.role || "alertdialog",
         onDismiss: settleDismissed,
       });
 
       if (!created) {
-        resolve(dismissValue);
+        finish(dismissValue, "unavailable", null);
         return;
       }
 
@@ -3883,170 +4567,1559 @@
       const content = node.querySelector(".rod-toast__content");
       const iconNode = node.querySelector(".rod-toast__icon");
 
-      node.dataset.confirm = "true";
+      node.dataset.confirm = "false";
+      node.dataset.interactive = "true";
+      node.dataset.interactiveKind = settings.kind || "dialog";
       node.setAttribute("aria-modal", "false");
 
       if (!content) {
-        settled = true;
-        controller.dismiss();
-        resolve(dismissValue);
+        controller.dismiss("unavailable", true);
+        finish(dismissValue, "unavailable", null);
         return;
       }
 
-      const root = node.ownerDocument.createElement("div");
-      const copy = node.ownerDocument.createElement("div");
-      const title = node.ownerDocument.createElement("div");
-      const description = node.ownerDocument.createElement("div");
-      const actionsNode = node.ownerDocument.createElement("div");
+      const documentRef = node.ownerDocument;
+      const root = documentRef.createElement("div");
+      const copy = documentRef.createElement("div");
+      const title = documentRef.createElement("div");
+      const description = documentRef.createElement("div");
+      const body = documentRef.createElement("div");
+      const validation = documentRef.createElement("div");
+      const countdown = documentRef.createElement("div");
+      const countdownLabel = documentRef.createElement("div");
+      const countdownTrack = documentRef.createElement("div");
+      const countdownBar = documentRef.createElement("div");
+      const actionsNode = documentRef.createElement("div");
 
-      root.className = "rod-toast__confirm";
-      copy.className = "rod-toast__confirm-copy";
-      title.className = "rod-toast__confirm-title";
-      description.className = "rod-toast__confirm-description";
+      root.className = "rod-toast__interactive";
+      copy.className = "rod-toast__interactive-copy";
+      title.className = "rod-toast__interactive-title";
+      description.className = "rod-toast__interactive-description";
+      validation.className = "rod-toast__validation";
+      validation.dataset.visible = "false";
+      countdown.className = "rod-toast__countdown";
+      countdown.dataset.visible = "false";
+      countdownTrack.className = "rod-toast__countdown-track";
+      countdownBar.className = "rod-toast__countdown-bar";
       actionsNode.className = "rod-toast__confirm-actions";
 
       title.textContent = String(options.title || "");
       title.hidden = !title.textContent;
       description.textContent = String(options.description || "");
       description.hidden = !description.textContent;
-
+      countdownTrack.appendChild(countdownBar);
+      countdown.appendChild(countdownLabel);
+      countdown.appendChild(countdownTrack);
       copy.appendChild(title);
       copy.appendChild(description);
       root.appendChild(copy);
+      root.appendChild(body);
+
+      const checkboxApi = buildCheckboxes(documentRef, options.checkbox);
+      if (checkboxApi.node) {
+        body.appendChild(checkboxApi.node);
+      }
+
+      const bodyApi = settings.buildBody?.({
+        document: documentRef,
+        body,
+        node,
+        controller,
+        options,
+      }) || {};
+
+      settings.getValues = () => ({
+        ...(bodyApi.getValues?.() || {}),
+        ...(checkboxApi.node ? { checked: checkboxApi.getValue() } : {}),
+      });
+
+      let currentDetailsNode = createDetailsNode(
+        documentRef,
+        options.details,
+        options.detailsLabel || "Details",
+      );
+      if (currentDetailsNode) {
+        root.appendChild(currentDetailsNode);
+      }
+
+      root.appendChild(validation);
+      root.appendChild(countdown);
       root.appendChild(actionsNode);
       content.replaceChildren(root);
 
       const buttons = [];
+      const buttonByActionId = new Map();
 
-      const setButtonsBusy = (activeButton, busy) => {
-        for (const button of buttons) {
-          button.disabled = busy || button.dataset.initialDisabled === "true";
+      const setValidation = (message) => {
+        validation.textContent = String(message || "");
+        validation.dataset.visible = String(Boolean(validation.textContent));
+      };
+
+      const updateDialog = (next = {}) => {
+        if (hasOwn(next, "title")) {
+          title.textContent = String(next.title || "");
+          title.hidden = !title.textContent;
+        }
+        if (hasOwn(next, "description")) {
+          description.textContent = String(next.description || "");
+          description.hidden = !description.textContent;
+        }
+        if (hasOwn(next, "details")) {
+          const nextDetails = createDetailsNode(
+            documentRef,
+            next.details,
+            next.detailsLabel || options.detailsLabel || "Details",
+          );
+          currentDetailsNode?.remove();
+          currentDetailsNode = nextDetails;
+          if (currentDetailsNode) {
+            root.insertBefore(currentDetailsNode, validation);
+          }
+        }
+        if (hasOwn(next, "validation")) {
+          setValidation(next.validation);
+        }
+        return controller;
+      };
+
+      const setButtonsBusy = (activeButton, action, busy) => {
+        buttons.forEach((button) => {
+          const descriptor = button.__rodAction;
+          const lockedByCountdown =
+            descriptor.disabledUntilCountdown && remainingSeconds > 0;
+          button.disabled = busy || descriptor.disabled || lockedByCountdown;
           button.dataset.busy = String(busy && button === activeButton);
+        });
+
+        if (activeButton) {
+          const label = activeButton.querySelector("span");
+          if (label) {
+            label.textContent = busy && action.loadingLabel
+              ? action.loadingLabel
+              : action.label;
+          }
         }
       };
 
-      const finish = (value, shouldClose = true) => {
-        if (settled) return;
-        settled = true;
-        resolve(value);
+      const executeAction = async (action, button, event = null) => {
+        if (settled || button.disabled) return;
+        setValidation("");
+        const values = settings.getValues?.() || {};
+        const validationResult = await settings.validate?.({
+          action,
+          values,
+          options,
+        });
 
-        if (shouldClose) {
-          controller.dismiss();
+        if (validationResult !== true && validationResult !== undefined) {
+          setValidation(
+            validationResult === false
+              ? options.validationMessage || "Please review this value."
+              : validationResult,
+          );
+          return;
+        }
+
+        const originalIcon = button.querySelector("svg")?.cloneNode(true);
+        const labelNode = button.querySelector("span");
+        setButtonsBusy(button, action, true);
+
+        if (button.querySelector("svg")) {
+          button.replaceChild(
+            createSvgIcon(documentRef, "loader-circle", 15),
+            button.querySelector("svg"),
+          );
+        } else {
+          button.insertBefore(
+            createSvgIcon(documentRef, "loader-circle", 15),
+            labelNode,
+          );
+        }
+
+        let closedByContext = false;
+        const close = (value, reason = "action") => {
+          closedByContext = true;
+          finish(value, reason, action.id);
+          controller.dismiss(reason);
+        };
+
+        try {
+          emitEvent("action", {
+            phase: "start",
+            actionId: action.id,
+            action: action.raw,
+            controller,
+            scope: options.scope || null,
+          });
+
+          let result;
+          if (action.handle) {
+            result = await action.handle({
+              action: action.raw,
+              controller,
+              event,
+              toast,
+              close,
+              update: updateDialog,
+              setValidation,
+              values,
+              checked: values.checked || {},
+            });
+          }
+
+          if (closedByContext) return;
+
+          if (result === undefined) {
+            result = settings.resolveValue
+              ? settings.resolveValue(action, values)
+              : action.hasValue
+                ? action.value
+                : action.id;
+          }
+
+          if (action.successLabel && labelNode) {
+            labelNode.textContent = action.successLabel;
+            const currentIcon = button.querySelector("svg");
+            currentIcon?.replaceWith(createSvgIcon(documentRef, "check", 15));
+            await new Promise((resolveDelay) => {
+              (state.hostWindow || initialHostWindow).setTimeout(resolveDelay, 260);
+            });
+          }
+
+          emitEvent("action", {
+            phase: "success",
+            actionId: action.id,
+            action: action.raw,
+            result,
+            controller,
+            scope: options.scope || null,
+          });
+
+          if (action.close) {
+            finish(result, "action", action.id);
+            controller.dismiss("action");
+            return;
+          }
+
+          const currentIcon = button.querySelector("svg");
+          currentIcon?.remove();
+          if (originalIcon) button.insertBefore(originalIcon, labelNode);
+          if (labelNode) labelNode.textContent = action.label;
+          setButtonsBusy(button, action, false);
+        } catch (error) {
+          emitEvent("action", {
+            phase: "error",
+            actionId: action.id,
+            action: action.raw,
+            error,
+            controller,
+            scope: options.scope || null,
+          });
+
+          if (options.rejectOnActionError === false) {
+            setValidation(error?.message || String(error));
+            const currentIcon = button.querySelector("svg");
+            currentIcon?.remove();
+            if (originalIcon) button.insertBefore(originalIcon, labelNode);
+            if (labelNode) labelNode.textContent = action.label;
+            setButtonsBusy(button, action, false);
+            return;
+          }
+
+          if (!settled) {
+            settled = true;
+            cleanupCallbacks.forEach((callback) => safeCall(callback, undefined));
+            reject(error);
+            controller.dismiss("action-error", true);
+          }
         }
       };
 
-      const fail = (error) => {
-        if (settled) return;
-        settled = true;
-        reject(error);
-        controller.dismiss(true);
-      };
-
-      for (const action of confirmActions) {
-        const button = node.ownerDocument.createElement("button");
-        const label = node.ownerDocument.createElement("span");
-
+      actions.forEach((action) => {
+        const button = documentRef.createElement("button");
+        const label = documentRef.createElement("span");
         button.type = "button";
         button.className = "rod-toast__confirm-button";
         button.dataset.actionId = action.id;
         button.dataset.variant = action.variant;
         button.dataset.busy = "false";
-        button.dataset.initialDisabled = String(action.disabled);
+        button.__rodAction = action;
         button.disabled = action.disabled;
 
         if (action.icon) {
-          button.appendChild(
-            createSvgIcon(node.ownerDocument, action.icon, 15),
-          );
+          button.appendChild(createSvgIcon(documentRef, action.icon, 15));
         }
 
         label.textContent = action.label;
         button.appendChild(label);
-
-        button.addEventListener("click", async (event) => {
+        button.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
-
-          if (settled || button.disabled) return;
-
-          const originalIcon = button.querySelector("svg")?.cloneNode(true);
-          setButtonsBusy(button, true);
-
-          if (originalIcon) {
-            button.replaceChild(
-              createSvgIcon(node.ownerDocument, "loader-circle", 15),
-              button.querySelector("svg"),
-            );
-          } else {
-            button.insertBefore(
-              createSvgIcon(node.ownerDocument, "loader-circle", 15),
-              label,
-            );
-          }
-
-          try {
-            let result;
-
-            if (action.handle) {
-              result = await action.handle({
-                action: action.raw,
-                controller,
-                event,
-                toast,
-              });
-            }
-
-            if (result === undefined) {
-              result = action.hasValue ? action.value : action.id;
-            }
-
-            if (action.close) {
-              finish(result, true);
-              return;
-            }
-
-            if (button.querySelector("svg")) {
-              button.querySelector("svg").remove();
-            }
-
-            if (originalIcon) {
-              button.insertBefore(originalIcon, label);
-            }
-
-            setButtonsBusy(button, false);
-          } catch (error) {
-            fail(error);
-          }
+          executeAction(action, button, event);
         });
-
         actionsNode.appendChild(button);
         buttons.push(button);
+        buttonByActionId.set(action.id, button);
+      });
+
+      const countdownValue = typeof options.countdown === "object"
+        ? options.countdown.seconds
+        : options.countdown;
+      initialSeconds = Math.max(0, Math.ceil(Number(countdownValue) || 0));
+      remainingSeconds = initialSeconds;
+
+      const updateCountdown = () => {
+        countdown.dataset.visible = String(initialSeconds > 0);
+        if (!initialSeconds) return;
+        const progress = clamp(remainingSeconds / initialSeconds, 0, 1);
+        countdown.style.setProperty(
+          "--rod-countdown-progress",
+          `${Math.round(progress * 100)}%`,
+        );
+        countdownLabel.textContent = remainingSeconds > 0
+          ? `${remainingSeconds}s remaining`
+          : "Ready";
+
+        buttons.forEach((button) => {
+          const action = button.__rodAction;
+          const label = button.querySelector("span");
+          if (label && button.dataset.busy !== "true") {
+            label.textContent = action.labelTemplate.replace(
+              /\{seconds\}/g,
+              String(remainingSeconds),
+            );
+          }
+          button.disabled =
+            action.disabled ||
+            (action.disabledUntilCountdown && remainingSeconds > 0);
+        });
+      };
+
+      if (initialSeconds > 0) {
+        updateCountdown();
+        countdownTimer = (state.hostWindow || initialHostWindow).setInterval(() => {
+          remainingSeconds = Math.max(0, remainingSeconds - 1);
+          updateCountdown();
+
+          if (remainingSeconds <= 0) {
+            (state.hostWindow || initialHostWindow).clearInterval(countdownTimer);
+            countdownTimer = null;
+            const autoActionId = typeof options.countdown === "object"
+              ? options.countdown.autoAction
+              : null;
+            if (autoActionId && buttonByActionId.has(String(autoActionId))) {
+              buttonByActionId.get(String(autoActionId)).click();
+            }
+          }
+        }, 1000);
       }
+
+      const shortcuts = new Map();
+      Object.entries(options.shortcuts || {}).forEach(([shortcut, actionId]) => {
+        shortcuts.set(normalizeShortcutName(shortcut), String(actionId));
+      });
+      actions.forEach((action) => {
+        if (action.shortcut) {
+          shortcuts.set(normalizeShortcutName(action.shortcut), action.id);
+        }
+      });
+
+      const keyHandler = (event) => {
+        if (settled) return;
+        const shortcut = shortcutFromEvent(event);
+        const actionId = shortcuts.get(shortcut);
+
+        if (actionId && buttonByActionId.has(actionId)) {
+          event.preventDefault();
+          event.stopPropagation();
+          buttonByActionId.get(actionId).click();
+          return;
+        }
+
+        if (event.key === "Escape" && options.dismissible !== false) {
+          event.preventDefault();
+          event.stopPropagation();
+          controller.dismiss("escape");
+        }
+      };
+
+      documentRef.addEventListener("keydown", keyHandler, true);
+      cleanupCallbacks.push(() => {
+        documentRef.removeEventListener("keydown", keyHandler, true);
+      });
 
       setManagerMinimized(false);
       syncStackLayout();
 
-      const preferredButton =
-        buttons.find((button) => {
-          return (
-            !button.disabled &&
-            button.dataset.variant === "primary"
-          );
-        }) || buttons.find((button) => !button.disabled);
-
+      const preferredButton = buttons.find((button) => {
+        return !button.disabled && button.dataset.variant === "primary";
+      }) || buttons.find((button) => !button.disabled);
       const hostWindow = state.hostWindow || initialHostWindow;
-      const requestFrame =
-        typeof hostWindow.requestAnimationFrame === "function"
-          ? hostWindow.requestAnimationFrame.bind(hostWindow)
-          : (callback) => hostWindow.setTimeout(callback, 0);
+      const requestFrame = typeof hostWindow.requestAnimationFrame === "function"
+        ? hostWindow.requestAnimationFrame.bind(hostWindow)
+        : (callback) => hostWindow.setTimeout(callback, 0);
 
       requestFrame(() => {
-        preferredButton?.focus?.({ preventScroll: true });
+        bodyApi.focus?.();
+        if (!bodyApi.focus) preferredButton?.focus?.({ preventScroll: true });
         iconNode?.setAttribute("aria-hidden", "true");
       });
 
-      record.confirmActions = confirmActions;
+      record.dialogActions = actions;
     });
+  }
+
+  function showConfirmToast(descriptor = {}) {
+    const options = isPlainObject(descriptor)
+      ? { ...descriptor }
+      : { title: String(descriptor ?? "") };
+    options.shortcuts ||= {
+      Escape: "cancel",
+      Enter: "confirm",
+    };
+
+    return showActionDialog(options, {
+      kind: "confirm",
+      dismissValue: false,
+      fallbackActions: [
+        {
+          id: "cancel",
+          label: "Cancel",
+          icon: "circle-x",
+          variant: "secondary",
+          value: false,
+        },
+        {
+          id: "confirm",
+          label: "Confirm",
+          icon: "check",
+          variant: "primary",
+          value: true,
+        },
+      ],
+    });
+  }
+
+  function showPromptToast(descriptor = {}) {
+    const options = isPlainObject(descriptor)
+      ? { ...descriptor }
+      : { title: String(descriptor ?? "") };
+    options.shortcuts ||= options.multiline
+      ? {
+          Escape: "cancel",
+          "Meta+Enter": "confirm",
+          "Control+Enter": "confirm",
+        }
+      : {
+          Escape: "cancel",
+          Enter: "confirm",
+        };
+    let input = null;
+
+    return showActionDialog(options, {
+      kind: "prompt",
+      dismissValue: hasOwn(options, "dismissValue")
+        ? options.dismissValue
+        : null,
+      fallbackActions: [
+        {
+          id: "cancel",
+          label: options.cancelLabel || "Cancel",
+          icon: "circle-x",
+          variant: "secondary",
+          value: hasOwn(options, "dismissValue") ? options.dismissValue : null,
+        },
+        {
+          id: "confirm",
+          label: options.confirmLabel || "Save",
+          icon: "check",
+          variant: "primary",
+        },
+      ],
+      buildBody({ document, body }) {
+        const field = document.createElement("label");
+        const label = document.createElement("span");
+        input = document.createElement(options.multiline ? "textarea" : "input");
+        field.className = "rod-toast__field";
+        label.className = "rod-toast__field-label";
+        label.textContent = String(options.inputLabel || "Value");
+        label.hidden = !options.inputLabel;
+        input.className = options.multiline
+          ? "rod-toast__textarea"
+          : "rod-toast__input";
+        if (!options.multiline) input.type = options.inputType || "text";
+        input.value = options.value === undefined || options.value === null
+          ? ""
+          : String(options.value);
+        input.placeholder = String(options.placeholder || "");
+        input.autocomplete = options.autocomplete || "off";
+        input.spellcheck = options.spellcheck !== false;
+        if (Number.isFinite(options.minLength)) input.minLength = options.minLength;
+        if (Number.isFinite(options.maxLength)) input.maxLength = options.maxLength;
+        input.required = Boolean(options.required);
+        field.appendChild(label);
+        field.appendChild(input);
+        body.appendChild(field);
+
+        return {
+          focus() {
+            input.focus({ preventScroll: true });
+            input.select?.();
+          },
+          getValues() {
+            return { input: input.value };
+          },
+        };
+      },
+      async validate({ action, values }) {
+        if (action.id === "cancel") return true;
+        if (options.required && !String(values.input || "").trim()) {
+          return options.requiredMessage || "A value is required.";
+        }
+        if (typeof options.validate === "function") {
+          return options.validate(values.input);
+        }
+        return true;
+      },
+      resolveValue(action, values) {
+        if (action.id === "cancel") {
+          return action.hasValue ? action.value : null;
+        }
+        return action.hasValue ? action.value : values.input;
+      },
+    });
+  }
+
+  function showSelectToast(descriptor = {}) {
+    const options = isPlainObject(descriptor) ? { ...descriptor } : {};
+    options.shortcuts ||= {
+      Escape: "cancel",
+      Enter: "confirm",
+    };
+    let select = null;
+    const choices = Array.isArray(options.options) ? options.options : [];
+
+    return showActionDialog(options, {
+      kind: "select",
+      dismissValue: hasOwn(options, "dismissValue")
+        ? options.dismissValue
+        : null,
+      fallbackActions: [
+        {
+          id: "cancel",
+          label: options.cancelLabel || "Cancel",
+          icon: "circle-x",
+          variant: "secondary",
+          value: hasOwn(options, "dismissValue") ? options.dismissValue : null,
+        },
+        {
+          id: "confirm",
+          label: options.confirmLabel || "Select",
+          icon: "check",
+          variant: "primary",
+        },
+      ],
+      buildBody({ document, body }) {
+        const field = document.createElement("label");
+        const label = document.createElement("span");
+        select = document.createElement("select");
+        field.className = "rod-toast__field";
+        label.className = "rod-toast__field-label";
+        label.textContent = String(options.inputLabel || "Option");
+        label.hidden = !options.inputLabel;
+        select.className = "rod-toast__select";
+        select.multiple = Boolean(options.multiple);
+
+        choices.forEach((choice, index) => {
+          const descriptor = typeof choice === "object"
+            ? choice
+            : { value: choice, label: choice };
+          const option = document.createElement("option");
+          option.value = String(descriptor.value ?? index);
+          option.textContent = String(descriptor.label ?? descriptor.value ?? index);
+          option.disabled = Boolean(descriptor.disabled);
+          option.selected = options.multiple
+            ? Array.isArray(options.value) && options.value.map(String).includes(option.value)
+            : String(options.value ?? "") === option.value;
+          select.appendChild(option);
+        });
+
+        field.appendChild(label);
+        field.appendChild(select);
+        body.appendChild(field);
+
+        return {
+          focus() {
+            select.focus({ preventScroll: true });
+          },
+          getValues() {
+            const selected = [...select.selectedOptions].map((option) => option.value);
+            return { selection: options.multiple ? selected : selected[0] ?? null };
+          },
+        };
+      },
+      async validate({ action, values }) {
+        if (action.id === "cancel") return true;
+        if (options.required && (values.selection === null || values.selection === undefined || values.selection.length === 0)) {
+          return options.requiredMessage || "Choose an option.";
+        }
+        if (typeof options.validate === "function") {
+          return options.validate(values.selection);
+        }
+        return true;
+      },
+      resolveValue(action, values) {
+        if (action.id === "cancel") {
+          return action.hasValue ? action.value : null;
+        }
+        return action.hasValue ? action.value : values.selection;
+      },
+    });
+  }
+
+  function isRichDescriptor(value) {
+    return isPlainObject(value) && [
+      "title",
+      "description",
+      "details",
+      "actions",
+      "error",
+      "copyError",
+    ].some((key) => hasOwn(value, key));
+  }
+
+  function showRichToast(descriptor = {}, forcedType = null) {
+    const options = isPlainObject(descriptor)
+      ? { ...descriptor }
+      : { title: String(descriptor ?? "") };
+    const type = forcedType || options.type || "default";
+    const created = createToastRecord([], {
+      ...options,
+      type,
+      dedupe: options.dedupe ?? false,
+    });
+
+    if (!created) return null;
+    const controller = created.controller;
+    const node = controller.element;
+    const content = node.querySelector(".rod-toast__content");
+    if (!content) return controller;
+    const documentRef = node.ownerDocument;
+    node.dataset.rich = "true";
+
+    const render = (next = options) => {
+      const root = documentRef.createElement("div");
+      const copy = documentRef.createElement("div");
+      const title = documentRef.createElement("div");
+      const description = documentRef.createElement("div");
+      const actionBar = documentRef.createElement("div");
+      root.className = "rod-toast__rich";
+      copy.className = "rod-toast__rich-copy";
+      title.className = "rod-toast__rich-title";
+      description.className = "rod-toast__rich-description";
+      actionBar.className = "rod-toast__action-bar";
+      title.textContent = String(next.title || "");
+      title.hidden = !title.textContent;
+      description.textContent = String(next.description || "");
+      description.hidden = !description.textContent;
+      copy.appendChild(title);
+      copy.appendChild(description);
+      root.appendChild(copy);
+
+      const details = next.details ?? next.error;
+      const detailsNode = createDetailsNode(
+        documentRef,
+        details instanceof Error ? details.stack || details.message : details,
+        next.detailsLabel || "Details",
+      );
+      if (detailsNode) root.appendChild(detailsNode);
+
+      const actions = normalizeActionDescriptors(next.actions, []);
+      if (next.copyError !== false && next.error) {
+        actions.push(normalizeActionDescriptors([
+          {
+            id: "copy-error",
+            label: next.copyLabel || "Copy error",
+            icon: "copy",
+            variant: "secondary",
+            close: false,
+            successLabel: "Copied",
+            async handle() {
+              return copyText(
+                next.error instanceof Error
+                  ? next.error.stack || next.error.message
+                  : next.error,
+              );
+            },
+          },
+        ])[0]);
+      }
+
+      actions.forEach((action) => {
+        const button = documentRef.createElement("button");
+        const label = documentRef.createElement("span");
+        button.type = "button";
+        button.className = "rod-toast__action-button";
+        button.dataset.variant = action.variant;
+        button.dataset.busy = "false";
+        button.disabled = action.disabled;
+        if (action.icon) button.appendChild(createSvgIcon(documentRef, action.icon, 14));
+        label.textContent = action.label;
+        button.appendChild(label);
+        button.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (button.disabled) return;
+          button.disabled = true;
+          button.dataset.busy = "true";
+          const original = label.textContent;
+          if (action.loadingLabel) label.textContent = action.loadingLabel;
+          try {
+            const result = action.handle
+              ? await action.handle({
+                  action: action.raw,
+                  controller,
+                  event,
+                  toast,
+                  close: (reason = "action") => controller.dismiss(reason),
+                  update: (nextDescriptor) => render({ ...next, ...nextDescriptor }),
+                })
+              : action.hasValue
+                ? action.value
+                : action.id;
+            emitEvent("action", {
+              phase: "success",
+              actionId: action.id,
+              action: action.raw,
+              result,
+              controller,
+              scope: options.scope || null,
+            });
+            if (action.successLabel) label.textContent = action.successLabel;
+            if (action.close) controller.dismiss("action");
+          } catch (error) {
+            emitEvent("action", {
+              phase: "error",
+              actionId: action.id,
+              action: action.raw,
+              error,
+              controller,
+              scope: options.scope || null,
+            });
+            label.textContent = original;
+            button.disabled = false;
+            button.dataset.busy = "false";
+            showSemanticToast("error", [error]);
+          }
+          if (!action.close) {
+            (state.hostWindow || initialHostWindow).setTimeout(() => {
+              label.textContent = original;
+              button.disabled = false;
+              button.dataset.busy = "false";
+            }, action.successLabel ? 650 : 0);
+          }
+        });
+        actionBar.appendChild(button);
+      });
+
+      if (actions.length) root.appendChild(actionBar);
+      content.replaceChildren(root);
+    };
+
+    render(options);
+    controller.updateRich = (next = {}) => {
+      Object.assign(options, next);
+      render(options);
+      return controller;
+    };
+    return controller;
+  }
+
+  function showSemanticToast(type, inputArgs) {
+    const args = [...inputArgs];
+    if (args.length === 1 && isRichDescriptor(args[0])) {
+      return showRichToast(args[0], type);
+    }
+
+    if (args[0] instanceof Error) {
+      const error = args[0];
+      const tail = args[1] && isOptionsCandidate(args[1]) ? args[1] : {};
+      return showRichToast({
+        ...tail,
+        title: tail.title || error.message || error.name || "Error",
+        description: tail.description || error.name || "Error",
+        error,
+        icon: tail.icon || "circle-x",
+        copyError: tail.copyError ?? true,
+      }, type);
+    }
+
+    return showToast(args, type);
+  }
+
+  function getTaskStorage() {
+    const hostWindow = state.hostWindow || initialHostWindow;
+    const key = state.config.taskStorage === "localStorage"
+      ? "localStorage"
+      : "sessionStorage";
+    return safeCall(() => hostWindow[key], null);
+  }
+
+  function getPersistedTaskSnapshots() {
+    const storage = getTaskStorage();
+    if (!storage) return [];
+    return safeCall(() => {
+      const parsed = JSON.parse(storage.getItem(state.config.taskStorageKey) || "[]");
+      return Array.isArray(parsed) ? parsed : [];
+    }, []);
+  }
+
+  function persistTaskSnapshots() {
+    if (!state.config.persistTasks) return;
+    const storage = getTaskStorage();
+    if (!storage) return;
+    const snapshots = [...state.tasks.values()]
+      .filter((task) => task.persist && !task.dismissed)
+      .map((task) => task.snapshot())
+      .slice(-state.config.maxPersistedTasks);
+    safeCall(() => {
+      storage.setItem(state.config.taskStorageKey, JSON.stringify(snapshots));
+    }, undefined);
+  }
+
+  function normalizeTaskStatus(value) {
+    return [
+      "queued",
+      "running",
+      "paused",
+      "success",
+      "error",
+      "warning",
+      "cancelled",
+    ].includes(value)
+      ? value
+      : "queued";
+  }
+
+  function createTaskController(descriptor = {}) {
+    const options = isPlainObject(descriptor)
+      ? { ...descriptor }
+      : { title: String(descriptor ?? "") };
+    const id = String(options.id || `task-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    const existing = state.tasks.get(id);
+    if (existing && !existing.dismissed) return existing;
+
+    const abortController = new AbortController();
+    const taskState = {
+      id,
+      title: String(options.title || "Task"),
+      description: String(options.description || ""),
+      icon: options.icon || "clock",
+      status: normalizeTaskStatus(options.status || "queued"),
+      progress: normalizeProgress(options.progress),
+      progressLabel: options.progressLabel || null,
+      metadata: options.metadata && typeof options.metadata === "object"
+        ? { ...options.metadata }
+        : {},
+      scope: options.scope == null ? null : String(options.scope),
+      createdAt: Number(options.createdAt) || Date.now(),
+      updatedAt: Date.now(),
+      restored: Boolean(options.restored),
+      orphaned: Boolean(options.orphaned),
+    };
+    let dismissed = false;
+    let paused = taskState.status === "paused";
+    const persist = options.persist ?? state.config.persistTasks;
+    const toastId = options.toastId || `task:${id}`;
+
+    const task = {
+      id,
+      persist,
+      abortController,
+      signal: abortController.signal,
+      get status() {
+        return taskState.status;
+      },
+      get progress() {
+        return taskState.progress;
+      },
+      get dismissed() {
+        return dismissed;
+      },
+      get element() {
+        return toastController?.element || null;
+      },
+      snapshot() {
+        return {
+          id,
+          title: taskState.title,
+          description: taskState.description,
+          icon: taskState.icon,
+          status: taskState.status,
+          progress: taskState.progress,
+          progressLabel: taskState.progressLabel,
+          metadata: taskState.metadata,
+          scope: taskState.scope,
+          createdAt: taskState.createdAt,
+          updatedAt: taskState.updatedAt,
+          persist,
+        };
+      },
+    };
+
+    const toastController = showLoadingToast([{
+      id: toastId,
+      title: taskState.title,
+      description: taskState.description,
+      icon: taskState.icon,
+      animation: taskState.progress === null ? "spinner" : "progress",
+      progress: taskState.progress,
+      progressLabel: taskState.progressLabel,
+      duration: 0,
+      dedupe: false,
+      scope: taskState.scope,
+      metadata: {
+        ...taskState.metadata,
+        taskId: id,
+      },
+      onDismiss({ reason } = {}) {
+        dismissed = true;
+        state.tasks.delete(id);
+        persistTaskSnapshots();
+        emitEvent("task:dismiss", { task, reason });
+      },
+    }]);
+
+    if (!toastController) return null;
+    const node = toastController.element;
+    const loadingCopy = node.querySelector(".rod-toast__loading-copy");
+    const taskStatus = node.ownerDocument.createElement("div");
+    const taskActions = node.ownerDocument.createElement("div");
+    taskStatus.className = "rod-toast__task-status";
+    taskActions.className = "rod-toast__task-actions";
+    loadingCopy?.appendChild(taskStatus);
+    loadingCopy?.appendChild(taskActions);
+
+    const renderTaskActions = () => {
+      taskActions.replaceChildren();
+      const descriptors = [];
+      if (options.pausable && ["running", "queued"].includes(taskState.status)) {
+        descriptors.push({ id: "pause", label: "Pause", icon: "pause" });
+      }
+      if (options.pausable && taskState.status === "paused") {
+        descriptors.push({ id: "resume", label: "Resume", icon: "play" });
+      }
+      if (options.cancellable && !["success", "error", "cancelled"].includes(taskState.status)) {
+        descriptors.push({ id: "cancel", label: "Cancel", icon: "square" });
+      }
+      normalizeActionDescriptors(
+        (Array.isArray(options.actions) ? options.actions : []).map((action) => ({
+          ...action,
+          close: action?.close === true,
+        })),
+        [],
+      ).forEach((action) => descriptors.push(action));
+
+      descriptors.forEach((rawAction) => {
+        const action = rawAction.raw ? rawAction : normalizeActionDescriptors([rawAction])[0];
+        const button = node.ownerDocument.createElement("button");
+        const label = node.ownerDocument.createElement("span");
+        button.type = "button";
+        button.className = "rod-toast__task-button";
+        button.dataset.busy = "false";
+        if (action.icon) button.appendChild(createSvgIcon(node.ownerDocument, action.icon, 14));
+        label.textContent = action.label;
+        button.appendChild(label);
+        button.addEventListener("click", async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (action.id === "pause") return task.pause();
+          if (action.id === "resume") return task.resume();
+          if (action.id === "cancel") return task.cancel("user");
+          button.disabled = true;
+          button.dataset.busy = "true";
+          try {
+            await action.handle?.({ task, controller: toastController, event, toast });
+            if (action.close) task.dismiss("action");
+          } finally {
+            button.disabled = false;
+            button.dataset.busy = "false";
+          }
+        });
+        taskActions.appendChild(button);
+      });
+      taskActions.hidden = !taskActions.childElementCount;
+    };
+
+    const apply = (next = {}, emit = true) => {
+      if (dismissed) return task;
+      if (hasOwn(next, "title")) taskState.title = String(next.title || "");
+      if (hasOwn(next, "description")) taskState.description = String(next.description || "");
+      if (hasOwn(next, "icon")) taskState.icon = next.icon || "circle";
+      if (hasOwn(next, "status")) taskState.status = normalizeTaskStatus(next.status);
+      if (hasOwn(next, "progress")) taskState.progress = normalizeProgress(next.progress);
+      if (hasOwn(next, "progressLabel")) taskState.progressLabel = next.progressLabel == null ? null : String(next.progressLabel);
+      if (next.metadata && typeof next.metadata === "object") {
+        taskState.metadata = { ...taskState.metadata, ...next.metadata };
+      }
+      taskState.updatedAt = Date.now();
+      paused = taskState.status === "paused";
+
+      const semantic = {
+        queued: { icon: taskState.icon || "clock", animation: "pulse" },
+        running: { icon: taskState.icon || "loader-circle", animation: taskState.progress === null ? "spinner" : "progress" },
+        paused: { icon: "pause", animation: "none" },
+        warning: { icon: "triangle-alert", animation: "none" },
+        cancelled: { icon: "square", animation: "none" },
+      }[taskState.status] || { icon: taskState.icon, animation: "none" };
+
+      if (["success", "error"].includes(taskState.status)) {
+        const settle = taskState.status === "success"
+          ? toastController.success.bind(toastController)
+          : toastController.error.bind(toastController);
+        settle({
+          title: taskState.title,
+          description: taskState.description,
+          icon: taskState.status === "success" ? "check" : "circle-x",
+          duration: Number.isFinite(next.duration)
+            ? Number(next.duration)
+            : taskState.status === "success"
+              ? state.config.loadingSuccessDuration
+              : state.config.loadingErrorDuration,
+        });
+      } else {
+        toastController.update({
+          title: taskState.title,
+          description: taskState.description,
+          icon: semantic.icon,
+          animation: semantic.animation,
+          progress: taskState.progress,
+          progressLabel: taskState.progressLabel,
+          duration: 0,
+        });
+      }
+
+      taskStatus.textContent = taskState.status;
+      renderTaskActions();
+      persistTaskSnapshots();
+      if (emit) emitEvent("task:update", { task, snapshot: task.snapshot() });
+      return task;
+    };
+
+    Object.assign(task, {
+      controller: toastController,
+      update(next = {}) {
+        return apply(next);
+      },
+      start(next = {}) {
+        return apply({ ...next, status: "running" });
+      },
+      setProgress(value, next = {}) {
+        return apply({ ...next, status: next.status || "running", progress: value });
+      },
+      async pause() {
+        if (dismissed || paused) return task;
+        await options.pause?.({ task, signal: task.signal });
+        return apply({ status: "paused" });
+      },
+      async resume() {
+        if (dismissed || !paused) return task;
+        await options.resume?.({ task, signal: task.signal });
+        return apply({ status: "running" });
+      },
+      async cancel(reason = "cancelled") {
+        if (dismissed || ["success", "error", "cancelled"].includes(taskState.status)) return task;
+        abortController.abort(reason);
+        await options.cancel?.({ task, reason });
+        apply({
+          status: "cancelled",
+          title: options.cancelledTitle || taskState.title,
+          description: options.cancelledDescription || "Task cancelled.",
+        });
+        emitEvent("task:cancel", { task, reason });
+        return task;
+      },
+      success(next = {}) {
+        return apply({ ...next, status: "success", progress: 1 });
+      },
+      error(error, next = {}) {
+        const details = error instanceof Error ? error.message : String(error || "");
+        return apply({
+          ...next,
+          status: "error",
+          description: next.description || details || taskState.description,
+        });
+      },
+      warning(next = {}) {
+        return apply({ ...next, status: "warning" });
+      },
+      dismiss(reason = "programmatic", immediate = false) {
+        toastController.dismiss(reason, immediate);
+        return task;
+      },
+      async run(executor) {
+        task.start();
+        try {
+          const result = await executor({
+            task,
+            signal: task.signal,
+            progress: (value, next = {}) => task.setProgress(value, next),
+            update: (next = {}) => task.update(next),
+          });
+          task.success();
+          return result;
+        } catch (error) {
+          if (task.signal.aborted) {
+            await task.cancel(task.signal.reason || "aborted");
+          } else {
+            task.error(error);
+          }
+          throw error;
+        }
+      },
+    });
+
+    state.tasks.set(id, task);
+    apply(taskState, false);
+    persistTaskSnapshots();
+    emitEvent("task:create", { task, snapshot: task.snapshot() });
+    return task;
+  }
+
+  function resolvePhaseDescriptor(spec, value, fallback = {}) {
+    const resolved = typeof spec === "function" ? spec(value) : spec;
+    if (resolved === undefined || resolved === null) return fallback;
+    if (typeof resolved === "string") return { ...fallback, description: resolved };
+    return { ...fallback, ...resolved };
+  }
+
+  async function showPromiseToast(input, descriptor = {}) {
+    const options = isPlainObject(descriptor) ? descriptor : {};
+    const loading = resolvePhaseDescriptor(options.loading, null, {
+      title: options.title || "Working",
+      description: options.description || "Please wait…",
+      icon: options.icon || "loader-circle",
+    });
+    const task = createTaskController({
+      ...loading,
+      id: options.id,
+      scope: options.scope,
+      metadata: options.metadata,
+      status: "running",
+      cancellable: options.cancellable,
+      pausable: options.pausable,
+      persist: options.persist,
+    });
+
+    try {
+      const result = typeof input === "function"
+        ? await input({
+            task,
+            signal: task.signal,
+            progress: (value, next = {}) => task.setProgress(value, next),
+            update: (next = {}) => task.update(next),
+            toast,
+          })
+        : await input;
+      const success = resolvePhaseDescriptor(options.success, result, {
+        title: "Completed",
+        description: "The operation completed successfully.",
+      });
+      task.success(success);
+      return result;
+    } catch (error) {
+      const failure = resolvePhaseDescriptor(options.error, error, {
+        title: "Failed",
+        description: error?.message || String(error),
+      });
+      task.error(error, failure);
+      throw error;
+    }
+  }
+
+  async function showUndoToast(descriptor = {}) {
+    const options = isPlainObject(descriptor) ? descriptor : {};
+    const duration = Number.isFinite(options.duration) ? Number(options.duration) : 6000;
+    const seconds = Math.max(1, Math.ceil(duration / 1000));
+    return showConfirmToast({
+      ...options,
+      icon: options.icon || "undo",
+      duration,
+      dismissValue: false,
+      countdown: seconds,
+      actions: [
+        {
+          id: "undo",
+          label: `${options.actionLabel || "Undo"} · {seconds}s`,
+          icon: options.actionIcon || "undo",
+          variant: options.variant || "secondary",
+          loadingLabel: options.loadingLabel || "Undoing…",
+          successLabel: options.successLabel || "Restored",
+          async handle(context) {
+            await options.undo?.(context);
+            return true;
+          },
+        },
+      ],
+    });
+  }
+
+  function waitWithSignal(milliseconds, signal, onTick) {
+    return new Promise((resolve, reject) => {
+      const startedAt = Date.now();
+      let timer = null;
+      let interval = null;
+      const cleanup = () => {
+        if (timer !== null) clearTimeout(timer);
+        if (interval !== null) clearInterval(interval);
+        signal?.removeEventListener("abort", onAbort);
+      };
+      const onAbort = () => {
+        cleanup();
+        reject(signal.reason instanceof Error ? signal.reason : new DOMException("Aborted", "AbortError"));
+      };
+      if (signal?.aborted) return onAbort();
+      signal?.addEventListener("abort", onAbort, { once: true });
+      interval = setInterval(() => {
+        const remaining = Math.max(0, milliseconds - (Date.now() - startedAt));
+        onTick?.(remaining);
+      }, 250);
+      timer = setTimeout(() => {
+        cleanup();
+        resolve();
+      }, Math.max(0, milliseconds));
+    });
+  }
+
+  async function showRetryToast(descriptor = {}) {
+    const options = isPlainObject(descriptor) ? descriptor : {};
+    if (typeof options.run !== "function") {
+      throw new TypeError("toast.retry() requires a run function.");
+    }
+    const maxAttempts = Math.max(1, Number(options.maxAttempts) || 3);
+    const abortController = new AbortController();
+    const task = createTaskController({
+      id: options.id,
+      title: options.title || "Trying operation",
+      description: options.description || "Starting…",
+      icon: options.icon || "refresh",
+      status: "running",
+      scope: options.scope,
+      metadata: options.metadata,
+      cancellable: true,
+      cancel() {
+        abortController.abort(new DOMException("Cancelled", "AbortError"));
+      },
+    });
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      task.update({
+        status: "running",
+        title: options.title || "Trying operation",
+        description: `Attempt ${attempt} of ${maxAttempts}`,
+        icon: "refresh",
+        progress: null,
+      });
+      emitEvent("retry:attempt", { task, attempt, maxAttempts });
+
+      try {
+        const result = await options.run({
+          attempt,
+          maxAttempts,
+          signal: abortController.signal,
+          task,
+          progress: (value, next = {}) => task.setProgress(value, next),
+        });
+        task.success(resolvePhaseDescriptor(options.success, result, {
+          title: "Completed",
+          description: `Succeeded on attempt ${attempt}.`,
+        }));
+        return result;
+      } catch (error) {
+        if (abortController.signal.aborted) {
+          await task.cancel("cancelled");
+          throw error;
+        }
+        if (attempt >= maxAttempts) {
+          task.error(error, resolvePhaseDescriptor(options.error, error, {
+            title: "All attempts failed",
+            description: error?.message || String(error),
+          }));
+          throw error;
+        }
+
+        const configured = Array.isArray(options.backoff)
+          ? options.backoff[Math.min(attempt - 1, options.backoff.length - 1)]
+          : typeof options.backoff === "function"
+            ? options.backoff(attempt, error)
+            : Number(options.backoff) || 1000 * 2 ** (attempt - 1);
+        const delay = Math.max(0, Number(configured) || 0);
+        task.update({
+          status: "paused",
+          title: options.retryTitle || "Retry scheduled",
+          description: `Attempt ${attempt} failed. Retrying in ${Math.ceil(delay / 1000)}s…`,
+          icon: "clock",
+        });
+
+        const decision = await showConfirmToast({
+          title: options.retryTitle || "Try again?",
+          description: error?.message || String(error),
+          icon: "refresh",
+          duration: delay,
+          dismissValue: "retry",
+          details: error?.stack || error,
+          rejectOnActionError: false,
+          actions: [
+            {
+              id: "cancel",
+              label: "Cancel",
+              icon: "circle-x",
+              variant: "secondary",
+              value: "cancel",
+            },
+            {
+              id: "details",
+              label: "View details",
+              icon: "eye",
+              variant: "ghost",
+              keepOpen: true,
+              handle({ update }) {
+                update({ details: error?.stack || error });
+              },
+            },
+            {
+              id: "retry",
+              label: "Retry now",
+              icon: "refresh",
+              variant: "primary",
+              value: "retry",
+            },
+          ],
+        });
+
+        if (decision === "cancel") {
+          abortController.abort(new DOMException("Cancelled", "AbortError"));
+          await task.cancel("cancelled");
+          throw error;
+        }
+      }
+    }
+
+    throw new Error("Retry loop ended unexpectedly.");
+  }
+
+  function createTaskGroup(descriptor = {}) {
+    const options = isPlainObject(descriptor) ? descriptor : { title: String(descriptor ?? "Group") };
+    const id = String(options.id || `group-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    const existing = state.groups.get(id);
+    if (existing) return existing;
+    const children = new Map();
+    const weights = new Map(Object.entries(options.weights || {}));
+    const parent = createTaskController({
+      id: options.parentTaskId || `group:${id}`,
+      title: options.title || "Task group",
+      description: options.description || "Waiting for tasks…",
+      icon: options.icon || "folder",
+      status: "queued",
+      scope: options.scope,
+      metadata: { ...(options.metadata || {}), groupId: id, groupRoot: true },
+      persist: options.persist,
+    });
+
+    const group = {
+      id,
+      parent,
+      children,
+      weights,
+      task(keyOrDescriptor, maybeDescriptor = {}) {
+        const childOptions = typeof keyOrDescriptor === "string"
+          ? { ...maybeDescriptor, key: maybeDescriptor.key || keyOrDescriptor, title: maybeDescriptor.title || keyOrDescriptor }
+          : { ...(keyOrDescriptor || {}) };
+        const key = String(childOptions.key || childOptions.id || `task-${children.size + 1}`);
+        if (children.has(key)) return children.get(key);
+        const child = createTaskController({
+          ...childOptions,
+          id: childOptions.id || `${id}:${key}`,
+          scope: childOptions.scope ?? options.scope,
+          metadata: { ...(childOptions.metadata || {}), groupId: id, groupKey: key },
+          persist: childOptions.persist ?? options.persist,
+        });
+        children.set(key, child);
+        recompute();
+        return child;
+      },
+      setWeights(nextWeights = {}) {
+        Object.entries(nextWeights).forEach(([key, value]) => {
+          weights.set(String(key), Math.max(0, Number(value) || 0));
+        });
+        recompute();
+        return group;
+      },
+      recompute,
+      dismissAll(reason = "group-dismiss") {
+        children.forEach((task) => task.dismiss(reason));
+        parent.dismiss(reason);
+        group.unsubscribe?.();
+        state.groups.delete(id);
+      },
+      complete(next = {}) {
+        parent.success(next);
+        group.unsubscribe?.();
+        return group;
+      },
+    };
+
+    function recompute() {
+      const entries = [...children.entries()];
+      if (!entries.length) {
+        parent.update({ status: "queued", progress: null });
+        return group;
+      }
+      let totalWeight = 0;
+      let completedWeight = 0;
+      let hasUnknownProgress = false;
+      let hasError = false;
+      let allSuccess = true;
+
+      entries.forEach(([key, task]) => {
+        const weight = weights.has(key) ? Number(weights.get(key)) : 1;
+        totalWeight += weight;
+        if (task.status === "error") hasError = true;
+        if (task.status !== "success") allSuccess = false;
+        if (task.status === "success") {
+          completedWeight += weight;
+        } else if (task.progress === null) {
+          hasUnknownProgress = true;
+        } else {
+          completedWeight += weight * task.progress;
+        }
+      });
+
+      if (hasError) {
+        parent.error("One or more child tasks failed.", {
+          title: options.errorTitle || "Task group failed",
+        });
+      } else if (allSuccess) {
+        parent.success({
+          title: options.successTitle || options.title || "All tasks completed",
+          description: options.successDescription || `${entries.length} tasks completed.`,
+        });
+      } else {
+        parent.update({
+          status: "running",
+          title: options.title || "Task group",
+          description: `${entries.filter(([, task]) => task.status === "success").length}/${entries.length} tasks completed`,
+          progress: hasUnknownProgress || totalWeight <= 0 ? null : completedWeight / totalWeight,
+        });
+      }
+      return group;
+    }
+
+    const unsubscribe = addEventListenerInternal("task:update", ({ task }) => {
+      if (task.snapshot().metadata?.groupId === id && task !== parent) recompute();
+    });
+    group.unsubscribe = unsubscribe;
+    state.groups.set(id, group);
+    emitEvent("group:create", { group });
+    return group;
+  }
+
+  function restorePersistedTasks() {
+    if (!state.config.persistTasks || state.restoredTasks) return [];
+    state.restoredTasks = true;
+    const now = Date.now();
+    const restored = [];
+    getPersistedTaskSnapshots().forEach((snapshot) => {
+      const terminal = ["success", "error", "cancelled"].includes(snapshot.status);
+      if (terminal && now - Number(snapshot.updatedAt || 0) > state.config.taskTerminalRetention) return;
+      const status = ["running", "queued"].includes(snapshot.status)
+        ? "paused"
+        : snapshot.status;
+      const description = ["running", "queued"].includes(snapshot.status)
+        ? `${snapshot.description || ""}${snapshot.description ? " · " : ""}Restored after reload. Resume manually.`
+        : snapshot.description;
+      const task = createTaskController({
+        ...snapshot,
+        status,
+        description,
+        restored: true,
+        orphaned: true,
+        persist: true,
+        pausable: false,
+        cancellable: true,
+      });
+      if (task) restored.push(task);
+    });
+    emitEvent("tasks:restore", { tasks: restored });
+    return restored;
+  }
+
+  function createScope(name, defaults = {}) {
+    const scopeName = String(name || "default");
+    const enrichDescriptor = (descriptor = {}) => ({
+      ...defaults,
+      ...(isPlainObject(descriptor) ? descriptor : { title: String(descriptor ?? "") }),
+      scope: scopeName,
+    });
+    const withOptions = (inputArgs) => {
+      const args = [...inputArgs];
+      let trailing = {};
+
+      if (args.length && isOptionsCandidate(args[args.length - 1])) {
+        trailing = { ...args.pop() };
+        delete trailing[OPTIONS_SYMBOL];
+      }
+
+      return [
+        ...args,
+        toast.options({ ...defaults, ...trailing, scope: scopeName }),
+      ];
+    };
+    const semantic = (type, args) => {
+      if (args.length === 1 && isRichDescriptor(args[0])) {
+        return showRichToast(enrichDescriptor(args[0]), type);
+      }
+
+      if (args[0] instanceof Error) {
+        const trailing = args[1] && isOptionsCandidate(args[1])
+          ? { ...args[1] }
+          : {};
+        return showSemanticToast(type, [
+          args[0],
+          toast.options({ ...defaults, ...trailing, scope: scopeName }),
+        ]);
+      }
+
+      return showSemanticToast(type, withOptions(args));
+    };
+
+    return {
+      name: scopeName,
+      show: (...args) => toast(...withOptions(args)),
+      error: (...args) => semantic("error", args),
+      info: (...args) => semantic("info", args),
+      success: (...args) => semantic("success", args),
+      warning: (...args) => semantic("warning", args),
+      loading: (descriptor) => showLoadingToast([enrichDescriptor(descriptor)]),
+      confirm: (descriptor) => showConfirmToast(enrichDescriptor(descriptor)),
+      prompt: (descriptor) => showPromptToast(enrichDescriptor(descriptor)),
+      select: (descriptor) => showSelectToast(enrichDescriptor(descriptor)),
+      undo: (descriptor) => showUndoToast(enrichDescriptor(descriptor)),
+      task: (descriptor) => createTaskController(enrichDescriptor(descriptor)),
+      promise: (input, descriptor) => showPromiseToast(input, enrichDescriptor(descriptor)),
+      retry: (descriptor) => showRetryToast(enrichDescriptor(descriptor)),
+      group: (descriptor) => createTaskGroup(enrichDescriptor(descriptor)),
+      dismissAll(immediate = false) {
+        getActiveToastRecords()
+          .filter((record) => record.options.scope === scopeName)
+          .forEach((record) => record.dismiss(immediate, null, "scope-dismissAll"));
+      },
+      getTasks() {
+        return [...state.tasks.values()].filter((task) => task.snapshot().scope === scopeName);
+      },
+      minimize: () => setManagerMinimized(true),
+      restore: () => setManagerMinimized(false),
+    };
   }
 
   function showDebugToast(inputArgs) {
@@ -4064,12 +6137,30 @@
     return showToast(args, null);
   }
 
-  toast.error = (...args) => showToast(args, "error");
-  toast.info = (...args) => showToast(args, "info");
-  toast.success = (...args) => showToast(args, "success");
-  toast.warning = (...args) => showToast(args, "warning");
+  toast.error = (...args) => showSemanticToast("error", args);
+  toast.info = (...args) => showSemanticToast("info", args);
+  toast.success = (...args) => showSemanticToast("success", args);
+  toast.warning = (...args) => showSemanticToast("warning", args);
+  toast.message = (descriptor = {}) => showRichToast(descriptor);
+  toast.copyError = (error, options = {}) => showRichToast({
+    ...options,
+    type: "error",
+    title: options.title || error?.message || "Error",
+    description: options.description || error?.name || "Error",
+    error,
+    copyError: true,
+    icon: options.icon || "circle-x",
+  }, "error");
   toast.loading = (...args) => showLoadingToast(args);
   toast.confirm = (descriptor = {}) => showConfirmToast(descriptor);
+  toast.prompt = (descriptor = {}) => showPromptToast(descriptor);
+  toast.select = (descriptor = {}) => showSelectToast(descriptor);
+  toast.undo = (descriptor = {}) => showUndoToast(descriptor);
+  toast.task = (descriptor = {}) => createTaskController(descriptor);
+  toast.promise = (input, descriptor = {}) => showPromiseToast(input, descriptor);
+  toast.retry = (descriptor = {}) => showRetryToast(descriptor);
+  toast.group = (descriptor = {}) => createTaskGroup(descriptor);
+  toast.scope = (name, defaults = {}) => createScope(name, defaults);
   toast.debug = (...args) => showDebugToast(args);
   toast.inspect = (...args) => showDebugToast(args);
 
@@ -4147,9 +6238,9 @@
     );
   };
 
-  toast.dismiss = (target) => {
+  toast.dismiss = (target, reason = "programmatic", immediate = false) => {
     if (target && typeof target.dismiss === "function") {
-      target.dismiss();
+      target.dismiss(reason, immediate);
       return true;
     }
 
@@ -4157,7 +6248,7 @@
       const record = state.recordsById.get(String(target));
 
       if (record && !record.removed) {
-        record.dismiss();
+        record.dismiss(Boolean(immediate), null, String(reason || "programmatic"));
         return true;
       }
     }
@@ -4172,14 +6263,39 @@
       const record = records[index];
 
       if (immediate) {
-        record.dismiss(true);
+        record.dismiss(true, null, "dismissAll");
         continue;
       }
 
       (state.hostWindow || initialHostWindow).setTimeout(() => {
-        record.dismiss(false);
+        record.dismiss(false, null, "dismissAll");
       }, index * 28);
     }
+  };
+
+  toast.on = (eventName, listener) => addEventListenerInternal(eventName, listener);
+  toast.off = (eventName, listener) => {
+    const bucket = state.listeners.get(String(eventName || "*"));
+    if (!bucket) return false;
+    const removed = bucket.delete(listener);
+    if (!bucket.size) state.listeners.delete(String(eventName || "*"));
+    return removed;
+  };
+  toast.once = (eventName, listener) => {
+    const unsubscribe = addEventListenerInternal(eventName, (event) => {
+      unsubscribe();
+      listener(event);
+    });
+    return unsubscribe;
+  };
+  toast.emit = (eventName, payload = {}) => emitEvent(eventName, payload);
+  toast.getTasks = () => [...state.tasks.values()];
+  toast.getTask = (id) => state.tasks.get(String(id)) || null;
+  toast.restoreTasks = () => restorePersistedTasks();
+  toast.clearPersistedTasks = () => {
+    const storage = getTaskStorage();
+    safeCall(() => storage?.removeItem(state.config.taskStorageKey), undefined);
+    state.restoredTasks = false;
   };
 
   toast.expand = () => {
@@ -4285,6 +6401,23 @@
     state.config.minimizeOnSpaNavigation = Boolean(
       state.config.minimizeOnSpaNavigation,
     );
+    state.config.persistTasks = Boolean(state.config.persistTasks);
+    state.config.restoreTasksOnLoad = Boolean(state.config.restoreTasksOnLoad);
+    state.config.taskStorage = state.config.taskStorage === "localStorage"
+      ? "localStorage"
+      : "sessionStorage";
+    state.config.taskStorageKey = String(
+      state.config.taskStorageKey || DEFAULT_CONFIG.taskStorageKey,
+    );
+    state.config.maxPersistedTasks = Math.max(
+      1,
+      Number(state.config.maxPersistedTasks) || DEFAULT_CONFIG.maxPersistedTasks,
+    );
+    state.config.taskTerminalRetention = Number.isFinite(
+      Number(state.config.taskTerminalRetention),
+    )
+      ? Math.max(0, Number(state.config.taskTerminalRetention))
+      : DEFAULT_CONFIG.taskTerminalRetention;
     state.config.successExitAnimation = Boolean(
       state.config.successExitAnimation,
     );
@@ -4421,4 +6554,10 @@
 
   globalWindow[TOAST_GLOBAL] = toast;
   globalWindow.toast = toast;
+
+  if (state.config.restoreTasksOnLoad) {
+    (initialHostWindow.setTimeout || globalWindow.setTimeout)(() => {
+      safeCall(() => restorePersistedTasks(), undefined);
+    }, 0);
+  }
 })(window);
