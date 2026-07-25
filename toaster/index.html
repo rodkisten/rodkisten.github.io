@@ -1,0 +1,3037 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#09090b">
+  <meta name="color-scheme" content="dark">
+  <title>Rod Toaster · Playground e documentação</title>
+  <meta
+    name="description"
+    content="Landing page interativa com todos os usos do Rod Toaster: mensagens, loading, confirmações, tarefas, grupos, retry, undo, scopes, eventos e persistência."
+  >
+
+  <style>
+    :root {
+      --page-bg: #070708;
+      --page-bg-soft: #0d0d10;
+      --surface: rgba(18, 18, 22, 0.78);
+      --surface-strong: rgba(24, 24, 29, 0.94);
+      --surface-hover: rgba(31, 31, 38, 0.96);
+      --border: rgba(255, 255, 255, 0.09);
+      --border-strong: rgba(255, 255, 255, 0.17);
+      --text: rgba(250, 250, 250, 0.96);
+      --text-soft: rgba(228, 228, 231, 0.84);
+      --muted: rgba(161, 161, 170, 0.78);
+      --muted-2: rgba(113, 113, 122, 0.82);
+      --accent: #a3ff75;
+      --accent-2: #78d7ff;
+      --accent-3: #c6a7ff;
+      --danger: #fb7185;
+      --warning: #facc15;
+      --success: #4ade80;
+      --radius-xl: 28px;
+      --radius-lg: 20px;
+      --radius-md: 14px;
+      --radius-sm: 10px;
+      --shadow:
+        0 1px 0 rgba(255, 255, 255, 0.04) inset,
+        0 28px 80px rgba(0, 0, 0, 0.38);
+      --content-width: 1460px;
+      --sidebar-width: 268px;
+      --font-sans:
+        Inter,
+        ui-sans-serif,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+      --font-mono:
+        "SFMono-Regular",
+        Consolas,
+        "Liberation Mono",
+        Menlo,
+        monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--page-bg);
+    }
+
+    body {
+      min-width: 0;
+      min-height: 100dvh;
+      margin: 0;
+      overflow-x: hidden;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 8% 4%, rgba(163, 255, 117, 0.11), transparent 30rem),
+        radial-gradient(circle at 90% 6%, rgba(120, 215, 255, 0.11), transparent 32rem),
+        radial-gradient(circle at 50% 82%, rgba(198, 167, 255, 0.07), transparent 36rem),
+        var(--page-bg);
+      font-family: var(--font-sans);
+      line-height: 1.55;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button,
+    a {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    a {
+      color: inherit;
+    }
+
+    ::selection {
+      color: #071006;
+      background: var(--accent);
+    }
+
+    .ambient-grid {
+      position: fixed;
+      inset: 0;
+      z-index: -2;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+      background-size: 34px 34px;
+      mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), transparent 92%);
+    }
+
+    .ambient-noise {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      opacity: 0.17;
+      background-image:
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.22'/%3E%3C/svg%3E");
+      mix-blend-mode: soft-light;
+    }
+
+    .shell {
+      width: min(100%, var(--content-width));
+      margin-inline: auto;
+      padding: 18px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 12px;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      width: min(calc(100% - 36px), var(--content-width));
+      min-height: 58px;
+      margin: 12px auto 0;
+      padding: 8px 10px 8px 14px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: rgba(9, 9, 11, 0.78);
+      box-shadow: 0 14px 38px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(24px) saturate(1.25);
+      -webkit-backdrop-filter: blur(24px) saturate(1.25);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      text-decoration: none;
+    }
+
+    .brand-mark {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      flex: 0 0 36px;
+      border: 1px solid rgba(163, 255, 117, 0.18);
+      border-radius: 12px;
+      background:
+        radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.34), transparent 22%),
+        linear-gradient(145deg, rgba(163, 255, 117, 0.2), rgba(120, 215, 255, 0.08));
+      color: var(--accent);
+      box-shadow:
+        0 0 0 5px rgba(163, 255, 117, 0.025),
+        0 12px 26px rgba(0, 0, 0, 0.3);
+    }
+
+    .brand-mark::after {
+      content: "";
+      width: 13px;
+      height: 13px;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: brand-spin 1.1s linear infinite;
+    }
+
+    @keyframes brand-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .brand-copy {
+      min-width: 0;
+    }
+
+    .brand-title {
+      display: block;
+      overflow: hidden;
+      font-weight: 780;
+      letter-spacing: -0.025em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .brand-subtitle {
+      display: block;
+      overflow: hidden;
+      color: var(--muted);
+      font: 600 10px/1.3 var(--font-mono);
+      letter-spacing: 0.02em;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 34px;
+      padding: 0 11px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.035);
+      font: 650 11px/1 var(--font-mono);
+      white-space: nowrap;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--warning);
+      box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.08);
+    }
+
+    .status-pill[data-state="ready"] .status-dot {
+      background: var(--success);
+      box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.08);
+    }
+
+    .status-pill[data-state="error"] .status-dot {
+      background: var(--danger);
+      box-shadow: 0 0 0 4px rgba(251, 113, 133, 0.08);
+    }
+
+    .button {
+      appearance: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 38px;
+      padding: 0 13px;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      outline: none;
+      color: var(--text-soft);
+      background: rgba(255, 255, 255, 0.045);
+      font-size: 12px;
+      font-weight: 720;
+      text-decoration: none;
+      cursor: pointer;
+      transition:
+        transform 160ms ease,
+        border-color 160ms ease,
+        background-color 160ms ease,
+        color 160ms ease;
+    }
+
+    .button:hover,
+    .button:focus-visible {
+      border-color: var(--border-strong);
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.075);
+      transform: translateY(-1px);
+    }
+
+    .button:focus-visible {
+      outline: 2px solid rgba(163, 255, 117, 0.38);
+      outline-offset: 2px;
+    }
+
+    .button:active {
+      transform: translateY(0);
+    }
+
+    .button-primary {
+      border-color: rgba(163, 255, 117, 0.44);
+      color: #071006;
+      background: var(--accent);
+    }
+
+    .button-primary:hover,
+    .button-primary:focus-visible {
+      border-color: var(--accent);
+      color: #071006;
+      background: #b8ff96;
+    }
+
+    .button-ghost {
+      border-color: transparent;
+      background: transparent;
+    }
+
+    .button-danger {
+      border-color: rgba(251, 113, 133, 0.26);
+      color: #fecdd3;
+      background: rgba(251, 113, 133, 0.08);
+    }
+
+    .icon {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      pointer-events: none;
+    }
+
+    .hero {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
+      align-items: center;
+      gap: clamp(28px, 6vw, 88px);
+      min-height: min(820px, calc(100dvh - 86px));
+      padding: clamp(70px, 10vw, 132px) 22px 72px;
+    }
+
+    .hero-copy {
+      max-width: 860px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 30px;
+      padding: 0 11px;
+      border: 1px solid rgba(163, 255, 117, 0.16);
+      border-radius: 999px;
+      color: #c7ffad;
+      background: rgba(163, 255, 117, 0.06);
+      font: 700 11px/1 var(--font-mono);
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 16px rgba(163, 255, 117, 0.8);
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      max-width: 950px;
+      margin: 24px 0 22px;
+      font-size: clamp(48px, 8.2vw, 112px);
+      font-weight: 820;
+      line-height: 0.92;
+      letter-spacing: -0.072em;
+    }
+
+    .hero-gradient {
+      color: transparent;
+      background:
+        linear-gradient(
+          110deg,
+          #ffffff 0%,
+          #e7ffd8 32%,
+          #b9f0ff 66%,
+          #d9c8ff 100%
+        );
+      background-clip: text;
+      -webkit-background-clip: text;
+    }
+
+    .hero-description {
+      max-width: 720px;
+      margin-bottom: 30px;
+      color: var(--text-soft);
+      font-size: clamp(16px, 2vw, 21px);
+      line-height: 1.58;
+      letter-spacing: -0.012em;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .install-card {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      background:
+        linear-gradient(155deg, rgba(255, 255, 255, 0.055), transparent 42%),
+        rgba(12, 12, 15, 0.86);
+      box-shadow: var(--shadow);
+      transform: rotate(1.2deg);
+    }
+
+    .install-card::before {
+      content: "";
+      position: absolute;
+      inset: -120px -80px auto auto;
+      width: 280px;
+      height: 280px;
+      border-radius: 50%;
+      background: rgba(120, 215, 255, 0.08);
+      filter: blur(2px);
+    }
+
+    .window-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 48px;
+      padding: 0 15px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.018);
+    }
+
+    .window-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .window-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted-2);
+    }
+
+    .window-dot:nth-child(1) {
+      background: #ff6b7a;
+    }
+
+    .window-dot:nth-child(2) {
+      background: #facc15;
+    }
+
+    .window-dot:nth-child(3) {
+      background: #4ade80;
+    }
+
+    .window-label {
+      color: var(--muted);
+      font: 600 10px/1 var(--font-mono);
+    }
+
+    .install-body {
+      padding: 22px;
+    }
+
+    .mini-toast {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 11px;
+      margin-bottom: 22px;
+      padding: 13px;
+      border: 1px solid var(--border-strong);
+      border-radius: 14px;
+      background: rgba(9, 9, 11, 0.96);
+      box-shadow: 0 16px 38px rgba(0, 0, 0, 0.3);
+    }
+
+    .mini-toast-spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(163, 255, 117, 0.25);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: brand-spin 0.85s linear infinite;
+    }
+
+    .mini-toast-copy {
+      min-width: 0;
+    }
+
+    .mini-toast-title {
+      display: block;
+      font-size: 12px;
+      font-weight: 730;
+    }
+
+    .mini-toast-description {
+      display: block;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 11px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mini-toast-progress {
+      color: var(--accent);
+      font: 700 10px/1 var(--font-mono);
+    }
+
+    .install-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font: 650 11px/1 var(--font-mono);
+    }
+
+    .code-shell {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(5, 5, 7, 0.92);
+    }
+
+    pre {
+      margin: 0;
+      overflow: auto;
+      padding: 17px;
+      color: rgba(228, 228, 231, 0.9);
+      font: 12px/1.65 var(--font-mono);
+      tab-size: 2;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+    }
+
+    code {
+      font-family: var(--font-mono);
+    }
+
+    .code-comment {
+      color: #71717a;
+    }
+
+    .code-keyword {
+      color: #c4b5fd;
+    }
+
+    .code-string {
+      color: #fdba74;
+    }
+
+    .code-call {
+      color: #93c5fd;
+    }
+
+    .code-number {
+      color: #bef264;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+      align-items: start;
+      gap: 24px;
+      padding: 34px 0 90px;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 88px;
+      max-height: calc(100dvh - 106px);
+      overflow: auto;
+      padding: 13px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: rgba(11, 11, 14, 0.7);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.13) transparent;
+    }
+
+    .sidebar-title {
+      margin: 4px 8px 10px;
+      color: var(--muted-2);
+      font: 700 10px/1 var(--font-mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .sidebar-list {
+      display: grid;
+      gap: 3px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .sidebar-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 38px;
+      padding: 0 10px;
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+      text-decoration: none;
+      transition:
+        color 140ms ease,
+        background-color 140ms ease;
+    }
+
+    .sidebar-link:hover,
+    .sidebar-link[data-active="true"] {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.055);
+    }
+
+    .sidebar-count {
+      min-width: 24px;
+      padding: 3px 6px;
+      border-radius: 999px;
+      color: var(--muted-2);
+      background: rgba(255, 255, 255, 0.04);
+      font: 650 9px/1 var(--font-mono);
+      text-align: center;
+    }
+
+    .content {
+      min-width: 0;
+    }
+
+    .catalog-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, 420px);
+      align-items: end;
+      gap: 24px;
+      margin-bottom: 26px;
+      padding: 5px 2px;
+    }
+
+    .catalog-head h2 {
+      margin-bottom: 9px;
+      font-size: clamp(30px, 4.2vw, 58px);
+      line-height: 1;
+      letter-spacing: -0.055em;
+    }
+
+    .catalog-head p {
+      max-width: 680px;
+      margin-bottom: 0;
+      color: var(--muted);
+    }
+
+    .search-wrap {
+      position: relative;
+    }
+
+    .search-wrap .icon {
+      position: absolute;
+      top: 50%;
+      left: 13px;
+      color: var(--muted-2);
+      transform: translateY(-50%);
+      pointer-events: none;
+    }
+
+    .search {
+      width: 100%;
+      height: 44px;
+      padding: 0 14px 0 40px;
+      border: 1px solid var(--border);
+      border-radius: 13px;
+      outline: none;
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.038);
+      transition:
+        border-color 160ms ease,
+        box-shadow 160ms ease,
+        background-color 160ms ease;
+    }
+
+    .search::placeholder {
+      color: var(--muted-2);
+    }
+
+    .search:focus {
+      border-color: rgba(163, 255, 117, 0.32);
+      background: rgba(255, 255, 255, 0.052);
+      box-shadow: 0 0 0 4px rgba(163, 255, 117, 0.055);
+    }
+
+    .section {
+      scroll-margin-top: 100px;
+      margin-bottom: 52px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 20px;
+      margin-bottom: 15px;
+      padding: 0 2px;
+    }
+
+    .section-kicker {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--accent);
+      font: 700 10px/1 var(--font-mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .section-title {
+      margin-bottom: 0;
+      font-size: clamp(23px, 3vw, 36px);
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+
+    .section-description {
+      max-width: 560px;
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: right;
+    }
+
+    .demo-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .demo-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.035), transparent 38%),
+        var(--surface);
+      box-shadow: 0 18px 44px rgba(0, 0, 0, 0.2);
+      transition:
+        transform 170ms ease,
+        border-color 170ms ease,
+        background-color 170ms ease;
+    }
+
+    .demo-card:hover {
+      border-color: var(--border-strong);
+      background-color: var(--surface-strong);
+      transform: translateY(-2px);
+    }
+
+    .demo-card[data-hidden="true"] {
+      display: none;
+    }
+
+    .demo-head {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 12px;
+      padding: 18px 18px 14px;
+    }
+
+    .demo-index {
+      display: grid;
+      place-items: center;
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--accent-2);
+      background: rgba(120, 215, 255, 0.055);
+      font: 700 10px/1 var(--font-mono);
+    }
+
+    .demo-copy {
+      min-width: 0;
+    }
+
+    .demo-title {
+      margin-bottom: 4px;
+      font-size: 15px;
+      line-height: 1.25;
+      letter-spacing: -0.018em;
+    }
+
+    .demo-description {
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .demo-code {
+      flex: 1;
+      min-height: 0;
+      margin: 0 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.065);
+      border-radius: 13px;
+      background: rgba(5, 5, 7, 0.88);
+    }
+
+    .demo-code pre {
+      max-height: 330px;
+      padding: 15px;
+      font-size: 11px;
+      line-height: 1.62;
+    }
+
+    .demo-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px;
+    }
+
+    .demo-meta {
+      min-width: 0;
+      overflow: hidden;
+      color: var(--muted-2);
+      font: 650 9px/1 var(--font-mono);
+      letter-spacing: 0.04em;
+      text-overflow: ellipsis;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .demo-actions {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex: 0 0 auto;
+    }
+
+    .button-small {
+      min-height: 32px;
+      padding-inline: 10px;
+      border-radius: 9px;
+      font-size: 10px;
+    }
+
+    .api-table-wrap {
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+    }
+
+    .api-table-scroller {
+      overflow-x: auto;
+    }
+
+    .api-table {
+      width: 100%;
+      min-width: 780px;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .api-table th,
+    .api-table td {
+      padding: 13px 15px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .api-table tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .api-table th {
+      color: var(--muted-2);
+      background: rgba(255, 255, 255, 0.018);
+      font: 700 10px/1 var(--font-mono);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .api-table code {
+      color: #d8b4fe;
+      font-size: 11px;
+    }
+
+    .api-table td:nth-child(2) {
+      color: var(--text-soft);
+    }
+
+    .api-table td:nth-child(3) {
+      color: var(--muted);
+    }
+
+    .empty-results {
+      display: none;
+      place-items: center;
+      min-height: 260px;
+      padding: 40px;
+      border: 1px dashed var(--border-strong);
+      border-radius: var(--radius-lg);
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .empty-results[data-visible="true"] {
+      display: grid;
+    }
+
+    .footer {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 24px;
+      margin-top: 42px;
+      padding: 28px 2px 46px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .footer strong {
+      color: var(--text-soft);
+    }
+
+    .kbd {
+      display: inline-grid;
+      place-items: center;
+      min-width: 24px;
+      min-height: 22px;
+      padding: 2px 6px;
+      border: 1px solid var(--border-strong);
+      border-bottom-color: rgba(255, 255, 255, 0.23);
+      border-radius: 6px;
+      color: var(--text-soft);
+      background: rgba(255, 255, 255, 0.045);
+      box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+      font: 650 10px/1 var(--font-mono);
+    }
+
+    .mobile-menu {
+      display: none;
+    }
+
+    .toast-result {
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    @media (max-width: 1080px) {
+      .hero {
+        grid-template-columns: 1fr;
+        min-height: auto;
+      }
+
+      .hero-copy {
+        max-width: 900px;
+      }
+
+      .install-card {
+        width: min(100%, 680px);
+        transform: none;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        display: none;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .shell {
+        padding-inline: 12px;
+      }
+
+      .topbar {
+        top: 8px;
+        width: calc(100% - 20px);
+        margin-top: 8px;
+      }
+
+      .status-pill {
+        display: none;
+      }
+
+      .topbar-actions .button-ghost {
+        display: none;
+      }
+
+      .mobile-menu {
+        display: inline-flex;
+      }
+
+      .hero {
+        padding: 68px 4px 54px;
+      }
+
+      h1 {
+        font-size: clamp(47px, 16vw, 74px);
+      }
+
+      .catalog-head {
+        grid-template-columns: 1fr;
+        align-items: start;
+      }
+
+      .demo-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .section-header {
+        align-items: start;
+        flex-direction: column;
+      }
+
+      .section-description {
+        text-align: left;
+      }
+
+      .footer {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 460px) {
+      .brand-subtitle {
+        display: none;
+      }
+
+      .topbar-actions .button span {
+        display: none;
+      }
+
+      .topbar-actions .button {
+        width: 38px;
+        padding: 0;
+      }
+
+      .hero-actions .button {
+        flex: 1 1 150px;
+      }
+
+      .install-body {
+        padding: 14px;
+      }
+
+      .demo-footer {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .demo-actions {
+        width: 100%;
+      }
+
+      .demo-actions .button {
+        flex: 1;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      *,
+      *::before,
+      *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 1ms !important;
+      }
+    }
+  </style>
+
+  <script src="https://rod.migos.club/toaster/toaster.js?v=4.0.0"></script>
+</head>
+
+<body>
+  <div class="ambient-grid"></div>
+  <div class="ambient-noise"></div>
+
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="Voltar ao início">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-copy">
+        <span class="brand-title">Rod Toaster</span>
+        <span class="brand-subtitle">playground · documentação · v<span data-version>...</span></span>
+      </span>
+    </a>
+
+    <div class="topbar-actions">
+      <span id="runtime-status" class="status-pill" data-state="loading">
+        <span class="status-dot"></span>
+        <span data-status-label>Carregando API…</span>
+      </span>
+
+      <button class="button button-ghost" type="button" data-action="minimize">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 12h12"></path>
+        </svg>
+        <span>Minimizar</span>
+      </button>
+
+      <button class="button button-primary" type="button" data-action="quick-demo">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m8 5 11 7-11 7Z"></path>
+        </svg>
+        <span>Testar agora</span>
+      </button>
+    </div>
+  </header>
+
+  <main id="top" class="shell">
+    <section class="hero">
+      <div class="hero-copy">
+        <span class="eyebrow">Uma API, muitos estados</span>
+        <h1>
+          Feedback visual que
+          <span class="hero-gradient">trabalha com você.</span>
+        </h1>
+        <p class="hero-description">
+          Mensagens, confirmações, prompts, progresso, filas, tarefas persistentes,
+          retries, undo, grupos ponderados, eventos e um pequeno gerenciador de
+          downloads. Tudo em um único arquivo, isolado por Shadow DOM e pronto
+          para sobreviver a navegações SPA.
+        </p>
+
+        <div class="hero-actions">
+          <button class="button button-primary" type="button" data-action="quick-demo">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-6.22-8.56"></path>
+            </svg>
+            Rodar demonstração
+          </button>
+
+          <a class="button" href="#catalog">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 6h13"></path>
+              <path d="M8 12h13"></path>
+              <path d="M8 18h13"></path>
+              <path d="M3 6h.01"></path>
+              <path d="M3 12h.01"></path>
+              <path d="M3 18h.01"></path>
+            </svg>
+            Explorar APIs
+          </a>
+
+          <button class="button" type="button" data-action="copy-install">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            Copiar instalação
+          </button>
+        </div>
+      </div>
+
+      <aside class="install-card" aria-label="Instalação rápida">
+        <div class="window-bar">
+          <div class="window-dots" aria-hidden="true">
+            <span class="window-dot"></span>
+            <span class="window-dot"></span>
+            <span class="window-dot"></span>
+          </div>
+          <span class="window-label">toaster.js</span>
+        </div>
+
+        <div class="install-body">
+          <div class="mini-toast" aria-hidden="true">
+            <span class="mini-toast-spinner"></span>
+            <span class="mini-toast-copy">
+              <span class="mini-toast-title">Enviando para o Telegram</span>
+              <span class="mini-toast-description">Unindo áudio e vídeo…</span>
+            </span>
+            <span class="mini-toast-progress">68%</span>
+          </div>
+
+          <div class="install-label">
+            <span>Instalação via script</span>
+            <span>zero build</span>
+          </div>
+
+          <div class="code-shell">
+            <pre><code>&lt;script
+  src="https://rod.migos.club/userscripts/toaster.js"
+&gt;&lt;/script&gt;
+
+&lt;script&gt;
+  toast.success({
+    title: "Pronto",
+    description: "A API já está disponível.",
+  });
+&lt;/script&gt;</code></pre>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <div id="catalog" class="layout">
+      <nav class="sidebar" aria-label="Seções da documentação">
+        <div class="sidebar-title">Navegação</div>
+        <ul id="sidebar-list" class="sidebar-list"></ul>
+      </nav>
+
+      <div class="content">
+        <div class="catalog-head">
+          <div>
+            <span class="section-kicker">Playground executável</span>
+            <h2>Todos os usos, sem fumaça.</h2>
+            <p>
+              Cada cartão contém código copiável e um botão que executa o exemplo
+              usando a versão real carregada de
+              <code>rod.migos.club/userscripts/toaster.js</code>.
+            </p>
+          </div>
+
+          <label class="search-wrap">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            <input
+              id="search"
+              class="search"
+              type="search"
+              placeholder="Buscar confirm, task, retry, progresso…"
+              autocomplete="off"
+              spellcheck="false"
+            >
+          </label>
+        </div>
+
+        <div id="sections"></div>
+
+        <div id="empty-results" class="empty-results">
+          <div>
+            <h3>Nenhum exemplo encontrado</h3>
+            <p>Experimente buscar por “task”, “confirm”, “evento” ou “loading”.</p>
+          </div>
+        </div>
+
+        <section id="reference" class="section">
+          <header class="section-header">
+            <div>
+              <span class="section-kicker">Mapa rápido</span>
+              <h2 class="section-title">Referência da API</h2>
+            </div>
+            <p class="section-description">
+              A superfície pública da versão carregada, agrupada por intenção.
+            </p>
+          </header>
+
+          <div class="api-table-wrap">
+            <div class="api-table-scroller">
+              <table class="api-table">
+                <thead>
+                  <tr>
+                    <th>API</th>
+                    <th>Retorno</th>
+                    <th>Uso principal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td><code>toast(...args)</code></td><td>Controller</td><td>Mensagem padrão com valores primitivos ou objetos.</td></tr>
+                  <tr><td><code>toast.success/info/warning/error()</code></td><td>Controller</td><td>Mensagens semânticas, descritores ricos e erros copiáveis.</td></tr>
+                  <tr><td><code>toast.message()</code></td><td>Controller</td><td>Toast rico com título, detalhes e ações assíncronas.</td></tr>
+                  <tr><td><code>toast.loading()</code></td><td>Loading controller</td><td>Spinner, pulse, progresso e transição para estado terminal.</td></tr>
+                  <tr><td><code>toast.confirm()</code></td><td>Promise&lt;T&gt;</td><td>Confirmação com actions, checkbox, atalhos e countdown.</td></tr>
+                  <tr><td><code>toast.prompt()</code></td><td>Promise&lt;string|null&gt;</td><td>Entrada de texto simples ou multiline com validação.</td></tr>
+                  <tr><td><code>toast.select()</code></td><td>Promise&lt;T|T[]|null&gt;</td><td>Seleção única ou múltipla.</td></tr>
+                  <tr><td><code>toast.undo()</code></td><td>Promise&lt;boolean&gt;</td><td>Janela temporária para desfazer uma ação.</td></tr>
+                  <tr><td><code>toast.promise()</code></td><td>Promise&lt;T&gt;</td><td>Mapeia uma Promise para loading, success e error.</td></tr>
+                  <tr><td><code>toast.task()</code></td><td>Task controller</td><td>Tarefa com progresso, pause, resume, cancel e persistência.</td></tr>
+                  <tr><td><code>toast.group()</code></td><td>Task group</td><td>Agrega tarefas filhas e calcula progresso ponderado.</td></tr>
+                  <tr><td><code>toast.retry()</code></td><td>Promise&lt;T&gt;</td><td>Tentativas, backoff, cancelamento e retry manual.</td></tr>
+                  <tr><td><code>toast.scope()</code></td><td>Scoped API</td><td>Isola mensagens e tarefas por feature ou domínio.</td></tr>
+                  <tr><td><code>toast.on/once/off/emit()</code></td><td>unsubscribe / void</td><td>Eventos de lifecycle, actions, tarefas e grupos.</td></tr>
+                  <tr><td><code>toast.update/progress/resolve()</code></td><td>Controller</td><td>Atualização imperativa baseada em ID.</td></tr>
+                  <tr><td><code>toast.minimize/restore()</code></td><td>boolean</td><td>Controla o gerenciador compacto de tarefas.</td></tr>
+                  <tr><td><code>toast.configure()</code></td><td>Config</td><td>Posição, persistência, duração, inspeção e navegação SPA.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <footer class="footer">
+          <div>
+            <strong>Rod Toaster</strong><br>
+            Um toaster que cresceu e virou uma pequena central de operações.
+          </div>
+          <div>
+            Pressione <span class="kbd">Esc</span> para fechar dialogs ou recolher a pilha.
+          </div>
+        </footer>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const INSTALL_CODE =
+        '<script src="https://rod.migos.club/userscripts/toaster.js"><' +
+        '/script>';
+
+      const sleep = (ms) =>
+        new Promise((resolve) => setTimeout(resolve, ms));
+
+      const icons = {
+        play: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7Z"></path></svg>',
+        copy: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
+      };
+
+      const sections = [
+        {
+          id: "messages",
+          title: "Mensagens e conteúdo rico",
+          kicker: "Fundamentos",
+          description:
+            "Do aviso de uma linha ao erro expansível com ações e cópia de stack.",
+        },
+        {
+          id: "interaction",
+          title: "Interação e decisões",
+          kicker: "Dialogs compactos",
+          description:
+            "Confirm, prompt, select, checkbox, atalhos e contagem regressiva.",
+        },
+        {
+          id: "async",
+          title: "Operações assíncronas",
+          kicker: "Estado vivo",
+          description:
+            "Loading, Promise, retry e progresso imperativo sem trocar de toast.",
+        },
+        {
+          id: "tasks",
+          title: "Tarefas e gerenciador",
+          kicker: "Download manager",
+          description:
+            "Pause, resume, cancel, grupos ponderados, persistência e navegação SPA.",
+        },
+        {
+          id: "architecture",
+          title: "Organização e integração",
+          kicker: "Arquitetura",
+          description:
+            "Scopes, eventos, IDs, configuração, inspeção e controles globais.",
+        },
+      ];
+
+      const demos = [
+        {
+          id: "semantic",
+          section: "messages",
+          title: "Toasts semânticos",
+          description:
+            "As variantes básicas compartilham a mesma API e mudam ícone, accent e role.",
+          tags: "default info success warning error semantic",
+          code: `toast("Mensagem neutra");
+toast.info("A sincronização começou.");
+toast.success("Arquivo salvo.");
+toast.warning("A conexão está instável.");
+toast.error("Não foi possível concluir.");`,
+          async run() {
+            toast("Mensagem neutra");
+            await sleep(140);
+            toast.info("A sincronização começou.");
+            await sleep(140);
+            toast.success("Arquivo salvo.");
+            await sleep(140);
+            toast.warning("A conexão está instável.");
+            await sleep(140);
+            toast.error("Não foi possível concluir.");
+          },
+        },
+        {
+          id: "rich-message",
+          section: "messages",
+          title: "Mensagem rica com ações",
+          description:
+            "Título, descrição, details expansível e botões assíncronos no próprio toast.",
+          tags: "message rich details actions async",
+          code: `toast.message({
+  title: "Worker respondeu com HTTP 413",
+  description: "O arquivo excedeu o limite configurado.",
+  icon: "triangle-alert",
+  details: {
+    endpoint: "/send",
+    status: 413,
+    limit: "50 MB",
+  },
+  actions: [
+    {
+      id: "inspect",
+      label: "Inspecionar",
+      icon: "eye",
+      variant: "secondary",
+      close: false,
+      handle({ update }) {
+        update({
+          description: "Detalhes atualizados sem fechar o toast.",
+        });
+      },
+    },
+  ],
+});`,
+          run() {
+            toast.message({
+              title: "Worker respondeu com HTTP 413",
+              description: "O arquivo excedeu o limite configurado.",
+              icon: "triangle-alert",
+              details: {
+                endpoint: "/send",
+                status: 413,
+                limit: "50 MB",
+              },
+              actions: [
+                {
+                  id: "inspect",
+                  label: "Inspecionar",
+                  icon: "eye",
+                  variant: "secondary",
+                  close: false,
+                  successLabel: "Atualizado",
+                  handle({ update }) {
+                    update({
+                      description:
+                        "Detalhes atualizados sem fechar o toast.",
+                    });
+                  },
+                },
+              ],
+            });
+          },
+        },
+        {
+          id: "error-copy",
+          section: "messages",
+          title: "Erro com stack copiável",
+          description:
+            "Ao receber um Error, o toaster cria details e uma action de copiar automaticamente.",
+          tags: "error copy stack details exception",
+          code: `try {
+  throw new Error("Falha ao processar playlist HLS.");
+} catch (error) {
+  toast.copyError(error, {
+    title: "Falha no pipeline",
+    description: "Abra os detalhes ou copie a stack.",
+  });
+}`,
+          run() {
+            try {
+              throw new Error("Falha ao processar playlist HLS.");
+            } catch (error) {
+              toast.copyError(error, {
+                title: "Falha no pipeline",
+                description: "Abra os detalhes ou copie a stack.",
+              });
+            }
+          },
+        },
+        {
+          id: "debug-inspector",
+          section: "messages",
+          title: "Debug com Object Inspector",
+          description:
+            "Objetos, arrays, Map, Set e Error podem ser explorados sem serialização destrutiva.",
+          tags: "debug inspect object inspector map set",
+          code: `toast.debug(
+  "Snapshot do pipeline",
+  {
+    provider: "twitter",
+    candidates: [
+      { type: "mp4", height: 1080 },
+      { type: "hls", height: 720 },
+    ],
+    headers: new Map([["Referer", location.origin]]),
+  },
+  toast.options({ duration: 0 }),
+);`,
+          run() {
+            toast.debug(
+              "Snapshot do pipeline",
+              {
+                provider: "twitter",
+                candidates: [
+                  { type: "mp4", height: 1080 },
+                  { type: "hls", height: 720 },
+                ],
+                headers: new Map([["Referer", location.origin]]),
+              },
+              toast.options({ duration: 0 }),
+            );
+          },
+        },
+        {
+          id: "confirm",
+          section: "interaction",
+          title: "Confirm com actions assíncronas",
+          description:
+            "O valor retornado por handle() vira diretamente o resultado do await.",
+          tags: "confirm actions handle promise repeat telegram",
+          code: `const confirmed = await toast.confirm({
+  title: "Enviar novamente?",
+  description:
+    "Este post já foi enviado ao Telegram em 24/07/2026 às 19:35.",
+  icon: "history",
+  duration: 0,
+  dismissible: true,
+  actions: [
+    {
+      id: "cancel",
+      label: "Cancelar",
+      icon: "circle-x",
+      variant: "secondary",
+      handle() {
+        return false;
+      },
+    },
+    {
+      id: "repeat",
+      label: "Enviar novamente",
+      icon: "send",
+      variant: "primary",
+      handle() {
+        return true;
+      },
+    },
+  ],
+});`,
+          async run() {
+            const confirmed = await toast.confirm({
+              title: "Enviar novamente?",
+              description:
+                "Este post já foi enviado ao Telegram em 24/07/2026 às 19:35.",
+              icon: "history",
+              duration: 0,
+              dismissible: true,
+              actions: [
+                {
+                  id: "cancel",
+                  label: "Cancelar",
+                  icon: "circle-x",
+                  variant: "secondary",
+                  handle() {
+                    return false;
+                  },
+                },
+                {
+                  id: "repeat",
+                  label: "Enviar novamente",
+                  icon: "send",
+                  variant: "primary",
+                  handle() {
+                    return true;
+                  },
+                },
+              ],
+            });
+
+            toast.info({
+              title: "Resultado do confirm",
+              description: confirmed ? "Reenviar: sim" : "Reenviar: não",
+            });
+          },
+        },
+        {
+          id: "confirm-meta",
+          section: "interaction",
+          title: "Checkbox, shortcuts e metadata",
+          description:
+            "returnMeta preserva value, reason, actionId e o estado dos checkboxes.",
+          tags: "confirm checkbox returnMeta shortcuts keyboard metadata",
+          code: `const result = await toast.confirm({
+  title: "Publicar alterações?",
+  description: "A ação pode disparar um novo deploy.",
+  icon: "send",
+  returnMeta: true,
+  checkbox: {
+    id: "remember",
+    label: "Não perguntar novamente nesta sessão",
+  },
+  shortcuts: {
+    Escape: "cancel",
+    "Meta+Enter": "publish",
+    "Control+Enter": "publish",
+  },
+  actions: [
+    {
+      id: "cancel",
+      label: "Cancelar",
+      variant: "secondary",
+      value: false,
+    },
+    {
+      id: "publish",
+      label: "Publicar",
+      icon: "send",
+      variant: "primary",
+      value: true,
+    },
+  ],
+});`,
+          async run() {
+            const result = await toast.confirm({
+              title: "Publicar alterações?",
+              description: "A ação pode disparar um novo deploy.",
+              icon: "send",
+              returnMeta: true,
+              checkbox: {
+                id: "remember",
+                label: "Não perguntar novamente nesta sessão",
+              },
+              shortcuts: {
+                Escape: "cancel",
+                "Meta+Enter": "publish",
+                "Control+Enter": "publish",
+              },
+              actions: [
+                {
+                  id: "cancel",
+                  label: "Cancelar",
+                  variant: "secondary",
+                  value: false,
+                },
+                {
+                  id: "publish",
+                  label: "Publicar",
+                  icon: "send",
+                  variant: "primary",
+                  value: true,
+                },
+              ],
+            });
+
+            toast.message({
+              title: "Metadata recebida",
+              description: JSON.stringify(result),
+              icon: "info",
+              details: result,
+            });
+          },
+        },
+        {
+          id: "countdown",
+          section: "interaction",
+          title: "Countdown para ação destrutiva",
+          description:
+            "A action fica desabilitada até o cronômetro chegar a zero.",
+          tags: "confirm countdown danger delete disabled",
+          code: `await toast.confirm({
+  title: "Apagar cache local?",
+  description: "Essa operação não pode ser desfeita.",
+  icon: "trash",
+  countdown: 4,
+  actions: [
+    {
+      id: "cancel",
+      label: "Cancelar",
+      variant: "secondary",
+      value: false,
+    },
+    {
+      id: "delete",
+      label: "Excluir em {seconds}s",
+      icon: "trash",
+      variant: "danger",
+      disabledUntilCountdown: true,
+      value: true,
+    },
+  ],
+});`,
+          async run() {
+            const deleted = await toast.confirm({
+              title: "Apagar cache local?",
+              description: "Essa operação não pode ser desfeita.",
+              icon: "trash",
+              countdown: 4,
+              actions: [
+                {
+                  id: "cancel",
+                  label: "Cancelar",
+                  variant: "secondary",
+                  value: false,
+                },
+                {
+                  id: "delete",
+                  label: "Excluir em {seconds}s",
+                  icon: "trash",
+                  variant: "danger",
+                  disabledUntilCountdown: true,
+                  value: true,
+                },
+              ],
+            });
+
+            if (deleted) {
+              toast.success("Cache fictício apagado.");
+            }
+          },
+        },
+        {
+          id: "prompt",
+          section: "interaction",
+          title: "Prompt com validação",
+          description:
+            "Entrada simples ou textarea, validação síncrona/assíncrona e atalhos.",
+          tags: "prompt input textarea validation multiline",
+          code: `const caption = await toast.prompt({
+  title: "Editar legenda",
+  description: "Revise o texto antes do envio.",
+  inputLabel: "Legenda",
+  value: "Vídeo encontrado pelo userscript.",
+  placeholder: "Digite a legenda…",
+  multiline: true,
+  required: true,
+  maxLength: 280,
+  validate(value) {
+    return value.trim().length >= 8
+      ? true
+      : "Use pelo menos 8 caracteres.";
+  },
+});`,
+          async run() {
+            const caption = await toast.prompt({
+              title: "Editar legenda",
+              description: "Revise o texto antes do envio.",
+              inputLabel: "Legenda",
+              value: "Vídeo encontrado pelo userscript.",
+              placeholder: "Digite a legenda…",
+              multiline: true,
+              required: true,
+              maxLength: 280,
+              validate(value) {
+                return value.trim().length >= 8
+                  ? true
+                  : "Use pelo menos 8 caracteres.";
+              },
+            });
+
+            if (caption !== null) {
+              toast.success({
+                title: "Legenda salva",
+                description: caption,
+              });
+            }
+          },
+        },
+        {
+          id: "select",
+          section: "interaction",
+          title: "Select simples ou múltiplo",
+          description:
+            "O retorno é o value selecionado ou uma lista quando multiple=true.",
+          tags: "select options multiple channels",
+          code: `const channels = await toast.select({
+  title: "Escolha os canais",
+  description: "Segure Ctrl/Cmd para selecionar mais de um.",
+  inputLabel: "Destinos",
+  multiple: true,
+  required: true,
+  value: ["videos"],
+  options: [
+    { value: "videos", label: "Vídeos" },
+    { value: "social", label: "Instagram e Twitter" },
+    { value: "archive", label: "Arquivo privado" },
+  ],
+});`,
+          async run() {
+            const channels = await toast.select({
+              title: "Escolha os canais",
+              description: "Segure Ctrl/Cmd para selecionar mais de um.",
+              inputLabel: "Destinos",
+              multiple: true,
+              required: true,
+              value: ["videos"],
+              options: [
+                { value: "videos", label: "Vídeos" },
+                { value: "social", label: "Instagram e Twitter" },
+                { value: "archive", label: "Arquivo privado" },
+              ],
+            });
+
+            if (channels) {
+              toast.info({
+                title: "Canais selecionados",
+                description: channels.join(", "),
+              });
+            }
+          },
+        },
+        {
+          id: "undo",
+          section: "interaction",
+          title: "Undo temporizado",
+          description:
+            "Uma confirmação regressiva especializada em operações reversíveis.",
+          tags: "undo rollback countdown restore",
+          code: `const restored = await toast.undo({
+  title: "Item removido",
+  description: "@usuario saiu da lista.",
+  duration: 6000,
+  actionLabel: "Desfazer",
+  async undo() {
+    await restoreUser();
+  },
+});`,
+          async run() {
+            const restored = await toast.undo({
+              title: "Item removido",
+              description: "@usuario saiu da lista.",
+              duration: 6000,
+              actionLabel: "Desfazer",
+              async undo() {
+                await sleep(700);
+              },
+            });
+
+            if (restored) {
+              toast.success("Usuário restaurado.");
+            }
+          },
+        },
+        {
+          id: "loading",
+          section: "async",
+          title: "Loading atualizável",
+          description:
+            "Um único toast atravessa spinner, progress e success sem piscar.",
+          tags: "loading spinner pulse progress setProgress success",
+          code: `const task = toast.loading({
+  title: "Enviando para o Telegram",
+  description: "Preparando mídia",
+  icon: "upload",
+  animation: "spinner",
+});
+
+task.update({
+  description: "Obtendo URL do vídeo",
+});
+
+task.setProgress(68, {
+  description: "Enviando vídeo…",
+  animation: "progress",
+});
+
+task.success({
+  title: "Enviado",
+  description: "A mídia chegou ao Telegram.",
+});`,
+          async run() {
+            const task = toast.loading({
+              title: "Enviando para o Telegram",
+              description: "Preparando mídia",
+              icon: "upload",
+              animation: "spinner",
+            });
+
+            await sleep(650);
+            task.update({
+              description: "Obtendo URL do vídeo",
+              icon: "refresh",
+              animation: "pulse",
+            });
+
+            await sleep(650);
+
+            for (const progress of [12, 28, 46, 68, 84, 100]) {
+              task.setProgress(progress, {
+                description: `Enviando vídeo · ${progress}%`,
+                animation: "progress",
+              });
+              await sleep(280);
+            }
+
+            task.success({
+              title: "Enviado",
+              description: "A mídia chegou ao Telegram.",
+            });
+          },
+        },
+        {
+          id: "id-api",
+          section: "async",
+          title: "Atualização imperativa por ID",
+          description:
+            "Útil quando eventos externos conhecem apenas o identificador da operação.",
+          tags: "id update progress resolve imperative",
+          code: `toast.loading({
+  id: "upload:post:123",
+  title: "Upload",
+  description: "Na fila…",
+  icon: "upload",
+});
+
+toast.update("upload:post:123", {
+  description: "Conectando ao Worker…",
+});
+
+toast.progress("upload:post:123", 75, {
+  description: "75% enviado",
+});
+
+toast.resolve("upload:post:123", "success", {
+  title: "Concluído",
+});`,
+          async run() {
+            const id = `upload:demo:${Date.now()}`;
+
+            toast.loading({
+              id,
+              title: "Upload",
+              description: "Na fila…",
+              icon: "upload",
+            });
+
+            await sleep(600);
+            toast.update(id, {
+              description: "Conectando ao Worker…",
+            });
+
+            await sleep(600);
+            toast.progress(id, 35, {
+              description: "35% enviado",
+              animation: "progress",
+            });
+
+            await sleep(450);
+            toast.progress(id, 75, {
+              description: "75% enviado",
+              animation: "progress",
+            });
+
+            await sleep(450);
+            toast.resolve(id, "success", {
+              title: "Concluído",
+              description: "Upload finalizado.",
+            });
+          },
+        },
+        {
+          id: "promise",
+          section: "async",
+          title: "toast.promise()",
+          description:
+            "Recebe Promise ou função e injeta signal, progress, update e task.",
+          tags: "promise async cancellable progress signal",
+          code: `const result = await toast.promise(
+  async ({ progress, signal }) => {
+    for (let value = 0; value <= 100; value += 10) {
+      if (signal.aborted) throw signal.reason;
+      progress(value, {
+        description: \`Processando · \${value}%\`,
+      });
+      await wait(180);
+    }
+
+    return { messageId: 9281 };
+  },
+  {
+    loading: {
+      title: "Processando mídia",
+      icon: "loader-circle",
+    },
+    success: (result) => ({
+      title: "Concluído",
+      description: \`Mensagem \${result.messageId} criada.\`,
+    }),
+    error: (error) => ({
+      title: "Falhou",
+      description: error.message,
+    }),
+    cancellable: true,
+  },
+);`,
+          async run() {
+            await toast.promise(
+              async ({ progress, signal }) => {
+                for (let value = 0; value <= 100; value += 10) {
+                  if (signal.aborted) {
+                    throw signal.reason;
+                  }
+
+                  progress(value, {
+                    description: `Processando · ${value}%`,
+                  });
+
+                  await sleep(180);
+                }
+
+                return { messageId: 9281 };
+              },
+              {
+                loading: {
+                  title: "Processando mídia",
+                  description: "Inicializando…",
+                  icon: "loader-circle",
+                },
+                success: (result) => ({
+                  title: "Concluído",
+                  description: `Mensagem ${result.messageId} criada.`,
+                }),
+                error: (error) => ({
+                  title: "Falhou",
+                  description: error.message,
+                }),
+                cancellable: true,
+              },
+            );
+          },
+        },
+        {
+          id: "retry",
+          section: "async",
+          title: "Retry com backoff",
+          description:
+            "Tentativas numeradas, pausa automática, retry manual e cancelamento.",
+          tags: "retry backoff attempts error cancel",
+          code: `const response = await toast.retry({
+  title: "Enviando ao Worker",
+  maxAttempts: 3,
+  backoff: [1200, 2200],
+  async run({ attempt, progress }) {
+    progress(attempt / 3, {
+      description: \`Tentativa \${attempt} de 3\`,
+    });
+
+    await request();
+
+    if (attempt < 3) {
+      throw new Error(\`HTTP 503 na tentativa \${attempt}\`);
+    }
+
+    return { ok: true };
+  },
+});`,
+          async run() {
+            await toast.retry({
+              title: "Enviando ao Worker",
+              description: "A primeira resposta pode falhar de propósito.",
+              maxAttempts: 3,
+              backoff: [1200, 1800],
+              async run({ attempt, progress }) {
+                progress(attempt / 3, {
+                  description: `Tentativa ${attempt} de 3`,
+                });
+
+                await sleep(650);
+
+                if (attempt < 3) {
+                  throw new Error(`HTTP 503 na tentativa ${attempt}`);
+                }
+
+                return { ok: true };
+              },
+              success: {
+                title: "Worker respondeu",
+                description: "A terceira tentativa foi bem-sucedida.",
+              },
+            });
+          },
+        },
+        {
+          id: "task",
+          section: "tasks",
+          title: "Task com pause, resume e cancel",
+          description:
+            "A tarefa aparece no gerenciador e expõe signal, progress e lifecycle.",
+          tags: "task manager pause resume cancel progress",
+          code: `const download = toast.task({
+  id: "download:video:123",
+  title: "video-1080p.mp4",
+  description: "Na fila",
+  icon: "download",
+  status: "queued",
+  pausable: true,
+  cancellable: true,
+});
+
+await download.run(async ({ task, signal, progress }) => {
+  for (let value = 0; value <= 100; value += 4) {
+    while (task.status === "paused") {
+      await wait(120);
+    }
+
+    if (signal.aborted) throw signal.reason;
+
+    progress(value, {
+      description: \`Baixando · \${value}%\`,
+    });
+
+    await wait(110);
+  }
+});`,
+          async run() {
+            const task = toast.task({
+              id: `download:video:${Date.now()}`,
+              title: "video-1080p.mp4",
+              description: "Na fila",
+              icon: "download",
+              status: "queued",
+              pausable: true,
+              cancellable: true,
+            });
+
+            await task.run(async ({ task, signal, progress }) => {
+              for (let value = 0; value <= 100; value += 4) {
+                while (task.status === "paused") {
+                  await sleep(120);
+                }
+
+                if (signal.aborted) {
+                  throw signal.reason;
+                }
+
+                progress(value, {
+                  description: `Baixando · ${value}%`,
+                });
+
+                await sleep(110);
+              }
+            });
+          },
+        },
+        {
+          id: "group",
+          section: "tasks",
+          title: "Grupo com progresso ponderado",
+          description:
+            "O parent acompanha várias subtarefas e calcula o avanço global por peso.",
+          tags: "group tasks weights parent child progress",
+          code: `const pipeline = toast.group({
+  id: "pipeline:post:123",
+  title: "Enviar vídeo ao Telegram",
+  weights: {
+    resolve: 5,
+    download: 55,
+    mux: 20,
+    upload: 20,
+  },
+});
+
+const resolve = pipeline.task("resolve", {
+  title: "Resolver mídia",
+});
+const download = pipeline.task("download", {
+  title: "Baixar segmentos",
+});
+const mux = pipeline.task("mux", {
+  title: "Unir áudio e vídeo",
+});
+const upload = pipeline.task("upload", {
+  title: "Enviar ao Worker",
+});`,
+          async run() {
+            const id = `pipeline:${Date.now()}`;
+            const pipeline = toast.group({
+              id,
+              title: "Enviar vídeo ao Telegram",
+              weights: {
+                resolve: 5,
+                download: 55,
+                mux: 20,
+                upload: 20,
+              },
+            });
+
+            const phases = [
+              ["resolve", "Resolver mídia", 420],
+              ["download", "Baixar segmentos", 1600],
+              ["mux", "Unir áudio e vídeo", 900],
+              ["upload", "Enviar ao Worker", 1100],
+            ];
+
+            for (const [key, title, duration] of phases) {
+              const child = pipeline.task(key, {
+                title,
+                icon:
+                  key === "upload"
+                    ? "upload"
+                    : key === "download"
+                      ? "download"
+                      : "refresh",
+              });
+
+              child.start({
+                description: "Em andamento…",
+              });
+
+              const steps = 10;
+              for (let index = 1; index <= steps; index += 1) {
+                child.setProgress(index / steps, {
+                  description: `${Math.round((index / steps) * 100)}%`,
+                });
+                await sleep(duration / steps);
+              }
+
+              child.success({
+                title,
+                description: "Concluído.",
+              });
+            }
+          },
+        },
+        {
+          id: "parallel-tasks",
+          section: "tasks",
+          title: "Vários downloads simultâneos",
+          description:
+            "Cada download mantém seu próprio controller e progresso independente.",
+          tags: "parallel simultaneous downloads concurrent tasks",
+          code: `const jobs = files.map((file, index) => {
+  const task = toast.task({
+    id: \`download:\${file.id}\`,
+    title: file.name,
+    icon: "download",
+    cancellable: true,
+  });
+
+  return task.run(async ({ progress, signal }) => {
+    await downloadFile(file, {
+      signal,
+      onProgress: progress,
+    });
+  });
+});
+
+await Promise.allSettled(jobs);`,
+          async run() {
+            const files = [
+              { id: "alpha", name: "nature-1080p.mp4", delay: 115 },
+              { id: "beta", name: "interview-720p.mp4", delay: 145 },
+              { id: "gamma", name: "reel-1080p.mp4", delay: 95 },
+            ];
+
+            const jobs = files.map((file) => {
+              const task = toast.task({
+                id: `download:${file.id}:${Date.now()}`,
+                title: file.name,
+                description: "Conectando…",
+                icon: "download",
+                cancellable: true,
+              });
+
+              return task.run(async ({ progress, signal }) => {
+                for (let value = 0; value <= 100; value += 5) {
+                  if (signal.aborted) {
+                    throw signal.reason;
+                  }
+
+                  progress(value, {
+                    description: `${value}% · download simultâneo`,
+                  });
+
+                  await sleep(file.delay);
+                }
+              });
+            });
+
+            await Promise.allSettled(jobs);
+          },
+        },
+        {
+          id: "persistence",
+          section: "tasks",
+          title: "Persistência entre reloads",
+          description:
+            "Snapshots visuais podem ser restaurados; Promises em execução não sobrevivem ao reload.",
+          tags: "persist tasks sessionStorage localStorage restore reload",
+          code: `toast.configure({
+  persistTasks: true,
+  taskStorage: "sessionStorage",
+  restoreTasksOnLoad: true,
+  maxPersistedTasks: 50,
+});
+
+const task = toast.task({
+  id: "persistent:download:123",
+  title: "Download persistente",
+  status: "running",
+  progress: 42,
+  persist: true,
+});
+
+toast.restoreTasks();`,
+          run() {
+            toast.configure({
+              persistTasks: true,
+              taskStorage: "sessionStorage",
+              restoreTasksOnLoad: true,
+              maxPersistedTasks: 50,
+            });
+
+            toast.task({
+              id: `persistent:download:${Date.now()}`,
+              title: "Download persistente",
+              description:
+                "O snapshot será guardado na sessionStorage.",
+              status: "running",
+              progress: 42,
+              persist: true,
+              cancellable: true,
+            });
+
+            toast.info({
+              title: "Persistência ativada",
+              description:
+                "Tarefas ativas serão restauradas visualmente como pausadas após reload.",
+            });
+          },
+        },
+        {
+          id: "spa-manager",
+          section: "tasks",
+          title: "Gerenciador minimizado em SPA",
+          description:
+            "pushState/replaceState minimizam tarefas ativas para um spinner compacto.",
+          tags: "spa pushState replaceState navigation minimize manager",
+          code: `const task = toast.loading({
+  title: "Download em andamento",
+  description: "Navegue sem perder o estado.",
+  icon: "download",
+});
+
+history.pushState(
+  { demo: true },
+  "",
+  "?route=outra-pagina",
+);
+
+// O toaster vira um spinner compacto.
+// Clique nele ou use:
+toast.restore();`,
+          async run() {
+            const task = toast.loading({
+              title: "Download em andamento",
+              description: "A navegação vai minimizar o gerenciador.",
+              icon: "download",
+              animation: "progress",
+              progress: 0.28,
+            });
+
+            await sleep(850);
+
+            try {
+              const nextUrl = new URL(location.href);
+              nextUrl.searchParams.set("toast-route", String(Date.now()));
+              history.pushState(
+                { toasterDemo: true },
+                "",
+                nextUrl,
+              );
+            } catch {
+              toast.minimize();
+            }
+
+            await sleep(1200);
+            task.setProgress(0.72, {
+              description:
+                "A tarefa continuou viva durante a navegação.",
+            });
+
+            await sleep(1200);
+            toast.restore();
+
+            await sleep(500);
+            task.success({
+              title: "Navegação concluída",
+              description: "O estado sobreviveu ao pushState.",
+            });
+          },
+        },
+        {
+          id: "scope",
+          section: "architecture",
+          title: "Scopes por feature",
+          description:
+            "Crie namespaces para downloads, uploads, Telegram ou qualquer domínio.",
+          tags: "scope namespace feature dismissAll getTasks",
+          code: `const telegram = toast.scope("telegram", {
+  icon: "send",
+});
+
+telegram.info({
+  title: "Fila criada",
+  description: "Dois envios aguardando.",
+});
+
+const task = telegram.task({
+  id: "send:123",
+  title: "Enviar post 123",
+  cancellable: true,
+});
+
+telegram.dismissAll();`,
+          async run() {
+            const scopeName = `telegram-${Date.now()}`;
+            const telegram = toast.scope(scopeName, {
+              icon: "send",
+            });
+
+            telegram.info({
+              title: "Fila criada",
+              description: "Dois envios aguardando.",
+            });
+
+            const task = telegram.task({
+              id: `send:${Date.now()}`,
+              title: "Enviar post 123",
+              description: "Preparando…",
+              cancellable: true,
+            });
+
+            task.start();
+
+            for (const value of [15, 35, 60, 85, 100]) {
+              task.setProgress(value, {
+                description: `${value}% enviado`,
+              });
+              await sleep(300);
+            }
+
+            task.success({
+              title: "Post enviado",
+              description: `Scope: ${scopeName}`,
+            });
+          },
+        },
+        {
+          id: "events",
+          section: "architecture",
+          title: "Eventos globais",
+          description:
+            "Observe criação, atualização, actions e tarefas sem acoplar sua regra de negócio ao DOM.",
+          tags: "events on once off emit lifecycle task update",
+          code: `const unsubscribe = toast.on(
+  "task:update",
+  ({ snapshot }) => {
+    console.log(
+      snapshot.id,
+      snapshot.status,
+      snapshot.progress,
+    );
+  },
+);
+
+toast.once("action", ({ actionId }) => {
+  console.log("Primeira action:", actionId);
+});
+
+toast.emit("app:ready", {
+  version: toast.version,
+});
+
+unsubscribe();`,
+          async run() {
+            const log = [];
+            const unsubscribe = toast.on(
+              "task:update",
+              ({ snapshot }) => {
+                log.push({
+                  id: snapshot.id,
+                  status: snapshot.status,
+                  progress: snapshot.progress,
+                });
+              },
+            );
+
+            const task = toast.task({
+              id: `events:${Date.now()}`,
+              title: "Emitindo eventos",
+              description: "Observe o console e o resumo final.",
+              icon: "terminal",
+            });
+
+            task.start();
+
+            for (const value of [0.2, 0.45, 0.7, 1]) {
+              task.setProgress(value);
+              await sleep(230);
+            }
+
+            task.success({
+              title: "Eventos capturados",
+              description: `${log.length} atualizações observadas.`,
+            });
+
+            unsubscribe();
+
+            toast.message({
+              title: "Últimos eventos",
+              description: `${log.length} snapshots coletados.`,
+              details: log,
+              icon: "terminal",
+            });
+          },
+        },
+        {
+          id: "controls",
+          section: "architecture",
+          title: "Controles globais",
+          description:
+            "Expanda, recolha, minimize, restaure, descarte e repare o host.",
+          tags: "minimize restore expand collapse dismissAll repairHost controls",
+          code: `toast.expand();
+toast.collapse();
+
+toast.minimize();
+toast.restore();
+
+toast.toggleMinimized();
+toast.isMinimized();
+
+toast.dismiss("task:123");
+toast.dismissAll();
+
+toast.repairHost();`,
+          async run() {
+            const first = toast.loading({
+              title: "Tarefa A",
+              description: "Gerenciador global",
+              icon: "download",
+            });
+            const second = toast.loading({
+              title: "Tarefa B",
+              description: "Mais um item na pilha",
+              icon: "upload",
+            });
+
+            await sleep(500);
+            toast.expand();
+            await sleep(850);
+            toast.collapse();
+            await sleep(700);
+            toast.minimize();
+            await sleep(1100);
+            toast.restore();
+            await sleep(500);
+
+            first.success({
+              title: "Tarefa A concluída",
+            });
+            second.success({
+              title: "Tarefa B concluída",
+            });
+          },
+        },
+        {
+          id: "configuration",
+          section: "architecture",
+          title: "Configuração global",
+          description:
+            "Posição, dedupe, duração, stack, navegação, inspector e persistência.",
+          tags: "configure config position dedupe stack inspector shadow dom",
+          code: `toast.configure({
+  position: "top-center",
+  duration: 5000,
+  maxToasts: 20,
+  dedupe: true,
+  stacked: true,
+  stackVisible: 3,
+  stackMaxHeight: 560,
+  persistAcrossSpaNavigation: true,
+  minimizeOnSpaNavigation: true,
+  useShadowRoot: true,
+  shadowRootMode: "closed",
+  persistTasks: true,
+  taskStorage: "sessionStorage",
+});`,
+          run() {
+            const config = toast.configure({
+              position: "top-center",
+              duration: 5000,
+              maxToasts: 20,
+              dedupe: true,
+              stacked: true,
+              stackVisible: 3,
+              stackMaxHeight: 560,
+              persistAcrossSpaNavigation: true,
+              minimizeOnSpaNavigation: true,
+              useShadowRoot: true,
+              shadowRootMode: "closed",
+              persistTasks: true,
+              taskStorage: "sessionStorage",
+            });
+
+            toast.message({
+              title: "Configuração aplicada",
+              description:
+                `Host: ${toast.getHostMode()} · posição: ${config.position}`,
+              icon: "settings",
+              details: config,
+            });
+          },
+        },
+      ];
+
+      const sectionById = new Map(
+        sections.map((section) => [section.id, section]),
+      );
+
+      const root = document.getElementById("sections");
+      const sidebar = document.getElementById("sidebar-list");
+      const search = document.getElementById("search");
+      const empty = document.getElementById("empty-results");
+      const runtimeStatus = document.getElementById("runtime-status");
+      const statusLabel = runtimeStatus.querySelector("[data-status-label]");
+
+      function getToast() {
+        return window.toast || window.RodToaster || null;
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;");
+      }
+
+      function highlight(code) {
+        return escapeHtml(code)
+          .replace(
+            /\b(const|let|await|async|return|throw|new|if|else|for|while|true|false|null)\b/g,
+            '<span class="code-keyword">$1</span>',
+          )
+          .replace(
+            /(&quot;.*?&quot;|`.*?`)/g,
+            '<span class="code-string">$1</span>',
+          )
+          .replace(
+            /\b(\d+(?:\.\d+)?)\b/g,
+            '<span class="code-number">$1</span>',
+          )
+          .replace(
+            /\b(toast(?:\.[a-zA-Z]+)?|progress|update|task|signal)\b/g,
+            '<span class="code-call">$1</span>',
+          );
+      }
+
+      function makeSidebar() {
+        const counts = new Map();
+
+        demos.forEach((demo) => {
+          counts.set(
+            demo.section,
+            (counts.get(demo.section) || 0) + 1,
+          );
+        });
+
+        sidebar.innerHTML = sections
+          .map((section) => {
+            return `
+              <li>
+                <a class="sidebar-link" href="#${section.id}">
+                  <span>${section.title}</span>
+                  <span class="sidebar-count">${counts.get(section.id) || 0}</span>
+                </a>
+              </li>
+            `;
+          })
+          .join("");
+
+        sidebar.insertAdjacentHTML(
+          "beforeend",
+          `
+            <li>
+              <a class="sidebar-link" href="#reference">
+                <span>Referência da API</span>
+                <span class="sidebar-count">17</span>
+              </a>
+            </li>
+          `,
+        );
+      }
+
+      function makeCard(demo, index) {
+        const article = document.createElement("article");
+        article.className = "demo-card";
+        article.dataset.demoId = demo.id;
+        article.dataset.search = [
+          demo.title,
+          demo.description,
+          demo.tags,
+          demo.code,
+          sectionById.get(demo.section)?.title,
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        article.innerHTML = `
+          <header class="demo-head">
+            <span class="demo-index">${String(index + 1).padStart(2, "0")}</span>
+            <div class="demo-copy">
+              <h3 class="demo-title">${escapeHtml(demo.title)}</h3>
+              <p class="demo-description">${escapeHtml(demo.description)}</p>
+            </div>
+          </header>
+
+          <div class="demo-code">
+            <pre><code>${highlight(demo.code)}</code></pre>
+          </div>
+
+          <footer class="demo-footer">
+            <span class="demo-meta">${escapeHtml(demo.tags.split(" ").slice(0, 4).join(" · "))}</span>
+            <div class="demo-actions">
+              <button
+                class="button button-small"
+                type="button"
+                data-copy="${escapeHtml(demo.id)}"
+              >
+                ${icons.copy}
+                Copiar
+              </button>
+              <button
+                class="button button-primary button-small"
+                type="button"
+                data-run="${escapeHtml(demo.id)}"
+              >
+                ${icons.play}
+                Executar
+              </button>
+            </div>
+          </footer>
+        `;
+
+        return article;
+      }
+
+      function makeSections() {
+        root.replaceChildren();
+
+        sections.forEach((section) => {
+          const wrapper = document.createElement("section");
+          wrapper.id = section.id;
+          wrapper.className = "section";
+
+          const cards = demos
+            .map((demo, index) => ({ demo, index }))
+            .filter(({ demo }) => demo.section === section.id);
+
+          wrapper.innerHTML = `
+            <header class="section-header">
+              <div>
+                <span class="section-kicker">${escapeHtml(section.kicker)}</span>
+                <h2 class="section-title">${escapeHtml(section.title)}</h2>
+              </div>
+              <p class="section-description">${escapeHtml(section.description)}</p>
+            </header>
+            <div class="demo-grid"></div>
+          `;
+
+          const grid = wrapper.querySelector(".demo-grid");
+
+          cards.forEach(({ demo, index }) => {
+            grid.appendChild(makeCard(demo, index));
+          });
+
+          root.appendChild(wrapper);
+        });
+      }
+
+      async function copy(value, button) {
+        try {
+          await navigator.clipboard.writeText(value);
+        } catch {
+          const textarea = document.createElement("textarea");
+          textarea.value = value;
+          textarea.style.position = "fixed";
+          textarea.style.left = "-99999px";
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          textarea.remove();
+        }
+
+        if (button) {
+          const original = button.innerHTML;
+          button.textContent = "Copiado";
+          setTimeout(() => {
+            button.innerHTML = original;
+          }, 900);
+        }
+      }
+
+      async function executeDemo(id, button) {
+        const api = getToast();
+        const demo = demos.find((item) => item.id === id);
+
+        if (!api || !demo) {
+          console.error("Rod Toaster indisponível.");
+          return;
+        }
+
+        const original = button?.innerHTML;
+
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Executando…";
+        }
+
+        try {
+          await demo.run();
+        } catch (error) {
+          console.error(`[Demo ${id}]`, error);
+
+          api.error(error, {
+            title: `Erro na demo ${demo.title}`,
+          });
+        } finally {
+          if (button) {
+            button.disabled = false;
+            button.innerHTML = original;
+          }
+        }
+      }
+
+      function filterDemos() {
+        const query = search.value.trim().toLowerCase();
+        let visibleCount = 0;
+
+        document.querySelectorAll(".demo-card").forEach((card) => {
+          const visible = !query || card.dataset.search.includes(query);
+          card.dataset.hidden = String(!visible);
+          if (visible) visibleCount += 1;
+        });
+
+        document.querySelectorAll(".section").forEach((section) => {
+          if (section.id === "reference") return;
+          const visibleCards = section.querySelectorAll(
+            '.demo-card[data-hidden="false"]',
+          );
+          section.hidden = visibleCards.length === 0;
+        });
+
+        empty.dataset.visible = String(visibleCount === 0);
+      }
+
+      function updateRuntimeStatus() {
+        const api = getToast();
+
+        if (api) {
+          runtimeStatus.dataset.state = "ready";
+          statusLabel.textContent = `API pronta · v${api.version || "?"}`;
+
+          document.querySelectorAll("[data-version]").forEach((node) => {
+            node.textContent = api.version || "?";
+          });
+
+          return;
+        }
+
+        runtimeStatus.dataset.state = "error";
+        statusLabel.textContent = "Falha ao carregar toaster.js";
+
+        document.querySelectorAll("[data-run]").forEach((button) => {
+          button.disabled = true;
+        });
+      }
+
+      function installIntersectionObserver() {
+        const links = [...document.querySelectorAll(".sidebar-link")];
+        const linkById = new Map(
+          links.map((link) => [
+            link.getAttribute("href").slice(1),
+            link,
+          ]),
+        );
+
+        const observer = new IntersectionObserver(
+          (entries) => {
+            const visible = entries
+              .filter((entry) => entry.isIntersecting)
+              .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+
+            if (!visible) return;
+
+            links.forEach((link) => {
+              link.dataset.active = "false";
+            });
+
+            const active = linkById.get(visible.target.id);
+            if (active) active.dataset.active = "true";
+          },
+          {
+            rootMargin: "-15% 0px -70% 0px",
+            threshold: [0, 0.15, 0.4],
+          },
+        );
+
+        document.querySelectorAll(".section").forEach((section) => {
+          observer.observe(section);
+        });
+      }
+
+      async function quickDemo() {
+        const api = getToast();
+        if (!api) return;
+
+        const task = api.loading({
+          title: "Rod Toaster",
+          description: "Percorrendo alguns estados…",
+          icon: "sparkles",
+          animation: "spinner",
+        });
+
+        await sleep(600);
+        task.update({
+          description: "Loading virou pulse.",
+          animation: "pulse",
+        });
+
+        await sleep(600);
+
+        for (const value of [18, 38, 62, 84, 100]) {
+          task.setProgress(value, {
+            description: `Playground carregado · ${value}%`,
+            animation: "progress",
+          });
+          await sleep(220);
+        }
+
+        task.success({
+          title: "Tudo pronto",
+          description: "Escolha uma API e clique em Executar.",
+        });
+      }
+
+      function bindEvents() {
+        document.addEventListener("click", (event) => {
+          const runButton = event.target.closest("[data-run]");
+          const copyButton = event.target.closest("[data-copy]");
+          const actionButton = event.target.closest("[data-action]");
+
+          if (runButton) {
+            executeDemo(runButton.dataset.run, runButton);
+            return;
+          }
+
+          if (copyButton) {
+            const demo = demos.find(
+              (item) => item.id === copyButton.dataset.copy,
+            );
+
+            if (demo) {
+              copy(demo.code, copyButton);
+            }
+
+            return;
+          }
+
+          if (!actionButton) return;
+
+          const action = actionButton.dataset.action;
+          const api = getToast();
+
+          if (action === "quick-demo") {
+            quickDemo();
+          } else if (action === "copy-install") {
+            copy(INSTALL_CODE, actionButton);
+
+            api?.success?.({
+              title: "Instalação copiada",
+              description: "Cole a tag no seu HTML ou userscript.",
+            });
+          } else if (action === "minimize") {
+            api?.minimize?.();
+          }
+        });
+
+        search.addEventListener("input", filterDemos);
+
+        window.addEventListener("keydown", (event) => {
+          if (
+            event.key === "/" &&
+            !["INPUT", "TEXTAREA", "SELECT"].includes(
+              document.activeElement?.tagName,
+            )
+          ) {
+            event.preventDefault();
+            search.focus();
+          }
+        });
+      }
+
+      makeSidebar();
+      makeSections();
+      bindEvents();
+      filterDemos();
+      updateRuntimeStatus();
+      installIntersectionObserver();
+
+      setTimeout(updateRuntimeStatus, 1500);
+    })();
+  </script>
+</body>
+</html>
