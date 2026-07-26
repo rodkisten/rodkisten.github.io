@@ -236,7 +236,7 @@
 
     // The expanded stack is always a bounded tray. Even persistent debug
     // toasts can never grow until they cover the whole viewport.
-    stackMaxHeight: 560,
+    stackMaxHeight: 660,
     stackViewportRatio: 0.62,
     stackToolbar: true,
 
@@ -1853,7 +1853,7 @@
         .rod-toast__action-bar,
         .rod-toast__task-actions {
           display: grid;
-          grid-template-columns: 1fr;
+          grid-template-columns: 1fr 1fr;
         }
 
         .rod-toast__action-button,
