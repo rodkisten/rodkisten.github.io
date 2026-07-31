@@ -1,21 +1,30 @@
 /**
- * MiniFabrica Lite
- * A tiny reactive DOM renderer for userscripts.
+ * MiniFabrica Lite v2
+ * Reactive DOM renderer for userscripts.
  *
- * Designed for:
- * - Tampermonkey / Violentmonkey / Userscripts for Safari
- * - ShadowRoot or regular Element roots
- * - Broto-compatible signals/effects
- * - Tagged-template rendering
- * - Dynamic components with <${Component} ...></${Component}>
+ * Features:
+ * - Compiled/cached tagged templates
+ * - Fine-grained reactive parts
+ * - Dynamic components: <${Component} ...></${Component}>
+ * - Component lifecycle and scoped cleanup
+ * - Keyed repeat reconciliation
+ * - Real fixed-height virtualRepeat
+ * - SVG templates
+ * - Element/content/attribute directives
+ * - Safe portals with owned ranges
+ * - Error boundaries with reset
+ * - Broto adapter, with a non-reactive fallback
+ * - ShadowRoot, iframe and userscript-sandbox friendly
  *
- * @version 1.0.0
+ * @version 2.0.0
  * @license MIT
  */
-(function installMiniFabricaLite(global) {
+(function installMiniFabricaLiteV2(global) {
   "use strict";
 
-  const VERSION = "1.0.0";
+  const VERSION = "2.0.0";
+  const HTML_NS = "http://www.w3.org/1999/xhtml";
+  const SVG_NS = "http://www.w3.org/2000/svg";
 
   const TEMPLATE = Symbol("mini-fabrica.template");
   const COMPONENT = Symbol("mini-fabrica.component");
@@ -23,48 +32,83 @@
   const EVENT = Symbol("mini-fabrica.event");
   const DIRECTIVE = Symbol("mini-fabrica.directive");
   const NOTHING = Symbol("mini-fabrica.nothing");
+  const RAW_CHILDREN = Symbol("mini-fabrica.raw-children");
 
-  const TOKEN_PREFIX = "__MF_EXPR_";
-  const TOKEN_RE_SOURCE = `${TOKEN_PREFIX}(\\d+)__`;
-  const COMPONENT_TAG_PREFIX = "mf-component-";
+  const PART_NODE = "node";
+  const PART_ATTRIBUTE = "attribute";
+  const PART_ELEMENT = "element";
 
-  const isObjectLike = (value) =>
-    value !== null && (typeof value === "object" || typeof value === "function");
+  const TOKEN_PREFIX = "__MF2_EXPR_";
+  const COMPONENT_PREFIX = "mf2-component-";
+  const NODE_MARKER_PREFIX = "mf2-node:";
+  const ATTRIBUTE_MARKER_PREFIX = "data-mf2-a-";
 
-  const isTemplate = (value) => Boolean(value?.[TEMPLATE]);
-  const isComponent = (value) => Boolean(value?.[COMPONENT]);
-  const isBinding = (value) => Boolean(value?.[BINDING]);
-  const isEvent = (value) => Boolean(value?.[EVENT]);
-  const isDirective = (value) => Boolean(value?.[DIRECTIVE]);
+  const templateCache = new WeakMap();
 
-  const token = (index) => `${TOKEN_PREFIX}${index}__`;
-  const tokenPattern = () => new RegExp(TOKEN_RE_SOURCE, "g");
-  const exactTokenPattern = () => new RegExp(`^${TOKEN_RE_SOURCE}$`);
+  function token(index) {
+    return `${TOKEN_PREFIX}${index}__`;
+  }
+
+  function tokenPattern() {
+    return new RegExp(`${TOKEN_PREFIX}(\\d+)__`, "g");
+  }
+
+  function exactTokenPattern() {
+    return new RegExp(`^${TOKEN_PREFIX}(\\d+)__$`);
+  }
+
+  function isTemplate(value) {
+    return Boolean(value?.[TEMPLATE]);
+  }
+
+  function isComponent(value) {
+    return Boolean(value?.[COMPONENT]);
+  }
+
+  function isBinding(value) {
+    return Boolean(value?.[BINDING]);
+  }
+
+  function isEventDescriptor(value) {
+    return Boolean(value?.[EVENT]);
+  }
+
+  function isDirective(value, kind) {
+    return Boolean(value?.[DIRECTIVE] && (!kind || value.kind === kind));
+  }
+
+  function isFunctionValue(value) {
+    return typeof value === "function" && !isComponent(value);
+  }
 
   function resolve(value) {
-    return typeof value === "function" &&
-      !isComponent(value) &&
-      !isBinding(value) &&
-      !isEvent(value) &&
-      !isDirective(value)
+    return isFunctionValue(value) && !isBinding(value) && !isEventDescriptor(value) && !isDirective(value)
       ? value()
       : value;
   }
 
   function resolveDeep(value) {
-    const resolved = resolve(value);
-    return isBinding(resolved) ? resolved.signal() : resolved;
+    const current = resolve(value);
+    return isBinding(current) ? current.get() : current;
   }
 
   function html(strings, ...values) {
     return Object.freeze({
       [TEMPLATE]: true,
+      namespace: HTML_NS,
       strings,
       values,
     });
   }
 
-  const svg = html;
+  function svg(strings, ...values) {
+    return Object.freeze({
+      [TEMPLATE]: true,
+      namespace: SVG_NS,
+      strings,
+      values,
+    });
+  }
 
   function component(name, renderer) {
     if (typeof name === "function" && renderer === undefined) {
@@ -77,7 +121,7 @@
     }
 
     const factory = function MiniFabricaComponent(props = {}) {
-      return renderer(props, createComponentContext(props));
+      return renderer(props, props.__mf2Context || EMPTY_COMPONENT_CONTEXT);
     };
 
     Object.defineProperties(factory, {
@@ -91,246 +135,242 @@
     return factory;
   }
 
-  function createComponentContext(props) {
-    const lifecycle = props?.__mfLifecycle;
+  const EMPTY_COMPONENT_CONTEXT = Object.freeze({
+    html,
+    svg,
+    nothing: NOTHING,
+    onMount() {},
+    onCleanup() {},
+    afterPaint() {},
+    onError() {},
+  });
 
-    return Object.freeze({
-      html,
-      svg,
-      nothing: NOTHING,
+  function bind(source, setterOrOptions, maybeOptions) {
+    let get;
+    let set;
+    let options;
 
-      onMount(callback) {
-        if (typeof callback === "function") lifecycle?.mounts.push(callback);
-      },
+    if (typeof setterOrOptions === "function") {
+      get = typeof source === "function" ? source : () => source;
+      set = setterOrOptions;
+      options = maybeOptions || {};
+    } else {
+      options = setterOrOptions || {};
 
-      onCleanup(callback) {
-        if (typeof callback === "function") lifecycle?.cleanups.push(callback);
-      },
+      if (source && typeof source === "object" && typeof source.get === "function") {
+        get = source.get.bind(source);
+        set = source.set?.bind(source);
+      } else if (typeof source === "function") {
+        get = source;
+        set = source.set?.bind(source);
+      } else {
+        get = () => source;
+      }
+    }
 
-      queueAfterPaint(callback) {
-        if (typeof callback === "function") lifecycle?.afterPaint.push(callback);
-      },
-    });
-  }
-
-  function bind(signal, options = {}) {
-    if (typeof signal !== "function") {
-      throw new TypeError("bind(signal): signal must be callable.");
+    if (typeof get !== "function") {
+      throw new TypeError("bind(source): source must be callable or expose get().");
     }
 
     return Object.freeze({
       [BINDING]: true,
-      signal,
+      get,
+      set,
       event: options.event,
+      commitEvent: options.commitEvent,
       parse: options.parse,
       format: options.format,
     });
   }
 
-  function event(handler, options = undefined) {
+  function event(handler, options = {}) {
     if (typeof handler !== "function") {
       throw new TypeError("event(handler): handler must be a function.");
     }
 
+    const normalized = {
+      capture: Boolean(options.capture),
+      once: Boolean(options.once),
+      passive: Boolean(options.passive),
+      prevent: Boolean(options.prevent),
+      stop: Boolean(options.stop),
+      stopImmediate: Boolean(options.stopImmediate),
+      self: Boolean(options.self),
+    };
+
+    const listener = function miniFabricaEventListener(domEvent) {
+      if (normalized.self && domEvent.target !== domEvent.currentTarget) return;
+      if (normalized.prevent) domEvent.preventDefault();
+      if (normalized.stop) domEvent.stopPropagation();
+      if (normalized.stopImmediate) domEvent.stopImmediatePropagation();
+      return handler.call(this, domEvent);
+    };
+
     return Object.freeze({
       [EVENT]: true,
-      handler,
-      options,
+      handler: listener,
+      options: {
+        capture: normalized.capture,
+        once: normalized.once,
+        passive: normalized.passive,
+      },
     });
   }
 
+  event.prevent = (handler, options) => event(handler, { ...options, prevent: true });
+  event.stop = (handler, options) => event(handler, { ...options, stop: true });
+  event.once = (handler, options) => event(handler, { ...options, once: true });
+  event.self = (handler, options) => event(handler, { ...options, self: true });
+
   for (const type of [
-    "click",
-    "input",
-    "change",
-    "submit",
-    "keydown",
-    "keyup",
-    "pointerdown",
-    "pointermove",
-    "pointerup",
-    "pointercancel",
-    "focus",
-    "blur",
-    "scroll",
+    "click", "input", "change", "submit", "keydown", "keyup",
+    "pointerdown", "pointermove", "pointerup", "pointercancel",
+    "focus", "blur", "scroll",
   ]) {
     event[type] = (handler, options) => event(handler, options);
   }
 
-  function directive(apply) {
+  function directive(kind, apply) {
     if (typeof apply !== "function") {
-      throw new TypeError("directive(apply): apply must be a function.");
+      throw new TypeError("directive(kind, apply): apply must be a function.");
     }
 
     return Object.freeze({
       [DIRECTIVE]: true,
+      kind,
       apply,
     });
   }
 
+  function nodeDirective(apply) {
+    return directive(PART_NODE, apply);
+  }
+
+  function elementDirective(apply) {
+    return directive(PART_ELEMENT, apply);
+  }
+
+  function attributeDirective(apply) {
+    return directive(PART_ATTRIBUTE, apply);
+  }
+
   function ref(callback) {
-    return directive((element, context) => {
-      context.refs.push(() => callback(element));
+    return elementDirective((element, scope) => {
+      scope.refs.push(() => callback(element));
     });
   }
 
   function classMap(value) {
-    return directive((element) => {
-      const resolved = resolveDeep(value);
-      const classes = [];
+    return attributeDirective((part) => {
+      part.setEffect(() => {
+        const classes = [];
 
-      const visit = (entry) => {
-        const current = resolveDeep(entry);
+        const visit = (entry) => {
+          const current = resolveDeep(entry);
+          if (!current) return;
 
-        if (!current) return;
-
-        if (Array.isArray(current) || current instanceof Set) {
-          for (const item of current) visit(item);
-          return;
-        }
-
-        if (typeof current === "object") {
-          for (const [name, enabled] of Object.entries(current)) {
-            if (resolveDeep(enabled)) classes.push(name);
+          if (Array.isArray(current) || current instanceof Set) {
+            for (const item of current) visit(item);
+            return;
           }
-          return;
-        }
 
-        classes.push(String(current));
-      };
+          if (typeof current === "object") {
+            for (const [name, enabled] of Object.entries(current)) {
+              if (resolveDeep(enabled)) classes.push(name);
+            }
+            return;
+          }
 
-      visit(resolved);
-      element.className = classes.join(" ");
+          classes.push(String(current));
+        };
+
+        visit(value);
+        part.element.className = classes.join(" ");
+      });
     });
   }
 
   function styleMap(value) {
-    return directive((element) => {
-      const styles = resolveDeep(value);
+    return attributeDirective((part) => {
+      let previous = new Set();
 
-      if (styles == null || styles === false) {
-        element.removeAttribute("style");
-        return;
-      }
+      part.setEffect(() => {
+        const styles = resolveDeep(value);
 
-      if (typeof styles === "string") {
-        element.setAttribute("style", styles);
-        return;
-      }
-
-      for (const [property, raw] of Object.entries(styles)) {
-        const current = resolveDeep(raw);
-
-        if (current == null || current === false) {
-          element.style.removeProperty(toKebabCase(property));
-          continue;
+        if (styles == null || styles === false) {
+          part.element.removeAttribute("style");
+          previous.clear();
+          return;
         }
 
-        if (property.startsWith("--")) {
-          element.style.setProperty(property, String(current));
-        } else {
-          try {
-            element.style[property] = String(current);
-          } catch {
-            element.style.setProperty(toKebabCase(property), String(current));
+        if (typeof styles === "string") {
+          part.element.setAttribute("style", styles);
+          previous.clear();
+          return;
+        }
+
+        const next = new Set();
+
+        for (const [rawName, rawValue] of Object.entries(styles)) {
+          const name = rawName.startsWith("--") ? rawName : toKebabCase(rawName);
+          const current = resolveDeep(rawValue);
+          next.add(name);
+
+          if (current == null || current === false) {
+            part.element.style.removeProperty(name);
+          } else {
+            part.element.style.setProperty(name, String(current));
           }
         }
-      }
+
+        for (const oldName of previous) {
+          if (!next.has(oldName)) part.element.style.removeProperty(oldName);
+        }
+
+        previous = next;
+      });
     });
   }
 
   function attrs(value) {
-    return directive((element) => {
-      const attributes = resolveDeep(value) || {};
+    return elementDirective((element, scope) => {
+      let previous = new Set();
 
-      for (const [name, raw] of Object.entries(attributes)) {
-        setNormalAttribute(element, name, resolveDeep(raw));
-      }
+      const dispose = scope.adapter.effect(() => {
+        const object = resolveDeep(value) || {};
+        const next = new Set(Object.keys(object));
+
+        for (const oldName of previous) {
+          if (!next.has(oldName)) element.removeAttribute(oldName);
+        }
+
+        for (const [name, raw] of Object.entries(object)) {
+          applyResolvedAttribute(element, name, resolveDeep(raw), scope);
+        }
+
+        previous = next;
+      }, { name: "mini-fabrica.attrs" });
+
+      scope.addCleanup(dispose);
     });
   }
 
   function unsafeHTML(value) {
-    return directive((element) => {
-      element.innerHTML = String(resolveDeep(value) ?? "");
+    return nodeDirective((part) => {
+      part.setEffect(() => {
+        const holder = part.document.createElement("template");
+        holder.innerHTML = String(resolveDeep(value) ?? "");
+        part.replace(holder.content.cloneNode(true));
+      });
     });
   }
 
-  function asSignal(value) {
-    let current = value;
-
-    const signal = () => current;
-    signal.peek = () => current;
-    signal.set = (next) => {
-      current = typeof next === "function" ? next(current) : next;
-      return current;
-    };
-    signal.update = signal.set;
-
-    return signal;
-  }
-
-  function repeat(items, key, renderer) {
-    if (typeof renderer !== "function") {
-      throw new TypeError("repeat(items, key, renderer): renderer must be a function.");
-    }
-
-    return () => {
-      const list = Array.from(resolveDeep(items) || []);
-      const getKey =
-        typeof key === "function"
-          ? key
-          : typeof key === "string"
-            ? (item) => item?.[key]
-            : (_item, index) => index;
-
-      return list.map((item, index) => {
-        const itemSignal = asSignal(item);
-        const indexSignal = asSignal(index);
-        const rendered = renderer({
-          item: itemSignal,
-          index: indexSignal,
-          key: getKey(item, index),
-          value: item,
-        });
-
-        return html`<mf-repeat-item style="display:contents" data-mf-key=${String(getKey(item, index))}>
-          ${rendered}
-        </mf-repeat-item>`;
+  function text(value) {
+    return nodeDirective((part) => {
+      part.setEffect(() => {
+        part.replace(part.document.createTextNode(String(resolveDeep(value) ?? "")));
       });
-    };
-  }
-
-  function virtualRepeat(items, key, renderer, options = {}) {
-    const height = () => Math.max(1, Number(resolveDeep(options.height)) || 420);
-    const itemHeight = () => Math.max(1, Number(resolveDeep(options.itemHeight)) || 48);
-    const overscan = () => Math.max(0, Number(resolveDeep(options.overscan)) || 6);
-
-    return component("VirtualRepeat", (_props, { onMount }) => {
-      const list = Array.from(resolveDeep(items) || []);
-      const viewportHeight = height();
-      const rowHeight = itemHeight();
-      const initialCount = Math.min(
-        list.length,
-        Math.ceil(viewportHeight / rowHeight) + overscan() * 2,
-      );
-
-      onMount(() => {
-        // The lightweight renderer intentionally does not mutate the tree while
-        // scrolling. Consumers can wire scrollTop into a Broto signal when true
-        // windowing is required.
-      });
-
-      return html`<div
-        class="mf-virtual-repeat"
-        style=${styleMap({
-          height: `${viewportHeight}px`,
-          overflow: "auto",
-          minHeight: "0",
-        })}
-      >
-        ${repeat(list.slice(0, initialCount), key, renderer)}
-      </div>`;
-    })();
+    });
   }
 
   function when(condition, truthy, falsy = NOTHING) {
@@ -340,134 +380,1031 @@
   function choose(value, cases, fallback = NOTHING) {
     return () => {
       const current = resolveDeep(value);
-      const selected =
-        cases instanceof Map
-          ? cases.get(current)
-          : Object.prototype.hasOwnProperty.call(cases || {}, current)
-            ? cases[current]
-            : fallback;
-
+      const selected = cases instanceof Map
+        ? cases.get(current)
+        : Object.prototype.hasOwnProperty.call(cases || {}, current)
+          ? cases[current]
+          : fallback;
       return resolve(selected);
     };
   }
 
-  function boundary({ children, fallback }) {
-    return () => {
-      try {
-        return resolve(children);
-      } catch (error) {
-        return typeof fallback === "function"
-          ? fallback(error, () => {})
-          : fallback ?? NOTHING;
-      }
-    };
-  }
+  function keyed(key, children) {
+    return nodeDirective((part) => {
+      let previousKey = Symbol("unset");
+      let childScope = null;
 
-  function portal(target, children) {
-    return directive((_element, context) => {
-      const destination = resolveDeep(target);
-      if (!destination?.append) return;
+      part.setEffect(() => {
+        const nextKey = resolveDeep(key);
+        if (Object.is(previousKey, nextKey)) return;
 
-      const fragment = destination.ownerDocument.createDocumentFragment();
-      appendValue(fragment, children, context);
-      destination.replaceChildren(fragment);
+        previousKey = nextKey;
+        childScope?.dispose();
+        childScope = part.scope.child("keyed");
+        part.replaceValue(resolve(children), childScope);
+      });
+
+      part.scope.addCleanup(() => childScope?.dispose());
     });
   }
 
-  function keyed(key, children) {
-    return html`<mf-keyed data-mf-key=${String(resolveDeep(key))}>${children}</mf-keyed>`;
+  function boundary({ children, fallback }) {
+    return nodeDirective((part) => {
+      let childScope = null;
+      let failed = false;
+
+      const renderChildren = () => {
+        failed = false;
+        childScope?.dispose();
+        childScope = part.scope.child("boundary");
+        childScope.errorHandler = renderFallback;
+
+        try {
+          part.replaceValue(resolve(children), childScope);
+        } catch (error) {
+          renderFallback(error);
+        }
+      };
+
+      const reset = () => renderChildren();
+
+      const renderFallback = (error) => {
+        if (failed) return;
+        failed = true;
+        childScope?.dispose();
+        childScope = part.scope.child("boundary-fallback");
+
+        const output = typeof fallback === "function"
+          ? fallback(error, reset)
+          : fallback ?? NOTHING;
+
+        part.replaceValue(output, childScope);
+      };
+
+      renderChildren();
+      part.scope.addCleanup(() => childScope?.dispose());
+    });
   }
 
-  function compile(template) {
+  function portal(target, children) {
+    return nodeDirective((part) => {
+      let portalScope = null;
+      let start = null;
+      let end = null;
+      let currentTarget = null;
+
+      const destroyPortal = () => {
+        portalScope?.dispose();
+        portalScope = null;
+        removeRange(start, end, true);
+        start = end = currentTarget = null;
+      };
+
+      part.setEffect(() => {
+        const destination = resolveDeep(target);
+        if (!destination?.append) {
+          destroyPortal();
+          return;
+        }
+
+        if (destination !== currentTarget) {
+          destroyPortal();
+          currentTarget = destination;
+          start = destination.ownerDocument.createComment("mf2:portal:start");
+          end = destination.ownerDocument.createComment("mf2:portal:end");
+          destination.append(start, end);
+        }
+
+        portalScope?.dispose();
+        portalScope = part.scope.child("portal", destination.ownerDocument);
+        replaceRangeValue(start, end, resolve(children), portalScope);
+      });
+
+      part.scope.addCleanup(destroyPortal);
+    });
+  }
+
+  function repeat(items, key, renderer) {
+    if (typeof renderer !== "function") {
+      throw new TypeError("repeat(items, key, renderer): renderer must be a function.");
+    }
+
+    return nodeDirective((part) => {
+      const records = new Map();
+
+      const keyOf = typeof key === "function"
+        ? key
+        : typeof key === "string"
+          ? (item) => item?.[key]
+          : (_item, index) => index;
+
+      part.setEffect(() => {
+        const list = Array.from(resolveDeep(items) || []);
+        const nextRecords = new Map();
+        const ordered = [];
+
+        for (let index = 0; index < list.length; index += 1) {
+          const item = list[index];
+          const recordKey = keyOf(item, index);
+
+          if (nextRecords.has(recordKey)) {
+            throw new Error(`repeat(): duplicate key ${String(recordKey)}.`);
+          }
+
+          let record = records.get(recordKey);
+
+          if (!record) {
+            record = createRepeatRecord(part, recordKey, item, index, renderer);
+          } else {
+            record.update(item, index);
+          }
+
+          nextRecords.set(recordKey, record);
+          ordered.push(record);
+        }
+
+        for (const [recordKey, record] of records) {
+          if (!nextRecords.has(recordKey)) record.dispose();
+        }
+
+        let cursor = part.end;
+        for (let index = ordered.length - 1; index >= 0; index -= 1) {
+          const record = ordered[index];
+          moveRangeBefore(record.start, record.end, cursor);
+          cursor = record.start;
+        }
+
+        records.clear();
+        for (const [recordKey, record] of nextRecords) records.set(recordKey, record);
+      });
+
+      part.scope.addCleanup(() => {
+        for (const record of records.values()) record.dispose();
+        records.clear();
+      });
+    });
+  }
+
+  function createRepeatRecord(part, recordKey, value, index, renderer) {
+    const scope = part.scope.child(`repeat:${String(recordKey)}`);
+    const start = part.document.createComment(`mf2:repeat:${String(recordKey)}:start`);
+    const end = part.document.createComment(`mf2:repeat:${String(recordKey)}:end`);
+    part.end.parentNode.insertBefore(start, part.end);
+    part.end.parentNode.insertBefore(end, part.end);
+
+    const itemSignal = createLocalSignal(value, scope.adapter);
+    const indexSignal = createLocalSignal(index, scope.adapter);
+
+    const renderRecord = () => {
+      const output = renderer({
+        item: itemSignal,
+        index: indexSignal,
+        key: recordKey,
+        value: itemSignal(),
+      });
+      replaceRangeValue(start, end, output, scope, true);
+      scope.flushRefs();
+      scope.mountOnce();
+      scope.flushAfterPaint();
+    };
+
+    let renderDispose = null;
+    if (scope.adapter.hasNativeSignals) {
+      renderDispose = scope.adapter.effect(renderRecord, {
+        name: `mini-fabrica.repeat:${String(recordKey)}`,
+      });
+      scope.addCleanup(renderDispose);
+    } else {
+      renderRecord();
+    }
+
+    return {
+      key: recordKey,
+      start,
+      end,
+      item: itemSignal,
+      index: indexSignal,
+      update(nextItem, nextIndex) {
+        const itemChanged = !Object.is(itemSignal(), nextItem);
+        const indexChanged = !Object.is(indexSignal(), nextIndex);
+        itemSignal.set?.(nextItem);
+        indexSignal.set?.(nextIndex);
+        if (!scope.adapter.hasNativeSignals && (itemChanged || indexChanged)) renderRecord();
+      },
+      dispose() {
+        scope.dispose();
+        removeRange(start, end, true);
+      },
+    };
+  }
+
+  function virtualRepeat(items, key, renderer, options = {}) {
+    const scrollTop = createStandaloneSignal(0);
+
+    const VirtualRepeat = component("VirtualRepeat", (_props, context) => {
+      const height = () => Math.max(1, Number(resolveDeep(options.height)) || 420);
+      const itemHeight = () => Math.max(1, Number(resolveDeep(options.itemHeight || options.estimateSize)) || 48);
+      const overscan = () => Math.max(0, Number(resolveDeep(options.overscan)) || 6);
+      const list = () => Array.from(resolveDeep(items) || []);
+
+      const visible = () => {
+        const source = list();
+        const rowHeight = itemHeight();
+        const viewport = height();
+        const top = scrollTop();
+        const start = Math.max(0, Math.floor(top / rowHeight) - overscan());
+        const end = Math.min(source.length, Math.ceil((top + viewport) / rowHeight) + overscan());
+
+        return source.slice(start, end).map((item, offset) => ({
+          item,
+          index: start + offset,
+        }));
+      };
+
+      context.onCleanup(() => scrollTop.dispose?.());
+
+      return html`<div
+        class="mf2-virtual-repeat"
+        data-mf-preserve-scroll
+        style=${styleMap({
+          height: () => `${height()}px`,
+          overflow: "auto",
+          minHeight: "0",
+          position: "relative",
+        })}
+        @scroll=${event((event) => scrollTop.set(event.currentTarget.scrollTop), { passive: true })}
+      >
+        <div style=${styleMap({
+          height: () => `${list().length * itemHeight()}px`,
+          position: "relative",
+        })}>
+          <div style=${styleMap({
+            position: "absolute",
+            insetInline: "0",
+            top: "0",
+            transform: () => {
+              const source = list();
+              const rowHeight = itemHeight();
+              const start = Math.max(0, Math.floor(scrollTop() / rowHeight) - overscan());
+              return `translateY(${Math.min(start, source.length) * rowHeight}px)`;
+            },
+          })}>
+            ${repeat(
+              visible,
+              ({ item, index }) => typeof key === "function"
+                ? key(item, index)
+                : typeof key === "string"
+                  ? item?.[key]
+                  : index,
+              ({ item }) => renderer({
+                item: () => item().item,
+                index: () => item().index,
+                key: typeof key === "function"
+                  ? key(item().item, item().index)
+                  : typeof key === "string"
+                    ? item().item?.[key]
+                    : item().index,
+                value: item().item,
+              }),
+            )}
+          </div>
+        </div>
+      </div>`;
+    });
+
+    return VirtualRepeat();
+  }
+
+  function compileTemplate(template) {
+    let cachedByNamespace = templateCache.get(template.strings);
+    if (!cachedByNamespace) {
+      cachedByNamespace = new Map();
+      templateCache.set(template.strings, cachedByNamespace);
+    }
+
+    const cached = cachedByNamespace.get(template.namespace);
+    if (cached) return cached;
+
     const componentNames = new Map();
-    let componentCounter = 0;
+    const componentByTag = new Map();
+    const values = template.values;
+    let componentIndex = 0;
     let source = "";
 
     for (let index = 0; index < template.strings.length; index += 1) {
-      const part = template.strings[index];
-      source += part;
+      const stringPart = template.strings[index];
+      source += stringPart;
 
-      if (index >= template.values.length) continue;
+      if (index >= values.length) continue;
+      const value = values[index];
+      const tagPosition = detectTagPosition(stringPart);
 
-      const value = template.values[index];
-      const isOpeningTag = /<\s*$/.test(part);
-      const isClosingTag = /<\/\s*$/.test(part);
-
-      if ((isOpeningTag || isClosingTag) && isComponent(value)) {
-        let tagName = componentNames.get(value);
-
-        if (!tagName) {
-          tagName = `${COMPONENT_TAG_PREFIX}${componentCounter++}`;
-          componentNames.set(value, tagName);
+      if (tagPosition && isComponent(value)) {
+        let tag = componentNames.get(value);
+        if (!tag) {
+          tag = `${COMPONENT_PREFIX}${componentIndex++}`;
+          componentNames.set(value, tag);
+          componentByTag.set(tag.toUpperCase(), value);
         }
-
-        source += tagName;
+        source += tag;
       } else {
         source += token(index);
       }
     }
 
-    const componentsByTag = new Map(
-      Array.from(componentNames, ([componentFactory, tagName]) => [
-        tagName.toUpperCase(),
-        componentFactory,
-      ]),
+    source = normalizeSelfClosingComponents(source);
+
+    const documentRef = global.document;
+    const holder = documentRef.createElement("template");
+
+    if (template.namespace === SVG_NS) {
+      holder.innerHTML = `<svg xmlns="${SVG_NS}">${source}</svg>`;
+    } else {
+      holder.innerHTML = source;
+    }
+
+    const content = template.namespace === SVG_NS
+      ? extractSvgContent(holder, documentRef)
+      : holder.content;
+
+    const descriptors = annotateTemplate(content);
+
+    const compiled = {
+      namespace: template.namespace,
+      content: content.cloneNode(true),
+      descriptors,
+      componentByTag,
+    };
+
+    cachedByNamespace.set(template.namespace, compiled);
+    return compiled;
+  }
+
+  function detectTagPosition(stringPart) {
+    return /<\/?\s*$/.test(stringPart);
+  }
+
+  function normalizeSelfClosingComponents(source) {
+    return source.replace(
+      new RegExp(`<(${COMPONENT_PREFIX}\\d+)([^<>]*?)\\s*\\/>`, "gi"),
+      "<$1$2></$1>",
+    );
+  }
+
+  function extractSvgContent(holder, documentRef) {
+    const fragment = documentRef.createDocumentFragment();
+    const wrapper = holder.content.firstElementChild;
+    while (wrapper?.firstChild) fragment.append(wrapper.firstChild);
+    return fragment;
+  }
+
+  function annotateTemplate(content) {
+    const descriptors = [];
+    const documentRef = content.ownerDocument;
+    const NodeFilterCtor = documentRef.defaultView?.NodeFilter || global.NodeFilter;
+    const walker = documentRef.createTreeWalker(
+      content,
+      NodeFilterCtor.SHOW_ELEMENT | NodeFilterCtor.SHOW_TEXT,
     );
 
-    return { source, componentsByTag };
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+
+    for (const node of nodes) {
+      if (node.nodeType === 3) {
+        annotateTextNode(node, descriptors);
+      } else if (node.nodeType === 1) {
+        annotateElement(node, descriptors);
+      }
+    }
+
+    return descriptors;
   }
 
-  function expressionValue(template, index) {
-    return template.values[Number(index)];
+  function annotateTextNode(node, descriptors) {
+    const source = node.nodeValue || "";
+    const matches = Array.from(source.matchAll(tokenPattern()));
+    if (!matches.length) return;
+
+    const fragment = node.ownerDocument.createDocumentFragment();
+    let cursor = 0;
+
+    for (const match of matches) {
+      if (match.index > cursor) {
+        fragment.append(node.ownerDocument.createTextNode(source.slice(cursor, match.index)));
+      }
+
+      const markerId = descriptors.length;
+      const marker = node.ownerDocument.createComment(`${NODE_MARKER_PREFIX}${markerId}`);
+      fragment.append(marker);
+      descriptors.push({ type: "node", markerId, expression: Number(match[1]) });
+      cursor = match.index + match[0].length;
+    }
+
+    if (cursor < source.length) {
+      fragment.append(node.ownerDocument.createTextNode(source.slice(cursor)));
+    }
+
+    node.replaceWith(fragment);
   }
 
-  function interpolate(raw, template) {
-    const pattern = tokenPattern();
+  function annotateElement(element, descriptors) {
+    for (const attribute of Array.from(element.attributes)) {
+      const matches = Array.from(attribute.value.matchAll(tokenPattern()));
+      if (!matches.length) continue;
 
-    return raw.replace(pattern, (_match, index) => {
-      const value = expressionValue(template, index);
-      const current = resolveDeep(value);
-      return current == null || current === false ? "" : String(current);
+      const markerId = descriptors.length;
+      element.setAttribute(`${ATTRIBUTE_MARKER_PREFIX}${markerId}`, "");
+      descriptors.push({
+        type: "attribute",
+        markerId,
+        name: attribute.name,
+        raw: attribute.value,
+        expressions: matches.map((match) => Number(match[1])),
+      });
+      element.removeAttribute(attribute.name);
+    }
+  }
+
+  function instantiateTemplate(template, scope) {
+    const compiled = compileTemplate(template);
+    const fragment = compiled.content.cloneNode(true);
+    const nodeMarkers = new Map();
+    const attributeMarkers = new Map();
+    const documentRef = scope.document;
+    const NodeFilterCtor = documentRef.defaultView?.NodeFilter || global.NodeFilter;
+    const walker = documentRef.createTreeWalker(
+      fragment,
+      NodeFilterCtor.SHOW_ELEMENT | NodeFilterCtor.SHOW_COMMENT,
+    );
+
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+
+      if (node.nodeType === 8 && node.nodeValue?.startsWith(NODE_MARKER_PREFIX)) {
+        nodeMarkers.set(Number(node.nodeValue.slice(NODE_MARKER_PREFIX.length)), node);
+      }
+
+      if (node.nodeType === 1) {
+        for (const attribute of Array.from(node.attributes)) {
+          if (!attribute.name.startsWith(ATTRIBUTE_MARKER_PREFIX)) continue;
+          const markerId = Number(attribute.name.slice(ATTRIBUTE_MARKER_PREFIX.length));
+          attributeMarkers.set(markerId, node);
+          node.removeAttribute(attribute.name);
+        }
+      }
+    }
+
+    materializeComponentPlaceholders(fragment, compiled.componentByTag, template, scope);
+
+    for (const descriptor of compiled.descriptors) {
+      if (descriptor.type === "node") {
+        const marker = nodeMarkers.get(descriptor.markerId);
+        if (!marker?.parentNode) continue;
+
+        const end = documentRef.createComment(`mf2-node-end:${descriptor.markerId}`);
+        marker.after(end);
+        const part = new NodePart(marker, end, scope);
+        part.setValue(template.values[descriptor.expression]);
+      } else {
+        const element = attributeMarkers.get(descriptor.markerId);
+        if (!element?.isConnected && !fragment.contains(element)) continue;
+        const part = new AttributePart(element, descriptor, template, scope);
+        part.mount();
+      }
+    }
+
+    return fragment;
+  }
+
+  function materializeComponentPlaceholders(root, componentByTag, template, scope) {
+    if (!componentByTag.size) return;
+
+    const elements = [];
+    const documentRef = scope.document;
+    const NodeFilterCtor = documentRef.defaultView?.NodeFilter || global.NodeFilter;
+    const walker = documentRef.createTreeWalker(root, NodeFilterCtor.SHOW_ELEMENT);
+    while (walker.nextNode()) {
+      if (componentByTag.has(walker.currentNode.tagName)) elements.push(walker.currentNode);
+    }
+
+    for (let index = 0; index < elements.length; index += 1) {
+      const element = elements[index];
+      if (!element.parentNode) continue;
+      const factory = componentByTag.get(element.tagName);
+      materializeComponent(element, factory, template, scope);
+    }
+  }
+
+  function materializeComponent(element, factory, template, parentScope) {
+    const componentScope = parentScope.child(`component:${factory.displayName || "Anonymous"}`);
+    const props = parseComponentProps(element, template, componentScope);
+    const start = element.ownerDocument.createComment(`mf2:${factory.displayName || "component"}:start`);
+    const end = element.ownerDocument.createComment(`mf2:${factory.displayName || "component"}:end`);
+    element.replaceWith(start, end);
+
+    const context = createComponentContext(componentScope);
+    props.__mf2Context = context;
+
+    try {
+      // Components are instantiated once. Fine-grained expressions and directives
+      // inside their returned template own subsequent reactive updates. This keeps
+      // children, refs and third-party DOM stable instead of remounting the shell.
+      const output = componentScope.adapter.untrack(() => factory(props));
+      replaceRangeValue(start, end, output, componentScope, true);
+      componentScope.flushRefs();
+      componentScope.mountOnce();
+      componentScope.flushAfterPaint();
+    } catch (error) {
+      componentScope.handleError(error);
+    }
+  }
+
+  function parseComponentProps(element, template, scope) {
+    const props = {};
+
+    for (const attribute of Array.from(element.attributes)) {
+      const rawName = attribute.name;
+      const name = rawName.startsWith(".") || rawName.startsWith("?")
+        ? rawName.slice(1)
+        : rawName;
+      const propertyName = toCamelCase(name);
+      const exact = attribute.value.match(exactTokenPattern());
+
+      if (exact) {
+        const rawValue = template.values[Number(exact[1])];
+        props[propertyName] = rawName.startsWith("?")
+          ? Boolean(resolveDeep(rawValue))
+          : rawValue;
+      } else if (tokenPattern().test(attribute.value)) {
+        props[propertyName] = interpolate(attribute.value, template.values);
+      } else {
+        props[propertyName] = attribute.value === "" ? true : attribute.value;
+      }
+    }
+
+    const childFragment = element.ownerDocument.createDocumentFragment();
+    while (element.firstChild) childFragment.append(element.firstChild);
+    props.children = childFragment.childNodes.length
+      ? Object.freeze({ [RAW_CHILDREN]: true, fragment: childFragment })
+      : NOTHING;
+
+    return props;
+  }
+
+  function createComponentContext(scope) {
+    return Object.freeze({
+      html,
+      svg,
+      nothing: NOTHING,
+      onMount(callback) {
+        if (typeof callback === "function") scope.mounts.push(callback);
+      },
+      onCleanup(callback) {
+        if (typeof callback === "function") scope.addCleanup(callback);
+      },
+      afterPaint(callback) {
+        if (typeof callback === "function") scope.afterPaint.push(callback);
+      },
+      onError(callback) {
+        if (typeof callback === "function") scope.errorHandler = callback;
+      },
     });
   }
 
-  function getDocument(parent) {
-    return parent?.ownerDocument ||
-      (parent?.nodeType === 9 ? parent : null) ||
-      global.document;
-  }
-
-  function isNode(value, documentRef) {
-    const NodeCtor = documentRef?.defaultView?.Node || global.Node;
-    return Boolean(NodeCtor && value instanceof NodeCtor);
-  }
-
-  function appendValue(parent, rawValue, context) {
-    let value;
-
-    try {
-      value = resolve(rawValue);
-    } catch (error) {
-      context.reportError(error);
-      return;
+  class AttributePart {
+    constructor(element, descriptor, template, scope) {
+      this.element = element;
+      this.descriptor = descriptor;
+      this.template = template;
+      this.scope = scope;
+      this.dispose = null;
+      this.listenerCleanup = null;
     }
 
-    if (
-      value == null ||
-      value === false ||
-      value === true ||
-      value === NOTHING
-    ) {
-      return;
+    mount() {
+      const { name, raw, expressions } = this.descriptor;
+
+      if (expressions.length === 1 && raw === token(expressions[0])) {
+        this.mountExact(name, this.template.values[expressions[0]]);
+        return;
+      }
+
+      this.setEffect(() => {
+        this.element.setAttribute(name, interpolate(raw, this.template.values));
+      });
     }
+
+    mountExact(name, rawValue) {
+      if (name === "ref") {
+        const value = resolve(rawValue);
+        if (isDirective(value, PART_ELEMENT)) value.apply(this.element, this.scope);
+        else if (typeof value === "function") this.scope.refs.push(() => value(this.element));
+        return;
+      }
+
+      if (name === "...") {
+        attrs(rawValue).apply(this.element, this.scope);
+        return;
+      }
+
+      if (name.startsWith("@")) {
+        this.mountEvent(name.slice(1), rawValue);
+        return;
+      }
+
+      if (name.startsWith(".")) {
+        this.mountProperty(name.slice(1), rawValue);
+        return;
+      }
+
+      if (name.startsWith("?")) {
+        const attributeName = name.slice(1);
+        this.setEffect(() => {
+          if (Boolean(resolveDeep(rawValue))) this.element.setAttribute(attributeName, "");
+          else this.element.removeAttribute(attributeName);
+        });
+        return;
+      }
+
+      const value = resolve(rawValue);
+
+      if (isDirective(value, PART_ATTRIBUTE)) {
+        value.apply(this, this.scope);
+        return;
+      }
+
+      if (isDirective(value, PART_ELEMENT)) {
+        value.apply(this.element, this.scope);
+        return;
+      }
+
+      this.setEffect(() => setNormalAttribute(this.element, name, resolveDeep(rawValue)));
+    }
+
+    mountEvent(type, rawValue) {
+      this.setEffect(() => {
+        this.listenerCleanup?.();
+        this.listenerCleanup = null;
+
+        const resolved = resolve(rawValue);
+        if (!resolved) return;
+        const descriptor = isEventDescriptor(resolved) ? resolved : event(resolved);
+        this.listenerCleanup = addDOMListener(
+          this.element,
+          type,
+          descriptor.handler,
+          descriptor.options,
+          this.scope,
+        );
+      });
+
+      this.scope.addCleanup(() => this.listenerCleanup?.());
+    }
+
+    mountProperty(property, rawValue) {
+      const binding = isBinding(rawValue) ? rawValue : null;
+
+      this.setEffect(() => {
+        const current = binding
+          ? binding.format
+            ? binding.format(binding.get())
+            : binding.get()
+          : resolveDeep(rawValue);
+
+        try {
+          this.element[property] = current ?? (BOOLEAN_PROPERTIES.has(property) ? false : "");
+        } catch (error) {
+          this.scope.warn(`Failed to assign .${property}`, error);
+        }
+      });
+
+      if (!binding?.set) return;
+
+      const eventName = binding.event || inferBindingEvent(this.element, property);
+      const commitEvent = binding.commitEvent;
+      const update = () => {
+        let next = readBoundProperty(this.element, property);
+        if (binding.parse) next = binding.parse(next, this.element);
+        binding.set(next);
+      };
+
+      this.scope.addCleanup(addDOMListener(this.element, eventName, update, {}, this.scope));
+      if (commitEvent && commitEvent !== eventName) {
+        this.scope.addCleanup(addDOMListener(this.element, commitEvent, update, {}, this.scope));
+      }
+    }
+
+    setEffect(callback) {
+      this.dispose?.();
+      this.dispose = this.scope.adapter.effect(() => {
+        try {
+          callback();
+        } catch (error) {
+          this.scope.handleError(error);
+        }
+      }, { name: `mini-fabrica.attribute:${this.descriptor.name}` });
+      this.scope.addCleanup(this.dispose);
+    }
+  }
+
+  class NodePart {
+    constructor(start, end, scope) {
+      this.start = start;
+      this.end = end;
+      this.scope = scope;
+      this.document = start.ownerDocument;
+      this.valueScope = null;
+      this.effectDispose = null;
+    }
+
+    setValue(rawValue) {
+      const resolved = resolve(rawValue);
+
+      if (isDirective(resolved, PART_NODE)) {
+        resolved.apply(this, this.scope);
+        return;
+      }
+
+      if (isFunctionValue(rawValue)) {
+        this.setEffect(() => this.replaceValue(resolve(rawValue)));
+        return;
+      }
+
+      this.replaceValue(resolved);
+    }
+
+    setEffect(callback) {
+      this.effectDispose?.();
+      this.effectDispose = this.scope.adapter.effect(() => {
+        try {
+          callback();
+        } catch (error) {
+          this.scope.handleError(error);
+        }
+      }, { name: "mini-fabrica.node" });
+      this.scope.addCleanup(this.effectDispose);
+    }
+
+    replace(value) {
+      this.valueScope?.dispose();
+      this.valueScope = this.scope.child("node-value");
+      replaceRange(this.start, this.end, value);
+    }
+
+    replaceValue(value, explicitScope) {
+      this.valueScope?.dispose();
+      this.valueScope = explicitScope || this.scope.child("node-value");
+      replaceRangeValue(this.start, this.end, value, this.valueScope);
+    }
+  }
+
+  class Scope {
+    constructor(adapter, documentRef, name = "scope", parent = null) {
+      this.adapter = adapter;
+      this.document = documentRef;
+      this.name = name;
+      this.parent = parent;
+      this.cleanups = [];
+      this.refs = [];
+      this.mounts = [];
+      this.afterPaint = [];
+      this.mounted = false;
+      this.disposed = false;
+      this.errorHandler = null;
+    }
+
+    child(name, documentRef = this.document) {
+      return new Scope(this.adapter, documentRef, name, this);
+    }
+
+    addCleanup(callback) {
+      if (typeof callback === "function") this.cleanups.push(callback);
+      return callback;
+    }
+
+    flushRefs() {
+      for (const callback of this.refs.splice(0)) {
+        try { callback(); } catch (error) { this.handleError(error); }
+      }
+    }
+
+    mountOnce() {
+      if (this.mounted) return;
+      this.mounted = true;
+
+      for (const callback of this.mounts.splice(0)) {
+        try {
+          const cleanup = callback();
+          if (typeof cleanup === "function") this.addCleanup(cleanup);
+        } catch (error) {
+          this.handleError(error);
+        }
+      }
+    }
+
+    flushAfterPaint() {
+      const callbacks = this.afterPaint.splice(0);
+      if (!callbacks.length) return;
+
+      queueMicrotask(() => {
+        if (this.disposed) return;
+        for (const callback of callbacks) {
+          try { callback(); } catch (error) { this.handleError(error); }
+        }
+      });
+    }
+
+    warn(message, error) {
+      console.warn(`[MiniFabrica:${this.name}] ${message}`, error);
+    }
+
+    handleError(error) {
+      if (typeof this.errorHandler === "function") {
+        this.errorHandler(error);
+        return;
+      }
+
+      if (this.parent) {
+        this.parent.handleError(error);
+        return;
+      }
+
+      console.error("[MiniFabrica] uncaught render error", error);
+    }
+
+    dispose() {
+      if (this.disposed) return;
+      this.disposed = true;
+
+      for (let index = this.cleanups.length - 1; index >= 0; index -= 1) {
+        try { this.cleanups[index]?.(); } catch (error) { this.warn("Cleanup failed", error); }
+      }
+
+      this.cleanups.length = 0;
+      this.refs.length = 0;
+      this.mounts.length = 0;
+      this.afterPaint.length = 0;
+    }
+  }
+
+  function createAdapter(Broto) {
+    if (Broto && typeof Broto.effect === "function") {
+      return {
+        hasNativeSignals: typeof Broto.signal === "function",
+        createSignal(initialValue) {
+          return typeof Broto.signal === "function"
+            ? Broto.signal(initialValue)
+            : createStandaloneSignal(initialValue);
+        },
+        effect(callback, options) {
+          return Broto.effect(callback, options) || (() => {});
+        },
+        batch(callback) {
+          return typeof Broto.batch === "function" ? Broto.batch(callback) : callback();
+        },
+        untrack(callback) {
+          return typeof Broto.untrack === "function" ? Broto.untrack(callback) : callback();
+        },
+      };
+    }
+
+    return {
+      hasNativeSignals: false,
+      createSignal(initialValue) { return createStandaloneSignal(initialValue); },
+      effect(callback) {
+        callback();
+        return () => {};
+      },
+      batch(callback) { return callback(); },
+      untrack(callback) { return callback(); },
+    };
+  }
+
+  function createLocalSignal(initialValue, adapter) {
+    return typeof adapter.createSignal === "function"
+      ? adapter.createSignal(initialValue)
+      : createStandaloneSignal(initialValue);
+  }
+
+  function createStandaloneSignal(initialValue) {
+    let value = initialValue;
+    const subscribers = new Set();
+
+    const signal = () => value;
+    signal.peek = () => value;
+    signal.set = (next) => {
+      const resolved = typeof next === "function" ? next(value) : next;
+      if (Object.is(value, resolved)) return value;
+      value = resolved;
+      for (const subscriber of subscribers) subscriber(value);
+      return value;
+    };
+    signal.subscribe = (callback) => {
+      subscribers.add(callback);
+      return () => subscribers.delete(callback);
+    };
+    signal.dispose = () => subscribers.clear();
+    return signal;
+  }
+
+  function render(root, tree, Broto, options = {}) {
+    if (!root?.replaceChildren) {
+      throw new TypeError("render(root, tree): root must be an Element or ShadowRoot.");
+    }
+
+    const documentRef = root.ownerDocument || global.document;
+    const adapter = createAdapter(Broto);
+    const scope = new Scope(adapter, documentRef, options.name || "root");
+    const start = documentRef.createComment("mf2:root:start");
+    const end = documentRef.createComment("mf2:root:end");
+    root.replaceChildren(start, end);
+
+    scope.errorHandler = (error) => {
+      options.onError?.(error);
+      if (!options.onError) console.error("[MiniFabrica] render failed", error);
+
+      const fallback = typeof options.fallback === "function"
+        ? options.fallback(error)
+        : options.fallback ?? `Render failed: ${error?.message || String(error)}`;
+
+      replaceRangeValue(start, end, fallback, scope.child("root-fallback"));
+    };
+
+    const disposeEffect = adapter.effect(() => {
+      try {
+        const output = resolve(tree);
+        replaceRangeValue(start, end, output, scope, true);
+        scope.flushRefs();
+        scope.mountOnce();
+        scope.flushAfterPaint();
+        options.afterPaint?.(root);
+      } catch (error) {
+        scope.handleError(error);
+      }
+    }, {
+      scheduler: options.scheduler || "microtask",
+      name: options.name || "mini-fabrica.render",
+    });
+
+    scope.addCleanup(disposeEffect);
+
+    return () => {
+      scope.dispose();
+      if (options.clearOnDispose !== false) root.replaceChildren();
+    };
+  }
+
+  function createRoot(root, Broto, options = {}) {
+    let dispose = null;
+
+    return Object.freeze({
+      render(tree) {
+        dispose?.();
+        dispose = render(root, tree, Broto, { ...options, clearOnDispose: false });
+        return this;
+      },
+      dispose() {
+        dispose?.();
+        dispose = null;
+        if (options.clearOnDispose !== false) root.replaceChildren();
+      },
+      get element() {
+        return root;
+      },
+    });
+  }
+
+  function replaceRangeValue(start, end, value, scope, preserveAnchors = false) {
+    clearBetween(start, end);
+    const fragment = start.ownerDocument.createDocumentFragment();
+    appendValue(fragment, value, scope);
+    end.parentNode.insertBefore(fragment, end);
+
+    if (!preserveAnchors) {
+      scope.flushRefs();
+      scope.mountOnce();
+      scope.flushAfterPaint();
+    }
+  }
+
+  function appendValue(parent, rawValue, scope) {
+    const value = resolve(rawValue);
+
+    if (value == null || value === false || value === true || value === NOTHING) return;
 
     if (isBinding(value)) {
-      appendValue(parent, value.signal(), context);
+      appendValue(parent, value.get(), scope);
+      return;
+    }
+
+    if (value?.[RAW_CHILDREN]) {
+      parent.append(value.fragment);
       return;
     }
 
     if (Array.isArray(value) || value instanceof Set) {
-      for (const item of value) appendValue(parent, item, context);
+      for (const item of value) appendValue(parent, item, scope);
       return;
     }
 
@@ -475,248 +1412,99 @@
       value &&
       typeof value !== "string" &&
       typeof value[Symbol.iterator] === "function" &&
-      !isNode(value, context.document)
+      !isNode(value, scope.document)
     ) {
-      for (const item of value) appendValue(parent, item, context);
+      for (const item of value) appendValue(parent, item, scope);
       return;
     }
 
     if (isTemplate(value)) {
-      parent.append(materialize(value, context));
+      parent.append(instantiateTemplate(value, scope));
       return;
     }
 
-    if (isDirective(value)) {
-      const anchor = context.document.createComment("mf:directive");
-      parent.append(anchor);
-      value.apply(anchor, context);
+    if (isDirective(value, PART_NODE)) {
+      const start = scope.document.createComment("mf2:directive:start");
+      const end = scope.document.createComment("mf2:directive:end");
+      parent.append(start, end);
+      value.apply(new NodePart(start, end, scope), scope);
       return;
     }
 
-    if (isNode(value, context.document)) {
+    if (isNode(value, scope.document)) {
       parent.append(value);
       return;
     }
 
-    parent.append(context.document.createTextNode(String(value)));
+    parent.append(scope.document.createTextNode(String(value)));
   }
 
-  function parseComponentProps(element, template, context) {
-    const props = {
-      __mfLifecycle: context,
-    };
-
-    for (const attribute of Array.from(element.attributes)) {
-      const name = attribute.name;
-      const raw = attribute.value;
-      const exact = raw.match(exactTokenPattern());
-
-      if (exact) {
-        props[toCamelCase(name)] = expressionValue(template, exact[1]);
-      } else if (tokenPattern().test(raw)) {
-        props[toCamelCase(name)] = interpolate(raw, template);
-      } else if (raw === "") {
-        props[toCamelCase(name)] = true;
-      } else {
-        props[toCamelCase(name)] = raw;
-      }
-    }
-
-    if (element.childNodes.length > 0) {
-      const children = context.document.createDocumentFragment();
-      while (element.firstChild) children.append(element.firstChild);
-      props.children = children;
-    } else {
-      props.children = NOTHING;
-    }
-
-    return props;
+  function replaceRange(start, end, value) {
+    clearBetween(start, end);
+    if (!value) return;
+    end.parentNode.insertBefore(value, end);
   }
 
-  function materializeComponent(element, factory, template, context) {
-    const props = parseComponentProps(element, template, context);
-    const replacement = context.document.createDocumentFragment();
-
-    try {
-      appendValue(replacement, factory(props), context);
-    } catch (error) {
-      context.reportError(error);
+  function clearBetween(start, end) {
+    let node = start.nextSibling;
+    while (node && node !== end) {
+      const next = node.nextSibling;
+      node.remove();
+      node = next;
     }
-
-    element.replaceWith(replacement);
   }
 
-  function applyAttribute(element, attribute, template, context) {
-    const name = attribute.name;
-    const raw = attribute.value;
-    const matches = Array.from(raw.matchAll(tokenPattern()));
-
-    if (!matches.length) return;
-
-    if (matches.length === 1 && matches[0][0] === raw) {
-      const value = expressionValue(template, matches[0][1]);
-
-      if (name === "ref") {
-        const callback = isDirective(value)
-          ? value.apply
-          : resolve(value);
-
-        if (typeof callback === "function") {
-          context.refs.push(() => callback(element, context));
-        }
-
-        element.removeAttribute(name);
-        return;
-      }
-
-      if (name === "class" && isDirective(value)) {
-        value.apply(element, context);
-        return;
-      }
-
-      if (name === "style" && isDirective(value)) {
-        value.apply(element, context);
-        return;
-      }
-
-      if (name === "...") {
-        const spread = resolveDeep(value) || {};
-        for (const [spreadName, spreadValue] of Object.entries(spread)) {
-          applyResolvedAttribute(element, spreadName, spreadValue, context);
-        }
-        element.removeAttribute(name);
-        return;
-      }
-
-      if (name.startsWith("@")) {
-        const eventName = name.slice(1);
-        const descriptor = isEvent(value)
-          ? value
-          : event(resolve(value));
-
-        element.addEventListener(
-          eventName,
-          descriptor.handler,
-          descriptor.options,
-        );
-
-        context.cleanups.push(() => {
-          element.removeEventListener(
-            eventName,
-            descriptor.handler,
-            descriptor.options,
-          );
-        });
-
-        element.removeAttribute(name);
-        return;
-      }
-
-      if (name.startsWith(".")) {
-        applyPropertyBinding(element, name.slice(1), value, context);
-        element.removeAttribute(name);
-        return;
-      }
-
-      if (name.startsWith("?")) {
-        const attributeName = name.slice(1);
-        if (Boolean(resolveDeep(value))) element.setAttribute(attributeName, "");
-        else element.removeAttribute(attributeName);
-        element.removeAttribute(name);
-        return;
-      }
-
-      if (isDirective(value)) {
-        value.apply(element, context);
-        element.removeAttribute(name);
-        return;
-      }
-
-      setNormalAttribute(element, name, resolveDeep(value));
-      return;
+  function removeRange(start, end, includeAnchors = false) {
+    if (!start || !end) return;
+    let node = includeAnchors ? start : start.nextSibling;
+    const stop = includeAnchors ? end.nextSibling : end;
+    while (node && node !== stop) {
+      const next = node.nextSibling;
+      node.remove();
+      node = next;
     }
-
-    element.setAttribute(name, interpolate(raw, template));
   }
 
-  function applyResolvedAttribute(element, name, value, context) {
+  function moveRangeBefore(start, end, reference) {
+    if (!start?.parentNode || !end?.parentNode || !reference?.parentNode) return;
+    const fragment = start.ownerDocument.createDocumentFragment();
+    let node = start;
+    const stop = end.nextSibling;
+    while (node && node !== stop) {
+      const next = node.nextSibling;
+      fragment.append(node);
+      node = next;
+    }
+    reference.parentNode.insertBefore(fragment, reference);
+  }
+
+  function interpolate(raw, values) {
+    return raw.replace(tokenPattern(), (_match, index) => {
+      const value = resolveDeep(values[Number(index)]);
+      return value == null || value === false ? "" : String(value);
+    });
+  }
+
+  function applyResolvedAttribute(element, name, value, scope) {
     if (name.startsWith("@")) {
-      const eventName = name.slice(1);
-      const descriptor = isEvent(value) ? value : event(value);
-      element.addEventListener(eventName, descriptor.handler, descriptor.options);
-      context.cleanups.push(() =>
-        element.removeEventListener(eventName, descriptor.handler, descriptor.options),
-      );
+      const descriptor = isEventDescriptor(value) ? value : event(value);
+      scope.addCleanup(addDOMListener(element, name.slice(1), descriptor.handler, descriptor.options, scope));
       return;
     }
 
     if (name.startsWith(".")) {
-      applyPropertyBinding(element, name.slice(1), value, context);
+      try { element[name.slice(1)] = value; } catch (error) { scope.warn(`Failed to assign ${name}`, error); }
       return;
     }
 
     if (name.startsWith("?")) {
-      if (Boolean(resolveDeep(value))) element.setAttribute(name.slice(1), "");
+      const attribute = name.slice(1);
+      if (Boolean(value)) element.setAttribute(attribute, "");
+      else element.removeAttribute(attribute);
       return;
     }
 
-    setNormalAttribute(element, name, resolveDeep(value));
-  }
-
-  function applyPropertyBinding(element, property, rawValue, context) {
-    const binding = isBinding(rawValue) ? rawValue : null;
-    const current = binding
-      ? binding.format
-        ? binding.format(binding.signal())
-        : binding.signal()
-      : resolveDeep(rawValue);
-
-    try {
-      element[property] =
-        current ??
-        (property === "checked" || property === "disabled" ? false : "");
-    } catch (error) {
-      context.warn(`Failed to assign .${property}`, error);
-    }
-
-    if (!binding) return;
-
-    const eventName =
-      binding.event ||
-      (property === "checked" || property === "selectedIndex"
-        ? "change"
-        : "input");
-
-    const update = () => {
-      let next;
-
-      if (
-        property === "value" &&
-        element?.tagName === "INPUT" &&
-        element.type === "number" &&
-        element.value !== ""
-      ) {
-        next = Number(element.value);
-      } else if (property === "checked") {
-        next = Boolean(element.checked);
-      } else {
-        next = element[property];
-      }
-
-      if (binding.parse) next = binding.parse(next, element);
-      binding.signal.set?.(next);
-    };
-
-    element.addEventListener(eventName, update);
-
-    if (eventName !== "change") {
-      element.addEventListener("change", update);
-    }
-
-    context.cleanups.push(() => {
-      element.removeEventListener(eventName, update);
-      if (eventName !== "change") element.removeEventListener("change", update);
-    });
+    setNormalAttribute(element, name, value);
   }
 
   function setNormalAttribute(element, name, value) {
@@ -732,367 +1520,77 @@
       return;
     }
 
+    if (URL_ATTRIBUTES.has(name.toLowerCase())) {
+      const sanitized = sanitizeURL(value);
+      if (sanitized == null) {
+        element.removeAttribute(name);
+        return;
+      }
+      value = sanitized;
+    }
+
     element.setAttribute(name, String(value));
   }
 
-  function materialize(template, parentContext) {
-    const context = parentContext || createRenderContext(global.document);
-    const { source, componentsByTag } = compile(template);
-    const holder = context.document.createElement("template");
-
-    holder.innerHTML = source;
-    const fragment = holder.content;
-
-    const walker = context.document.createTreeWalker(
-      fragment,
-      global.NodeFilter.SHOW_ELEMENT | global.NodeFilter.SHOW_TEXT,
-    );
-
-    const nodes = [];
-    while (walker.nextNode()) nodes.push(walker.currentNode);
-
-    // Components are replaced deepest-first, so nested component placeholders
-    // are passed through as children instead of being consumed prematurely.
-    const componentNodes = nodes
-      .filter(
-        (node) =>
-          node.nodeType === 1 && componentsByTag.has(node.tagName),
-      )
-      .reverse();
-
-    for (const element of componentNodes) {
-      materializeComponent(
-        element,
-        componentsByTag.get(element.tagName),
-        template,
-        context,
-      );
-    }
-
-    for (const node of nodes) {
-      if (!node.isConnected && !fragment.contains(node)) continue;
-
-      if (node.nodeType === 3) {
-        replaceTextExpressions(node, template, context);
-        continue;
-      }
-
-      if (node.nodeType === 1) {
-        for (const attribute of Array.from(node.attributes)) {
-          applyAttribute(node, attribute, template, context);
-        }
-      }
-    }
-
-    return fragment;
+  function sanitizeURL(value) {
+    const raw = String(value).trim();
+    if (/^(?:javascript|vbscript):/i.test(raw)) return null;
+    if (/^data:/i.test(raw) && !/^data:image\/(?:png|gif|jpe?g|webp|svg\+xml);/i.test(raw)) return null;
+    return raw;
   }
 
-  function replaceTextExpressions(node, template, context) {
-    const text = node.nodeValue || "";
-    const pattern = tokenPattern();
+  function addDOMListener(element, type, handler, options, scope) {
+    const view = element.ownerDocument?.defaultView || global;
+    const AbortControllerCtor = view.AbortController || global.AbortController;
 
-    if (!pattern.test(text)) return;
-
-    const replacement = context.document.createDocumentFragment();
-    let cursor = 0;
-
-    for (const match of text.matchAll(tokenPattern())) {
-      if (match.index > cursor) {
-        replacement.append(
-          context.document.createTextNode(text.slice(cursor, match.index)),
-        );
-      }
-
-      appendValue(
-        replacement,
-        expressionValue(template, match[1]),
-        context,
-      );
-
-      cursor = match.index + match[0].length;
-    }
-
-    if (cursor < text.length) {
-      replacement.append(
-        context.document.createTextNode(text.slice(cursor)),
-      );
-    }
-
-    node.replaceWith(replacement);
-  }
-
-  function createRenderContext(documentRef, options = {}) {
-    const context = {
-      document: documentRef,
-      refs: [],
-      mounts: [],
-      cleanups: [],
-      afterPaint: [],
-      warn(message, error) {
-        options.onWarn?.(message, error);
-        if (!options.onWarn) console.warn("[MiniFabrica]", message, error);
-      },
-      reportError(error) {
-        if (options.onError) {
-          options.onError(error);
-          return;
-        }
-        throw error;
-      },
-    };
-
-    return context;
-  }
-
-  function captureDOMState(root, options) {
-    const active = root.contains(root.ownerDocument.activeElement)
-      ? root.ownerDocument.activeElement
-      : null;
-
-    const focusKey =
-      active?.getAttribute?.("data-mf-focus-key") ||
-      active?.id ||
-      null;
-
-    const interactiveSelector =
-      options.interactiveSelector ||
-      "input,select,textarea,button,[contenteditable],[tabindex]";
-
-    const interactive = Array.from(root.querySelectorAll(interactiveSelector));
-    const activeIndex = active ? interactive.indexOf(active) : -1;
-
-    const selection =
-      active &&
-      typeof active.selectionStart === "number"
-        ? {
-            start: active.selectionStart,
-            end: active.selectionEnd,
-            direction: active.selectionDirection,
-          }
-        : null;
-
-    const scrollSelector =
-      options.scrollSelector ||
-      "[data-mf-preserve-scroll],.mf-virtual-repeat";
-
-    const scroll = Array.from(root.querySelectorAll(scrollSelector)).map(
-      (node, index) => ({
-        key: node.getAttribute("data-mf-scroll-key") || String(index),
-        top: node.scrollTop,
-        left: node.scrollLeft,
-      }),
-    );
-
-    return {
-      focusKey,
-      activeIndex,
-      selection,
-      scroll,
-      interactiveSelector,
-      scrollSelector,
-    };
-  }
-
-  function restoreDOMState(root, state) {
-    const scrollNodes = Array.from(root.querySelectorAll(state.scrollSelector));
-
-    for (const position of state.scroll) {
-      const node =
-        root.querySelector(
-          `[data-mf-scroll-key="${cssEscape(position.key)}"]`,
-        ) ||
-        scrollNodes[Number(position.key)];
-
-      if (node) {
-        node.scrollTop = position.top;
-        node.scrollLeft = position.left;
-      }
-    }
-
-    let nextActive = null;
-
-    if (state.focusKey) {
-      nextActive =
-        root.querySelector(
-          `[data-mf-focus-key="${cssEscape(state.focusKey)}"]`,
-        ) ||
-        root.querySelector(`#${cssEscape(state.focusKey)}`);
-    }
-
-    if (!nextActive && state.activeIndex >= 0) {
-      nextActive =
-        root.querySelectorAll(state.interactiveSelector)[state.activeIndex];
-    }
-
-    nextActive?.focus?.({ preventScroll: true });
-
-    if (
-      state.selection &&
-      nextActive &&
-      typeof nextActive.setSelectionRange === "function"
-    ) {
+    if (AbortControllerCtor) {
       try {
-        nextActive.setSelectionRange(
-          state.selection.start,
-          state.selection.end,
-          state.selection.direction,
-        );
+        const controller = new AbortControllerCtor();
+        element.addEventListener(type, handler, { ...options, signal: controller.signal });
+        return () => controller.abort();
       } catch {
-        // Unsupported input type.
+        // Old Safari can expose AbortController but reject signal in addEventListener.
       }
     }
+
+    element.addEventListener(type, handler, options);
+    return () => element.removeEventListener(type, handler, options);
   }
 
-  function resolveEffect(Broto) {
-    if (typeof Broto?.effect === "function") return Broto.effect.bind(Broto);
-    if (typeof Broto?.autorun === "function") return Broto.autorun.bind(Broto);
-
-    return (callback) => {
-      callback();
-      return () => {};
-    };
+  function inferBindingEvent(element, property) {
+    if (property === "checked" || property === "selectedIndex") return "change";
+    if (element.matches?.("select,input[type=checkbox],input[type=radio],input[type=file]")) return "change";
+    return "input";
   }
 
-  function render(root, tree, Broto, options = {}) {
-    if (!root?.replaceChildren) {
-      throw new TypeError("render(root, tree): root must be an Element or ShadowRoot.");
+  function readBoundProperty(element, property) {
+    const view = element.ownerDocument?.defaultView || global;
+    const InputCtor = view.HTMLInputElement;
+    const SelectCtor = view.HTMLSelectElement;
+
+    if (property === "checked") return Boolean(element.checked);
+
+    if (InputCtor && element instanceof InputCtor) {
+      if (element.type === "number" || element.type === "range") {
+        return element.value === "" ? "" : Number(element.value);
+      }
+      if (element.type === "file") return element.files;
     }
 
-    const documentRef = getDocument(root);
-    const effect = resolveEffect(Broto);
-    let disposed = false;
-    let cleanups = [];
+    if (SelectCtor && element instanceof SelectCtor && element.multiple) {
+      return Array.from(element.selectedOptions, (option) => option.value);
+    }
 
-    const paint = () => {
-      if (disposed) return;
-
-      for (const cleanup of cleanups.splice(0)) {
-        try {
-          cleanup?.();
-        } catch (error) {
-          options.onWarn?.("Cleanup failed", error);
-        }
-      }
-
-      const domState = options.preserveState === false
-        ? null
-        : captureDOMState(root, options);
-
-      const context = createRenderContext(documentRef, {
-        onError: options.onError,
-        onWarn: options.onWarn,
-      });
-
-      try {
-        const fragment = documentRef.createDocumentFragment();
-        appendValue(fragment, tree, context);
-        root.replaceChildren(fragment);
-
-        for (const callback of context.refs) callback();
-
-        if (domState) restoreDOMState(root, domState);
-
-        for (const mount of context.mounts) {
-          const cleanup = mount();
-          if (typeof cleanup === "function") context.cleanups.push(cleanup);
-        }
-
-        cleanups = context.cleanups;
-
-        queueMicrotask(() => {
-          if (disposed) return;
-
-          for (const callback of context.afterPaint) {
-            try {
-              callback();
-            } catch (error) {
-              context.warn("afterPaint callback failed", error);
-            }
-          }
-
-          options.afterPaint?.(root);
-        });
-      } catch (error) {
-        options.onError?.(error);
-
-        if (!options.onError) {
-          console.error("[MiniFabrica] render failed", error);
-        }
-
-        const fallback =
-          typeof options.fallback === "function"
-            ? options.fallback(error)
-            : options.fallback;
-
-        root.replaceChildren();
-
-        if (fallback !== undefined) {
-          const fallbackContext = createRenderContext(documentRef);
-          const fragment = documentRef.createDocumentFragment();
-          appendValue(fragment, fallback, fallbackContext);
-          root.append(fragment);
-        } else {
-          root.append(
-            documentRef.createTextNode(
-              `Render failed: ${error?.message || String(error)}`,
-            ),
-          );
-        }
-      }
-    };
-
-    const disposeEffect = effect(paint, {
-      scheduler: options.scheduler || "microtask",
-      name: options.name || "mini-fabrica.render",
-    });
-
-    return () => {
-      if (disposed) return;
-      disposed = true;
-
-      try {
-        disposeEffect?.();
-      } catch {}
-
-      for (const cleanup of cleanups.splice(0)) {
-        try {
-          cleanup?.();
-        } catch {}
-      }
-
-      if (options.clearOnDispose !== false) root.replaceChildren();
-    };
+    return element[property];
   }
 
-  function createRoot(root, Broto, options = {}) {
-    let dispose = null;
-
-    return Object.freeze({
-      render(tree) {
-        dispose?.();
-        dispose = render(root, tree, Broto, {
-          ...options,
-          clearOnDispose: false,
-        });
-        return this;
-      },
-
-      dispose() {
-        dispose?.();
-        dispose = null;
-        if (options.clearOnDispose !== false) root.replaceChildren();
-      },
-
-      get element() {
-        return root;
-      },
-    });
+  function isNode(value, documentRef) {
+    const NodeCtor = documentRef?.defaultView?.Node || global.Node;
+    return Boolean(NodeCtor && value instanceof NodeCtor);
   }
 
   function toCamelCase(value) {
-    return String(value).replace(/-([a-z])/g, (_match, letter) =>
-      letter.toUpperCase(),
-    );
+    return String(value).replace(/-([a-z])/g, (_match, letter) => letter.toUpperCase());
   }
 
   function toKebabCase(value) {
@@ -1102,10 +1600,8 @@
       .toLowerCase();
   }
 
-  function cssEscape(value) {
-    if (global.CSS?.escape) return global.CSS.escape(String(value));
-    return String(value).replace(/["\\]/g, "\\$&");
-  }
+  const BOOLEAN_PROPERTIES = new Set(["checked", "disabled", "hidden", "multiple", "open", "readOnly", "required", "selected"]);
+  const URL_ATTRIBUTES = new Set(["href", "src", "action", "formaction", "poster", "xlink:href"]);
 
   const api = Object.freeze({
     version: VERSION,
@@ -1119,20 +1615,25 @@
     bind,
     event,
     directive,
+    nodeDirective,
+    elementDirective,
+    attributeDirective,
     ref,
     attrs,
     classMap,
     styleMap,
     unsafeHTML,
+    text,
 
     repeat,
     virtualRepeat,
     when,
     choose,
+    keyed,
     boundary,
     portal,
-    keyed,
 
+    sanitizeURL,
     nothing: NOTHING,
   });
 
@@ -1144,78 +1645,98 @@
   });
 })(typeof globalThis !== "undefined" ? globalThis : window);
 
-// Exemplo de uso:
-//
-// const {
-//   html,
-//   component,
-//   render,
-//   bind,
-//   event,
-//   repeat,
-//   when,
-//   classMap,
-//   styleMap,
-// } = MiniFabrica;
-//
-// const state = Broto.store({
-//   title: "Mini Fábrica",
-//   items: ["Um", "Dois", "Três"],
-//   open: true,
-// });
-// const query = Broto.signal("");
-//
-// const Button = component("Button", ({ children, kind = "default", onClick }) => html`
-//   <button
-//     class=${classMap(["button", `button--${kind}`])}
-//     @click=${event(onClick)}
-//   >
-//     ${children}
-//   </button>
-// `);
-//
-// const App = component("App", () => html`
-//   <section style=${styleMap({ padding: "16px" })}>
-//     <h1>${() => state.title}</h1>
-//
-//     <input
-//       data-mf-focus-key="search"
-//       .value=${bind(query)}
-//       placeholder="Buscar"
-//     />
-//
-//     <${Button}
-//       kind="primary"
-//       on-click=${() => { state.open = !state.open; }}
-//     >
-//       Alternar
-//     </${Button}>
-//
-//     ${when(
-//       () => state.open,
-//       () => html`
-//         <ul>
-//           ${repeat(
-//             () => state.items,
-//             (item) => item,
-//             ({ item, index }) => html`
-//               <li>${index}. ${item}</li>
-//             `,
-//           )}
-//         </ul>
-//       `,
-//     )}
-//   </section>
-// `);
-//
-// const dispose = render(
-//   document.querySelector("#app"),
-//   App(),
-//   Broto,
-//   {
-//     name: "my-userscript.app",
-//     afterPaint(root) {
-//       // Ajustes de geometria, se necessários.
-//     },
-//   },
-// );
+/*
+USAGE
+=====
+
+const {
+  html,
+  component,
+  render,
+  bind,
+  event,
+  repeat,
+  virtualRepeat,
+  when,
+  boundary,
+  portal,
+  classMap,
+  styleMap,
+} = MiniFabrica;
+
+const state = Broto.store({
+  query: "",
+  open: true,
+  items: [
+    { id: 1, label: "One" },
+    { id: 2, label: "Two" },
+  ],
+});
+
+const Button = component("Button", ({ children, kind = "default", onClick }, { onMount }) => {
+  onMount(() => {
+    console.log("mounted");
+    return () => console.log("unmounted");
+  });
+
+  return html`
+    <button
+      class=${classMap(["button", { "button--primary": kind === "primary" }])}
+      @click=${event(onClick)}
+    >
+      ${children}
+    </button>
+  `;
+});
+
+const App = component("App", () => html`
+  <section style=${styleMap({ padding: "16px" })}>
+    <input
+      .value=${bind(
+        () => state.query,
+        (value) => { state.query = value; },
+      )}
+      placeholder="Search"
+    />
+
+    <${Button}
+      kind="primary"
+      .onClick=${() => { state.open = !state.open; }}
+    >
+      Toggle
+    </${Button}>
+
+    ${when(
+      () => state.open,
+      () => html`
+        <ul>
+          ${repeat(
+            () => state.items,
+            "id",
+            ({ item, index }) => html`
+              <li>${index}. ${() => item().label}</li>
+            `,
+          )}
+        </ul>
+      `,
+    )}
+
+    ${boundary({
+      children: () => riskyView(),
+      fallback: (error, reset) => html`
+        <button @click=${reset}>Retry: ${error.message}</button>
+      `,
+    })}
+
+    ${portal(
+      () => document.body,
+      () => html`<div class="toast">Portal content</div>`,
+    )}
+  </section>
+`);
+
+const dispose = render(document.querySelector("#app"), App(), Broto, {
+  name: "my-userscript",
+  fallback: (error) => html`<pre>${error.stack}</pre>`,
+});
+*/
