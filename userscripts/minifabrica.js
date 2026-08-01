@@ -1,5 +1,5 @@
 /**
- * MiniFabrica Lite v2
+ * MiniFabrica Lite v2.1 Fast
  * Reactive DOM renderer for userscripts.
  *
  * Features:
@@ -16,13 +16,13 @@
  * - Broto adapter, with a non-reactive fallback
  * - ShadowRoot, iframe and userscript-sandbox friendly
  *
- * @version 2.0.0
+ * @version 2.1.0
  * @license MIT
  */
 (function installMiniFabricaLiteV2(global) {
   "use strict";
 
-  const VERSION = "2.0.0";
+  const VERSION = "2.1.0";
   const HTML_NS = "http://www.w3.org/1999/xhtml";
   const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -599,9 +599,8 @@
   }
 
   function virtualRepeat(items, key, renderer, options = {}) {
-    const scrollTop = createStandaloneSignal(0);
-
     const VirtualRepeat = component("VirtualRepeat", (_props, context) => {
+      const scrollTop = context.signal(0);
       const height = () => Math.max(1, Number(resolveDeep(options.height)) || 420);
       const itemHeight = () => Math.max(1, Number(resolveDeep(options.itemHeight || options.estimateSize)) || 48);
       const overscan = () => Math.max(0, Number(resolveDeep(options.overscan)) || 6);
@@ -969,6 +968,15 @@
       onError(callback) {
         if (typeof callback === "function") scope.errorHandler = callback;
       },
+      signal(initialValue) {
+        return scope.adapter.createSignal(initialValue);
+      },
+      batch(callback) {
+        return scope.adapter.batch(callback);
+      },
+      untrack(callback) {
+        return scope.adapter.untrack(callback);
+      },
     });
   }
 
@@ -990,9 +998,14 @@
         return;
       }
 
-      this.setEffect(() => {
-        this.element.setAttribute(name, interpolate(raw, this.template.values));
+      const reactive = expressions.some((index) => {
+        const value = this.template.values[index];
+        return isFunctionValue(value) || isBinding(value);
       });
+
+      const update = () => this.element.setAttribute(name, interpolate(raw, this.template.values));
+      if (reactive) this.setEffect(update);
+      else update();
     }
 
     mountExact(name, rawValue) {
@@ -1027,7 +1040,7 @@
         return;
       }
 
-      const value = resolve(rawValue);
+      const value = isFunctionValue(rawValue) ? rawValue : resolve(rawValue);
 
       if (isDirective(value, PART_ATTRIBUTE)) {
         value.apply(this, this.scope);
@@ -1039,33 +1052,43 @@
         return;
       }
 
-      this.setEffect(() => setNormalAttribute(this.element, name, resolveDeep(rawValue)));
+      if (isFunctionValue(rawValue) || isBinding(rawValue)) {
+        this.setEffect(() => setNormalAttribute(this.element, name, resolveDeep(rawValue)));
+      } else {
+        setNormalAttribute(this.element, name, value);
+      }
     }
 
     mountEvent(type, rawValue) {
-      this.setEffect(() => {
-        this.listenerCleanup?.();
-        this.listenerCleanup = null;
+      // Keep a single stable DOM listener. Dynamic descriptors are resolved only
+      // when the event fires, avoiding effect churn and remove/add cycles.
+      const listener = (domEvent) => {
+        const current = isEventDescriptor(rawValue)
+          ? rawValue
+          : typeof rawValue === "function"
+            ? rawValue
+            : resolve(rawValue);
 
-        const resolved = resolve(rawValue);
-        if (!resolved) return;
-        const descriptor = isEventDescriptor(resolved) ? resolved : event(resolved);
-        this.listenerCleanup = addDOMListener(
-          this.element,
-          type,
-          descriptor.handler,
-          descriptor.options,
-          this.scope,
-        );
-      });
+        if (!current) return;
+        if (isEventDescriptor(current)) return current.handler.call(this.element, domEvent);
+        return current.call?.(this.element, domEvent);
+      };
 
-      this.scope.addCleanup(() => this.listenerCleanup?.());
+      const initial = isEventDescriptor(rawValue) ? rawValue : null;
+      this.listenerCleanup = addDOMListener(
+        this.element,
+        type,
+        listener,
+        initial?.options || {},
+        this.scope,
+      );
+      this.scope.addCleanup(this.listenerCleanup);
     }
 
     mountProperty(property, rawValue) {
       const binding = isBinding(rawValue) ? rawValue : null;
 
-      this.setEffect(() => {
+      const updateProperty = () => {
         const current = binding
           ? binding.format
             ? binding.format(binding.get())
@@ -1073,11 +1096,15 @@
           : resolveDeep(rawValue);
 
         try {
-          this.element[property] = current ?? (BOOLEAN_PROPERTIES.has(property) ? false : "");
+          const normalized = current ?? (BOOLEAN_PROPERTIES.has(property) ? false : "");
+          if (!Object.is(this.element[property], normalized)) this.element[property] = normalized;
         } catch (error) {
           this.scope.warn(`Failed to assign .${property}`, error);
         }
-      });
+      };
+
+      if (binding || isFunctionValue(rawValue)) this.setEffect(updateProperty);
+      else updateProperty();
 
       if (!binding?.set) return;
 
@@ -1119,15 +1146,16 @@
     }
 
     setValue(rawValue) {
-      const resolved = resolve(rawValue);
-
-      if (isDirective(resolved, PART_NODE)) {
-        resolved.apply(this, this.scope);
+      // Do not eagerly call reactive getters here. Doing so leaks their
+      // dependencies into whichever parent effect is currently mounting us.
+      if (isFunctionValue(rawValue)) {
+        this.setEffect(() => this.replaceValue(resolve(rawValue)));
         return;
       }
 
-      if (isFunctionValue(rawValue)) {
-        this.setEffect(() => this.replaceValue(resolve(rawValue)));
+      const resolved = resolve(rawValue);
+      if (isDirective(resolved, PART_NODE)) {
+        resolved.apply(this, this.scope);
         return;
       }
 
@@ -1331,23 +1359,20 @@
       replaceRangeValue(start, end, fallback, scope.child("root-fallback"));
     };
 
-    const disposeEffect = adapter.effect(() => {
-      try {
-        const output = resolve(tree);
-        replaceRangeValue(start, end, output, scope, true);
-        scope.flushRefs();
-        scope.mountOnce();
-        scope.flushAfterPaint();
-        options.afterPaint?.(root);
-      } catch (error) {
-        scope.handleError(error);
-      }
-    }, {
-      scheduler: options.scheduler || "microtask",
-      name: options.name || "mini-fabrica.render",
-    });
-
-    scope.addCleanup(disposeEffect);
+    try {
+      // The root is mounted once. Only explicit reactive NodeParts and
+      // AttributeParts subscribe to state, preventing full-tree remounts.
+      adapter.untrack(() => {
+        const rootPart = new NodePart(start, end, scope);
+        rootPart.setValue(tree);
+      });
+      scope.flushRefs();
+      scope.mountOnce();
+      scope.flushAfterPaint();
+      options.afterPaint?.(root);
+    } catch (error) {
+      scope.handleError(error);
+    }
 
     return () => {
       scope.dispose();
@@ -1467,6 +1492,7 @@
 
   function moveRangeBefore(start, end, reference) {
     if (!start?.parentNode || !end?.parentNode || !reference?.parentNode) return;
+    if (end.nextSibling === reference) return;
     const fragment = start.ownerDocument.createDocumentFragment();
     let node = start;
     const stop = end.nextSibling;
