@@ -22,7 +22,7 @@
 (function installMiniFabricaLiteV22(global) {
   "use strict";
 
-  const VERSION = "2.2.0";
+  const VERSION = "2.2.2";
   const HTML_NS = "http://www.w3.org/1999/xhtml";
   const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -754,7 +754,7 @@
         </div>
       </div>`;
     });
-    return VirtualRepeat();
+    return html`<${VirtualRepeat} />`;
   }
 
   function compileTemplate(template) {
@@ -809,7 +809,7 @@
       ? extractSvgContent(holder, documentRef)
       : holder.content;
 
-    const descriptors = annotateTemplate(content);
+    const descriptors = annotateTemplate(content, componentByTag);
     const componentDescriptors = collectComponentDescriptors(content, componentByTag);
     assignDescriptorPaths(content, descriptors);
 
@@ -843,7 +843,7 @@
     return fragment;
   }
 
-  function annotateTemplate(content) {
+  function annotateTemplate(content, componentByTag = new Map()) {
     const descriptors = [];
     const documentRef = content.ownerDocument;
     const NodeFilterCtor = documentRef.defaultView?.NodeFilter || global.NodeFilter;
@@ -859,7 +859,10 @@
       if (node.nodeType === 3) {
         annotateTextNode(node, descriptors);
       } else if (node.nodeType === 1) {
-        annotateElement(node, descriptors);
+        // Dynamic attributes on component placeholders are props, not DOM parts.
+        // Keep their expression tokens intact so parseComponentProps() can read
+        // the original values before the placeholder is materialized.
+        if (!componentByTag.has(node.tagName)) annotateElement(node, descriptors);
       }
     }
 
@@ -1390,19 +1393,18 @@
         hasNativeSignals: typeof Broto.signal === "function",
         createSignal(initialValue) { return typeof Broto.signal === "function" ? Broto.signal(initialValue) : createStandaloneSignal(initialValue); },
         effect(callback, options) {
+          // The callback must execute inside Broto's tracking frame on every run.
+          // Enqueuing only the callback outside Broto drops all dependencies after
+          // the first update, producing a UI that reacts exactly once and freezes.
           let disposed = false;
-          let firstRun = true;
           const wrapped = () => {
-            if (disposed) return;
-            if (firstRun || options?.scheduler === "sync") {
-              firstRun = false;
-              callback();
-            } else {
-              scheduler.enqueue(callback);
-            }
+            if (!disposed) callback();
           };
-          const dispose = Broto.effect(wrapped, { ...options, scheduler: "sync" }) || (() => {});
-          return () => { disposed = true; scheduler.flush(); dispose(); };
+          const dispose = Broto.effect(wrapped, options) || (() => {});
+          return () => {
+            disposed = true;
+            dispose();
+          };
         },
         batch(callback) { return typeof Broto.batch === "function" ? Broto.batch(callback) : callback(); },
         untrack(callback) { return typeof Broto.untrack === "function" ? Broto.untrack(callback) : callback(); },
