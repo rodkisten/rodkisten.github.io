@@ -1,14 +1,14 @@
 /**
- * MiniFabrica Lite v2.1 Fast
+ * MiniFabrica Lite v2.2 Performance & Correctness
  * Reactive DOM renderer for userscripts.
  *
  * Features:
- * - Compiled/cached tagged templates
+ * - Compiled/cached tagged templates with direct node paths
  * - Fine-grained reactive parts
  * - Dynamic components: <${Component} ...></${Component}>
- * - Component lifecycle and scoped cleanup
- * - Keyed repeat reconciliation
- * - Real fixed-height virtualRepeat
+ * - Hierarchical lifecycle scopes with leak-resistant cleanup
+ * - Keyed repeat reconciliation without per-item structural effects
+ * - rAF-throttled fixed-height virtualRepeat
  * - SVG templates
  * - Element/content/attribute directives
  * - Safe portals with owned ranges
@@ -16,13 +16,13 @@
  * - Broto adapter, with a non-reactive fallback
  * - ShadowRoot, iframe and userscript-sandbox friendly
  *
- * @version 2.1.0
+ * @version 2.2.0
  * @license MIT
  */
-(function installMiniFabricaLiteV2(global) {
+(function installMiniFabricaLiteV22(global) {
   "use strict";
 
-  const VERSION = "2.1.0";
+  const VERSION = "2.2.0";
   const HTML_NS = "http://www.w3.org/1999/xhtml";
   const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -44,6 +44,44 @@
   const ATTRIBUTE_MARKER_PREFIX = "data-mf2-a-";
 
   const templateCache = new WeakMap();
+  const REACTIVE = Symbol("mini-fabrica.reactive");
+  const DEV = Boolean(global.__MINI_FABRICA_DEV__);
+
+  const scheduler = (() => {
+    const jobs = new Set();
+    let pending = false;
+    const flush = () => {
+      pending = false;
+      const current = Array.from(jobs);
+      jobs.clear();
+      for (const job of current) {
+        try { job(); } catch (error) { queueMicrotask(() => { throw error; }); }
+      }
+    };
+    return {
+      enqueue(job) {
+        jobs.add(job);
+        if (!pending) {
+          pending = true;
+          queueMicrotask(flush);
+        }
+      },
+      flush,
+    };
+  })();
+
+  function maybeFreeze(value) {
+    return DEV ? Object.freeze(value) : value;
+  }
+
+  function reactive(getter) {
+    if (typeof getter !== "function") throw new TypeError("reactive(getter): getter must be a function.");
+    return maybeFreeze({ [REACTIVE]: true, get: getter });
+  }
+
+  function isReactive(value) {
+    return Boolean(value?.[REACTIVE]);
+  }
 
   function token(index) {
     return `${TOKEN_PREFIX}${index}__`;
@@ -82,6 +120,7 @@
   }
 
   function resolve(value) {
+    if (isReactive(value)) return value.get();
     return isFunctionValue(value) && !isBinding(value) && !isEventDescriptor(value) && !isDirective(value)
       ? value()
       : value;
@@ -93,7 +132,7 @@
   }
 
   function html(strings, ...values) {
-    return Object.freeze({
+    return maybeFreeze({
       [TEMPLATE]: true,
       namespace: HTML_NS,
       strings,
@@ -102,7 +141,7 @@
   }
 
   function svg(strings, ...values) {
-    return Object.freeze({
+    return maybeFreeze({
       [TEMPLATE]: true,
       namespace: SVG_NS,
       strings,
@@ -141,6 +180,7 @@
     nothing: NOTHING,
     onMount() {},
     onCleanup() {},
+    afterUpdate() {},
     afterPaint() {},
     onError() {},
   });
@@ -172,7 +212,7 @@
       throw new TypeError("bind(source): source must be callable or expose get().");
     }
 
-    return Object.freeze({
+    return maybeFreeze({
       [BINDING]: true,
       get,
       set,
@@ -206,7 +246,7 @@
       return handler.call(this, domEvent);
     };
 
-    return Object.freeze({
+    return maybeFreeze({
       [EVENT]: true,
       handler: listener,
       options: {
@@ -235,7 +275,7 @@
       throw new TypeError("directive(kind, apply): apply must be a function.");
     }
 
-    return Object.freeze({
+    return maybeFreeze({
       [DIRECTIVE]: true,
       kind,
       apply,
@@ -262,30 +302,28 @@
 
   function classMap(value) {
     return attributeDirective((part) => {
+      let owned = new Set();
       part.setEffect(() => {
-        const classes = [];
-
+        const next = new Set();
         const visit = (entry) => {
           const current = resolveDeep(entry);
           if (!current) return;
-
           if (Array.isArray(current) || current instanceof Set) {
             for (const item of current) visit(item);
-            return;
+          } else if (typeof current === "object") {
+            for (const [name, enabled] of Object.entries(current)) if (resolveDeep(enabled)) next.add(name);
+          } else {
+            for (const name of String(current).split(/\s+/)) if (name) next.add(name);
           }
-
-          if (typeof current === "object") {
-            for (const [name, enabled] of Object.entries(current)) {
-              if (resolveDeep(enabled)) classes.push(name);
-            }
-            return;
-          }
-
-          classes.push(String(current));
         };
-
         visit(value);
-        part.element.className = classes.join(" ");
+        for (const name of owned) if (!next.has(name)) part.element.classList.remove(name);
+        for (const name of next) if (!owned.has(name)) part.element.classList.add(name);
+        owned = next;
+      });
+      part.scope.addCleanup(() => {
+        for (const name of owned) part.element.classList.remove(name);
+        owned.clear();
       });
     });
   }
@@ -334,25 +372,75 @@
 
   function attrs(value) {
     return elementDirective((element, scope) => {
-      let previous = new Set();
+      const controllers = new Map();
 
-      const dispose = scope.adapter.effect(() => {
+      const remove = (name) => {
+        const controller = controllers.get(name);
+        if (controller) {
+          controller.dispose?.();
+          controllers.delete(name);
+        }
+        if (name.startsWith(".")) {
+          const property = name.slice(1);
+          try { element[property] = BOOLEAN_PROPERTIES.has(property) ? false : ""; } catch {}
+        } else if (!name.startsWith("@")) {
+          element.removeAttribute(name.startsWith("?") ? name.slice(1) : name);
+        }
+      };
+
+      const update = (name, raw) => {
+        let controller = controllers.get(name);
+        if (!controller) {
+          controller = createAttributeController(element, name, scope);
+          controllers.set(name, controller);
+        }
+        controller.update(raw);
+      };
+
+      const disposeEffect = scope.adapter.effect(() => {
         const object = resolveDeep(value) || {};
         const next = new Set(Object.keys(object));
-
-        for (const oldName of previous) {
-          if (!next.has(oldName)) element.removeAttribute(oldName);
-        }
-
-        for (const [name, raw] of Object.entries(object)) {
-          applyResolvedAttribute(element, name, resolveDeep(raw), scope);
-        }
-
-        previous = next;
+        for (const name of Array.from(controllers.keys())) if (!next.has(name)) remove(name);
+        for (const [name, raw] of Object.entries(object)) update(name, resolveDeep(raw));
       }, { name: "mini-fabrica.attrs" });
 
-      scope.addCleanup(dispose);
+      scope.addCleanup(disposeEffect);
+      scope.addCleanup(() => {
+        for (const name of Array.from(controllers.keys())) remove(name);
+      });
     });
+  }
+
+  function createAttributeController(element, name, scope) {
+    let cleanup = null;
+    let current;
+    return {
+      update(value) {
+        if (name.startsWith("@")) {
+          if (Object.is(current, value)) return;
+          cleanup?.();
+          current = value;
+          if (!value) { cleanup = null; return; }
+          const descriptor = isEventDescriptor(value) ? value : event(value);
+          cleanup = addDOMListener(element, name.slice(1), descriptor.handler, descriptor.options, scope);
+          return;
+        }
+        current = value;
+        if (name.startsWith(".")) {
+          const property = name.slice(1);
+          const normalized = value ?? (BOOLEAN_PROPERTIES.has(property) ? false : "");
+          try { if (!Object.is(element[property], normalized)) element[property] = normalized; } catch (error) { scope.warn(`Failed to assign .${property}`, error); }
+          return;
+        }
+        if (name.startsWith("?")) {
+          const attribute = name.slice(1);
+          if (value) element.setAttribute(attribute, ""); else element.removeAttribute(attribute);
+          return;
+        }
+        setNormalAttribute(element, name, value);
+      },
+      dispose() { cleanup?.(); cleanup = null; current = undefined; },
+    };
   }
 
   function unsafeHTML(value) {
@@ -393,17 +481,16 @@
     return nodeDirective((part) => {
       let previousKey = Symbol("unset");
       let childScope = null;
-
       part.setEffect(() => {
         const nextKey = resolveDeep(key);
         if (Object.is(previousKey, nextKey)) return;
-
         previousKey = nextKey;
-        childScope?.dispose();
-        childScope = part.scope.child("keyed");
-        part.replaceValue(resolve(children), childScope);
+        part.scope.adapter.untrack(() => {
+          childScope?.dispose();
+          childScope = part.scope.child("keyed");
+          part.replaceValue(resolve(children), childScope);
+        });
       });
-
       part.scope.addCleanup(() => childScope?.dispose());
     });
   }
@@ -449,35 +536,34 @@
   function portal(target, children) {
     return nodeDirective((part) => {
       let portalScope = null;
+      let portalPart = null;
       let start = null;
       let end = null;
       let currentTarget = null;
 
       const destroyPortal = () => {
         portalScope?.dispose();
-        portalScope = null;
+        portalScope = portalPart = null;
         removeRange(start, end, true);
         start = end = currentTarget = null;
       };
 
       part.setEffect(() => {
         const destination = resolveDeep(target);
-        if (!destination?.append) {
-          destroyPortal();
-          return;
-        }
+        if (!destination?.append) { destroyPortal(); return; }
+        if (destination === currentTarget) return;
 
-        if (destination !== currentTarget) {
-          destroyPortal();
-          currentTarget = destination;
-          start = destination.ownerDocument.createComment("mf2:portal:start");
-          end = destination.ownerDocument.createComment("mf2:portal:end");
-          destination.append(start, end);
-        }
-
-        portalScope?.dispose();
+        destroyPortal();
+        currentTarget = destination;
+        start = destination.ownerDocument.createComment("mf2:portal:start");
+        end = destination.ownerDocument.createComment("mf2:portal:end");
+        destination.append(start, end);
         portalScope = part.scope.child("portal", destination.ownerDocument);
-        replaceRangeValue(start, end, resolve(children), portalScope);
+        portalPart = new NodePart(start, end, portalScope);
+        portalScope.adapter.untrack(() => portalPart.setValue(children));
+        portalScope.flushRefs();
+        portalScope.mountOnce();
+        portalScope.flushAfterPaint();
       });
 
       part.scope.addCleanup(destroyPortal);
@@ -554,29 +640,17 @@
 
     const itemSignal = createLocalSignal(value, scope.adapter);
     const indexSignal = createLocalSignal(index, scope.adapter);
+    const output = scope.adapter.untrack(() => renderer({
+      item: itemSignal,
+      index: indexSignal,
+      key: recordKey,
+      value: itemSignal,
+    }));
 
-    const renderRecord = () => {
-      const output = renderer({
-        item: itemSignal,
-        index: indexSignal,
-        key: recordKey,
-        value: itemSignal(),
-      });
-      replaceRangeValue(start, end, output, scope, true);
-      scope.flushRefs();
-      scope.mountOnce();
-      scope.flushAfterPaint();
-    };
-
-    let renderDispose = null;
-    if (scope.adapter.hasNativeSignals) {
-      renderDispose = scope.adapter.effect(renderRecord, {
-        name: `mini-fabrica.repeat:${String(recordKey)}`,
-      });
-      scope.addCleanup(renderDispose);
-    } else {
-      renderRecord();
-    }
+    replaceRangeValue(start, end, output, scope, true);
+    scope.flushRefs();
+    scope.mountOnce();
+    scope.flushAfterPaint();
 
     return {
       key: recordKey,
@@ -585,11 +659,10 @@
       item: itemSignal,
       index: indexSignal,
       update(nextItem, nextIndex) {
-        const itemChanged = !Object.is(itemSignal(), nextItem);
-        const indexChanged = !Object.is(indexSignal(), nextIndex);
-        itemSignal.set?.(nextItem);
-        indexSignal.set?.(nextIndex);
-        if (!scope.adapter.hasNativeSignals && (itemChanged || indexChanged)) renderRecord();
+        scope.adapter.batch(() => {
+          if (!Object.is(scope.adapter.peek(itemSignal), nextItem)) itemSignal.set?.(nextItem);
+          if (!Object.is(scope.adapter.peek(indexSignal), nextIndex)) indexSignal.set?.(nextIndex);
+        });
       },
       dispose() {
         scope.dispose();
@@ -599,78 +672,88 @@
   }
 
   function virtualRepeat(items, key, renderer, options = {}) {
+    if (DEV && key == null) console.warn("[MiniFabrica] virtualRepeat(): a stable key is strongly recommended.");
+
     const VirtualRepeat = component("VirtualRepeat", (_props, context) => {
       const scrollTop = context.signal(0);
-      const height = () => Math.max(1, Number(resolveDeep(options.height)) || 420);
-      const itemHeight = () => Math.max(1, Number(resolveDeep(options.itemHeight || options.estimateSize)) || 48);
-      const overscan = () => Math.max(0, Number(resolveDeep(options.overscan)) || 6);
-      const list = () => Array.from(resolveDeep(items) || []);
+      let frame = 0;
+      let pendingTop = 0;
+      let cachedInputs = null;
+      let cachedWindow = null;
 
-      const visible = () => {
-        const source = list();
-        const rowHeight = itemHeight();
-        const viewport = height();
+      const resolveWindow = () => {
+        const sourceValue = resolveDeep(items) || [];
+        const source = Array.isArray(sourceValue) ? sourceValue : Array.from(sourceValue);
+        const viewport = Math.max(1, Number(resolveDeep(options.height)) || 420);
+        const rowHeight = Math.max(1, Number(resolveDeep(options.itemHeight || options.estimateSize)) || 48);
+        const extra = Math.max(0, Number(resolveDeep(options.overscan)) || 6);
         const top = scrollTop();
-        const start = Math.max(0, Math.floor(top / rowHeight) - overscan());
-        const end = Math.min(source.length, Math.ceil((top + viewport) / rowHeight) + overscan());
-
-        return source.slice(start, end).map((item, offset) => ({
-          item,
-          index: start + offset,
-        }));
+        const signature = [source, source.length, viewport, rowHeight, extra, top];
+        if (cachedInputs && signature.every((entry, index) => Object.is(entry, cachedInputs[index]))) return cachedWindow;
+        const start = Math.max(0, Math.floor(top / rowHeight) - extra);
+        const end = Math.min(source.length, Math.ceil((top + viewport) / rowHeight) + extra);
+        cachedInputs = signature;
+        cachedWindow = { source, viewport, rowHeight, start, end, total: source.length * rowHeight };
+        return cachedWindow;
       };
 
-      context.onCleanup(() => scrollTop.dispose?.());
+      const visible = () => {
+        const window = resolveWindow();
+        const rows = new Array(window.end - window.start);
+        for (let offset = 0; offset < rows.length; offset += 1) {
+          const index = window.start + offset;
+          rows[offset] = { item: window.source[index], index };
+        }
+        return rows;
+      };
+
+      const onScroll = (event) => {
+        pendingTop = event.currentTarget.scrollTop;
+        if (frame) return;
+        const view = event.currentTarget.ownerDocument.defaultView || global;
+        frame = view.requestAnimationFrame(() => {
+          frame = 0;
+          scrollTop.set(pendingTop);
+        });
+      };
+
+      context.onCleanup(() => {
+        if (frame) (context.document?.defaultView || global).cancelAnimationFrame?.(frame);
+        scrollTop.dispose?.();
+      });
 
       return html`<div
         class="mf2-virtual-repeat"
         data-mf-preserve-scroll
         style=${styleMap({
-          height: () => `${height()}px`,
-          overflow: "auto",
-          minHeight: "0",
-          position: "relative",
+          height: () => `${resolveWindow().viewport}px`, overflow: "auto", minHeight: "0", position: "relative",
+          contain: "strict",
         })}
-        @scroll=${event((event) => scrollTop.set(event.currentTarget.scrollTop), { passive: true })}
+        @scroll=${event(onScroll, { passive: true })}
       >
-        <div style=${styleMap({
-          height: () => `${list().length * itemHeight()}px`,
-          position: "relative",
-        })}>
+        <div style=${styleMap({ height: () => `${resolveWindow().total}px`, position: "relative" })}>
           <div style=${styleMap({
-            position: "absolute",
-            insetInline: "0",
-            top: "0",
-            transform: () => {
-              const source = list();
-              const rowHeight = itemHeight();
-              const start = Math.max(0, Math.floor(scrollTop() / rowHeight) - overscan());
-              return `translateY(${Math.min(start, source.length) * rowHeight}px)`;
-            },
+            position: "absolute", insetInline: "0", top: "0",
+            transform: () => `translateY(${resolveWindow().start * resolveWindow().rowHeight}px)`,
+            willChange: "transform",
           })}>
             ${repeat(
               visible,
-              ({ item, index }) => typeof key === "function"
-                ? key(item, index)
-                : typeof key === "string"
-                  ? item?.[key]
-                  : index,
+              ({ item, index }) => typeof key === "function" ? key(item, index) : typeof key === "string" ? item?.[key] : index,
               ({ item }) => renderer({
                 item: () => item().item,
                 index: () => item().index,
-                key: typeof key === "function"
-                  ? key(item().item, item().index)
-                  : typeof key === "string"
-                    ? item().item?.[key]
-                    : item().index,
-                value: item().item,
+                key: () => {
+                  const row = item();
+                  return typeof key === "function" ? key(row.item, row.index) : typeof key === "string" ? row.item?.[key] : row.index;
+                },
+                value: () => item().item,
               }),
             )}
           </div>
         </div>
       </div>`;
     });
-
     return VirtualRepeat();
   }
 
@@ -727,11 +810,14 @@
       : holder.content;
 
     const descriptors = annotateTemplate(content);
+    const componentDescriptors = collectComponentDescriptors(content, componentByTag);
+    assignDescriptorPaths(content, descriptors);
 
     const compiled = {
       namespace: template.namespace,
       content: content.cloneNode(true),
       descriptors,
+      componentDescriptors,
       componentByTag,
     };
 
@@ -825,75 +911,97 @@
     }
   }
 
-  function instantiateTemplate(template, scope) {
-    const compiled = compileTemplate(template);
-    const fragment = compiled.content.cloneNode(true);
-    const nodeMarkers = new Map();
-    const attributeMarkers = new Map();
-    const documentRef = scope.document;
-    const NodeFilterCtor = documentRef.defaultView?.NodeFilter || global.NodeFilter;
-    const walker = documentRef.createTreeWalker(
-      fragment,
-      NodeFilterCtor.SHOW_ELEMENT | NodeFilterCtor.SHOW_COMMENT,
-    );
+  function nodePath(root, node) {
+    const path = [];
+    let current = node;
+    while (current && current !== root) {
+      const parent = current.parentNode;
+      if (!parent) return null;
+      path.push(Array.prototype.indexOf.call(parent.childNodes, current));
+      current = parent;
+    }
+    return current === root ? path.reverse() : null;
+  }
 
+  function locateByPath(root, path) {
+    let current = root;
+    for (const index of path || []) {
+      current = current?.childNodes?.[index];
+      if (!current) return null;
+    }
+    return current;
+  }
+
+  function assignDescriptorPaths(content, descriptors) {
+    const documentRef = content.ownerDocument;
+    const NodeFilterCtor = documentRef.defaultView?.NodeFilter || global.NodeFilter;
+    const walker = documentRef.createTreeWalker(content, NodeFilterCtor.SHOW_ELEMENT | NodeFilterCtor.SHOW_COMMENT);
     while (walker.nextNode()) {
       const node = walker.currentNode;
-
       if (node.nodeType === 8 && node.nodeValue?.startsWith(NODE_MARKER_PREFIX)) {
-        nodeMarkers.set(Number(node.nodeValue.slice(NODE_MARKER_PREFIX.length)), node);
-      }
-
-      if (node.nodeType === 1) {
+        const id = Number(node.nodeValue.slice(NODE_MARKER_PREFIX.length));
+        if (descriptors[id]) descriptors[id].path = nodePath(content, node);
+      } else if (node.nodeType === 1) {
         for (const attribute of Array.from(node.attributes)) {
           if (!attribute.name.startsWith(ATTRIBUTE_MARKER_PREFIX)) continue;
-          const markerId = Number(attribute.name.slice(ATTRIBUTE_MARKER_PREFIX.length));
-          attributeMarkers.set(markerId, node);
-          node.removeAttribute(attribute.name);
+          const id = Number(attribute.name.slice(ATTRIBUTE_MARKER_PREFIX.length));
+          if (descriptors[id]) descriptors[id].path = nodePath(content, node);
         }
       }
     }
+  }
 
-    materializeComponentPlaceholders(fragment, compiled.componentByTag, template, scope);
+  function collectComponentDescriptors(content, componentByTag) {
+    if (!componentByTag.size) return [];
+    const result = [];
+    const documentRef = content.ownerDocument;
+    const NodeFilterCtor = documentRef.defaultView?.NodeFilter || global.NodeFilter;
+    const walker = documentRef.createTreeWalker(content, NodeFilterCtor.SHOW_ELEMENT);
+    while (walker.nextNode()) {
+      const element = walker.currentNode;
+      if (componentByTag.has(element.tagName)) result.push({ path: nodePath(content, element), tagName: element.tagName });
+    }
+    return result;
+  }
 
-    for (const descriptor of compiled.descriptors) {
-      if (descriptor.type === "node") {
-        const marker = nodeMarkers.get(descriptor.markerId);
-        if (!marker?.parentNode) continue;
+  function instantiateTemplate(template, scope) {
+    const compiled = compileTemplate(template);
+    const fragment = compiled.content.cloneNode(true);
+    const resolvedDescriptors = compiled.descriptors.map((descriptor) => ({ descriptor, node: locateByPath(fragment, descriptor.path) }));
+    const componentNodes = compiled.componentDescriptors.map((descriptor) => ({ descriptor, node: locateByPath(fragment, descriptor.path) }));
 
-        const end = documentRef.createComment(`mf2-node-end:${descriptor.markerId}`);
-        marker.after(end);
-        const part = new NodePart(marker, end, scope);
-        part.setValue(template.values[descriptor.expression]);
-      } else {
-        const element = attributeMarkers.get(descriptor.markerId);
-        if (!element?.isConnected && !fragment.contains(element)) continue;
-        const part = new AttributePart(element, descriptor, template, scope);
-        part.mount();
+    for (const { node } of resolvedDescriptors) {
+      if (node?.nodeType === 1) {
+        for (const attribute of Array.from(node.attributes)) if (attribute.name.startsWith(ATTRIBUTE_MARKER_PREFIX)) node.removeAttribute(attribute.name);
       }
     }
 
+    materializeComponentNodes(componentNodes, compiled.componentByTag, template, scope);
+
+    for (const { descriptor, node } of resolvedDescriptors) {
+      if (descriptor.type === "node") {
+        const marker = node;
+        if (!marker?.parentNode) continue;
+        const end = marker.ownerDocument.createComment(`mf2-node-end:${descriptor.markerId}`);
+        marker.after(end);
+        new NodePart(marker, end, scope).setValue(template.values[descriptor.expression]);
+      } else {
+        const element = node;
+        if (!element?.parentNode) continue;
+        new AttributePart(element, descriptor, template, scope).mount();
+      }
+    }
     return fragment;
   }
 
-  function materializeComponentPlaceholders(root, componentByTag, template, scope) {
-    if (!componentByTag.size) return;
-
-    const elements = [];
-    const documentRef = scope.document;
-    const NodeFilterCtor = documentRef.defaultView?.NodeFilter || global.NodeFilter;
-    const walker = documentRef.createTreeWalker(root, NodeFilterCtor.SHOW_ELEMENT);
-    while (walker.nextNode()) {
-      if (componentByTag.has(walker.currentNode.tagName)) elements.push(walker.currentNode);
-    }
-
-    for (let index = 0; index < elements.length; index += 1) {
-      const element = elements[index];
-      if (!element.parentNode) continue;
-      const factory = componentByTag.get(element.tagName);
-      materializeComponent(element, factory, template, scope);
+  function materializeComponentNodes(entries, componentByTag, template, scope) {
+    for (let index = entries.length - 1; index >= 0; index -= 1) {
+      const { descriptor, node } = entries[index];
+      if (!node?.parentNode) continue;
+      materializeComponent(node, componentByTag.get(descriptor.tagName), template, scope);
     }
   }
+
 
   function materializeComponent(element, factory, template, parentScope) {
     const componentScope = parentScope.child(`component:${factory.displayName || "Anonymous"}`);
@@ -945,7 +1053,7 @@
     const childFragment = element.ownerDocument.createDocumentFragment();
     while (element.firstChild) childFragment.append(element.firstChild);
     props.children = childFragment.childNodes.length
-      ? Object.freeze({ [RAW_CHILDREN]: true, fragment: childFragment })
+      ? maybeFreeze({ [RAW_CHILDREN]: true, fragment: childFragment })
       : NOTHING;
 
     return props;
@@ -962,12 +1070,16 @@
       onCleanup(callback) {
         if (typeof callback === "function") scope.addCleanup(callback);
       },
+      afterUpdate(callback) {
+        if (typeof callback === "function") scope.afterUpdate.push(callback);
+      },
       afterPaint(callback) {
         if (typeof callback === "function") scope.afterPaint.push(callback);
       },
       onError(callback) {
         if (typeof callback === "function") scope.errorHandler = callback;
       },
+      document: scope.document,
       signal(initialValue) {
         return scope.adapter.createSignal(initialValue);
       },
@@ -1123,15 +1235,14 @@
     }
 
     setEffect(callback) {
-      this.dispose?.();
+      if (this.dispose) {
+        this.scope.cleanups.delete(this.dispose);
+        this.dispose();
+      }
       this.dispose = this.scope.adapter.effect(() => {
-        try {
-          callback();
-        } catch (error) {
-          this.scope.handleError(error);
-        }
+        try { callback(); } catch (error) { this.scope.handleError(error); }
       }, { name: `mini-fabrica.attribute:${this.descriptor.name}` });
-      this.scope.addCleanup(this.dispose);
+      this.scope.cleanups.add(this.dispose);
     }
   }
 
@@ -1163,15 +1274,14 @@
     }
 
     setEffect(callback) {
-      this.effectDispose?.();
+      if (this.effectDispose) {
+        this.scope.cleanups.delete(this.effectDispose);
+        this.effectDispose();
+      }
       this.effectDispose = this.scope.adapter.effect(() => {
-        try {
-          callback();
-        } catch (error) {
-          this.scope.handleError(error);
-        }
+        try { callback(); } catch (error) { this.scope.handleError(error); }
       }, { name: "mini-fabrica.node" });
-      this.scope.addCleanup(this.effectDispose);
+      this.scope.cleanups.add(this.effectDispose);
     }
 
     replace(value) {
@@ -1193,13 +1303,17 @@
       this.document = documentRef;
       this.name = name;
       this.parent = parent;
-      this.cleanups = [];
+      this.children = new Set();
+      this.cleanups = new Set();
       this.refs = [];
       this.mounts = [];
+      this.afterUpdate = [];
       this.afterPaint = [];
       this.mounted = false;
       this.disposed = false;
       this.errorHandler = null;
+      this.paintFrame = 0;
+      parent?.children.add(this);
     }
 
     child(name, documentRef = this.document) {
@@ -1207,8 +1321,9 @@
     }
 
     addCleanup(callback) {
-      if (typeof callback === "function") this.cleanups.push(callback);
-      return callback;
+      if (typeof callback !== "function") return callback;
+      this.cleanups.add(callback);
+      return () => this.cleanups.delete(callback);
     }
 
     flushRefs() {
@@ -1220,59 +1335,52 @@
     mountOnce() {
       if (this.mounted) return;
       this.mounted = true;
-
       for (const callback of this.mounts.splice(0)) {
         try {
           const cleanup = callback();
-          if (typeof cleanup === "function") this.addCleanup(cleanup);
-        } catch (error) {
-          this.handleError(error);
-        }
+          if (typeof cleanup === "function") this.cleanups.add(cleanup);
+        } catch (error) { this.handleError(error); }
       }
     }
 
     flushAfterPaint() {
-      const callbacks = this.afterPaint.splice(0);
-      if (!callbacks.length) return;
-
-      queueMicrotask(() => {
+      const updates = this.afterUpdate.splice(0);
+      if (updates.length) queueMicrotask(() => {
         if (this.disposed) return;
-        for (const callback of callbacks) {
-          try { callback(); } catch (error) { this.handleError(error); }
-        }
+        for (const callback of updates) try { callback(); } catch (error) { this.handleError(error); }
       });
+
+      const paints = this.afterPaint.splice(0);
+      if (!paints.length || this.paintFrame) return;
+      const view = this.document.defaultView || global;
+      this.paintFrame = view.requestAnimationFrame?.(() => {
+        this.paintFrame = 0;
+        if (this.disposed) return;
+        for (const callback of paints) try { callback(); } catch (error) { this.handleError(error); }
+      }) || 0;
     }
 
-    warn(message, error) {
-      console.warn(`[MiniFabrica:${this.name}] ${message}`, error);
-    }
+    warn(message, error) { if (DEV) console.warn(`[MiniFabrica:${this.name}] ${message}`, error); }
 
     handleError(error) {
-      if (typeof this.errorHandler === "function") {
-        this.errorHandler(error);
-        return;
-      }
-
-      if (this.parent) {
-        this.parent.handleError(error);
-        return;
-      }
-
+      if (typeof this.errorHandler === "function") return this.errorHandler(error);
+      if (this.parent) return this.parent.handleError(error);
       console.error("[MiniFabrica] uncaught render error", error);
     }
 
     dispose() {
       if (this.disposed) return;
       this.disposed = true;
-
-      for (let index = this.cleanups.length - 1; index >= 0; index -= 1) {
-        try { this.cleanups[index]?.(); } catch (error) { this.warn("Cleanup failed", error); }
+      if (this.paintFrame) (this.document.defaultView || global).cancelAnimationFrame?.(this.paintFrame);
+      for (const child of Array.from(this.children)) child.dispose();
+      this.children.clear();
+      const callbacks = Array.from(this.cleanups).reverse();
+      this.cleanups.clear();
+      for (const callback of callbacks) {
+        try { callback?.(); } catch (error) { if (DEV) this.warn("Cleanup failed", error); }
       }
-
-      this.cleanups.length = 0;
-      this.refs.length = 0;
-      this.mounts.length = 0;
-      this.afterPaint.length = 0;
+      this.parent?.children.delete(this);
+      this.refs.length = this.mounts.length = this.afterUpdate.length = this.afterPaint.length = 0;
     }
   }
 
@@ -1280,32 +1388,36 @@
     if (Broto && typeof Broto.effect === "function") {
       return {
         hasNativeSignals: typeof Broto.signal === "function",
-        createSignal(initialValue) {
-          return typeof Broto.signal === "function"
-            ? Broto.signal(initialValue)
-            : createStandaloneSignal(initialValue);
-        },
+        createSignal(initialValue) { return typeof Broto.signal === "function" ? Broto.signal(initialValue) : createStandaloneSignal(initialValue); },
         effect(callback, options) {
-          return Broto.effect(callback, options) || (() => {});
+          let disposed = false;
+          let firstRun = true;
+          const wrapped = () => {
+            if (disposed) return;
+            if (firstRun || options?.scheduler === "sync") {
+              firstRun = false;
+              callback();
+            } else {
+              scheduler.enqueue(callback);
+            }
+          };
+          const dispose = Broto.effect(wrapped, { ...options, scheduler: "sync" }) || (() => {});
+          return () => { disposed = true; scheduler.flush(); dispose(); };
         },
-        batch(callback) {
-          return typeof Broto.batch === "function" ? Broto.batch(callback) : callback();
-        },
-        untrack(callback) {
-          return typeof Broto.untrack === "function" ? Broto.untrack(callback) : callback();
-        },
+        batch(callback) { return typeof Broto.batch === "function" ? Broto.batch(callback) : callback(); },
+        untrack(callback) { return typeof Broto.untrack === "function" ? Broto.untrack(callback) : callback(); },
+        peek(signal) { return typeof signal?.peek === "function" ? signal.peek() : this.untrack(() => signal()); },
+        isSignal(value) { return typeof Broto.isSignal === "function" ? Broto.isSignal(value) : typeof value === "function" && typeof value.set === "function"; },
       };
     }
-
     return {
       hasNativeSignals: false,
-      createSignal(initialValue) { return createStandaloneSignal(initialValue); },
-      effect(callback) {
-        callback();
-        return () => {};
-      },
+      createSignal: createStandaloneSignal,
+      effect(callback) { callback(); return () => {}; },
       batch(callback) { return callback(); },
       untrack(callback) { return callback(); },
+      peek(signal) { return typeof signal?.peek === "function" ? signal.peek() : signal(); },
+      isSignal(value) { return typeof value === "function" && typeof value.set === "function"; },
     };
   }
 
@@ -1369,7 +1481,8 @@
       scope.flushRefs();
       scope.mountOnce();
       scope.flushAfterPaint();
-      options.afterPaint?.(root);
+      if (typeof options.afterPaint === "function") scope.afterPaint.push(() => options.afterPaint(root));
+      scope.flushAfterPaint();
     } catch (error) {
       scope.handleError(error);
     }
@@ -1383,7 +1496,7 @@
   function createRoot(root, Broto, options = {}) {
     let dispose = null;
 
-    return Object.freeze({
+    return maybeFreeze({
       render(tree) {
         dispose?.();
         dispose = render(root, tree, Broto, { ...options, clearOnDispose: false });
@@ -1559,10 +1672,18 @@
   }
 
   function sanitizeURL(value) {
-    const raw = String(value).trim();
-    if (/^(?:javascript|vbscript):/i.test(raw)) return null;
-    if (/^data:/i.test(raw) && !/^data:image\/(?:png|gif|jpe?g|webp|svg\+xml);/i.test(raw)) return null;
-    return raw;
+    const raw = String(value ?? "").trim().replace(/[\u0000-\u001F\u007F\s]+/g, "");
+    if (!raw) return raw;
+    try {
+      const parsed = new URL(raw, global.document?.baseURI || "https://invalid.local/");
+      const protocol = parsed.protocol.toLowerCase();
+      if (["javascript:", "vbscript:"].includes(protocol)) return "about:blank";
+      if (protocol === "data:") {
+        const media = raw.slice(5, raw.indexOf(",") > -1 ? raw.indexOf(",") : raw.length).toLowerCase();
+        if (!/^image\/(?:png|gif|jpeg|webp|avif);/.test(media + ";")) return "about:blank";
+      }
+      return raw;
+    } catch { return "about:blank"; }
   }
 
   function addDOMListener(element, type, handler, options, scope) {
@@ -1629,11 +1750,12 @@
   const BOOLEAN_PROPERTIES = new Set(["checked", "disabled", "hidden", "multiple", "open", "readOnly", "required", "selected"]);
   const URL_ATTRIBUTES = new Set(["href", "src", "action", "formaction", "poster", "xlink:href"]);
 
-  const api = Object.freeze({
+  const api = maybeFreeze({
     version: VERSION,
 
     html,
     svg,
+    reactive,
     component,
     render,
     createRoot,
@@ -1661,6 +1783,8 @@
 
     sanitizeURL,
     nothing: NOTHING,
+    flush: scheduler.flush,
+    dev: DEV,
   });
 
   Object.defineProperty(global, "MiniFabrica", {
