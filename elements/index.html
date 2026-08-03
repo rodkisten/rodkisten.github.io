@@ -1,0 +1,1325 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#05070d" />
+  <meta
+    name="description"
+    content="RodElements: uma micro API DOM ultra performática para userscripts, interfaces e ferramentas high-tech."
+  />
+  <title>RodElements — DOM encaixado. Performance destravada.</title>
+
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #05070d;
+      --bg-soft: #0a0e18;
+      --panel: rgba(12, 17, 29, 0.82);
+      --panel-strong: rgba(14, 20, 34, 0.96);
+      --line: rgba(144, 175, 255, 0.16);
+      --line-strong: rgba(126, 245, 255, 0.38);
+      --text: #f4f7ff;
+      --muted: #8d99b8;
+      --cyan: #79f7ff;
+      --blue: #6e8cff;
+      --violet: #b176ff;
+      --green: #64ffb3;
+      --shadow: 0 30px 80px rgba(0, 0, 0, 0.42);
+      --radius-xl: 30px;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+      --max: 1180px;
+      --ease: cubic-bezier(.22,.8,.2,1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--bg);
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow-x: hidden;
+      font-family:
+        Inter,
+        ui-sans-serif,
+        -apple-system,
+        BlinkMacSystemFont,
+        "SF Pro Display",
+        "Segoe UI",
+        sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 20% 10%, rgba(110, 140, 255, 0.18), transparent 28%),
+        radial-gradient(circle at 82% 18%, rgba(121, 247, 255, 0.13), transparent 26%),
+        radial-gradient(circle at 50% 80%, rgba(177, 118, 255, 0.12), transparent 32%),
+        linear-gradient(180deg, #05070d 0%, #070a12 55%, #05070d 100%);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: -2;
+      opacity: 0.38;
+      background-image:
+        linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+      background-size: 34px 34px;
+      mask-image: linear-gradient(to bottom, black 0%, transparent 90%);
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: -1;
+      background:
+        linear-gradient(115deg, transparent 0 35%, rgba(121, 247, 255, 0.025) 48%, transparent 60%),
+        radial-gradient(circle at center, transparent 20%, rgba(0,0,0,.35) 100%);
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    .page-shell {
+      width: min(calc(100% - 32px), var(--max));
+      margin: 0 auto;
+    }
+
+    .topbar-wrap {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      padding-top: 14px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 14px 16px 14px 18px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      backdrop-filter: blur(20px) saturate(140%);
+      background: rgba(6, 9, 16, 0.7);
+      box-shadow: 0 10px 40px rgba(0,0,0,.2);
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      overflow: hidden;
+      background:
+        linear-gradient(135deg, rgba(121, 247, 255, 0.2), rgba(177, 118, 255, 0.18)),
+        #0d1320;
+      border: 1px solid rgba(121, 247, 255, 0.28);
+      box-shadow:
+        inset 0 0 22px rgba(121, 247, 255, 0.08),
+        0 0 24px rgba(110, 140, 255, 0.14);
+    }
+
+    .brand-mark::before,
+    .brand-mark::after {
+      content: "";
+      position: absolute;
+      border-radius: 999px;
+      background: var(--bg);
+    }
+
+    .brand-mark::before {
+      width: 11px;
+      height: 11px;
+      top: -5px;
+      left: 14px;
+    }
+
+    .brand-mark::after {
+      width: 11px;
+      height: 11px;
+      right: -5px;
+      top: 14px;
+    }
+
+    .brand-symbol {
+      font-weight: 900;
+      font-size: 16px;
+      letter-spacing: -0.05em;
+      color: var(--cyan);
+      text-shadow: 0 0 14px rgba(121, 247, 255, 0.72);
+    }
+
+    .brand-copy {
+      min-width: 0;
+    }
+
+    .brand-name {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: .01em;
+    }
+
+    .brand-version {
+      margin: 2px 0 0;
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-link {
+      padding: 9px 12px;
+      border-radius: 10px;
+      color: #a8b3d1;
+      font-size: 13px;
+      transition:
+        color .2s var(--ease),
+        background .2s var(--ease);
+    }
+
+    .nav-link:hover {
+      color: var(--text);
+      background: rgba(255,255,255,.05);
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 46px;
+      padding: 0 18px;
+      border: 1px solid transparent;
+      border-radius: 14px;
+      cursor: pointer;
+      font-weight: 760;
+      letter-spacing: -0.01em;
+      transition:
+        transform .2s var(--ease),
+        border-color .2s var(--ease),
+        background .2s var(--ease),
+        box-shadow .2s var(--ease);
+    }
+
+    .button:hover {
+      transform: translateY(-2px);
+    }
+
+    .button-primary {
+      color: #031014;
+      background:
+        linear-gradient(135deg, var(--cyan), #91b8ff 58%, #caa3ff);
+      box-shadow:
+        0 14px 35px rgba(121, 247, 255, 0.16),
+        inset 0 1px rgba(255,255,255,.6);
+    }
+
+    .button-primary:hover {
+      box-shadow:
+        0 20px 45px rgba(121, 247, 255, 0.26),
+        inset 0 1px rgba(255,255,255,.65);
+    }
+
+    .button-secondary {
+      color: var(--text);
+      border-color: rgba(255,255,255,.12);
+      background: rgba(255,255,255,.045);
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.06fr) minmax(420px, .94fr);
+      align-items: center;
+      gap: 56px;
+      min-height: calc(100vh - 90px);
+      padding: 74px 0 84px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 12px;
+      margin-bottom: 22px;
+      border: 1px solid rgba(121, 247, 255, 0.16);
+      border-radius: 999px;
+      color: #b8c5e8;
+      background: rgba(121, 247, 255, 0.045);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 16px rgba(100, 255, 179, .8);
+    }
+
+    .hero-title {
+      margin: 0;
+      max-width: 760px;
+      font-size: clamp(52px, 7vw, 94px);
+      line-height: .92;
+      letter-spacing: -0.07em;
+      font-weight: 900;
+    }
+
+    .hero-title .accent {
+      display: block;
+      color: transparent;
+      background:
+        linear-gradient(100deg, #f7fbff 0%, var(--cyan) 40%, #96a6ff 72%, #d8b8ff 100%);
+      background-clip: text;
+      -webkit-background-clip: text;
+      filter: drop-shadow(0 0 30px rgba(121,247,255,.13));
+    }
+
+    .hero-description {
+      max-width: 680px;
+      margin: 28px 0 0;
+      color: #9aa7c7;
+      font-size: clamp(17px, 2vw, 21px);
+      line-height: 1.65;
+      letter-spacing: -0.015em;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 32px;
+    }
+
+    .hero-metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      margin-top: 34px;
+      padding-top: 28px;
+      border-top: 1px solid rgba(255,255,255,.075);
+    }
+
+    .metric {
+      min-width: 120px;
+    }
+
+    .metric-value {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 860;
+      letter-spacing: -0.04em;
+    }
+
+    .metric-label {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+    }
+
+    .puzzle-stage {
+      position: relative;
+      min-height: 590px;
+      isolation: isolate;
+    }
+
+    .puzzle-glow {
+      position: absolute;
+      inset: 12% 8%;
+      z-index: -1;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(121,247,255,.18), rgba(110,140,255,.08) 42%, transparent 72%);
+      filter: blur(42px);
+    }
+
+    .puzzle-grid {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+      width: min(100%, 520px);
+      margin: 16px auto 0;
+      transform: rotate(-2deg);
+    }
+
+    .piece {
+      position: relative;
+      min-height: 220px;
+      padding: 24px;
+      border: 1px solid rgba(135, 171, 255, 0.16);
+      background:
+        linear-gradient(145deg, rgba(255,255,255,.055), rgba(255,255,255,.018)),
+        rgba(10, 14, 24, .82);
+      box-shadow:
+        inset 0 1px rgba(255,255,255,.055),
+        inset 0 0 34px rgba(110,140,255,.025),
+        var(--shadow);
+      backdrop-filter: blur(18px);
+      transition:
+        transform .45s var(--ease),
+        border-color .45s var(--ease),
+        box-shadow .45s var(--ease);
+    }
+
+    .piece:hover {
+      transform: translateY(-8px) scale(1.015);
+      border-color: rgba(121, 247, 255, 0.36);
+      box-shadow:
+        inset 0 1px rgba(255,255,255,.08),
+        0 36px 90px rgba(0,0,0,.46),
+        0 0 34px rgba(121,247,255,.08);
+    }
+
+    .piece:nth-child(1) {
+      border-radius: 28px 10px 18px 10px;
+      transform: translateY(26px);
+    }
+
+    .piece:nth-child(2) {
+      border-radius: 10px 28px 10px 18px;
+      transform: translateX(8px);
+    }
+
+    .piece:nth-child(3) {
+      border-radius: 10px 18px 10px 28px;
+      transform: translateX(-10px) translateY(10px);
+    }
+
+    .piece:nth-child(4) {
+      border-radius: 18px 10px 28px 10px;
+      transform: translateY(-14px);
+    }
+
+    .piece::before,
+    .piece::after {
+      content: "";
+      position: absolute;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: var(--bg);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+    }
+
+    .piece:nth-child(1)::after,
+    .piece:nth-child(3)::after {
+      right: -21px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .piece:nth-child(2)::before,
+    .piece:nth-child(4)::before {
+      left: -21px;
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    .piece:nth-child(1)::before,
+    .piece:nth-child(2)::after {
+      bottom: -21px;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    .piece-kicker {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: #8390b1;
+      font-size: 11px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .piece-index {
+      color: var(--cyan);
+      font-weight: 800;
+    }
+
+    .piece h3 {
+      margin: 38px 0 0;
+      font-size: 24px;
+      line-height: 1.05;
+      letter-spacing: -0.04em;
+    }
+
+    .piece p {
+      margin: 14px 0 0;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 14px;
+    }
+
+    .piece-code {
+      display: inline-flex;
+      margin-top: 20px;
+      padding: 8px 10px;
+      border-radius: 9px;
+      color: #c6faff;
+      background: rgba(121,247,255,.06);
+      border: 1px solid rgba(121,247,255,.11);
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 11px;
+    }
+
+    .section {
+      padding: 96px 0;
+    }
+
+    .section-heading {
+      display: grid;
+      grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
+      gap: 60px;
+      align-items: end;
+      margin-bottom: 42px;
+    }
+
+    .section-label {
+      color: var(--cyan);
+      font-size: 12px;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      font-weight: 800;
+    }
+
+    .section-title {
+      margin: 12px 0 0;
+      font-size: clamp(38px, 5vw, 64px);
+      line-height: .98;
+      letter-spacing: -0.06em;
+    }
+
+    .section-copy {
+      margin: 0;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.7;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .feature-card {
+      position: relative;
+      overflow: hidden;
+      min-height: 250px;
+      padding: 26px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background:
+        linear-gradient(145deg, rgba(255,255,255,.045), rgba(255,255,255,.012)),
+        rgba(8, 12, 20, .72);
+      box-shadow: inset 0 1px rgba(255,255,255,.04);
+    }
+
+    .feature-card::after {
+      content: "";
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      right: -44px;
+      bottom: -48px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(121,247,255,.16), transparent 70%);
+      pointer-events: none;
+    }
+
+    .feature-card.wide {
+      grid-column: span 7;
+    }
+
+    .feature-card.narrow {
+      grid-column: span 5;
+    }
+
+    .feature-icon {
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      border-radius: 13px;
+      color: var(--cyan);
+      background: rgba(121,247,255,.07);
+      border: 1px solid rgba(121,247,255,.14);
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-weight: 800;
+    }
+
+    .feature-card h3 {
+      margin: 46px 0 0;
+      font-size: 25px;
+      letter-spacing: -0.04em;
+    }
+
+    .feature-card p {
+      max-width: 620px;
+      margin: 12px 0 0;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .code-section {
+      padding-top: 54px;
+    }
+
+    .code-shell {
+      overflow: hidden;
+      border: 1px solid rgba(121,247,255,.15);
+      border-radius: 24px;
+      background: rgba(7, 10, 18, .92);
+      box-shadow: var(--shadow);
+    }
+
+    .code-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(255,255,255,.07);
+      background: rgba(255,255,255,.02);
+    }
+
+    .code-dots {
+      display: flex;
+      gap: 7px;
+    }
+
+    .code-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #38425c;
+    }
+
+    .code-label {
+      color: #8c98b8;
+      font-size: 12px;
+      font-family: "SFMono-Regular", Consolas, monospace;
+    }
+
+    .copy-button {
+      border: 1px solid rgba(255,255,255,.09);
+      border-radius: 10px;
+      padding: 8px 11px;
+      color: #bdc8e3;
+      background: rgba(255,255,255,.035);
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    pre {
+      margin: 0;
+      overflow-x: auto;
+      padding: 30px;
+      color: #dce7ff;
+      font: 13px/1.8 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    .token-key { color: #9ba9ff; }
+    .token-fn { color: #7ef7ff; }
+    .token-string { color: #a8f1bf; }
+    .token-comment { color: #66728e; }
+    .token-prop { color: #d6b2ff; }
+
+    .cta {
+      position: relative;
+      overflow: hidden;
+      margin: 80px 0 30px;
+      padding: 56px;
+      border: 1px solid rgba(121,247,255,.16);
+      border-radius: 30px;
+      background:
+        radial-gradient(circle at 10% 20%, rgba(121,247,255,.12), transparent 30%),
+        radial-gradient(circle at 90% 20%, rgba(177,118,255,.11), transparent 32%),
+        rgba(9, 13, 23, .88);
+      box-shadow: var(--shadow);
+    }
+
+    .cta::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(120deg, transparent 0 42%, rgba(255,255,255,.035) 50%, transparent 58%);
+      transform: translateX(-70%);
+      animation: scan 8s linear infinite;
+    }
+
+    @keyframes scan {
+      to {
+        transform: translateX(70%);
+      }
+    }
+
+    .cta-grid {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 36px;
+    }
+
+    .cta h2 {
+      margin: 0;
+      font-size: clamp(36px, 5vw, 64px);
+      line-height: .95;
+      letter-spacing: -0.06em;
+    }
+
+    .cta p {
+      max-width: 680px;
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.65;
+    }
+
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 32px 0 44px;
+      color: #74809d;
+      font-size: 12px;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 18px;
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition:
+        opacity .7s var(--ease),
+        transform .7s var(--ease);
+    }
+
+    .reveal.is-visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    @media (max-width: 980px) {
+      .nav {
+        display: none;
+      }
+
+      .hero {
+        grid-template-columns: 1fr;
+        min-height: auto;
+        padding-top: 90px;
+      }
+
+      .puzzle-stage {
+        min-height: 520px;
+      }
+
+      .section-heading {
+        grid-template-columns: 1fr;
+        gap: 22px;
+      }
+
+      .feature-card.wide,
+      .feature-card.narrow {
+        grid-column: span 12;
+      }
+
+      .cta-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .page-shell {
+        width: min(calc(100% - 20px), var(--max));
+      }
+
+      .topbar {
+        padding: 12px;
+      }
+
+      .topbar .button {
+        min-height: 40px;
+        padding: 0 13px;
+        font-size: 12px;
+      }
+
+      .hero {
+        padding: 66px 0 58px;
+      }
+
+      .hero-title {
+        font-size: clamp(48px, 16vw, 70px);
+      }
+
+      .hero-description {
+        font-size: 16px;
+      }
+
+      .puzzle-grid {
+        grid-template-columns: 1fr;
+        gap: 14px;
+        width: 100%;
+        transform: none;
+      }
+
+      .puzzle-stage {
+        min-height: auto;
+      }
+
+      .piece,
+      .piece:nth-child(n) {
+        min-height: 190px;
+        transform: none;
+        border-radius: 22px;
+      }
+
+      .piece::before,
+      .piece::after {
+        display: none;
+      }
+
+      .section {
+        padding: 72px 0;
+      }
+
+      .feature-card {
+        min-height: 220px;
+      }
+
+      .cta {
+        padding: 34px 24px;
+      }
+
+      .footer {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .001ms !important;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app"></div>
+
+  <script src="./elements.js"></script>
+  <script>
+    (function bootstrapRodElementsLanding() {
+      "use strict";
+
+      const RE = globalThis.RodElements;
+
+      if (!RE) {
+        document.getElementById("app").textContent =
+          "RodElements não foi carregado. Coloque rod-elements-v1.0.0.js ao lado deste arquivo.";
+        return;
+      }
+
+      const { el, append } = RE;
+
+      const features = [
+        {
+          className: "wide",
+          icon: "<>",
+          title: "Tiny Emmet, zero cerimônia",
+          description:
+            "Crie elementos com tag, id, classes e atributos em uma única string, sem parser inflado nem dependências.",
+        },
+        {
+          className: "narrow",
+          icon: "⚡",
+          title: "Caminho quente enxuto",
+          description:
+            "Cache de seletores, eventos diretos e detecção cross-realm sem instanceof Node.",
+        },
+        {
+          className: "narrow",
+          icon: "{}",
+          title: "Props claras",
+          description:
+            "text, html, class, style, data, attr, on e $ref, tudo sem uma camada reativa escondida.",
+        },
+        {
+          className: "wide",
+          icon: "∞",
+          title: "HTML, SVG e múltiplos documentos",
+          description:
+            "Use em páginas, iframes, Shadow DOM e userscripts que atravessam realms sem tropeçar em wrappers.",
+        },
+      ];
+
+      const code = [
+        '<span class="token-comment">// DOM encaixado como peças de puzzle</span>',
+        '<span class="token-key">const</span> card = <span class="token-fn">RodElements.el</span>(',
+        '  <span class="token-string">"section.card#status[data-state=open]"</span>,',
+        '  {',
+        '    <span class="token-prop">class</span>: [<span class="token-string">"active"</span>, isReady && <span class="token-string">"ready"</span>],',
+        '    <span class="token-prop">style</span>: { <span class="token-string">"--accent"</span>: <span class="token-string">"#79f7ff"</span> },',
+        '    <span class="token-prop">onclick</span>: handleClick,',
+        '    <span class="token-prop">$ref</span>: (node) => node.focus(),',
+        '  },',
+        '  RodElements.el(<span class="token-string">"h2"</span>, <span class="token-string">"Ultra fast DOM"</span>),',
+        '  RodElements.el(<span class="token-string">"p"</span>, <span class="token-string">"Sem framework. Sem ruído."</span>),',
+        ');',
+      ].join("\n");
+
+      function scrollToId(id) {
+        const target = document.getElementById(id);
+        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      function createTopbar() {
+        return el(
+          "div.topbar-wrap",
+          null,
+          el(
+            "div.page-shell",
+            null,
+            el(
+              "header.topbar",
+              null,
+              el(
+                "a.brand[href=#top]",
+                {
+                  onclick(event) {
+                    event.preventDefault();
+                    scrollToId("top");
+                  },
+                },
+                el("span.brand-mark", null, el("span.brand-symbol", "RE")),
+                el(
+                  "span.brand-copy",
+                  null,
+                  el("p.brand-name", "RodElements"),
+                  el("p.brand-version", "v1.0.0 · userscript ready"),
+                ),
+              ),
+              el(
+                "nav.nav[aria-label=Principal]",
+                null,
+                el("a.nav-link[href=#features]", "Recursos"),
+                el("a.nav-link[href=#code]", "Código"),
+                el("a.nav-link[href=#architecture]", "Arquitetura"),
+              ),
+              el(
+                "button.button.button-secondary[type=button]",
+                {
+                  onclick() {
+                    scrollToId("code");
+                  },
+                },
+                "Ver API",
+              ),
+            ),
+          ),
+        );
+      }
+
+      function createHero() {
+        const pieces = [
+          {
+            index: "01",
+            title: "Parse",
+            copy: "Seletores compactos, cacheados e prontos para o caminho quente.",
+            code: 'el("button.primary")',
+          },
+          {
+            index: "02",
+            title: "Compose",
+            copy: "Props previsíveis, children variádicos e arrays aninhados.",
+            code: "el(tag, props, ...children)",
+          },
+          {
+            index: "03",
+            title: "Bridge",
+            copy: "Funciona entre página, iframe e sandbox de userscript.",
+            code: "withDocument(frameDoc)",
+          },
+          {
+            index: "04",
+            title: "Ship",
+            copy: "IIFE global, sem dependências, pronta para @require.",
+            code: "globalThis.RodElements",
+          },
+        ];
+
+        return el(
+          "section.hero#top",
+          null,
+          el(
+            "div.hero-copy.reveal",
+            null,
+            el(
+              "div.eyebrow",
+              null,
+              el("span.eyebrow-dot"),
+              "Micro DOM engine para userscripts",
+            ),
+            el(
+              "h1.hero-title",
+              null,
+              "DOM encaixado.",
+              el("span.accent", "Performance destravada."),
+            ),
+            el(
+              "p.hero-description",
+              "RodElements transforma criação de interface em peças leves, previsíveis e rápidas. Uma IIFE global feita para Safari, Tampermonkey, iframes e ferramentas que não podem desperdiçar ciclos.",
+            ),
+            el(
+              "div.hero-actions",
+              null,
+              el(
+                "button.button.button-primary[type=button]",
+                {
+                  onclick() {
+                    scrollToId("code");
+                  },
+                },
+                "Explorar a API",
+              ),
+              el(
+                "button.button.button-secondary[type=button]",
+                {
+                  onclick() {
+                    scrollToId("features");
+                  },
+                },
+                "Ver os encaixes",
+              ),
+            ),
+            el(
+              "div.hero-metrics",
+              null,
+              el(
+                "div.metric",
+                null,
+                el("p.metric-value", "0 deps"),
+                el("p.metric-label", "Dependências"),
+              ),
+              el(
+                "div.metric",
+                null,
+                el("p.metric-value", "IIFE"),
+                el("p.metric-label", "Entrega"),
+              ),
+              el(
+                "div.metric",
+                null,
+                el("p.metric-value", "HTML + SVG"),
+                el("p.metric-label", "Namespaces"),
+              ),
+            ),
+          ),
+          el(
+            "div.puzzle-stage.reveal",
+            null,
+            el("div.puzzle-glow"),
+            el(
+              "div.puzzle-grid",
+              null,
+              pieces.map((piece) =>
+                el(
+                  "article.piece",
+                  null,
+                  el(
+                    "div.piece-kicker",
+                    null,
+                    el("span", "Puzzle module"),
+                    el("span.piece-index", piece.index),
+                  ),
+                  el("h3", piece.title),
+                  el("p", piece.copy),
+                  el("code.piece-code", piece.code),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      function createFeatures() {
+        return el(
+          "section.section#features",
+          null,
+          el(
+            "div.section-heading.reveal",
+            null,
+            el(
+              "div",
+              null,
+              el("span.section-label", "Os encaixes"),
+              el("h2.section-title", "Cada peça resolve uma fricção real."),
+            ),
+            el(
+              "p.section-copy",
+              "A API foi desenhada para ficar perto do DOM nativo, sem esconder custo, sem inventar uma árvore virtual e sem transformar seu userscript num parque temático de abstrações.",
+            ),
+          ),
+          el(
+            "div.feature-grid",
+            null,
+            features.map((feature) =>
+              el(
+                `article.feature-card.${feature.className}.reveal`,
+                null,
+                el("div.feature-icon", feature.icon),
+                el("h3", feature.title),
+                el("p", feature.description),
+              ),
+            ),
+          ),
+        );
+      }
+
+      function createCodeSection() {
+        return el(
+          "section.section.code-section#code",
+          null,
+          el(
+            "div.section-heading.reveal",
+            null,
+            el(
+              "div",
+              null,
+              el("span.section-label", "API mínima"),
+              el("h2.section-title", "Legível antes de ser esperta."),
+            ),
+            el(
+              "p.section-copy",
+              "A sintaxe serve o código, não o contrário. Você vê tag, props e children sem precisar decodificar uma DSL inteira.",
+            ),
+          ),
+          el(
+            "div.code-shell.reveal",
+            null,
+            el(
+              "div.code-toolbar",
+              null,
+              el(
+                "div.code-dots",
+                null,
+                el("span.code-dot"),
+                el("span.code-dot"),
+                el("span.code-dot"),
+              ),
+              el("span.code-label", "rod-elements-example.js"),
+              el(
+                "button.copy-button[type=button]",
+                {
+                  onclick(event) {
+                    navigator.clipboard
+                      ?.writeText(
+                        `const card = RodElements.el(
+  "section.card#status[data-state=open]",
+  {
+    class: ["active", isReady && "ready"],
+    style: { "--accent": "#79f7ff" },
+    onclick: handleClick,
+    $ref: (node) => node.focus(),
+  },
+  RodElements.el("h2", "Ultra fast DOM"),
+  RodElements.el("p", "Sem framework. Sem ruído."),
+);`,
+                      )
+                      .then(() => {
+                        event.currentTarget.textContent = "Copiado";
+                        setTimeout(() => {
+                          event.currentTarget.textContent = "Copiar";
+                        }, 1400);
+                      });
+                  },
+                },
+                "Copiar",
+              ),
+            ),
+            el("pre", { html: code }),
+          ),
+        );
+      }
+
+      function createArchitecture() {
+        return el(
+          "section.section#architecture",
+          null,
+          el(
+            "div.section-heading.reveal",
+            null,
+            el(
+              "div",
+              null,
+              el("span.section-label", "Arquitetura"),
+              el("h2.section-title", "Uma biblioteca que sabe o próprio tamanho."),
+            ),
+            el(
+              "p.section-copy",
+              "Sem reatividade, sem hydration, sem runtime secreto. Só criação, composição e utilidades de DOM com foco em previsibilidade e velocidade.",
+            ),
+          ),
+          el(
+            "div.feature-grid",
+            null,
+            el(
+              "article.feature-card.wide.reveal",
+              null,
+              el("div.feature-icon", "01"),
+              el("h3", "Parser single-pass"),
+              el(
+                "p",
+                "O seletor é lido uma vez, cacheado e reutilizado. A biblioteca evita repetir trabalho onde a interface repete padrões.",
+              ),
+            ),
+            el(
+              "article.feature-card.narrow.reveal",
+              null,
+              el("div.feature-icon", "02"),
+              el("h3", "Cross-realm safe"),
+              el(
+                "p",
+                "Nodes são reconhecidos por shape, não por instanceof, evitando armadilhas entre iframe, página e sandbox.",
+              ),
+            ),
+          ),
+        );
+      }
+
+      function createCTA() {
+        return el(
+          "section.cta.reveal",
+          null,
+          el(
+            "div.cta-grid",
+            null,
+            el(
+              "div",
+              null,
+              el("h2", "Peças pequenas. Interfaces grandes."),
+              el(
+                "p",
+                "Use RodElements para painéis, devtools, overlays, consoles, downloaders e qualquer UI que precise nascer rápido e ficar fora do caminho.",
+              ),
+            ),
+            el(
+              "button.button.button-primary[type=button]",
+              {
+                onclick() {
+                  scrollToId("top");
+                },
+              },
+              "Voltar ao topo",
+            ),
+          ),
+        );
+      }
+
+      function createFooter() {
+        return el(
+          "footer.footer",
+          null,
+          el("span", "RodElements v1.0.0 · construído para o DOM real"),
+          el(
+            "div.footer-links",
+            null,
+            el("a[href=#features]", "Recursos"),
+            el("a[href=#code]", "API"),
+            el("a[href=#top]", "Topo"),
+          ),
+        );
+      }
+
+      const app = document.getElementById("app");
+
+      append(
+        app,
+        createTopbar(),
+        el(
+          "main.page-shell",
+          null,
+          createHero(),
+          createFeatures(),
+          createCodeSection(),
+          createArchitecture(),
+          createCTA(),
+        ),
+        el("div.page-shell", null, createFooter()),
+      );
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("is-visible");
+              observer.unobserve(entry.target);
+            }
+          }
+        },
+        {
+          threshold: 0.14,
+          rootMargin: "0px 0px -5% 0px",
+        },
+      );
+
+      document.querySelectorAll(".reveal").forEach((node) => observer.observe(node));
+    })();
+  </script>
+</body>
+</html>
