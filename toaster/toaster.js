@@ -6924,6 +6924,7 @@
 
   globalWindow[TOAST_GLOBAL] = toast;
   globalWindow.toast = toast;
+  globalThis[TOAST_GLOBAL] = toast;
 
   if (state.config.restoreTasksOnLoad) {
     (initialHostWindow.setTimeout || globalWindow.setTimeout)(() => {
