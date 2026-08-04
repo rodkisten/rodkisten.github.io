@@ -1,3 +1,5 @@
+// @global RodObjectInspector
+// @outfile dist/object-inspector.js
 /*
  * RodObjectInspector v3.2.0
  * ------------------------------------------------------------
