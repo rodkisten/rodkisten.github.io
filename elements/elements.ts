@@ -1,3 +1,5 @@
+// @global RodToaster
+// @outfile dist/toaster.js
 /**
  * RodElements v1.1.0
  * Tiny, strict and cross-realm-safe DOM factory with optional Cipó CSS runtime.
