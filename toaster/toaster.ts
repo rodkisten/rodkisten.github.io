@@ -1,3 +1,6 @@
+// @global RodToaster
+// @outfile dist/toaster.js
+
 /*
  * Rod Super Toaster
  * Version 4.2.0
