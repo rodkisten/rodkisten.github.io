@@ -133,7 +133,7 @@ const configs = sourceFiles.map(sourceFile => {
       name: globalName,
       exports: "default",
       sourcemap: false,
-      minify: true,
+      minify: false,
       banner: `/* Generated from ${relative(ROOT, sourceFile)}. Do not edit directly. */`,
     },
     treeshake: true,
