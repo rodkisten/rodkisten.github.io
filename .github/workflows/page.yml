@@ -1,0 +1,102 @@
+name: Build tools and deploy Pages
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.deploy-check.outputs.should_deploy }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Build every TypeScript tool as IIFE
+        run: npx --yes rolldown@1 --config scripts/rolldown.config.mjs
+
+      - name: Commit generated JavaScript
+        id: generated
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! -s .cache/ts-iife-outputs.txt ]]; then
+            echo "No generated JavaScript outputs."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          while IFS= read -r output; do
+            [[ -n "$output" ]] && git add -- "$output"
+          done < .cache/ts-iife-outputs.txt
+
+          if git diff --cached --quiet; then
+            echo "Generated JavaScript is already current."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(build): update generated IIFE files [skip ci]"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare Pages directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .pages
+          rsync -a ./ .pages/ \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude '.cache/' \
+            --exclude 'node_modules/' \
+            --exclude 'scripts/' \
+            --exclude '*.ts' \
+            --exclude '*.map'
+          touch .pages/.nojekyll
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: .pages
+
+      - name: Mark deploy as ready
+        id: deploy-check
+        run: echo "should_deploy=true" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
