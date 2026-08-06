@@ -1,5 +1,5 @@
 /* Generated from toaster/toaster.ts. Do not edit directly. */
-var Toaster = (function() {
+var RodToaster = (function() {
 
 //#region \0rolldown/runtime.js
 	var __defProp = Object.defineProperty;
@@ -3622,14 +3622,54 @@ var Toaster = (function() {
 	})(window);
 
 //#endregion
-//#region \0rod-iife-entry:/home/runner/work/rodkisten.github.io/rodkisten.github.io/toaster/toaster.ts
-	const __hasExports = Object.keys(toaster_exports).length > 0;
-	const __existing = globalThis["Toaster"];
-	const __value = Object.prototype.hasOwnProperty.call(toaster_exports, "default") ? void 0 : Object.prototype.hasOwnProperty.call(toaster_exports, "Toaster") ? void 0 : __hasExports ? toaster_exports : __existing;
-	if (__value !== void 0) {
-		globalThis["Toaster"] = __value;
-		if (typeof window !== "undefined") window["Toaster"] = __value;
+//#region \0rod-iife-entry:browser:/home/runner/work/rodkisten.github.io/rodkisten.github.io/toaster/toaster.ts
+	const __globalName = "RodToaster";
+	const __roots = [];
+	function __addRoot(value) {
+		if (!value || typeof value !== "object" && typeof value !== "function") return;
+		if (!__roots.includes(value)) __roots.push(value);
 	}
+	__addRoot(globalThis);
+	try {
+		if (typeof window !== "undefined") __addRoot(window);
+	} catch {}
+	try {
+		if (typeof self !== "undefined") __addRoot(self);
+	} catch {}
+	try {
+		if (typeof unsafeWindow !== "undefined") __addRoot(unsafeWindow);
+	} catch {}
+	try {
+		if (typeof window !== "undefined") __addRoot(window.parent);
+	} catch {}
+	try {
+		if (typeof window !== "undefined") __addRoot(window.top);
+	} catch {}
+	let __existing;
+	for (const __root of __roots) try {
+		const __candidate = __root[__globalName];
+		if (__candidate !== void 0) {
+			__existing = __candidate;
+			break;
+		}
+	} catch {}
+	const __hasExports = Object.keys(toaster_exports).length > 0;
+	const __value = Object.prototype.hasOwnProperty.call(toaster_exports, "default") ? void 0 : Object.prototype.hasOwnProperty.call(toaster_exports, __globalName) ? toaster_exports[__globalName] : __hasExports ? toaster_exports : __existing;
+	function __publish(__root) {
+		if (__value === void 0) return;
+		try {
+			Object.defineProperty(__root, __globalName, {
+				value: __value,
+				configurable: true,
+				writable: true
+			});
+			return;
+		} catch {}
+		try {
+			__root[__globalName] = __value;
+		} catch {}
+	}
+	for (const __root of __roots) __publish(__root);
 
 //#endregion
 return __value;
