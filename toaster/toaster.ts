@@ -3,7 +3,7 @@
 
 /*
  * Rod Super Toaster
- * Version 4.2.0
+ * Version 4.3.0
  *
  * Browser-first, bundler-optional TypeScript IIFE.
  * Compile with: tsc --target ES2022 --lib ES2022,DOM --strict
@@ -12,7 +12,7 @@
 (function installRodToaster(globalWindow: Window & typeof globalThis): void {
   "use strict";
 
-  const VERSION = "4.2.0" as const;
+  const VERSION = "4.3.0" as const;
   const TOAST_GLOBAL = "RodToaster" as const;
   const INSPECTOR_GLOBAL = "RodObjectInspector" as const;
   const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -24,6 +24,7 @@
   type ToastType = "default" | "error" | "info" | "success" | "warning" | "debug";
   type Theme = "auto" | "dark" | "light";
   type ResolvedTheme = Exclude<Theme, "auto">;
+  type ToastSize = "compact" | "comfortable" | "large";
   type ToastPosition =
     | "top-center"
     | "top-left"
@@ -491,6 +492,7 @@
     closeButton: boolean;
     position: ToastPosition;
     theme: Theme;
+    size: ToastSize;
     stacked: boolean;
     stackVisible: number;
     stackMaxHeight: number;
@@ -557,9 +559,11 @@
     container: HTMLDivElement | null;
     toasts: ToastRecord[];
     recordsById: Map<string, ToastRecord>;
+    recordsByNode: WeakMap<Element, ToastRecord>;
     dedupeRecords: Map<string, ToastRecord>;
     objectIds: WeakMap<object, number>;
     nextObjectId: number;
+    activeLoadingCount: number;
     stackExpanded: boolean;
     managerMinimized: boolean;
     resolvedTheme: ResolvedTheme;
@@ -583,6 +587,7 @@
     spaCleanup: (() => void) | null;
     hostRepairFrame: number | null;
     historyRestore: (() => void) | null;
+    taskPersistTimer: number | null;
   }
 
   interface ToasterApi {
@@ -631,6 +636,8 @@
     configure(nextConfig?: Partial<ToasterConfig>): ToasterConfig & { resolvedTheme: ResolvedTheme };
     setTheme(theme: Theme): ResolvedTheme;
     getTheme(): { theme: Theme; resolvedTheme: ResolvedTheme };
+    setSize(size: ToastSize): ToastSize;
+    getSize(): ToastSize;
     toggleTheme(): ResolvedTheme;
     getConfig(): ToasterConfig & { resolvedTheme: ResolvedTheme };
     getHostMode(): "shadow" | "light-dom" | null;
@@ -656,6 +663,20 @@
     warning: { bg: "rgba(255,255,255,.985)", border: "rgba(161,98,7,.17)", text: "rgba(39,39,42,.96)", accent: "rgba(161,98,7,.94)" },
     debug: { bg: "rgba(255,255,255,.985)", border: "rgba(24,24,27,.11)", text: "rgba(39,39,42,.94)", accent: "rgba(63,63,70,.86)" },
   };
+
+  const LIGHT_PALETTES = Object.fromEntries(
+    (Object.keys(TOAST_COLORS) as ToastType[]).map((type) => [
+      type,
+      { ...TOAST_COLORS[type], ...LIGHT_TOAST_COLORS[type] },
+    ]),
+  ) as Record<ToastType, Palette>;
+
+  const THEME_TOAST_COLORS: Record<ResolvedTheme, Record<ToastType, Palette>> = {
+    dark: TOAST_COLORS,
+    light: LIGHT_PALETTES,
+  };
+
+  const SVG_TEMPLATE_CACHE = new WeakMap<Document, Map<string, SVGSVGElement>>();
 
   const SVG_ICONS = {
     circle: `<circle cx="12" cy="12" r="7.5"></circle>`,
@@ -700,6 +721,7 @@
     closeButton: true,
     position: "top-center",
     theme: "auto",
+    size: "compact",
     stacked: true,
     stackVisible: 3,
     stackMaxHeight: 660,
@@ -765,6 +787,7 @@
   const ALLOWED_POSITIONS = new Set<ToastPosition>([
     "top-center", "top-left", "top-right", "bottom-center", "bottom-left", "bottom-right",
   ]);
+  const ALLOWED_SIZES = new Set<ToastSize>(["compact", "comfortable", "large"]);
   const ALLOWED_ACTION_VARIANTS = new Set<ActionVariant>(["primary", "secondary", "danger", "ghost"]);
   const ALLOWED_TASK_STATUSES = new Set<TaskStatus>(["queued", "running", "paused", "success", "error", "warning", "cancelled"]);
 
@@ -847,6 +870,12 @@
     return value === "dark" || value === "light" || value === "auto" ? value : "auto";
   }
 
+  function normalizeToastSize(value: unknown): ToastSize {
+    return typeof value === "string" && ALLOWED_SIZES.has(value as ToastSize)
+      ? value as ToastSize
+      : "compact";
+  }
+
   function normalizeTaskStatus(value: unknown): TaskStatus {
     return typeof value === "string" && ALLOWED_TASK_STATUSES.has(value as TaskStatus)
       ? (value as TaskStatus)
@@ -854,20 +883,33 @@
   }
 
   function createSvgIcon(documentRef: Document, name: SvgIconName | string, size = 18): SVGSVGElement {
-    const svg = documentRef.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", "0 0 24 24");
-    svg.setAttribute("width", String(size));
-    svg.setAttribute("height", String(size));
-    svg.setAttribute("fill", "none");
-    svg.setAttribute("stroke", "currentColor");
-    svg.setAttribute("stroke-width", "2");
-    svg.setAttribute("stroke-linecap", "round");
-    svg.setAttribute("stroke-linejoin", "round");
-    svg.setAttribute("aria-hidden", "true");
-    svg.setAttribute("focusable", "false");
     const iconName: SvgIconName = hasOwn(SVG_ICONS, name) ? name : "circle";
-    svg.innerHTML = SVG_ICONS[iconName];
-    return svg;
+    const normalizedSize = Math.max(1, Math.round(Number(size) || 18));
+    const cacheKey = `${iconName}:${normalizedSize}`;
+    let documentCache = SVG_TEMPLATE_CACHE.get(documentRef);
+    if (!documentCache) {
+      documentCache = new Map();
+      SVG_TEMPLATE_CACHE.set(documentRef, documentCache);
+    }
+
+    let template = documentCache.get(cacheKey);
+    if (!template) {
+      template = documentRef.createElementNS("http://www.w3.org/2000/svg", "svg");
+      template.setAttribute("viewBox", "0 0 24 24");
+      template.setAttribute("width", String(normalizedSize));
+      template.setAttribute("height", String(normalizedSize));
+      template.setAttribute("fill", "none");
+      template.setAttribute("stroke", "currentColor");
+      template.setAttribute("stroke-width", "2");
+      template.setAttribute("stroke-linecap", "round");
+      template.setAttribute("stroke-linejoin", "round");
+      template.setAttribute("aria-hidden", "true");
+      template.setAttribute("focusable", "false");
+      template.innerHTML = SVG_ICONS[iconName];
+      documentCache.set(cacheKey, template);
+    }
+
+    return template.cloneNode(true) as SVGSVGElement;
   }
 
   function setSvgIcon(node: Element, documentRef: Document, name: SvgIconName | string, size = 18): void {
@@ -941,9 +983,11 @@
     container: null,
     toasts: [],
     recordsById: new Map(),
+    recordsByNode: new WeakMap(),
     dedupeRecords: new Map(),
     objectIds: new WeakMap(),
     nextObjectId: 1,
+    activeLoadingCount: 0,
     stackExpanded: false,
     managerMinimized: false,
     resolvedTheme: "dark",
@@ -967,6 +1011,7 @@
     spaCleanup: null,
     hostRepairFrame: null,
     historyRestore: null,
+    taskPersistTimer: null,
   };
 
   try {
@@ -1047,16 +1092,16 @@
       .rod-toast-stack[data-position^="bottom"]{right:max(env(safe-area-inset-right,0px),16px);bottom:max(env(safe-area-inset-bottom,0px),16px);left:max(env(safe-area-inset-left,0px),16px);flex-direction:column-reverse}
       .rod-toast-stack[data-position$="left"]{align-items:flex-start}.rod-toast-stack[data-position$="right"]{align-items:flex-end}
       .rod-toast-stack__list,.rod-toast-stack__toolbar{width:var(--rod-toast-width)}
-      .rod-toast-stack__manager{appearance:none;position:relative;display:none;place-items:center;align-self:center;width:50px;height:50px;padding:0;border:1px solid var(--rod-border);border-radius:999px;outline:0;background:var(--rod-surface);color:var(--rod-text-strong);box-shadow:var(--rod-shadow-raised);backdrop-filter:blur(28px) saturate(1.28);-webkit-backdrop-filter:blur(28px) saturate(1.28);pointer-events:auto;touch-action:manipulation;cursor:pointer;animation:rod-toast-manager-enter 480ms var(--rod-ease-spring) both;transition:transform 300ms var(--rod-ease-spring),background-color 180ms,border-color 180ms}
+      .rod-toast-stack__manager{appearance:none;position:relative;display:none;place-items:center;align-self:center;width:50px;height:50px;padding:0;border:1px solid var(--rod-border);border-radius:999px;outline:0;background:var(--rod-surface);color:var(--rod-text-strong);box-shadow:var(--rod-shadow-raised);pointer-events:auto;touch-action:manipulation;cursor:pointer;animation:rod-toast-manager-enter 480ms var(--rod-ease-spring) both;transition:transform 300ms var(--rod-ease-spring),background-color 180ms,border-color 180ms}
       .rod-toast-stack__manager:hover,.rod-toast-stack__manager:focus-visible{border-color:var(--rod-border-strong);background:var(--rod-surface-raised);transform:translateY(-2px) scale(1.04)}
       .rod-toast-stack__manager svg{width:19px;height:19px;animation:rod-toast-spinner 850ms linear infinite}
       .rod-toast-stack__manager-count{position:absolute;top:-4px;right:-5px;display:none;min-width:19px;height:19px;padding:0 5px;border:2px solid var(--rod-surface);border-radius:999px;background:var(--rod-text-strong);color:var(--rod-surface);font:750 9px/15px system-ui,sans-serif;text-align:center}.rod-toast-stack__manager-count[data-visible="true"]{display:block}
       .rod-toast-stack[data-manager-minimized="true"] .rod-toast-stack__manager{display:grid}.rod-toast-stack[data-manager-minimized="true"] .rod-toast-stack__toolbar,.rod-toast-stack[data-manager-minimized="true"] .rod-toast-stack__list{display:none!important}
-      .rod-toast-stack__toolbar{display:none;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:7px 8px 7px 16px;border:1px solid var(--rod-border);border-radius:16px;background:color-mix(in srgb,var(--rod-surface) 94%,transparent);box-shadow:var(--rod-shadow);backdrop-filter:blur(26px) saturate(1.3);-webkit-backdrop-filter:blur(26px) saturate(1.3);pointer-events:auto;user-select:none;animation:rod-toast-toolbar-enter 360ms var(--rod-ease-spring) both}
+      .rod-toast-stack__toolbar{display:none;align-items:center;justify-content:space-between;gap:12px;min-height:48px;padding:7px 8px 7px 16px;border:1px solid var(--rod-border);border-radius:16px;background:var(--rod-surface);box-shadow:var(--rod-shadow);pointer-events:auto;user-select:none;animation:rod-toast-toolbar-enter 360ms var(--rod-ease-spring) both}
       .rod-toast-stack[data-expanded="true"][data-has-many="true"] .rod-toast-stack__toolbar[data-enabled="true"]{display:flex}
       .rod-toast-stack__toolbar-label{min-width:0;overflow:hidden;color:var(--rod-muted);font:650 12px/1.2 system-ui,sans-serif;text-overflow:ellipsis;white-space:nowrap}.rod-toast-stack__toolbar-actions{display:flex;gap:4px}
       .rod-toast-stack__toolbar-button,.rod-toast__close,.rod-toast__expand,.rod-toast__minimize{appearance:none;border:1px solid transparent;outline:0;background:transparent;color:inherit;touch-action:manipulation;cursor:pointer}
-      .rod-toast-stack__toolbar-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:0 11px;border-radius:10px;color:var(--rod-muted);font:650 11px/1 system-ui,sans-serif;transition:all 180ms var(--rod-ease-spring)}
+      .rod-toast-stack__toolbar-button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:0 11px;border-radius:10px;color:var(--rod-muted);font:650 11px/1 system-ui,sans-serif;transition:transform 160ms var(--rod-ease-spring),background-color 140ms,border-color 140ms,color 140ms}
       .rod-toast-stack__toolbar-button:hover,.rod-toast-stack__toolbar-button:focus-visible{border-color:var(--rod-border);background:var(--rod-hover);color:var(--rod-text-strong);transform:translateY(-1px)}
       .rod-toast-stack__list{position:relative;isolation:isolate;display:flex;flex-direction:column;gap:11px;min-width:0;overflow:visible;pointer-events:none;overscroll-behavior:contain;scrollbar-width:thin}
       .rod-toast-stack[data-position^="bottom"] .rod-toast-stack__list{flex-direction:column-reverse}
@@ -1064,29 +1109,54 @@
       .rod-toast-stack__list::before{z-index:-1}.rod-toast-stack__list::after{z-index:-2}
       .rod-toast-stack[data-expanded="false"][data-stack-depth="2"] .rod-toast-stack__list::before,.rod-toast-stack[data-expanded="false"][data-stack-depth="3"] .rod-toast-stack__list::before{opacity:.94;transform:translateY(12px) scaleX(.95)}
       .rod-toast-stack[data-expanded="false"][data-stack-depth="3"] .rod-toast-stack__list::after{opacity:.76;transform:translateY(22px) scaleX(.89)}
-      .rod-toast-stack[data-expanded="true"] .rod-toast-stack__list{max-height:min(var(--rod-toast-stack-max-height),var(--rod-toast-stack-max-viewport));overflow-x:hidden;overflow-y:auto;padding:2px;pointer-events:auto;-webkit-overflow-scrolling:touch;scroll-behavior:smooth}
+      .rod-toast-stack[data-expanded="true"] .rod-toast-stack__list{max-height:min(var(--rod-toast-stack-max-height),var(--rod-toast-stack-max-viewport));overflow-x:hidden;overflow-y:auto;padding:2px;pointer-events:auto;-webkit-overflow-scrolling:touch}
       .rod-toast-stack[data-expanded="false"] .rod-toast{display:none}.rod-toast-stack[data-expanded="false"] .rod-toast[data-stack-index="0"]{display:grid;cursor:grab}
-      .rod-toast{--rod-toast-bg:var(--rod-surface);--rod-toast-border:var(--rod-border);--rod-toast-text:var(--rod-text);--rod-toast-accent:rgba(244,244,245,.76);position:relative;z-index:1;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:15px;width:100%;min-width:0;max-width:100%;min-height:78px;max-height:min(72dvh,760px);overflow:auto;padding:17px 14px 17px 18px;border:1px solid var(--rod-toast-border);border-radius:var(--rod-toaster-border-radius,22px);background:linear-gradient(180deg,color-mix(in srgb,var(--rod-toast-bg) 98%,white 2%),var(--rod-toast-bg));color:var(--rod-toast-text);box-shadow:var(--rod-shadow);opacity:0;filter:blur(5px);transform:translate3d(0,-18px,0) scale(.965);transform-origin:top center;transition:opacity 260ms,filter 360ms,transform 500ms var(--rod-ease-spring),border-color 180ms,background-color 180ms,width 420ms var(--rod-ease-spring),height 420ms var(--rod-ease-spring),padding 420ms var(--rod-ease-spring),border-radius 420ms var(--rod-ease-spring);pointer-events:auto;touch-action:none;user-select:text;overscroll-behavior:contain;backdrop-filter:blur(30px) saturate(1.35);-webkit-backdrop-filter:blur(30px) saturate(1.35);scrollbar-width:thin}
-      .rod-toast-stack[data-position^="bottom"] .rod-toast{transform:translate3d(0,18px,0) scale(.965);transform-origin:bottom center}.rod-toast::before{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(118deg,rgba(255,255,255,.055),transparent 28%,transparent 72%,rgba(255,255,255,.018));pointer-events:none}.rod-toast[data-visible="true"]{opacity:1;filter:blur(0);transform:translate3d(0,0,0) scale(1)}.rod-toast:hover{border-color:color-mix(in srgb,var(--rod-toast-border) 72%,var(--rod-text-strong) 28%);box-shadow:var(--rod-shadow-raised)}
-      .rod-toast-stack[data-theme="light"] .rod-toast{background:linear-gradient(180deg,rgba(255,255,255,.998),rgba(250,250,250,.992))}
+      .rod-toast{--rod-toast-bg:var(--rod-surface);--rod-toast-border:var(--rod-border);--rod-toast-text:var(--rod-text);--rod-toast-accent:rgba(244,244,245,.76);position:relative;z-index:1;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:15px;width:100%;min-width:0;max-width:100%;min-height:78px;max-height:min(72dvh,760px);overflow:auto;padding:17px 14px 17px 18px;border:1px solid var(--rod-toast-border);border-radius:var(--rod-toaster-border-radius,22px);background:var(--rod-toast-bg);color:var(--rod-toast-text);box-shadow:var(--rod-shadow);opacity:0;transform:translate3d(0,-14px,0) scale(.975);transform-origin:top center;transition:opacity 180ms,transform 260ms var(--rod-ease-spring),border-color 140ms,background-color 140ms;pointer-events:auto;touch-action:none;user-select:text;overscroll-behavior:contain;scrollbar-width:thin;contain:layout paint style}
+      .rod-toast-stack[data-position^="bottom"] .rod-toast{transform:translate3d(0,14px,0) scale(.975);transform-origin:bottom center}.rod-toast::before{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(118deg,rgba(255,255,255,.035),transparent 34%,transparent 74%,rgba(255,255,255,.012));pointer-events:none}.rod-toast[data-visible="true"]{opacity:1;transform:translate3d(0,0,0) scale(1)}.rod-toast:hover{border-color:var(--rod-border-strong)}
+      .rod-toast-stack[data-theme="light"] .rod-toast{background:var(--rod-toast-bg)}
       .rod-toast-stack[data-expanded="true"][data-has-many="true"] .rod-toast[data-item-expanded="false"]{max-height:64px;min-height:64px;overflow:hidden;cursor:pointer}.rod-toast-stack[data-expanded="true"][data-has-many="true"] .rod-toast[data-item-expanded="false"] .rod-toast__content{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rod-toast-stack[data-expanded="true"][data-has-many="true"] .rod-toast[data-item-expanded="true"]{max-height:min(68dvh,720px);overflow:auto;border-color:var(--rod-border-strong);background:var(--rod-surface-raised);box-shadow:var(--rod-shadow-raised)}
       .rod-toast__icon{position:relative;display:grid;place-items:center;width:26px;min-width:26px;height:26px;color:var(--rod-toast-accent);user-select:none;transition:color 180ms,transform 420ms var(--rod-ease-spring)}.rod-toast__icon svg{width:22px;height:22px;overflow:visible}.rod-toast[data-visible="true"] .rod-toast__icon{animation:rod-toast-icon-enter 520ms 90ms var(--rod-ease-spring) both}
       .rod-toast__content{position:relative;z-index:1;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;min-width:0;color:inherit;font-size:15px;letter-spacing:-.012em;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}.rod-toast__arg{min-width:0;max-width:100%}.rod-toast__actions{position:relative;z-index:2;display:flex;align-items:center;gap:4px;margin:0}
       .rod-toast__count{display:none;min-width:27px;height:27px;padding:0 7px;border:1px solid var(--rod-border);border-radius:999px;background:var(--rod-overlay);color:var(--rod-muted);font:700 10px/25px system-ui,sans-serif;text-align:center}.rod-toast__count[data-visible="true"]{display:block}
-      .rod-toast__close,.rod-toast__expand,.rod-toast__minimize{display:grid;place-items:center;width:38px;min-width:38px;height:38px;padding:0;border-radius:12px;color:var(--rod-muted);transition:all 180ms var(--rod-ease-spring)}.rod-toast__close:hover,.rod-toast__expand:hover,.rod-toast__minimize:hover,.rod-toast__close:focus-visible,.rod-toast__expand:focus-visible,.rod-toast__minimize:focus-visible{border-color:var(--rod-border);background:var(--rod-hover);color:var(--rod-text-strong);transform:scale(1.04)}.rod-toast__expand,.rod-toast__minimize{display:none}.rod-toast[data-loading="true"] .rod-toast__minimize,.rod-toast-stack[data-expanded="true"][data-has-many="true"] .rod-toast__expand{display:grid}.rod-toast[data-item-expanded="true"] .rod-toast__expand svg{transform:rotate(180deg)}
+      .rod-toast__close,.rod-toast__expand,.rod-toast__minimize{display:grid;place-items:center;width:38px;min-width:38px;height:38px;padding:0;border-radius:12px;color:var(--rod-muted);transition:transform 160ms var(--rod-ease-spring),background-color 140ms,border-color 140ms,color 140ms}.rod-toast__close:hover,.rod-toast__expand:hover,.rod-toast__minimize:hover,.rod-toast__close:focus-visible,.rod-toast__expand:focus-visible,.rod-toast__minimize:focus-visible{border-color:var(--rod-border);background:var(--rod-hover);color:var(--rod-text-strong);transform:scale(1.04)}.rod-toast__expand,.rod-toast__minimize{display:none}.rod-toast[data-loading="true"] .rod-toast__minimize,.rod-toast-stack[data-expanded="true"][data-has-many="true"] .rod-toast__expand{display:grid}.rod-toast[data-item-expanded="true"] .rod-toast__expand svg{transform:rotate(180deg)}
       .rod-token--null{color:rgb(216,180,254)}.rod-token--undefined,.rod-token--meta{color:rgb(212,212,216)}.rod-token--string{color:rgb(253,186,116)}.rod-token--number{color:rgb(190,242,100)}.rod-token--boolean{color:rgb(147,197,253);font-weight:600}.rod-token--symbol{color:rgb(94,234,212)}.rod-token--function{color:rgb(253,224,71)}.rod-toast__inspector-placeholder{color:var(--rod-muted);font-style:italic}
       .rod-toast__loading-copy,.rod-toast__confirm-copy,.rod-toast__rich-copy,.rod-toast__interactive-copy{display:grid;gap:6px;min-width:0;width:100%}.rod-toast__loading-title,.rod-toast__confirm-title,.rod-toast__rich-title,.rod-toast__interactive-title{color:var(--rod-text-strong);font:680 15px/1.34 Inter,system-ui,sans-serif;letter-spacing:-.02em}.rod-toast__loading-description,.rod-toast__confirm-description,.rod-toast__rich-description,.rod-toast__interactive-description{color:var(--rod-muted);font:430 13px/1.5 Inter,system-ui,sans-serif;letter-spacing:-.01em}
       .rod-toast[data-loading="true"][data-loading-icon="false"]{grid-template-columns:minmax(0,1fr) auto}.rod-toast[data-loading="true"][data-loading-icon="false"] .rod-toast__icon{display:none}.rod-toast[data-loading="true"][data-loading-content-empty="true"]{grid-template-columns:auto auto;justify-content:center;width:fit-content;min-width:0;max-width:min(100%,280px);margin-inline:auto}.rod-toast[data-loading="true"][data-loading-content-empty="true"] .rod-toast__content{display:none}
       .rod-toast__progress{display:grid;gap:7px;width:100%;margin-top:8px}.rod-toast__progress-meta{display:flex;justify-content:flex-end;min-height:14px;color:var(--rod-muted-soft);font:650 10px/1 system-ui,sans-serif}.rod-toast__progress-track{position:relative;width:100%;height:4px;overflow:hidden;border-radius:999px;background:var(--rod-overlay)}.rod-toast__progress-bar{position:absolute;inset:0 auto 0 0;width:var(--rod-loading-progress,0%);border-radius:inherit;background:linear-gradient(90deg,color-mix(in srgb,var(--rod-toast-accent) 84%,transparent),var(--rod-toast-accent));transition:width 420ms var(--rod-ease-soft)}.rod-toast:not([data-loading-animation="progress"]) .rod-toast__progress{display:none}.rod-toast[data-loading-indeterminate="true"] .rod-toast__progress-bar{width:38%;animation:rod-toast-progress-indeterminate 1.1s cubic-bezier(.4,0,.2,1) infinite}.rod-toast[data-loading-state="loading"] [data-loading-spinner="true"]{animation:rod-toast-spinner 850ms linear infinite}.rod-toast[data-loading-state="loading"] [data-loading-pulse="true"]{animation:rod-toast-pulse 1.35s cubic-bezier(.4,0,.6,1) infinite}
       .rod-toast[data-confirm="true"],.rod-toast[data-rich="true"],.rod-toast[data-interactive="true"]{min-width:min(470px,calc(100vw - 28px));max-width:min(620px,calc(100vw - 28px));padding-block:19px;touch-action:pan-y}.rod-toast[data-confirm="true"] .rod-toast__content,.rod-toast[data-rich="true"] .rod-toast__content,.rod-toast[data-interactive="true"] .rod-toast__content{display:block;width:100%}.rod-toast[data-confirm="true"] .rod-toast__minimize,.rod-toast[data-rich="true"] .rod-toast__minimize,.rod-toast[data-interactive="true"] .rod-toast__minimize,.rod-toast[data-confirm="true"] .rod-toast__expand,.rod-toast[data-rich="true"] .rod-toast__expand,.rod-toast[data-interactive="true"] .rod-toast__expand{display:none!important}
-      .rod-toast__confirm,.rod-toast__rich,.rod-toast__interactive{display:grid;gap:17px;width:100%;min-width:0}.rod-toast__confirm-actions,.rod-toast__action-bar,.rod-toast__task-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:9px;width:100%}.rod-toast__confirm-button,.rod-toast__action-button,.rod-toast__task-button{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:0 15px;border:1px solid var(--rod-border);border-radius:12px;outline:0;background:var(--rod-overlay);color:var(--rod-text);font:650 12px/1 system-ui,sans-serif;cursor:pointer;transition:all 180ms var(--rod-ease-spring)}.rod-toast__confirm-button:hover:not(:disabled),.rod-toast__action-button:hover:not(:disabled),.rod-toast__task-button:hover:not(:disabled){border-color:var(--rod-border-strong);background:var(--rod-hover);transform:translateY(-2px)}.rod-toast__confirm-button:disabled,.rod-toast__action-button:disabled,.rod-toast__task-button:disabled{opacity:.5;cursor:wait}.rod-toast__confirm-button[data-variant="primary"],.rod-toast__action-button[data-variant="primary"]{border-color:var(--rod-text-strong);background:var(--rod-text-strong);color:var(--rod-surface)}.rod-toast__confirm-button[data-variant="danger"],.rod-toast__action-button[data-variant="danger"]{border-color:rgba(248,113,113,.3);background:rgba(127,29,29,.22);color:rgba(252,165,165,.98)}.rod-toast__confirm-button[data-variant="ghost"],.rod-toast__action-button[data-variant="ghost"]{border-color:transparent;background:transparent;color:var(--rod-muted)}
+      .rod-toast__confirm,.rod-toast__rich,.rod-toast__interactive{display:grid;gap:17px;width:100%;min-width:0}.rod-toast__confirm-actions{display:flex;flex-wrap:nowrap;justify-content:flex-end;gap:9px;width:100%;overflow-x:auto;scrollbar-width:none}.rod-toast__confirm-actions::-webkit-scrollbar{display:none}.rod-toast__confirm-actions .rod-toast__confirm-button{flex:1 1 0;min-width:0}.rod-toast__action-bar,.rod-toast__task-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:9px;width:100%}.rod-toast__confirm-button,.rod-toast__action-button,.rod-toast__task-button{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:0 15px;border:1px solid var(--rod-border);border-radius:12px;outline:0;background:var(--rod-overlay);color:var(--rod-text);font:650 12px/1 system-ui,sans-serif;cursor:pointer;transition:transform 160ms var(--rod-ease-spring),background-color 140ms,border-color 140ms,color 140ms}.rod-toast__confirm-button:hover:not(:disabled),.rod-toast__action-button:hover:not(:disabled),.rod-toast__task-button:hover:not(:disabled){border-color:var(--rod-border-strong);background:var(--rod-hover);transform:translateY(-2px)}.rod-toast__confirm-button:disabled,.rod-toast__action-button:disabled,.rod-toast__task-button:disabled{opacity:.5;cursor:wait}.rod-toast__confirm-button[data-variant="primary"],.rod-toast__action-button[data-variant="primary"]{border-color:var(--rod-text-strong);background:var(--rod-text-strong);color:var(--rod-surface)}.rod-toast__confirm-button[data-variant="danger"],.rod-toast__action-button[data-variant="danger"]{border-color:rgba(248,113,113,.3);background:rgba(127,29,29,.22);color:rgba(252,165,165,.98)}.rod-toast__confirm-button[data-variant="ghost"],.rod-toast__action-button[data-variant="ghost"]{border-color:transparent;background:transparent;color:var(--rod-muted)}
       .rod-toast__details{overflow:hidden;border:1px solid var(--rod-border);border-radius:12px;background:var(--rod-overlay)}.rod-toast__details summary{display:flex;align-items:center;min-height:36px;padding:0 11px;color:var(--rod-muted);font:600 11px/1 system-ui,sans-serif;cursor:pointer}.rod-toast__details-body{max-height:280px;overflow:auto;padding:10px;border-top:1px solid var(--rod-border);font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
       .rod-toast__field{display:grid;gap:6px;min-width:0}.rod-toast__field-label{color:var(--rod-muted);font:600 10px/1.2 system-ui,sans-serif}.rod-toast__input,.rod-toast__select,.rod-toast__textarea{appearance:none;width:100%;min-width:0;min-height:40px;padding:9px 11px;border:1px solid var(--rod-border);border-radius:12px;outline:0;background:var(--rod-overlay);color:var(--rod-text-strong);font:16px/1.45 system-ui,sans-serif}.rod-toast__textarea{min-height:96px;resize:vertical}.rod-toast__input:focus,.rod-toast__select:focus,.rod-toast__textarea:focus{border-color:var(--rod-border-strong);box-shadow:0 0 0 4px color-mix(in srgb,var(--rod-focus) 18%,transparent)}
       .rod-toast__checkboxes{display:grid;gap:7px}.rod-toast__checkbox{display:flex;align-items:flex-start;gap:8px;color:var(--rod-muted);font:11px/1.45 system-ui,sans-serif;cursor:pointer}.rod-toast__checkbox input{width:15px;height:15px;margin:1px 0 0;accent-color:var(--rod-text-strong)}
       .rod-toast__validation{display:none;padding:8px 10px;border:1px solid rgba(248,113,113,.24);border-radius:10px;background:rgba(127,29,29,.16);color:rgba(252,165,165,.96);font:500 11px/1.45 system-ui,sans-serif}.rod-toast__validation[data-visible="true"]{display:block}.rod-toast__countdown{display:none;gap:5px;color:var(--rod-muted);font:500 10px/1.2 system-ui,sans-serif}.rod-toast__countdown[data-visible="true"]{display:grid}.rod-toast__countdown-track{position:relative;height:3px;overflow:hidden;border-radius:999px;background:var(--rod-overlay)}.rod-toast__countdown-bar{position:absolute;inset:0 auto 0 0;width:var(--rod-countdown-progress,100%);border-radius:inherit;background:var(--rod-text);transition:width 250ms linear}.rod-toast__task-status{color:var(--rod-muted-soft);font:650 9px/1 system-ui,sans-serif;letter-spacing:.04em;text-transform:uppercase}
-      .rod-toast[data-completing="true"]{align-self:center;justify-self:center;grid-template-columns:1fr;gap:0;width:54px;min-width:54px;max-width:54px;height:54px;min-height:54px;max-height:54px;padding:0;overflow:hidden;border-radius:999px;background:var(--rod-surface);box-shadow:var(--rod-shadow-raised);cursor:default}.rod-toast[data-completing="true"] .rod-toast__content,.rod-toast[data-completing="true"] .rod-toast__actions{position:absolute;opacity:0;pointer-events:none}.rod-toast[data-completing="true"] .rod-toast__icon{justify-self:center;width:54px;min-width:54px;height:54px;margin:0}.rod-toast[data-completing="true"] .rod-icon-check-path{stroke-dasharray:24;stroke-dashoffset:24;animation:rod-toast-check-draw 280ms 100ms ease-out forwards}.rod-toast[data-success-exit="true"]{opacity:0;filter:blur(5px);transform:translate3d(0,-22px,0) scale(.82)}
+      .rod-toast[data-completing="true"]{align-self:center;justify-self:center;grid-template-columns:1fr;gap:0;width:54px;min-width:54px;max-width:54px;height:54px;min-height:54px;max-height:54px;padding:0;overflow:hidden;border-radius:999px;background:var(--rod-surface);box-shadow:var(--rod-shadow-raised);cursor:default}.rod-toast[data-completing="true"] .rod-toast__content,.rod-toast[data-completing="true"] .rod-toast__actions{position:absolute;opacity:0;pointer-events:none}.rod-toast[data-completing="true"] .rod-toast__icon{justify-self:center;width:54px;min-width:54px;height:54px;margin:0}.rod-toast[data-completing="true"] .rod-icon-check-path{stroke-dasharray:24;stroke-dashoffset:24;animation:rod-toast-check-draw 280ms 100ms ease-out forwards}.rod-toast[data-success-exit="true"]{opacity:0;transform:translate3d(0,-18px,0) scale(.86)}
       @keyframes rod-toast-spinner{to{transform:rotate(360deg)}}@keyframes rod-toast-pulse{0%,100%{opacity:.55;transform:scale(.92)}50%{opacity:1;transform:scale(1.08)}}@keyframes rod-toast-progress-indeterminate{0%{left:-42%}50%{left:42%}100%{left:104%}}@keyframes rod-toast-check-draw{to{stroke-dashoffset:0}}@keyframes rod-toast-icon-enter{0%{opacity:0;transform:scale(.72) rotate(-9deg)}62%{opacity:1;transform:scale(1.08) rotate(1deg)}100%{opacity:1;transform:scale(1)}}@keyframes rod-toast-toolbar-enter{from{opacity:0;transform:translateY(-8px) scale(.98)}to{opacity:1;transform:none}}@keyframes rod-toast-manager-enter{0%{opacity:0;transform:translateY(-10px) scale(.72)}70%{opacity:1;transform:translateY(1px) scale(1.06)}100%{opacity:1;transform:none}}
-      @media(max-width:560px){.rod-toast-stack{--rod-toast-width:calc(100vw - 20px)}.rod-toast-stack[data-position^="top"]{top:max(env(safe-area-inset-top,0px),10px);right:10px;left:10px}.rod-toast-stack[data-position^="bottom"]{right:10px;bottom:max(env(safe-area-inset-bottom,0px),10px);left:10px}.rod-toast{min-height:72px;gap:12px;padding:15px 10px 15px 15px;border-radius:20px}.rod-toast[data-confirm="true"],.rod-toast[data-rich="true"],.rod-toast[data-interactive="true"]{min-width:0;max-width:none}.rod-toast__confirm-actions,.rod-toast__action-bar,.rod-toast__task-actions{display:grid;grid-template-columns:1fr}.rod-toast__confirm-button,.rod-toast__action-button,.rod-toast__task-button{width:100%}}
+      @media(max-width:560px){.rod-toast-stack{--rod-toast-width:calc(100vw - 16px)}.rod-toast-stack[data-position^="top"]{top:max(env(safe-area-inset-top,0px),8px);right:8px;left:8px}.rod-toast-stack[data-position^="bottom"]{right:8px;bottom:max(env(safe-area-inset-bottom,0px),8px);left:8px}.rod-toast[data-confirm="true"],.rod-toast[data-rich="true"],.rod-toast[data-interactive="true"]{min-width:0;max-width:none}.rod-toast__action-bar,.rod-toast__task-actions{display:grid;grid-template-columns:1fr}.rod-toast__action-button,.rod-toast__task-button{width:100%}.rod-toast__confirm-actions{display:flex;flex-wrap:nowrap}.rod-toast__confirm-button{width:auto;min-width:0;flex:1 1 0}}
+      .rod-toast-stack[data-size="compact"]{--rod-toast-width:min(420px,calc(100vw - 16px));--rod-toaster-font-size:13px;--rod-toaster-line-height:1.38;gap:8px}
+      .rod-toast-stack[data-size="compact"] .rod-toast{min-height:56px;max-height:min(64dvh,620px);gap:9px;padding:10px 8px 10px 12px;border-radius:14px}
+      .rod-toast-stack[data-size="compact"] .rod-toast__icon{width:21px;min-width:21px;height:21px}.rod-toast-stack[data-size="compact"] .rod-toast__icon svg{width:18px;height:18px}
+      .rod-toast-stack[data-size="compact"] .rod-toast__content{font-size:13px;line-height:1.38}.rod-toast-stack[data-size="compact"] .rod-toast__actions{gap:1px}
+      .rod-toast-stack[data-size="compact"] .rod-toast__close,.rod-toast-stack[data-size="compact"] .rod-toast__expand,.rod-toast-stack[data-size="compact"] .rod-toast__minimize{width:31px;min-width:31px;height:31px;border-radius:9px}
+      .rod-toast-stack[data-size="compact"] .rod-toast__loading-copy,.rod-toast-stack[data-size="compact"] .rod-toast__confirm-copy,.rod-toast-stack[data-size="compact"] .rod-toast__rich-copy,.rod-toast-stack[data-size="compact"] .rod-toast__interactive-copy{gap:3px}
+      .rod-toast-stack[data-size="compact"] .rod-toast__loading-title,.rod-toast-stack[data-size="compact"] .rod-toast__confirm-title,.rod-toast-stack[data-size="compact"] .rod-toast__rich-title,.rod-toast-stack[data-size="compact"] .rod-toast__interactive-title{font-size:13px;line-height:1.25}
+      .rod-toast-stack[data-size="compact"] .rod-toast__loading-description,.rod-toast-stack[data-size="compact"] .rod-toast__confirm-description,.rod-toast-stack[data-size="compact"] .rod-toast__rich-description,.rod-toast-stack[data-size="compact"] .rod-toast__interactive-description{font-size:11px;line-height:1.4}
+      .rod-toast-stack[data-size="compact"] .rod-toast[data-confirm="true"],.rod-toast-stack[data-size="compact"] .rod-toast[data-rich="true"],.rod-toast-stack[data-size="compact"] .rod-toast[data-interactive="true"]{min-width:min(390px,calc(100vw - 16px));max-width:min(480px,calc(100vw - 16px));padding-block:12px}
+      .rod-toast-stack[data-size="compact"] .rod-toast__confirm,.rod-toast-stack[data-size="compact"] .rod-toast__rich,.rod-toast-stack[data-size="compact"] .rod-toast__interactive{gap:11px}
+      .rod-toast-stack[data-size="compact"] .rod-toast__confirm-button,.rod-toast-stack[data-size="compact"] .rod-toast__action-button,.rod-toast-stack[data-size="compact"] .rod-toast__task-button{min-height:34px;padding:0 10px;border-radius:9px;font-size:11px}
+      .rod-toast-stack[data-size="compact"] .rod-toast[data-visible="true"] .rod-toast__icon{animation:none}
+      .rod-toast-stack[data-size="comfortable"]{--rod-toast-width:min(520px,calc(100vw - 24px));--rod-toaster-font-size:14px;--rod-toaster-line-height:1.46;gap:10px}
+      .rod-toast-stack[data-size="comfortable"] .rod-toast{min-height:70px;gap:13px;padding:14px 11px 14px 16px;border-radius:19px}
+      .rod-toast-stack[data-size="comfortable"] .rod-toast__content{font-size:14px}.rod-toast-stack[data-size="comfortable"] .rod-toast__close,.rod-toast-stack[data-size="comfortable"] .rod-toast__expand,.rod-toast-stack[data-size="comfortable"] .rod-toast__minimize{width:36px;min-width:36px;height:36px;border-radius:11px}
+      .rod-toast-stack[data-size="comfortable"] .rod-toast[data-confirm="true"],.rod-toast-stack[data-size="comfortable"] .rod-toast[data-rich="true"],.rod-toast-stack[data-size="comfortable"] .rod-toast[data-interactive="true"]{min-width:min(460px,calc(100vw - 24px));max-width:min(580px,calc(100vw - 24px));padding-block:16px}
+      .rod-toast-stack[data-size="comfortable"] .rod-toast__confirm-button,.rod-toast-stack[data-size="comfortable"] .rod-toast__action-button,.rod-toast-stack[data-size="comfortable"] .rod-toast__task-button{min-height:38px;padding:0 13px}
+      .rod-toast-stack[data-size="large"]{--rod-toast-width:min(640px,calc(100vw - 32px));--rod-toaster-font-size:16px;--rod-toaster-line-height:1.52;gap:13px}
+      .rod-toast-stack[data-size="large"] .rod-toast{min-height:88px;gap:17px;padding:20px 16px 20px 22px;border-radius:24px}
+      .rod-toast-stack[data-size="large"] .rod-toast__icon{width:31px;min-width:31px;height:31px}.rod-toast-stack[data-size="large"] .rod-toast__icon svg{width:26px;height:26px}
+      .rod-toast-stack[data-size="large"] .rod-toast__content{font-size:16px}.rod-toast-stack[data-size="large"] .rod-toast__close,.rod-toast-stack[data-size="large"] .rod-toast__expand,.rod-toast-stack[data-size="large"] .rod-toast__minimize{width:44px;min-width:44px;height:44px;border-radius:14px}
+      .rod-toast-stack[data-size="large"] .rod-toast__loading-title,.rod-toast-stack[data-size="large"] .rod-toast__confirm-title,.rod-toast-stack[data-size="large"] .rod-toast__rich-title,.rod-toast-stack[data-size="large"] .rod-toast__interactive-title{font-size:17px}.rod-toast-stack[data-size="large"] .rod-toast__loading-description,.rod-toast-stack[data-size="large"] .rod-toast__confirm-description,.rod-toast-stack[data-size="large"] .rod-toast__rich-description,.rod-toast-stack[data-size="large"] .rod-toast__interactive-description{font-size:14px}
+      .rod-toast-stack[data-size="large"] .rod-toast[data-confirm="true"],.rod-toast-stack[data-size="large"] .rod-toast[data-rich="true"],.rod-toast-stack[data-size="large"] .rod-toast[data-interactive="true"]{min-width:min(560px,calc(100vw - 32px));max-width:min(700px,calc(100vw - 32px));padding-block:22px}
+      .rod-toast-stack[data-size="large"] .rod-toast__confirm-button,.rod-toast-stack[data-size="large"] .rod-toast__action-button,.rod-toast-stack[data-size="large"] .rod-toast__task-button{min-height:46px;padding:0 18px;font-size:13px}
+      @media(max-width:560px){.rod-toast-stack[data-size="compact"],.rod-toast-stack[data-size="comfortable"],.rod-toast-stack[data-size="large"]{--rod-toast-width:calc(100vw - 16px)}.rod-toast-stack[data-size="large"] .rod-toast{min-height:78px;gap:14px;padding:17px 12px 17px 16px}.rod-toast-stack[data-size="large"] .rod-toast[data-confirm="true"],.rod-toast-stack[data-size="large"] .rod-toast[data-rich="true"],.rod-toast-stack[data-size="large"] .rod-toast[data-interactive="true"]{min-width:0;max-width:none}}
       @media(prefers-reduced-motion:reduce){.rod-toast,.rod-toast__content,.rod-toast__actions,.rod-toast__icon,.rod-toast__expand svg,.rod-toast-stack__list::before,.rod-toast-stack__list::after{transition-duration:1ms!important;animation-duration:1ms!important}}
     `;
     return style;
@@ -1101,19 +1171,22 @@
   }
 
   function getToastPalette(type: ToastType): Palette {
-    const base = TOAST_COLORS[type] ?? TOAST_COLORS.default;
-    return state.resolvedTheme === "light" ? { ...base, ...LIGHT_TOAST_COLORS[type] } : base;
+    const semanticType: ToastType = hasOwn(TOAST_COLORS, type) ? type : "default";
+    return THEME_TOAST_COLORS[state.resolvedTheme][semanticType];
   }
 
   function applyToastPalette(node: HTMLElement | null, type: ToastType): void {
     if (!node) return;
     const semanticType: ToastType = hasOwn(TOAST_COLORS, type) ? type : "default";
-    const palette = getToastPalette(semanticType);
+    const paletteKey = `${state.resolvedTheme}:${semanticType}`;
+    if (node.dataset.rodPalette === paletteKey) return;
+    const palette = THEME_TOAST_COLORS[state.resolvedTheme][semanticType];
     node.style.setProperty("--rod-toast-bg", palette.bg);
     node.style.setProperty("--rod-toast-border", palette.border);
     node.style.setProperty("--rod-toast-text", palette.text);
     node.style.setProperty("--rod-toast-accent", palette.accent);
     node.dataset.type = semanticType;
+    node.dataset.rodPalette = paletteKey;
   }
 
   function syncTheme(): boolean {
@@ -1121,7 +1194,7 @@
     state.resolvedTheme = resolveTheme();
     if (state.container) state.container.dataset.theme = state.resolvedTheme;
     if (state.hostElement) state.hostElement.dataset.rodToasterTheme = state.resolvedTheme;
-    for (const record of getActiveToastRecords()) applyToastPalette(record.node, record.options.type);
+    for (const record of state.toasts) applyToastPalette(record.node, record.options.type);
     return previous !== state.resolvedTheme;
   }
 
@@ -1178,6 +1251,7 @@
   }
 
   function getObjectInspectorApi(): ObjectInspectorApi | null {
+    if (state.inspectorApi) return state.inspectorApi;
     for (const candidate of [state.hostWindow, initialHostWindow, globalWindow]) {
       if (!candidate) continue;
       const api = safeCall(() => (candidate as WindowWithRodGlobals).RodObjectInspector ?? null, null);
@@ -1295,10 +1369,22 @@
     return state.inspectorPromise;
   }
 
+  function hasEventListeners(eventName: string): boolean {
+    return Boolean(state.listeners.get(eventName)?.size || state.listeners.get("*")?.size);
+  }
+
   function emitEvent(eventName: string, payload: UnknownRecord = {}): ToastEvent {
     const event: ToastEvent = { event: eventName, timestamp: Date.now(), ...payload };
-    const listeners = [...(state.listeners.get(eventName) ?? []), ...(state.listeners.get("*") ?? [])];
-    for (const listener of listeners) safeCall(() => listener(event), undefined);
+    const directListeners = state.listeners.get(eventName);
+    if (directListeners) {
+      for (const listener of directListeners) safeCall(() => listener(event), undefined);
+    }
+    if (eventName !== "*") {
+      const wildcardListeners = state.listeners.get("*");
+      if (wildcardListeners) {
+        for (const listener of wildcardListeners) safeCall(() => listener(event), undefined);
+      }
+    }
     return event;
   }
 
@@ -1313,90 +1399,121 @@
     };
   }
 
-  function getActiveToastRecords(): ToastRecord[] {
-    return state.toasts.filter((record) => !record.removed);
+  function hasActiveLoadingRecords(): boolean {
+    return state.activeLoadingCount > 0;
   }
 
-  function hasActiveLoadingRecords(): boolean {
-    return getActiveToastRecords().some((record) => record.options.loading && record.options.loadingState === "loading");
+  function setDataValue(element: HTMLElement, key: string, value: string): void {
+    if (element.dataset[key] !== value) element.dataset[key] = value;
+  }
+
+  function setTextValue(node: Node, value: string): void {
+    if (node.textContent !== value) node.textContent = value;
   }
 
   function setManagerMinimized(minimized: boolean): boolean {
-    const activeRecords = getActiveToastRecords();
-    state.managerMinimized = Boolean(minimized) && activeRecords.length > 0;
+    const count = state.toasts.length;
+    state.managerMinimized = Boolean(minimized) && count > 0;
     syncStackLayout();
-    if (!state.managerMinimized && activeRecords.length > 1) setStackExpanded(true);
+    if (!state.managerMinimized && count > 1) setStackExpanded(true);
     return state.managerMinimized;
   }
 
   function syncStackLayout(): void {
-    if (!state.container) return;
-    const newestFirst = [...getActiveToastRecords()].reverse();
-    newestFirst.forEach((record, index) => {
-      record.node.dataset.stackIndex = String(index);
-      record.node.dataset.itemExpanded ||= "false";
-    });
-    const count = newestFirst.length;
+    const container = state.container;
+    if (!container) return;
+
+    const records = state.toasts;
+    const count = records.length;
+    let taskCount = 0;
+
+    for (let sourceIndex = count - 1, stackIndex = 0; sourceIndex >= 0; sourceIndex -= 1, stackIndex += 1) {
+      const record = records[sourceIndex];
+      setDataValue(record.node, "stackIndex", String(stackIndex));
+      if (!record.node.dataset.itemExpanded) record.node.dataset.itemExpanded = "false";
+      if (record.options.metadata?.taskId) taskCount += 1;
+    }
+
     if (count === 0) state.managerMinimized = false;
     if (count <= 1) state.stackExpanded = false;
+
     const stackVisible = Math.min(3, Math.max(1, Number(state.config.stackVisible) || 1));
     const stackDepth = Math.min(count, stackVisible);
     const effectiveExpanded = !state.config.stacked || state.stackExpanded || count <= 1;
     const viewportRatio = clamp(Number(state.config.stackViewportRatio) || DEFAULT_CONFIG.stackViewportRatio, 0.2, 0.8);
-    state.container.dataset.stacked = String(state.config.stacked);
-    state.container.dataset.managerMinimized = String(state.managerMinimized);
-    state.container.dataset.expanded = String(effectiveExpanded);
-    state.container.dataset.stackDepth = String(stackDepth);
-    state.container.dataset.count = String(count);
-    state.container.dataset.hasMany = String(count > 1);
-    state.container.style.setProperty("--rod-toast-stack-max-height", `${Math.max(180, state.config.stackMaxHeight)}px`);
-    state.container.style.setProperty("--rod-toast-stack-max-viewport", `${Math.round(viewportRatio * 100)}dvh`);
-    if (state.toolbar) state.toolbar.dataset.enabled = String(state.config.stackToolbar);
-    const taskCount = newestFirst.filter((record) => Boolean(record.options.metadata?.taskId)).length;
+
+    setDataValue(container, "stacked", String(state.config.stacked));
+    setDataValue(container, "managerMinimized", String(state.managerMinimized));
+    setDataValue(container, "expanded", String(effectiveExpanded));
+    setDataValue(container, "stackDepth", String(stackDepth));
+    setDataValue(container, "count", String(count));
+    setDataValue(container, "hasMany", String(count > 1));
+    setDataValue(container, "size", state.config.size);
+
+    const stackHeight = `${Math.max(180, state.config.stackMaxHeight)}px`;
+    const stackViewport = `${Math.round(viewportRatio * 100)}dvh`;
+    if (container.style.getPropertyValue("--rod-toast-stack-max-height") !== stackHeight) {
+      container.style.setProperty("--rod-toast-stack-max-height", stackHeight);
+    }
+    if (container.style.getPropertyValue("--rod-toast-stack-max-viewport") !== stackViewport) {
+      container.style.setProperty("--rod-toast-stack-max-viewport", stackViewport);
+    }
+
+    if (state.toolbar) setDataValue(state.toolbar, "enabled", String(state.config.stackToolbar));
     if (state.stackCountNode) {
-      state.stackCountNode.textContent = taskCount
-        ? `${taskCount} ${taskCount === 1 ? "task" : "tasks"} · ${count} ${count === 1 ? "toast" : "toasts"}`
-        : `${count} ${count === 1 ? "toast" : "toasts"}`;
+      setTextValue(
+        state.stackCountNode,
+        taskCount
+          ? `${taskCount} ${taskCount === 1 ? "task" : "tasks"} · ${count} ${count === 1 ? "toast" : "toasts"}`
+          : `${count} ${count === 1 ? "toast" : "toasts"}`,
+      );
     }
     if (state.managerCountNode) {
       const visibleCount = taskCount || count;
-      state.managerCountNode.textContent = String(visibleCount);
-      state.managerCountNode.dataset.visible = String(visibleCount > 1);
+      setTextValue(state.managerCountNode, String(visibleCount));
+      setDataValue(state.managerCountNode, "visible", String(visibleCount > 1));
     }
     if (state.managerNode) {
-      state.managerNode.title = taskCount
+      const title = taskCount
         ? `Restore ${taskCount} active ${taskCount === 1 ? "task" : "tasks"}`
         : "Restore active toasts";
+      if (state.managerNode.title !== title) state.managerNode.title = title;
     }
   }
 
   function setExpandedToast(record: ToastRecord, expanded: boolean): void {
     if (record.removed) return;
-    for (const candidate of getActiveToastRecords()) {
-      candidate.node.dataset.itemExpanded = String(candidate === record && expanded);
+    for (const candidate of state.toasts) {
+      setDataValue(candidate.node, "itemExpanded", String(candidate === record && expanded));
     }
     if (expanded) {
-      safeCall(() => record.node.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" }), undefined);
+      safeCall(() => record.node.scrollIntoView({ block: "nearest", inline: "nearest" }), undefined);
     }
   }
 
   function setStackExpanded(expanded: boolean): void {
-    const activeRecords = getActiveToastRecords();
-    if (!state.config.stacked || activeRecords.length <= 1) {
+    const records = state.toasts;
+    if (!state.config.stacked || records.length <= 1) {
       state.stackExpanded = false;
-      activeRecords.forEach((record) => { record.node.dataset.itemExpanded = "false"; });
+      for (const record of records) setDataValue(record.node, "itemExpanded", "false");
       syncStackLayout();
       return;
     }
     state.stackExpanded = Boolean(expanded);
     if (state.stackExpanded) {
-      const alreadyExpanded = activeRecords.some((record) => record.node.dataset.itemExpanded === "true");
+      let alreadyExpanded = false;
+      for (const record of records) {
+        if (record.node.dataset.itemExpanded === "true") {
+          alreadyExpanded = true;
+          break;
+        }
+      }
       if (!alreadyExpanded) {
-        const newest = [...activeRecords].sort((left, right) => right.createdAt - left.createdAt)[0];
+        const newest = records[records.length - 1];
         if (newest) setExpandedToast(newest, true);
       }
     } else {
-      activeRecords.forEach((record) => { record.node.dataset.itemExpanded = "false"; });
+      for (const record of records) setDataValue(record.node, "itemExpanded", "false");
     }
     syncStackLayout();
   }
@@ -1414,7 +1531,8 @@
   }
 
   function getToastRecordByNode(node: Element): ToastRecord | null {
-    return state.toasts.find((record) => !record.removed && record.node === node) ?? null;
+    const record = state.recordsByNode.get(node);
+    return record && !record.removed ? record : null;
   }
 
   function handleStackClick(event: MouseEvent): void {
@@ -1425,7 +1543,7 @@
     const record = getToastRecordByNode(toastNode);
     if (!record) return;
     if (!state.stackExpanded) {
-      if (getActiveToastRecords().length <= 1 || toastNode.dataset.stackIndex !== "0") return;
+      if (state.toasts.length <= 1 || toastNode.dataset.stackIndex !== "0") return;
       setStackExpanded(true);
       setExpandedToast(record, true);
       return;
@@ -1446,7 +1564,7 @@
     const requestFrame = hostWindow.requestAnimationFrame?.bind(hostWindow) ?? ((callback: FrameRequestCallback) => hostWindow.setTimeout(() => callback(performance.now()), 0));
     state.hostRepairFrame = requestFrame(() => {
       state.hostRepairFrame = null;
-      if (getActiveToastRecords().length) ensureHost();
+      if (state.toasts.length) ensureHost();
     });
   }
 
@@ -1472,6 +1590,12 @@
       hostWindow.removeEventListener("hashchange", navigationHandler);
       hostWindow.removeEventListener("rod:toaster:navigation", navigationHandler as EventListener);
     });
+
+    const pageHideHandler = (): void => {
+      if (state.config.persistTasks) flushTaskSnapshots();
+    };
+    hostWindow.addEventListener("pagehide", pageHideHandler);
+    callbacks.push(() => hostWindow.removeEventListener("pagehide", pageHideHandler));
 
     const patchedWindow = hostWindow as WindowWithRodGlobals & typeof globalThis;
     if (!safeCall(() => Boolean(patchedWindow[HISTORY_PATCH_SYMBOL]), false)) {
@@ -1503,7 +1627,7 @@
 
     if (typeof hostWindow.MutationObserver === "function" && hostDocument.documentElement) {
       state.spaObserver = new hostWindow.MutationObserver(() => {
-        if (getActiveToastRecords().length && state.hostElement && !state.hostElement.isConnected) scheduleHostRepair();
+        if (state.toasts.length && state.hostElement && !state.hostElement.isConnected) scheduleHostRepair();
       });
       state.spaObserver.observe(hostDocument.documentElement, { childList: true });
       callbacks.push(() => {
@@ -1543,13 +1667,24 @@
   }
 
   function ensureHost(): HostContext | null {
+    if (
+      state.hostElement?.isConnected &&
+      state.hostWindow &&
+      state.hostDocument &&
+      state.container &&
+      state.list
+    ) {
+      return {
+        window: state.hostWindow,
+        document: state.hostDocument,
+        container: state.container,
+        list: state.list,
+      };
+    }
+
     const hostWindow = getHighestAccessibleWindow(globalWindow);
     const hostDocument = safeCall(() => hostWindow.document, null);
     if (!hostDocument) return null;
-
-    if (state.hostElement?.isConnected && state.hostDocument === hostDocument && state.container && state.list) {
-      return { window: state.hostWindow ?? hostWindow, document: state.hostDocument, container: state.container, list: state.list };
-    }
 
     const parent = hostDocument.documentElement ?? hostDocument.body;
     if (!parent) return null;
@@ -1603,6 +1738,7 @@
     container.className = "rod-toast-stack";
     container.dataset.position = state.config.position;
     container.dataset.theme = state.resolvedTheme;
+    container.dataset.size = state.config.size;
     container.dataset.expanded = "true";
     container.dataset.stackDepth = "0";
     container.dataset.managerMinimized = String(state.managerMinimized);
@@ -1655,9 +1791,12 @@
     clearButton.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      [...getActiveToastRecords()].reverse().forEach((record, index) => {
-        hostWindow.setTimeout(() => record.dismiss(false, null, "dismissAll"), index * 28);
-      });
+      let delayIndex = 0;
+      for (let index = state.toasts.length - 1; index >= 0; index -= 1) {
+        const record = state.toasts[index];
+        hostWindow.setTimeout(() => record.dismiss(false, null, "dismissAll"), delayIndex * 28);
+        delayIndex += 1;
+      }
     });
 
     toolbarActions.append(minimizeButton, collapseButton, clearButton);
@@ -1684,15 +1823,13 @@
     syncTheme();
     installSpaPersistence(hostWindow, hostDocument);
 
-    [...getActiveToastRecords()]
-      .sort((left, right) => right.createdAt - left.createdAt)
-      .forEach((record) => { if (!record.node.isConnected) list.append(record.node); });
+    for (let index = state.toasts.length - 1; index >= 0; index -= 1) {
+      const record = state.toasts[index];
+      if (!record.node.isConnected) list.append(record.node);
+    }
 
     const inspectorApi = getObjectInspectorApi();
-    if (inspectorApi) {
-      state.inspectorApi = inspectorApi;
-      ensureInspectorRuntime(inspectorApi);
-    }
+    if (inspectorApi) state.inspectorApi = inspectorApi;
 
     container.addEventListener("click", handleStackClick);
     container.addEventListener("keydown", (event) => {
@@ -1926,17 +2063,31 @@
     return button;
   }
 
-  function setToastIcon(node: HTMLElement, documentRef: Document, iconValue: NormalizedToastOptions["icon"], fallbackName: SvgIconName): boolean {
-    node.replaceChildren();
-    if (iconValue === false) return false;
+  function setToastIcon(
+    node: HTMLElement,
+    documentRef: Document,
+    iconValue: NormalizedToastOptions["icon"],
+    fallbackName: SvgIconName,
+  ): boolean {
+    if (iconValue === false) {
+      if (node.childNodes.length) node.replaceChildren();
+      node.dataset.rodIconKey = "false";
+      return false;
+    }
+
     if (isDomNode(iconValue)) {
-      node.append(iconValue.cloneNode(true));
+      node.replaceChildren(iconValue.cloneNode(true));
+      node.dataset.rodIconKey = `node:${getObjectId(iconValue as object)}`;
       return true;
     }
+
     const iconName: SvgIconName = typeof iconValue === "string" && hasOwn(SVG_ICONS, iconValue)
       ? iconValue
       : fallbackName;
-    node.append(createSvgIcon(documentRef, iconName, 17));
+    const key = `svg:${iconName}`;
+    if (node.dataset.rodIconKey === key && node.firstChild) return true;
+    node.replaceChildren(createSvgIcon(documentRef, iconName, 17));
+    node.dataset.rodIconKey = key;
     return true;
   }
 
@@ -2120,23 +2271,35 @@
         ? TOAST_COLORS[nextOptions.type].icon
         : state.config.loadingIcon || "loader-circle";
       const hasIcon = setToastIcon(icon, host.document, nextOptions.icon, fallbackIcon);
-      node.dataset.loading = "true";
-      node.dataset.loadingState = nextOptions.loadingState;
-      node.dataset.loadingAnimation = nextOptions.animation;
-      node.dataset.loadingIcon = String(hasIcon);
-      node.dataset.loadingContentEmpty = String(contentEmpty);
-      node.dataset.loadingIndeterminate = String(hasProgress && nextOptions.progress === null);
-      icon.dataset.loadingSpinner = String(nextOptions.loadingState === "loading" && nextOptions.animation === "spinner");
-      icon.dataset.loadingPulse = String(nextOptions.loadingState === "loading" && nextOptions.animation === "pulse");
-      loadingTitle.textContent = nextOptions.title;
-      loadingTitle.hidden = !hasTitle;
-      loadingDescription.textContent = nextOptions.description;
-      loadingDescription.hidden = !hasDescription;
+
+      setDataValue(node, "loading", "true");
+      setDataValue(node, "loadingState", nextOptions.loadingState);
+      setDataValue(node, "loadingAnimation", nextOptions.animation);
+      setDataValue(node, "loadingIcon", String(hasIcon));
+      setDataValue(node, "loadingContentEmpty", String(contentEmpty));
+      setDataValue(node, "loadingIndeterminate", String(hasProgress && nextOptions.progress === null));
+      setDataValue(icon, "loadingSpinner", String(nextOptions.loadingState === "loading" && nextOptions.animation === "spinner"));
+      setDataValue(icon, "loadingPulse", String(nextOptions.loadingState === "loading" && nextOptions.animation === "pulse"));
+
+      setTextValue(loadingTitle, nextOptions.title);
+      if (loadingTitle.hidden === hasTitle) loadingTitle.hidden = !hasTitle;
+      setTextValue(loadingDescription, nextOptions.description);
+      if (loadingDescription.hidden === hasDescription) loadingDescription.hidden = !hasDescription;
+
       const progressPercent = nextOptions.progress === null ? 0 : Math.round(nextOptions.progress * 100);
-      node.style.setProperty("--rod-loading-progress", `${progressPercent}%`);
-      progressMeta.textContent = nextOptions.progressLabel ?? (nextOptions.progress === null ? "" : `${progressPercent}%`);
-      progressMeta.hidden = !progressMeta.textContent || nextOptions.animation !== "progress";
-      content.replaceChildren(loadingCopy);
+      const progressValue = `${progressPercent}%`;
+      if (node.style.getPropertyValue("--rod-loading-progress") !== progressValue) {
+        node.style.setProperty("--rod-loading-progress", progressValue);
+      }
+
+      const progressText = nextOptions.progressLabel ?? (nextOptions.progress === null ? "" : `${progressPercent}%`);
+      setTextValue(progressMeta, progressText);
+      const hideProgressMeta = !progressText || nextOptions.animation !== "progress";
+      if (progressMeta.hidden !== hideProgressMeta) progressMeta.hidden = hideProgressMeta;
+
+      if (content.firstChild !== loadingCopy || content.childNodes.length !== 1) {
+        content.replaceChildren(loadingCopy);
+      }
     };
 
     const renderArgs = (nextArgs: unknown[], nextOptions: NormalizedToastOptions): void => {
@@ -2144,22 +2307,25 @@
         renderLoading(nextOptions);
         return;
       }
-      node.dataset.loading = "false";
-      node.dataset.loadingState = "";
-      node.dataset.loadingAnimation = "";
-      node.dataset.loadingIcon = "true";
-      node.dataset.loadingContentEmpty = "false";
-      node.dataset.loadingIndeterminate = "false";
-      icon.dataset.loadingSpinner = "false";
-      icon.dataset.loadingPulse = "false";
+
+      setDataValue(node, "loading", "false");
+      setDataValue(node, "loadingState", "");
+      setDataValue(node, "loadingAnimation", "");
+      setDataValue(node, "loadingIcon", "true");
+      setDataValue(node, "loadingContentEmpty", "false");
+      setDataValue(node, "loadingIndeterminate", "false");
+      setDataValue(icon, "loadingSpinner", "false");
+      setDataValue(icon, "loadingPulse", "false");
       setToastIcon(icon, host.document, nextOptions.icon, TOAST_COLORS[nextOptions.type].icon);
-      content.replaceChildren();
+
+      const nextContent = host.document.createDocumentFragment();
       for (const value of nextArgs) {
         const wrapper = host.document.createElement("span");
         wrapper.className = "rod-toast__arg";
         wrapper.append(renderToastValue(value, host.document, nextOptions));
-        content.append(wrapper);
+        nextContent.append(wrapper);
       }
+      content.replaceChildren(nextContent);
     };
 
     const clearTimer = (): void => {
@@ -2174,13 +2340,17 @@
       removed = true;
       dismissReason = reason || dismissReason || "programmatic";
       clearTimer();
+      if (options.loading && options.loadingState === "loading") {
+        state.activeLoadingCount = Math.max(0, state.activeLoadingCount - 1);
+      }
       const dismissEvent: ToastDismissEvent = { reason: dismissReason, record, controller, scope: options.scope };
       safeCall(() => options.onDismiss?.(dismissEvent), undefined);
       removeRecord(record);
+      state.recordsByNode.delete(node);
       node.remove();
-      emitEvent("dismiss", dismissEvent as unknown as UnknownRecord);
+      if (hasEventListeners("dismiss")) emitEvent("dismiss", dismissEvent as unknown as UnknownRecord);
       syncStackLayout();
-      if (!host.list.children.length) destroyHost({ keepPersistence: state.config.persistAcrossSpaNavigation });
+      if (!state.toasts.length) destroyHost({ keepPersistence: state.config.persistAcrossSpaNavigation });
     };
 
     const playSuccessExit = (): void => {
@@ -2253,14 +2423,32 @@
     };
 
     const update = (nextArgs: unknown[], nextRawOptions: ToastOptions = {}): ToastController => {
-      const previous = { ...options };
+      const shouldEmitUpdate = hasEventListeners("update");
+      const previous = shouldEmitUpdate ? { ...options } : null;
+      const wasActiveLoading = options.loading && options.loadingState === "loading";
       const nextOptions = normalizeToastOptions({ ...options, ...nextRawOptions });
+      const isActiveLoading = nextOptions.loading && nextOptions.loadingState === "loading";
+
+      if (wasActiveLoading !== isActiveLoading) {
+        state.activeLoadingCount = Math.max(0, state.activeLoadingCount + (isActiveLoading ? 1 : -1));
+      }
+
       Object.assign(options, nextOptions);
       applyToastPalette(node, nextOptions.type);
-      node.setAttribute("role", nextOptions.role);
+      if (node.getAttribute("role") !== nextOptions.role) node.setAttribute("role", nextOptions.role);
       renderArgs(nextArgs, nextOptions);
       resetTimer(nextOptions.duration);
-      emitEvent("update", { record, controller, previous, options: { ...options }, args: nextArgs, scope: options.scope } as unknown as UnknownRecord);
+
+      if (shouldEmitUpdate && previous) {
+        emitEvent("update", {
+          record,
+          controller,
+          previous,
+          options: { ...options },
+          args: nextArgs,
+          scope: options.scope,
+        } as unknown as UnknownRecord);
+      }
       return controller;
     };
 
@@ -2370,7 +2558,11 @@
     renderArgs(args, options);
     host.list.prepend(node);
     state.toasts.push(record);
-    emitEvent("create", { record, controller, options: { ...options }, args, scope: options.scope } as unknown as UnknownRecord);
+    state.recordsByNode.set(node, record);
+    if (options.loading && options.loadingState === "loading") state.activeLoadingCount += 1;
+    if (hasEventListeners("create")) {
+      emitEvent("create", { record, controller, options: { ...options }, args, scope: options.scope } as unknown as UnknownRecord);
+    }
     installSwipeToDismiss(record, host);
     syncStackLayout();
     const requestFrame = host.window.requestAnimationFrame?.bind(host.window) ?? ((callback: FrameRequestCallback) => host.window.setTimeout(() => callback(performance.now()), 0));
@@ -3049,7 +3241,7 @@
         return {
           focus: () => select?.focus({ preventScroll: true }),
           getValues: () => {
-            const selected = select ? [...select.selectedOptions].map((option) => option.value) : [];
+            const selected = select ? Array.from(select.selectedOptions, (option) => option.value) : [];
             return { selection: options.multiple ? selected : selected[0] ?? null };
           },
         };
@@ -3236,15 +3428,34 @@
     return isUnknownRecord(value) && typeof value.id === "string" && typeof value.title === "string" && typeof value.status === "string";
   }
 
-  function persistTaskSnapshots(): void {
+  function flushTaskSnapshots(): void {
+    if (state.taskPersistTimer !== null) {
+      (state.hostWindow ?? initialHostWindow).clearTimeout(state.taskPersistTimer);
+      state.taskPersistTimer = null;
+    }
     if (!state.config.persistTasks) return;
     const storage = getTaskStorage();
     if (!storage) return;
-    const snapshots = [...state.tasks.values()]
-      .filter((task) => task.persist && !task.dismissed)
-      .map((task) => task.snapshot())
-      .slice(-state.config.maxPersistedTasks);
+
+    const snapshots: TaskSnapshot[] = [];
+    const limit = Math.max(1, state.config.maxPersistedTasks);
+    for (const task of state.tasks.values()) {
+      if (!task.persist || task.dismissed) continue;
+      snapshots.push(task.snapshot());
+      if (snapshots.length > limit) snapshots.shift();
+    }
+
     safeCall(() => storage.setItem(state.config.taskStorageKey, JSON.stringify(snapshots)), undefined);
+  }
+
+  function persistTaskSnapshots(immediate = false): void {
+    if (!state.config.persistTasks) return;
+    if (immediate) {
+      flushTaskSnapshots();
+      return;
+    }
+    if (state.taskPersistTimer !== null) return;
+    state.taskPersistTimer = (state.hostWindow ?? initialHostWindow).setTimeout(flushTaskSnapshots, 160);
   }
 
   function createTaskController(descriptor: TaskDescriptor | string = {}): TaskController | null {
@@ -3303,7 +3514,9 @@
         dismissed = true;
         state.tasks.delete(id);
         persistTaskSnapshots();
-        emitEvent("task:dismiss", { task, reason } as unknown as UnknownRecord);
+        if (hasEventListeners("task:dismiss")) {
+          emitEvent("task:dismiss", { task, reason } as unknown as UnknownRecord);
+        }
       },
     }]);
     if (!toastController) return null;
@@ -3316,7 +3529,12 @@
     taskActions.className = "rod-toast__task-actions";
     loadingCopy?.append(taskStatus, taskActions);
 
+    let lastTaskActionsSignature = "";
+
     const renderTaskActions = (): void => {
+      const signature = `${taskState.status}|${Boolean(options.pausable)}|${Boolean(options.cancellable)}|${Array.isArray(options.actions) ? options.actions.length : 0}`;
+      if (signature === lastTaskActionsSignature) return;
+      lastTaskActionsSignature = signature;
       taskActions.replaceChildren();
       const descriptors: ToastActionDescriptor[] = [];
       if (options.pausable && (taskState.status === "running" || taskState.status === "queued")) descriptors.push({ id: "pause", label: "Pause", icon: "pause" });
@@ -3379,23 +3597,47 @@
       taskState.updatedAt = Date.now();
       paused = taskState.status === "paused";
 
-      const semantics = {
-        queued: { icon: taskState.icon || "clock", animation: "pulse" },
-        running: { icon: taskState.icon || "loader-circle", animation: taskState.progress === null ? "spinner" : "progress" },
-        paused: { icon: "pause", animation: "none" },
-        warning: { icon: "triangle-alert", animation: "none" },
-        cancelled: { icon: "square", animation: "none" },
-        success: { icon: "check", animation: "none" },
-        error: { icon: "circle-x", animation: "none" },
-      } satisfies Record<TaskStatus, { icon: SvgIconName | false; animation: LoadingAnimation }>;
-      const semantic = semantics[taskState.status];
+      let semanticIcon: SvgIconName | false;
+      let semanticAnimation: LoadingAnimation;
+      switch (taskState.status) {
+        case "queued":
+          semanticIcon = taskState.icon || "clock";
+          semanticAnimation = "pulse";
+          break;
+        case "running":
+          semanticIcon = taskState.icon || "loader-circle";
+          semanticAnimation = taskState.progress === null ? "spinner" : "progress";
+          break;
+        case "paused":
+          semanticIcon = "pause";
+          semanticAnimation = "none";
+          break;
+        case "warning":
+          semanticIcon = "triangle-alert";
+          semanticAnimation = "none";
+          break;
+        case "cancelled":
+          semanticIcon = "square";
+          semanticAnimation = "none";
+          break;
+        case "success":
+          semanticIcon = "check";
+          semanticAnimation = "none";
+          break;
+        case "error":
+          semanticIcon = "circle-x";
+          semanticAnimation = "none";
+          break;
+      }
 
       if (taskState.status === "success" || taskState.status === "error") {
-        const settle = taskState.status === "success" ? toastController!.success.bind(toastController) : toastController!.error.bind(toastController);
+        const settle = taskState.status === "success"
+          ? toastController!.success.bind(toastController)
+          : toastController!.error.bind(toastController);
         settle({
           title: taskState.title,
           description: taskState.description,
-          icon: semantic.icon,
+          icon: semanticIcon,
           duration: Number.isFinite(Number(next.duration))
             ? Number(next.duration)
             : taskState.status === "success"
@@ -3406,17 +3648,19 @@
         toastController!.update({
           title: taskState.title,
           description: taskState.description,
-          icon: semantic.icon,
-          animation: semantic.animation,
+          icon: semanticIcon,
+          animation: semanticAnimation,
           progress: taskState.progress,
           progressLabel: taskState.progressLabel,
           duration: 0,
         });
       }
-      taskStatus.textContent = taskState.status;
+      setTextValue(taskStatus, taskState.status);
       renderTaskActions();
       persistTaskSnapshots();
-      if (emit) emitEvent("task:update", { task, snapshot: task.snapshot() } as unknown as UnknownRecord);
+      if (emit && hasEventListeners("task:update")) {
+        emitEvent("task:update", { task, snapshot: task.snapshot() } as unknown as UnknownRecord);
+      }
       return task;
     };
 
@@ -3497,7 +3741,9 @@
     state.tasks.set(id, task);
     apply(options, false);
     persistTaskSnapshots();
-    emitEvent("task:create", { task, snapshot: task.snapshot() } as unknown as UnknownRecord);
+    if (hasEventListeners("task:create")) {
+      emitEvent("task:create", { task, snapshot: task.snapshot() } as unknown as UnknownRecord);
+    }
     return task;
   }
 
@@ -3861,9 +4107,12 @@
       retry: <T>(descriptor: RetryDescriptor<T>) => showRetryToast(enrichDescriptor(descriptor) as RetryDescriptor<T>),
       group: (descriptor) => createTaskGroup(enrichDescriptor(descriptor)),
       dismissAll(immediate = false) {
-        getActiveToastRecords()
-          .filter((record) => record.options.scope === scopeName)
-          .forEach((record) => record.dismiss(immediate, null, "scope-dismissAll"));
+        for (let index = state.toasts.length - 1; index >= 0; index -= 1) {
+          const record = state.toasts[index];
+          if (record.options.scope === scopeName) {
+            record.dismiss(immediate, null, "scope-dismissAll");
+          }
+        }
       },
       getTasks: () => [...state.tasks.values()].filter((task) => task.snapshot().scope === scopeName),
       minimize: () => setManagerMinimized(true),
@@ -3963,10 +4212,14 @@
   };
 
   toastApi.dismissAll = (immediate = false) => {
-    [...getActiveToastRecords()].reverse().forEach((record, index) => {
+    const hostWindow = state.hostWindow ?? initialHostWindow;
+    let delayIndex = 0;
+    for (let index = state.toasts.length - 1; index >= 0; index -= 1) {
+      const record = state.toasts[index];
       if (immediate) record.dismiss(true, null, "dismissAll");
-      else (state.hostWindow ?? initialHostWindow).setTimeout(() => record.dismiss(false, null, "dismissAll"), index * 28);
-    });
+      else hostWindow.setTimeout(() => record.dismiss(false, null, "dismissAll"), delayIndex * 28);
+      delayIndex += 1;
+    }
   };
 
   toastApi.on = (eventName, listener) => addEventListenerInternal(eventName, listener);
@@ -3989,6 +4242,10 @@
   toastApi.getTask = (id) => state.tasks.get(String(id)) ?? null;
   toastApi.restoreTasks = () => restorePersistedTasks();
   toastApi.clearPersistedTasks = () => {
+    if (state.taskPersistTimer !== null) {
+      (state.hostWindow ?? initialHostWindow).clearTimeout(state.taskPersistTimer);
+      state.taskPersistTimer = null;
+    }
     const storage = getTaskStorage();
     safeCall(() => storage?.removeItem(state.config.taskStorageKey), undefined);
     state.restoredTasks = false;
@@ -4010,6 +4267,9 @@
   toastApi.loadInspector = () => loadObjectInspector();
 
   toastApi.configure = (nextConfig = {}) => {
+    const previousTheme = state.config.theme;
+    const previousSize = state.config.size;
+    const previousPersistTasks = state.config.persistTasks;
     const previousHostConfig = {
       useShadowRoot: state.config.useShadowRoot,
       shadowRootMode: state.config.shadowRootMode,
@@ -4038,6 +4298,7 @@
     state.config.virtualOverscan = Math.max(1, Number(state.config.virtualOverscan) || DEFAULT_CONFIG.virtualOverscan);
     state.config.virtualMaxHeight = Math.max(120, Number(state.config.virtualMaxHeight) || DEFAULT_CONFIG.virtualMaxHeight);
     state.config.theme = normalizeTheme(state.config.theme);
+    state.config.size = normalizeToastSize(state.config.size);
     state.config.position = ALLOWED_POSITIONS.has(state.config.position) ? state.config.position : DEFAULT_CONFIG.position;
     state.config.stacked = Boolean(state.config.stacked);
     state.config.stackToolbar = Boolean(state.config.stackToolbar);
@@ -4093,12 +4354,28 @@
     while (state.toasts.length > state.config.maxToasts) {
       state.toasts[0]?.dismiss(true, null, "limit");
     }
-    installThemeObserver();
-    syncTheme();
+
+    if (previousPersistTasks && !state.config.persistTasks && state.taskPersistTimer !== null) {
+      (state.hostWindow ?? initialHostWindow).clearTimeout(state.taskPersistTimer);
+      state.taskPersistTimer = null;
+    }
+
+    if (previousTheme !== state.config.theme) {
+      installThemeObserver();
+    } else if (state.container && state.container.dataset.theme !== state.resolvedTheme) {
+      syncTheme();
+    }
+
     if (state.container) {
-      state.container.dataset.position = state.config.position;
+      setDataValue(state.container, "position", state.config.position);
+      setDataValue(state.container, "size", state.config.size);
       syncStackLayout();
     }
+
+    if (previousSize !== state.config.size && hasEventListeners("size:change")) {
+      emitEvent("size:change", { previousSize, size: state.config.size });
+    }
+
     return { ...state.config, resolvedTheme: state.resolvedTheme };
   };
 
@@ -4118,6 +4395,19 @@
   };
   toastApi.getTheme = () => ({ theme: state.config.theme, resolvedTheme: state.resolvedTheme });
   toastApi.toggleTheme = () => toastApi.setTheme(state.resolvedTheme === "dark" ? "light" : "dark");
+  toastApi.setSize = (size) => {
+    const previousSize = state.config.size;
+    state.config.size = normalizeToastSize(size);
+    if (state.container) {
+      setDataValue(state.container, "size", state.config.size);
+      syncStackLayout();
+    }
+    if (previousSize !== state.config.size && hasEventListeners("size:change")) {
+      emitEvent("size:change", { previousSize, size: state.config.size });
+    }
+    return state.config.size;
+  };
+  toastApi.getSize = () => state.config.size;
   toastApi.getConfig = () => ({ ...state.config, resolvedTheme: state.resolvedTheme });
   toastApi.getHostMode = () => state.hostMode;
   toastApi.repairHost = () => {
