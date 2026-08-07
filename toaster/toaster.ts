@@ -4445,3 +4445,5 @@
   }
 })(window);
 
+export default {}
+
