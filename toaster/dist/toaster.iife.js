@@ -429,8 +429,17 @@ var RodToaster = (function() {
 		const initialHostWindow = getHighestAccessibleWindow(globalWindow);
 		const typedGlobalWindow = globalWindow;
 		const typedInitialHostWindow = initialHostWindow;
+		/**
 		const existingToaster = safeCall(() => typedInitialHostWindow[TOAST_GLOBAL] ?? typedGlobalWindow[TOAST_GLOBAL] ?? null, null);
+		
 		if (existingToaster) {
+		typedGlobalWindow[TOAST_GLOBAL] = existingToaster;
+		typedGlobalWindow.toast = existingToaster;
+		return;
+		}
+		**/
+		const isValidToaster = (value) => typeof value === "function" && typeof value.loading === "function" && typeof value.success === "function" && typeof value.error === "function" && typeof value.confirm === "function";
+		if (isValidToaster(existingToaster)) {
 			typedGlobalWindow[TOAST_GLOBAL] = existingToaster;
 			typedGlobalWindow.toast = existingToaster;
 			return;
