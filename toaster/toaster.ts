@@ -955,6 +955,7 @@
   const initialHostWindow = getHighestAccessibleWindow(globalWindow);
   const typedGlobalWindow = globalWindow as WindowWithRodGlobals & typeof globalThis;
   const typedInitialHostWindow = initialHostWindow as WindowWithRodGlobals & typeof globalThis;
+  /**
   const existingToaster = safeCall(() => typedInitialHostWindow[TOAST_GLOBAL] ?? typedGlobalWindow[TOAST_GLOBAL] ?? null, null);
 
   if (existingToaster) {
@@ -962,7 +963,19 @@
     typedGlobalWindow.toast = existingToaster;
     return;
   }
+ **/
+const isValidToaster = (value) =>
+  typeof value === "function" &&
+  typeof value.loading === "function" &&
+  typeof value.success === "function" &&
+  typeof value.error === "function" &&
+  typeof value.confirm === "function";
 
+if (isValidToaster(existingToaster)) {
+  typedGlobalWindow[TOAST_GLOBAL] = existingToaster;
+  typedGlobalWindow.toast = existingToaster;
+  return;
+}
   const existingState = safeCall(() => typedInitialHostWindow[STATE_SYMBOL] ?? null, null);
   if (existingState?.api) {
     typedGlobalWindow[TOAST_GLOBAL] = existingState.api;
