@@ -8,7 +8,7 @@
   <title>Rod Toaster · Playground e documentação</title>
   <meta
     name="description"
-    content="Landing page interativa do Rod Toaster v4.5: mensagens, image icons, loading, confirmações, picker de imagens e vídeos, tarefas, grupos, retry, undo, scopes, eventos, temas e persistência."
+    content="Landing page interativa do Rod Toaster v4.6.0: mensagens, image icons, loading, confirmações, picker de imagens e vídeos, tarefas, grupos, retry, undo, scopes, eventos, temas e persistência."
   >
 
   <style>
@@ -1239,7 +1239,7 @@
     }
   </style>
 
-  <script src="https://rod.migos.club/userscripts/toaster.js?v=4.5.0"></script>
+  <script src="https://rod.migos.club/userscripts/toaster.js?v=4.6.0"></script>
 </head>
 
 <body>
@@ -1295,16 +1295,16 @@
   <main id="top" class="shell">
     <section class="hero">
       <div class="hero-copy">
-        <span class="eyebrow">Uma API, muitos estados</span>
+        <span class="eyebrow">v4.6 · runtime de operações</span>
         <h1>
           Feedback visual que
           <span class="hero-gradient">trabalha com você.</span>
         </h1>
         <p class="hero-description">
-          Mensagens, image icons, confirmações, prompts, picker visual de imagens
-          e vídeos, progresso, filas, tarefas persistentes, retries, undo, grupos
-          ponderados e um pequeno gerenciador de downloads. Tudo em um único arquivo,
-          isolado por Shadow DOM e pronto para sobreviver a navegações SPA.
+          Mensagens, image icons, dialogs com ownership de foco, picker mobile de
+          imagens e vídeos, tasks com state machine real, retries, persistência segura
+          e grupos ponderados. A v4.6 separa interação, tarefas e notificações em lanes
+          próprias e corta trabalho dos hot paths para aguentar operações intensas.
         </p>
 
         <div class="hero-actions">
@@ -1381,7 +1381,7 @@
 
           <div class="code-shell">
             <pre><code>&lt;script
-  src="https://rod.migos.club/userscripts/toaster.js?v=4.5.0"
+  src="https://rod.migos.club/userscripts/toaster.js?v=4.6.0"
 &gt;&lt;/script&gt;
 
 &lt;script&gt;
@@ -1422,7 +1422,7 @@
               id="search"
               class="search"
               type="search"
-              placeholder="Buscar picker, confirm, task, retry, progresso…"
+              placeholder="Buscar picker, dialog stack, task, retry, performance…"
               autocomplete="off"
               spellcheck="false"
             >
@@ -1434,7 +1434,7 @@
         <div id="empty-results" class="empty-results">
           <div>
             <h3>Nenhum exemplo encontrado</h3>
-            <p>Experimente buscar por “picker”, “task”, “confirm”, “evento” ou “loading”.</p>
+            <p>Experimente buscar por “picker”, “state machine”, “dialog stack”, “retry” ou “performance”.</p>
           </div>
         </div>
 
@@ -1465,22 +1465,24 @@
                   <tr><td><code>ToastOptions.icon</code></td><td>SVG | URL | Image descriptor | Node</td><td>Ícone vetorial ou imagem real forçada para uma caixa quadrada 1:1, com cover/contain e fallback semântico.</td></tr>
                   <tr><td><code>toast.message()</code></td><td>Controller</td><td>Toast rico com título, detalhes e ações assíncronas.</td></tr>
                   <tr><td><code>toast.loading()</code></td><td>Loading controller</td><td>Spinner, pulse, progresso e transição para estado terminal.</td></tr>
-                  <tr><td><code>toast.confirm()</code></td><td>Promise&lt;T&gt;</td><td>Confirmação com actions, checkbox, atalhos e countdown.</td></tr>
+                  <tr><td><code>toast.confirm()</code></td><td>Promise&lt;T&gt;</td><td>Confirmação na interaction lane. Apenas o dialog do topo recebe foco, Enter e Escape; dismissible:false bloqueia dismiss implícito.</td></tr>
                   <tr><td><code>toast.prompt()</code></td><td>Promise&lt;string|null&gt;</td><td>Entrada de texto simples ou multiline com validação.</td></tr>
-                  <tr><td><code>toast.select()</code></td><td>Promise&lt;T|T[]|null&gt;</td><td>Seleção textual única ou múltipla.</td></tr>
+                  <tr><td><code>toast.select&lt;T&gt;()</code></td><td>Promise&lt;T|T[]|null&gt;</td><td>Seleção textual sem stringificar number/object; tokens internos preservam o valor original.</td></tr>
                   <tr><td><code>toast.picker&lt;T&gt;()</code></td><td>Promise&lt;PickerResult&lt;T&gt;&gt;</td><td>Grid visual para imagens e vídeos, Blob/File, seleção múltipla e retorno por item, ID, index ou descriptor.</td></tr>
                   <tr><td><code>toast.undo()</code></td><td>Promise&lt;boolean&gt;</td><td>Janela temporária para desfazer uma ação.</td></tr>
                   <tr><td><code>toast.promise()</code></td><td>Promise&lt;T&gt;</td><td>Mapeia uma Promise para loading, success e error.</td></tr>
-                  <tr><td><code>toast.task()</code></td><td>Task controller</td><td>Tarefa com progresso, pause, resume, cancel e persistência.</td></tr>
+                  <tr><td><code>toast.task()</code></td><td>Task controller</td><td>State machine com queued/running/paused e estados terminais success/error/cancelled; cancel races não ressuscitam a task.</td></tr>
                   <tr><td><code>toast.group()</code></td><td>Task group</td><td>Agrega tarefas filhas e calcula progresso ponderado.</td></tr>
                   <tr><td><code>toast.retry()</code></td><td>Promise&lt;T&gt;</td><td>Tentativas, backoff, cancelamento e retry manual.</td></tr>
                   <tr><td><code>toast.scope()</code></td><td>Scoped API</td><td>Isola mensagens e tarefas por feature ou domínio.</td></tr>
                   <tr><td><code>toast.on/once/off/emit()</code></td><td>unsubscribe / void</td><td>Eventos de lifecycle, actions, tarefas e grupos.</td></tr>
                   <tr><td><code>toast.update/progress/resolve()</code></td><td>Controller</td><td>Atualização imperativa baseada em ID.</td></tr>
                   <tr><td><code>toast.minimize/restore()</code></td><td>boolean</td><td>Controla o gerenciador compacto de tarefas.</td></tr>
+                  <tr><td><code>toast.bringToFront()/isTopLayer()</code></td><td>boolean</td><td>Reasserta o host no browser Top Layer sem executar esse trabalho a cada update de progresso.</td></tr>
+                  <tr><td><code>toast.destroy()/noConflict()</code></td><td>void / ToasterApi</td><td>Teardown real de observers/listeners/history patch e restauração segura dos globals anteriores.</td></tr>
                   <tr><td><code>toast.setTheme/toggleTheme()</code></td><td>dark | light</td><td>Alterna tema em runtime ou acompanha o sistema com auto.</td></tr>
                   <tr><td><code>toast.setSize/getSize()</code></td><td>compact | comfortable | large</td><td>Controla densidade e escala do componente.</td></tr>
-                  <tr><td><code>toast.configure()</code></td><td>Config</td><td>Posição, tema, tamanho, persistência, duração, inspeção e navegação SPA.</td></tr>
+                  <tr><td><code>toast.configure()</code></td><td>Config</td><td>Inclui idleHostTtl, taskProgressPersistInterval, Top Layer, persistência, tema, tamanho, inspector e SPA.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1490,7 +1492,7 @@
         <footer class="footer">
           <div>
             <strong>Rod Toaster</strong><br>
-            Toasts, image icons, media picker e tarefas em uma pequena central de operações.
+            v4.6: interaction lane, task state machine, media picker e um runtime quente de alta performance.
           </div>
           <div>
             Pressione <span class="kbd">Esc</span> para fechar dialogs ou recolher a pilha.
@@ -1505,7 +1507,7 @@
       "use strict";
 
       const INSTALL_CODE =
-        '<script src="https://rod.migos.club/userscripts/toaster.js?v=4.5.0"><' +
+        '<script src="https://rod.migos.club/userscripts/toaster.js?v=4.6.0"><' +
         '/script>';
 
       const sleep = (ms) =>
@@ -1599,11 +1601,18 @@
             "Pause, resume, cancel, grupos ponderados, persistência e navegação SPA.",
         },
         {
+          id: "runtime",
+          title: "Runtime v4.6",
+          kicker: "Invariantes & performance",
+          description:
+            "Dialog stack isolada, state machine terminal, lifecycle seguro, persistência throttled e host ocioso reutilizável.",
+        },
+        {
           id: "architecture",
           title: "Organização e integração",
           kicker: "Arquitetura",
           description:
-            "Scopes, eventos, IDs, configuração, inspeção e controles globais.",
+            "Scopes, eventos, IDs, configuração, inspeção, Top Layer e controles globais.",
         },
       ];
 
@@ -1636,39 +1645,39 @@
           id: "ig-1",
           type: "image",
           src: makeDemoMediaSvg("Foto 01", "#5f76ff", "#b772ff"),
-          label: "Foto 01",
+          label: "01 · Foto",
         },
         {
           id: "ig-2",
           type: "image",
           src: makeDemoMediaSvg("Foto 02", "#ff5d79", "#ffb15c"),
-          label: "Foto 02",
+          label: "02 · Foto",
         },
         {
           id: "ig-3",
           type: "video",
           src: "https://example.invalid/demo-reel.mp4",
           poster: makeDemoMediaSvg("Vídeo 03", "#0f8fb8", "#0d152d"),
-          label: "Vídeo 03",
+          label: "03 · Vídeo",
         },
         {
           id: "ig-4",
           type: "image",
           src: makeDemoMediaSvg("Foto 04", "#2ea76f", "#6ed7db"),
-          label: "Foto 04",
+          label: "04 · Foto",
         },
         {
           id: "ig-5",
           type: "video",
           src: "https://example.invalid/demo-story.mp4",
           poster: makeDemoMediaSvg("Vídeo 05", "#7d58d6", "#dc69a7"),
-          label: "Vídeo 05",
+          label: "05 · Vídeo",
         },
         {
           id: "ig-6",
           type: "image",
           src: makeDemoMediaSvg("Foto 06", "#7b8a35", "#e4bc54"),
-          label: "Foto 06",
+          label: "06 · Foto",
         },
       ];
 
@@ -2255,7 +2264,7 @@ toast.warning({
           section: "media",
           title: "Picker de carrossel",
           description:
-            "Seleção visual de fotos e vídeos com tudo selecionado por padrão, perfeito para o carrossel do Instagram.",
+            "Sheet estável no iPhone: header e ações ficam fixos, só a grid rola, sem labels duplicadas e sem autofocus que desloca o viewport.",
           tags: "picker media instagram carousel images videos defaultAllSelected download",
           requires: "picker",
           code: `const selected = await toast.picker({
@@ -2265,6 +2274,9 @@ toast.warning({
   items: carouselItems,
   multiple: true,
   defaultAllSelected: true,
+  columns: 2,
+  virtualizeAfter: 60,
+  mediaRootMargin: "320px 0px",
   downloadLabel: true,
   showLabels: true,
   showType: true,
@@ -2279,6 +2291,9 @@ console.log(selected);`,
               items: DEMO_MEDIA,
               multiple: true,
               defaultAllSelected: true,
+              columns: 2,
+              virtualizeAfter: 4,
+              mediaRootMargin: "280px 0px",
               downloadLabel: true,
               showLabels: true,
               showType: true,
@@ -2301,7 +2316,7 @@ console.log(selected);`,
           section: "media",
           title: "IDs, indexes e descriptors",
           description:
-            "Controle o formato do retorno sem perder a referência ao item original.",
+            "IDs e indexes são namespaces separados. Descriptors de Blob/File expõem dispose() quando preservam uma object URL temporária.",
           tags: "picker returnType ids indexes descriptors typed selection",
           requires: "picker",
           code: `const selected = await toast.picker({
@@ -2354,6 +2369,8 @@ console.log(selected);`,
   minSelected: 2,
   maxSelected: 4,
   defaultSelected: ["ig-1", "ig-2"],
+  // Índices usam uma opção separada:
+  // defaultSelectedIndexes: [0, 1],
   returnType: "ids",
   returnMeta: true,
   countLabel: "{selected} de {total}",
@@ -2390,7 +2407,7 @@ console.log(result.value);`,
           section: "media",
           title: "Blob e File locais",
           description:
-            "O picker cria object URLs temporárias para Blob/File e limpa tudo quando o dialog fecha.",
+            "Blob/File usam object URLs de preview. Em returnType: items elas são limpas automaticamente; descriptors selecionados podem expor dispose().",
           tags: "picker blob file objectURL local media cleanup",
           requires: "picker",
           code: `const files = [
@@ -3259,6 +3276,255 @@ toast.repairHost();`,
             });
           },
         },
+
+        {
+          id: "dialog-stack-v46",
+          section: "runtime",
+          title: "Dialog stack com ownership",
+          description:
+            "Confirm, prompt, select e picker vivem numa lane de interação separada. Só o dialog do topo recebe teclado e foco.",
+          tags: "v4.6 dialog stack focus keyboard dismissible interaction lane",
+          code: `const first = toast.confirm({
+  id: "first-dialog",
+  title: "Primeira decisão",
+  dismissible: false,
+});
+
+const second = toast.confirm({
+  id: "second-dialog",
+  title: "Dialog do topo",
+});
+
+// Enter/Escape só afetam second-dialog.
+// Quando ele fecha, first-dialog volta ao topo.`,
+          async run() {
+            const first = toast.confirm({
+              id: `first-dialog:${Date.now()}`,
+              title: "Primeira decisão",
+              description: "Este dialog fica preservado abaixo do próximo.",
+              dismissible: false,
+              actions: [{ id: "confirm", label: "Concluir primeira", variant: "primary", value: true }],
+            });
+
+            await sleep(250);
+
+            const second = await toast.confirm({
+              title: "Dialog do topo",
+              description: "Só este recebe os atalhos enquanto estiver ativo.",
+              actions: [
+                { id: "cancel", label: "Voltar", variant: "secondary", value: false },
+                { id: "confirm", label: "Continuar", variant: "primary", value: true },
+              ],
+            });
+
+            toast.info({
+              title: "Ownership transferido",
+              description: `Segundo dialog: ${second ? "confirmado" : "cancelado"}. A primeira decisão voltou ao topo.`,
+            });
+
+            return first;
+          },
+        },
+        {
+          id: "task-state-machine-v46",
+          section: "runtime",
+          title: "Task state machine terminal",
+          description:
+            "success, error e cancelled são terminais. Updates tardios e executors que ignoram AbortSignal não ressuscitam uma tarefa.",
+          tags: "v4.6 task state machine terminal cancelled success race abort",
+          code: `const job = toast.task({
+  id: "download:123",
+  title: "Download",
+  cancellable: true,
+});
+
+await job.cancel();
+job.setProgress(80); // ignorado
+job.start();          // ignorado
+
+console.log(job.status); // "cancelled"`,
+          async run() {
+            const task = toast.task({
+              id: `terminal:${Date.now()}`,
+              title: "State machine v4.6",
+              description: "A tarefa será concluída e receberá updates tardios.",
+            });
+
+            task.start();
+            task.setProgress(55);
+            await sleep(450);
+            task.success({ title: "Estado terminal: success" });
+            task.setProgress(12);
+            task.start();
+
+            toast.info({
+              title: "Update tardio bloqueado",
+              description: `status=${task.status} · progress=${Math.round((task.progress || 0) * 100)}%`,
+            });
+          },
+        },
+        {
+          id: "typed-select-v46",
+          section: "runtime",
+          title: "select<T>() preserva valores",
+          description:
+            "A option usa tokens internos. Números e objetos não são mais convertidos para string pelo elemento <select>.",
+          tags: "v4.6 select generic typed number object token",
+          code: `const channel = await toast.select<number>({
+  title: "Escolha um canal",
+  value: 42,
+  options: [
+    { value: 42, label: "Canal 42" },
+    { value: 7, label: "Canal 7" },
+  ],
+});
+
+console.log(typeof channel); // "number"`,
+          async run() {
+            const channel = await toast.select({
+              title: "Escolha um channelId",
+              description: "O valor retornado continua sendo number.",
+              value: 42,
+              options: [
+                { value: 42, label: "Canal 42" },
+                { value: 7, label: "Canal 7" },
+              ],
+            });
+
+            if (channel !== null) {
+              toast.success({
+                title: "Tipo preservado",
+                description: `value=${channel} · typeof=${typeof channel}`,
+              });
+            }
+          },
+        },
+        {
+          id: "retry-zero-v46",
+          section: "runtime",
+          title: "Retry sem dead zone",
+          description:
+            "backoff: 0 significa tentar imediatamente. Delays reais usam countdown vivo e podem ser antecipados pelo usuário.",
+          tags: "v4.6 retry backoff zero countdown immediate",
+          code: `await toast.retry({
+  title: "Worker",
+  maxAttempts: 3,
+  backoff: 0,
+  async run({ attempt }) {
+    if (attempt < 3) throw new Error("503");
+    return { ok: true };
+  },
+});`,
+          async run() {
+            const startedAt = performance.now();
+            let attempts = 0;
+            await toast.retry({
+              title: "Retry imediato",
+              maxAttempts: 3,
+              backoff: 0,
+              async run({ attempt }) {
+                attempts = attempt;
+                await sleep(120);
+                if (attempt < 3) throw new Error(`HTTP 503 · tentativa ${attempt}`);
+                return { ok: true };
+              },
+              success: {
+                title: "Recuperado",
+                description: "backoff 0 não abriu um dialog persistente.",
+              },
+            });
+
+            toast.info({
+              title: `${attempts} tentativas`,
+              description: `${Math.round(performance.now() - startedAt)}ms no playground.`,
+            });
+          },
+        },
+        {
+          id: "persistence-performance-v46",
+          section: "runtime",
+          title: "Persistência segura e throttled",
+          description:
+            "Metadata circular/BigInt é sanitizada; progresso é persistido em lote, enquanto mudanças de status são flush imediato.",
+          tags: "v4.6 persistence performance throttle circular bigint storage",
+          code: `toast.configure({
+  persistTasks: false,
+  taskProgressPersistInterval: 900,
+});
+
+const task = toast.task({
+  id: "download:123",
+  persist: true, // override individual
+  metadata: { bytes: 10n },
+});`,
+          run() {
+            const circular = { provider: "instagram" };
+            circular.self = circular;
+
+            toast.configure({
+              persistTasks: false,
+              taskProgressPersistInterval: 900,
+            });
+
+            const task = toast.task({
+              id: `persist:${Date.now()}`,
+              title: "Snapshot seguro",
+              description: "persist:true funciona mesmo com o default global desligado.",
+              persist: true,
+              status: "running",
+              progress: 0.42,
+              metadata: {
+                bytes: 10n,
+                circular,
+              },
+            });
+
+            task.success({
+              title: "Snapshot sanitizado",
+              description: "BigInt e referências circulares não derrubam o lote.",
+            });
+          },
+        },
+        {
+          id: "lifecycle-v46",
+          section: "runtime",
+          title: "Lifecycle e host quente",
+          description:
+            "O stylesheet permanece parseado entre bursts. destroy/noConflict dão teardown real para upgrades e repairHost independe da política SPA.",
+          tags: "v4.6 destroy noConflict repairHost idleHostTtl hot host performance upgrade",
+          code: `toast.configure({
+  idleHostTtl: 0, // mantém host/CSS prontos
+  useTopLayer: true,
+});
+
+toast.repairHost();
+toast.bringToFront();
+
+// Para teardown explícito:
+// toast.destroy("uninstall");
+// toast.noConflict();`,
+          run() {
+            const config = toast.configure({
+              idleHostTtl: 0,
+              useTopLayer: true,
+            });
+
+            const host = toast.repairHost();
+            const topLayer = toast.bringToFront();
+
+            toast.message({
+              title: "Runtime aquecido",
+              description: `host=${Boolean(host)} · topLayer=${topLayer}`,
+              icon: "sparkles",
+              details: {
+                idleHostTtl: config.idleHostTtl,
+                taskProgressPersistInterval: config.taskProgressPersistInterval,
+                destroy: typeof toast.destroy,
+                noConflict: typeof toast.noConflict,
+              },
+            });
+          },
+        },
         {
           id: "theme-size",
           section: "architecture",
@@ -3317,9 +3583,12 @@ toast.toggleTheme();`,
   stackMaxHeight: 560,
   persistAcrossSpaNavigation: true,
   minimizeOnSpaNavigation: true,
+  useTopLayer: true,
+  idleHostTtl: 0,
   useShadowRoot: true,
   shadowRootMode: "closed",
   persistTasks: true,
+  taskProgressPersistInterval: 900,
   taskStorage: "sessionStorage",
 });`,
           run() {
@@ -3335,9 +3604,12 @@ toast.toggleTheme();`,
               stackMaxHeight: 560,
               persistAcrossSpaNavigation: true,
               minimizeOnSpaNavigation: true,
+              useTopLayer: true,
+              idleHostTtl: 0,
               useShadowRoot: true,
               shadowRootMode: "closed",
               persistTasks: true,
+              taskProgressPersistInterval: 900,
               taskStorage: "sessionStorage",
             });
 
@@ -3555,7 +3827,7 @@ toast.toggleTheme();`,
           api.warning?.({
             title: `API ${demo.requires} indisponível`,
             description:
-              `A versão carregada é ${api.version || "desconhecida"}. Atualize para o Rod Toaster 4.5.0 ou superior.`,
+              `A versão carregada é ${api.version || "desconhecida"}. Atualize para o Rod Toaster 4.6.0 ou superior.`,
           });
           return;
         }
@@ -3608,11 +3880,15 @@ toast.toggleTheme();`,
         const api = getToast();
 
         if (api) {
-          const hasPicker = typeof api.picker === "function";
-          runtimeStatus.dataset.state = hasPicker ? "ready" : "error";
-          statusLabel.textContent = hasPicker
-            ? `API pronta · v${api.version || "?"} · picker`
-            : `API antiga · v${api.version || "?"} · sem picker`;
+          const hasV46 =
+            typeof api.picker === "function" &&
+            typeof api.destroy === "function" &&
+            typeof api.noConflict === "function" &&
+            typeof api.bringToFront === "function";
+          runtimeStatus.dataset.state = hasV46 ? "ready" : "error";
+          statusLabel.textContent = hasV46
+            ? `API pronta · v${api.version || "?"} · runtime v4.6`
+            : `API antiga · v${api.version || "?"} · atualize para 4.6`;
 
           document.querySelectorAll("[data-version]").forEach((node) => {
             node.textContent = api.version || "?";
@@ -3712,10 +3988,12 @@ toast.toggleTheme();`,
 
         if (typeof api.picker === "function") {
           const selected = await api.picker({
-            title: "Novo na v4.4 · Media Picker",
+            title: "v4.6 · Media Picker mobile",
             description: "Selecione algumas mídias para concluir a demo.",
-            items: DEMO_MEDIA.slice(0, 4),
+            items: DEMO_MEDIA,
+            columns: 2,
             defaultAllSelected: true,
+            virtualizeAfter: 4,
             downloadLabel: true,
             confirmLabel: "Continuar",
             selectAllLabel: "Tudo",
