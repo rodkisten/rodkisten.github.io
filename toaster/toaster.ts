@@ -3,7 +3,7 @@
 
 /*
  * Rod Super Toaster
- * Version 4.5.0
+ * Version 4.5.1
  *
  * Browser-first, bundler-optional TypeScript IIFE.
  * Compile with: tsc --target ES2022 --lib ES2022,DOM --strict
@@ -12,7 +12,7 @@
 (function installRodToaster(globalWindow: Window & typeof globalThis): void {
   "use strict";
 
-  const VERSION = "4.5.0" as const;
+  const VERSION = "4.5.1" as const;
   const TOAST_GLOBAL = "RodToaster" as const;
   const INSPECTOR_GLOBAL = "RodObjectInspector" as const;
   const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -70,6 +70,9 @@
     | URL
     | ToastImageIconDescriptor
     | false;
+
+  type TopLayerHostElement = HTMLDivElement;
+
 
   type PickerMediaType = "image" | "video";
   type PickerReturnType = "items" | "ids" | "indexes" | "descriptors";
@@ -642,6 +645,11 @@
     stackToolbar: boolean;
     persistAcrossSpaNavigation: boolean;
     minimizeOnSpaNavigation: boolean;
+    /**
+     * Uses the browser Top Layer through a manual Popover when supported.
+     * This beats authored z-index values and stacking contexts.
+     */
+    useTopLayer: boolean;
     persistTasks: boolean;
     restoreTasksOnLoad: boolean;
     taskStorage: TaskStorageName;
@@ -729,6 +737,9 @@
     spaCleanup: (() => void) | null;
     hostRepairFrame: number | null;
     historyRestore: (() => void) | null;
+    topLayerActive: boolean;
+    topLayerObserver: MutationObserver | null;
+    topLayerCleanup: (() => void) | null;
     taskPersistTimer: number | null;
   }
 
@@ -784,6 +795,8 @@
     toggleTheme(): ResolvedTheme;
     getConfig(): ToasterConfig & { resolvedTheme: ResolvedTheme };
     getHostMode(): "shadow" | "light-dom" | null;
+    bringToFront(): boolean;
+    isTopLayer(): boolean;
     repairHost(): HTMLDivElement | null;
     readonly version: string;
     readonly objectInspector: ObjectInspectorApi | null;
@@ -873,6 +886,7 @@
     stackToolbar: true,
     persistAcrossSpaNavigation: true,
     minimizeOnSpaNavigation: true,
+    useTopLayer: true,
     persistTasks: false,
     restoreTasksOnLoad: true,
     taskStorage: "sessionStorage",
@@ -1230,7 +1244,8 @@
       typeof candidate.success === "function" &&
       typeof candidate.error === "function" &&
       typeof candidate.confirm === "function" &&
-      typeof candidate.picker === "function"
+      typeof candidate.picker === "function" &&
+      typeof candidate.bringToFront === "function"
     );
   }
 
@@ -1290,6 +1305,9 @@
     spaCleanup: null,
     hostRepairFrame: null,
     historyRestore: null,
+    topLayerActive: false,
+    topLayerObserver: null,
+    topLayerCleanup: null,
     taskPersistTimer: null,
   };
 
@@ -1330,8 +1348,40 @@
   function createStyles(documentRef: Document, hostMode: "shadow" | "light-dom"): HTMLStyleElement {
     const style = documentRef.createElement("style");
     const hostReset = hostMode === "shadow"
-      ? ":host{all:initial;contain:layout style;color-scheme:dark}"
-      : `#${TOAST_HOST_ID}{all:initial!important;contain:layout style;color-scheme:dark}`;
+      ? `:host{
+          all:initial;
+          position:fixed!important;
+          inset:0!important;
+          width:0!important;
+          height:0!important;
+          margin:0!important;
+          padding:0!important;
+          border:0!important;
+          overflow:visible!important;
+          visibility:visible!important;
+          opacity:1!important;
+          z-index:${MAX_Z_INDEX}!important;
+          isolation:isolate!important;
+          pointer-events:none!important;
+          color-scheme:dark;
+        }`
+      : `#${TOAST_HOST_ID}{
+          all:initial!important;
+          position:fixed!important;
+          inset:0!important;
+          width:0!important;
+          height:0!important;
+          margin:0!important;
+          padding:0!important;
+          border:0!important;
+          overflow:visible!important;
+          visibility:visible!important;
+          opacity:1!important;
+          z-index:${MAX_Z_INDEX}!important;
+          isolation:isolate!important;
+          pointer-events:none!important;
+          color-scheme:dark;
+        }`;
     const universalReset = hostMode === "shadow"
       ? "*,*::before,*::after{box-sizing:border-box}"
       : `#${TOAST_HOST_ID} *,#${TOAST_HOST_ID} *::before,#${TOAST_HOST_ID} *::after{box-sizing:border-box}`;
@@ -1864,6 +1914,221 @@
     toggleExpandedToast(record);
   }
 
+
+  function applyHostDominanceStyles(hostElement: HTMLElement): void {
+    const importantStyles = [
+      ["all", "initial"],
+      ["position", "fixed"],
+      ["inset", "0"],
+      ["top", "0"],
+      ["right", "0"],
+      ["bottom", "0"],
+      ["left", "0"],
+      ["width", "0"],
+      ["height", "0"],
+      ["min-width", "0"],
+      ["min-height", "0"],
+      ["max-width", "none"],
+      ["max-height", "none"],
+      ["margin", "0"],
+      ["padding", "0"],
+      ["border", "0"],
+      ["outline", "0"],
+      ["background", "transparent"],
+      ["overflow", "visible"],
+      ["visibility", "visible"],
+      ["opacity", "1"],
+      ["clip", "auto"],
+      ["clip-path", "none"],
+      ["filter", "none"],
+      ["transform", "none"],
+      ["perspective", "none"],
+      ["mask", "none"],
+      ["mix-blend-mode", "normal"],
+      ["isolation", "isolate"],
+      ["z-index", String(MAX_Z_INDEX)],
+      ["pointer-events", "none"],
+    ] as const;
+
+    for (const [property, value] of importantStyles) {
+      if (
+        hostElement.style.getPropertyValue(property) !== value ||
+        hostElement.style.getPropertyPriority(property) !== "important"
+      ) {
+        hostElement.style.setProperty(property, value, "important");
+      }
+    }
+  }
+
+  function isHostInTopLayer(
+    hostElement: TopLayerHostElement | null =
+      state.hostElement as TopLayerHostElement | null,
+  ): boolean {
+    if (!hostElement?.isConnected) return false;
+    return safeCall(() => hostElement.matches(":popover-open"), false);
+  }
+
+  function disableHostTopLayer(): void {
+    const hostElement = state.hostElement as TopLayerHostElement | null;
+
+    state.topLayerCleanup?.();
+    state.topLayerCleanup = null;
+    state.topLayerObserver?.disconnect();
+    state.topLayerObserver = null;
+
+    if (hostElement) {
+      if (isHostInTopLayer(hostElement)) {
+        safeCall(() => hostElement.hidePopover?.(), undefined);
+      }
+      hostElement.removeAttribute("popover");
+      hostElement.dataset.rodToasterTopLayer = "z-index";
+      applyHostDominanceStyles(hostElement);
+    }
+
+    state.topLayerActive = false;
+  }
+
+  function promoteHostToTopLayer(reorder = false): boolean {
+    const hostElement = state.hostElement as TopLayerHostElement | null;
+
+    if (!hostElement?.isConnected) {
+      state.topLayerActive = false;
+      return false;
+    }
+
+    applyHostDominanceStyles(hostElement);
+
+    if (
+      !state.config.useTopLayer ||
+      typeof hostElement.showPopover !== "function"
+    ) {
+      hostElement.dataset.rodToasterTopLayer = "z-index";
+      state.topLayerActive = false;
+      return false;
+    }
+
+    hostElement.setAttribute("popover", "manual");
+
+    const wasOpen = isHostInTopLayer(hostElement);
+
+    // A synchronous hide/show moves the host to the end of the browser Top
+    // Layer without a painted intermediate frame.
+    if (reorder && wasOpen) {
+      safeCall(() => hostElement.hidePopover?.(), undefined);
+    }
+
+    if (!isHostInTopLayer(hostElement)) {
+      safeCall(() => hostElement.showPopover?.(), undefined);
+    }
+
+    state.topLayerActive = isHostInTopLayer(hostElement);
+    hostElement.dataset.rodToasterTopLayer =
+      state.topLayerActive ? "popover" : "z-index";
+
+    return state.topLayerActive;
+  }
+
+  function installTopLayerGuard(
+    hostWindow: Window & typeof globalThis,
+    hostDocument: Document,
+  ): void {
+    state.topLayerCleanup?.();
+    state.topLayerCleanup = null;
+    state.topLayerObserver?.disconnect();
+    state.topLayerObserver = null;
+
+    if (!state.config.useTopLayer || !state.hostElement) {
+      promoteHostToTopLayer(false);
+      return;
+    }
+
+    const promoteAfterExternalTopLayerChange = (event: Event): void => {
+      if (!state.toasts.length || event.target === state.hostElement) return;
+
+      const toggleEvent = event as Event & { newState?: string };
+      if (
+        typeof toggleEvent.newState === "string" &&
+        toggleEvent.newState !== "open"
+      ) {
+        return;
+      }
+
+      hostWindow.queueMicrotask(() => {
+        if (state.toasts.length) promoteHostToTopLayer(true);
+      });
+    };
+
+    hostDocument.addEventListener(
+      "toggle",
+      promoteAfterExternalTopLayerChange,
+      true,
+    );
+    hostDocument.addEventListener(
+      "fullscreenchange",
+      promoteAfterExternalTopLayerChange,
+      true,
+    );
+    hostDocument.addEventListener(
+      "webkitfullscreenchange",
+      promoteAfterExternalTopLayerChange,
+      true,
+    );
+
+    // showModal() mutates the dialog's open attribute. This covers browsers
+    // where dialog toggle events are missing or inconsistent.
+    if (
+      typeof hostWindow.MutationObserver === "function" &&
+      hostDocument.documentElement
+    ) {
+      const observer = new hostWindow.MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          const target = mutation.target;
+          if (
+            isElementLike(target) &&
+            target !== state.hostElement &&
+            target.matches("dialog[open]")
+          ) {
+            hostWindow.queueMicrotask(() => {
+              if (state.toasts.length) promoteHostToTopLayer(true);
+            });
+            break;
+          }
+        }
+      });
+
+      observer.observe(hostDocument.documentElement, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["open"],
+      });
+
+      state.topLayerObserver = observer;
+    }
+
+    state.topLayerCleanup = () => {
+      hostDocument.removeEventListener(
+        "toggle",
+        promoteAfterExternalTopLayerChange,
+        true,
+      );
+      hostDocument.removeEventListener(
+        "fullscreenchange",
+        promoteAfterExternalTopLayerChange,
+        true,
+      );
+      hostDocument.removeEventListener(
+        "webkitfullscreenchange",
+        promoteAfterExternalTopLayerChange,
+        true,
+      );
+      state.topLayerObserver?.disconnect();
+      state.topLayerObserver = null;
+      state.topLayerCleanup = null;
+    };
+
+    promoteHostToTopLayer(false);
+  }
+
   function removeHostInteractionListeners(): void {
     if (state.hostDocument && state.outsidePointerDownHandler) {
       state.hostDocument.removeEventListener("pointerdown", state.outsidePointerDownHandler, true);
@@ -1877,7 +2142,10 @@
     const requestFrame = hostWindow.requestAnimationFrame?.bind(hostWindow) ?? ((callback: FrameRequestCallback) => hostWindow.setTimeout(() => callback(performance.now()), 0));
     state.hostRepairFrame = requestFrame(() => {
       state.hostRepairFrame = null;
-      if (state.toasts.length) ensureHost();
+      if (state.toasts.length) {
+        ensureHost();
+        promoteHostToTopLayer(false);
+      }
     });
   }
 
@@ -1955,6 +2223,11 @@
 
   function destroyHost(options: { keepPersistence?: boolean } = {}): void {
     removeHostInteractionListeners();
+    state.topLayerCleanup?.();
+    state.topLayerCleanup = null;
+    state.topLayerObserver?.disconnect();
+    state.topLayerObserver = null;
+    state.topLayerActive = false;
     state.inspectorRuntime?.clearHighlight?.();
     state.themeCleanup?.();
     state.themeCleanup = null;
@@ -1985,6 +2258,8 @@
       state.container &&
       state.list
     ) {
+      applyHostDominanceStyles(state.hostElement);
+      promoteHostToTopLayer(false);
       return {
         window: state.hostWindow,
         document: state.hostDocument,
@@ -2001,8 +2276,11 @@
     if (!parent) return null;
 
     if (state.hostElement && !state.hostElement.isConnected && state.hostDocument === hostDocument && state.container && state.list) {
+      applyHostDominanceStyles(state.hostElement);
       parent.appendChild(state.hostElement);
+      installTopLayerGuard(hostWindow, hostDocument);
       installSpaPersistence(hostWindow, hostDocument);
+      promoteHostToTopLayer(true);
       syncStackLayout();
       return { window: state.hostWindow ?? hostWindow, document: state.hostDocument, container: state.container, list: state.list };
     }
@@ -2010,13 +2288,14 @@
     if (state.hostElement?.isConnected) destroyHost();
     else removeHostInteractionListeners();
 
-    const hostElement = hostDocument.createElement("div");
+    const hostElement = hostDocument.createElement("div") as TopLayerHostElement;
     hostElement.id = TOAST_HOST_ID;
     hostElement.setAttribute("aria-live", "polite");
-    for (const [property, value] of [
-      ["all", "initial"], ["position", "fixed"], ["inset", "0"], ["width", "0"], ["height", "0"],
-      ["z-index", String(MAX_Z_INDEX)], ["pointer-events", "none"],
-    ] as const) hostElement.style.setProperty(property, value, "important");
+    hostElement.setAttribute("aria-atomic", "false");
+    if (state.config.useTopLayer && typeof hostElement.showPopover === "function") {
+      hostElement.setAttribute("popover", "manual");
+    }
+    applyHostDominanceStyles(hostElement);
 
     let shadowRoot: ShadowRoot | null = null;
     let renderRoot: ShadowRoot | HTMLDivElement = hostElement;
@@ -2132,6 +2411,8 @@
 
     installThemeObserver();
     syncTheme();
+    installTopLayerGuard(hostWindow, hostDocument);
+    promoteHostToTopLayer(true);
     installSpaPersistence(hostWindow, hostDocument);
 
     for (let index = state.toasts.length - 1; index >= 0; index -= 1) {
@@ -2782,6 +3063,7 @@
       applyToastPalette(node, nextOptions.type);
       if (node.getAttribute("role") !== nextOptions.role) node.setAttribute("role", nextOptions.role);
       renderArgs(nextArgs, nextOptions);
+      promoteHostToTopLayer(false);
       resetTimer(nextOptions.duration);
 
       if (shouldEmitUpdate && previous) {
@@ -2904,6 +3186,7 @@
     host.list.prepend(node);
     state.toasts.push(record);
     state.recordsByNode.set(node, record);
+    promoteHostToTopLayer(true);
     if (options.loading && options.loadingState === "loading") state.activeLoadingCount += 1;
     if (hasEventListeners("create")) {
       emitEvent("create", { record, controller, options: { ...options }, args, scope: options.scope } as unknown as UnknownRecord);
@@ -5164,6 +5447,7 @@
     const previousTheme = state.config.theme;
     const previousSize = state.config.size;
     const previousPersistTasks = state.config.persistTasks;
+    const previousUseTopLayer = state.config.useTopLayer;
     const previousHostConfig = {
       useShadowRoot: state.config.useShadowRoot,
       shadowRootMode: state.config.shadowRootMode,
@@ -5197,6 +5481,7 @@
     state.config.stackToolbar = Boolean(state.config.stackToolbar);
     state.config.persistAcrossSpaNavigation = Boolean(state.config.persistAcrossSpaNavigation);
     state.config.minimizeOnSpaNavigation = Boolean(state.config.minimizeOnSpaNavigation);
+    state.config.useTopLayer = Boolean(state.config.useTopLayer);
     state.config.persistTasks = Boolean(state.config.persistTasks);
     state.config.restoreTasksOnLoad = Boolean(state.config.restoreTasksOnLoad);
     state.config.taskStorage = state.config.taskStorage === "localStorage" ? "localStorage" : "sessionStorage";
@@ -5235,6 +5520,20 @@
 
     if (!state.config.persistAcrossSpaNavigation) state.spaCleanup?.();
     else if (state.hostWindow && state.hostDocument) installSpaPersistence(state.hostWindow, state.hostDocument);
+
+    if (
+      previousUseTopLayer !== state.config.useTopLayer &&
+      state.hostWindow &&
+      state.hostDocument &&
+      state.hostElement
+    ) {
+      if (state.config.useTopLayer) {
+        installTopLayerGuard(state.hostWindow, state.hostDocument);
+        promoteHostToTopLayer(true);
+      } else {
+        disableHostTopLayer();
+      }
+    }
 
     const hostModeChanged =
       previousHostConfig.useShadowRoot !== state.config.useShadowRoot ||
@@ -5303,6 +5602,11 @@
   toastApi.getSize = () => state.config.size;
   toastApi.getConfig = () => ({ ...state.config, resolvedTheme: state.resolvedTheme });
   toastApi.getHostMode = () => state.hostMode;
+  toastApi.bringToFront = () => {
+    ensureHost();
+    return promoteHostToTopLayer(true);
+  };
+  toastApi.isTopLayer = () => isHostInTopLayer();
   toastApi.repairHost = () => {
     scheduleHostRepair();
     return state.hostElement;
