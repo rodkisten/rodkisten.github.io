@@ -8,7 +8,7 @@
   <title>Rod Toaster · Playground e documentação</title>
   <meta
     name="description"
-    content="Landing page interativa do Rod Toaster v4.4: mensagens, loading, confirmações, picker de imagens e vídeos, tarefas, grupos, retry, undo, scopes, eventos, temas e persistência."
+    content="Landing page interativa do Rod Toaster v4.5: mensagens, image icons, loading, confirmações, picker de imagens e vídeos, tarefas, grupos, retry, undo, scopes, eventos, temas e persistência."
   >
 
   <style>
@@ -500,6 +500,26 @@
       border-top-color: var(--accent);
       border-radius: 50%;
       animation: brand-spin 0.85s linear infinite;
+    }
+
+
+    .mini-toast-image {
+      display: block;
+      width: 26px;
+      height: 26px;
+      flex: 0 0 26px;
+      aspect-ratio: 1;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      background:
+        linear-gradient(145deg, rgba(163, 255, 117, 0.16), rgba(120, 215, 255, 0.12)),
+        #111114;
+      object-fit: cover;
+      object-position: center;
+      box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.08) inset,
+        0 6px 16px rgba(0, 0, 0, 0.24);
     }
 
     .mini-toast-copy {
@@ -1219,7 +1239,7 @@
     }
   </style>
 
-  <script src="https://rod.migos.club/userscripts/toaster.js?v=4.4.0"></script>
+  <script src="https://rod.migos.club/userscripts/toaster.js?v=4.5.0"></script>
 </head>
 
 <body>
@@ -1281,9 +1301,9 @@
           <span class="hero-gradient">trabalha com você.</span>
         </h1>
         <p class="hero-description">
-          Mensagens, confirmações, prompts, picker visual de imagens e vídeos,
-          progresso, filas, tarefas persistentes, retries, undo, grupos ponderados,
-          eventos e um pequeno gerenciador de downloads. Tudo em um único arquivo,
+          Mensagens, image icons, confirmações, prompts, picker visual de imagens
+          e vídeos, progresso, filas, tarefas persistentes, retries, undo, grupos
+          ponderados e um pequeno gerenciador de downloads. Tudo em um único arquivo,
           isolado por Shadow DOM e pronto para sobreviver a navegações SPA.
         </p>
 
@@ -1329,10 +1349,14 @@
 
         <div class="install-body">
           <div class="mini-toast" aria-hidden="true">
-            <span class="mini-toast-spinner"></span>
+            <img
+              class="mini-toast-image"
+              src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 600'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%236d5dfc'/%3E%3Cstop offset='.52' stop-color='%2363d7ff'/%3E%3Cstop offset='1' stop-color='%23a3ff75'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1200' height='600' fill='url(%23g)'/%3E%3Ccircle cx='830' cy='170' r='155' fill='white' opacity='.25'/%3E%3Cpath d='M0 510 260 290l165 155 175-210 250 275 150-145 200 145v90H0Z' fill='%2309090b' opacity='.56'/%3E%3C/svg%3E"
+              alt=""
+            >
             <span class="mini-toast-copy">
               <span class="mini-toast-title">Enviando para o Telegram</span>
-              <span class="mini-toast-description">Unindo áudio e vídeo…</span>
+              <span class="mini-toast-description">Thumbnail como icon · recorte 1:1</span>
             </span>
             <span class="mini-toast-progress">68%</span>
           </div>
@@ -1357,7 +1381,7 @@
 
           <div class="code-shell">
             <pre><code>&lt;script
-  src="https://rod.migos.club/userscripts/toaster.js?v=4.4.0"
+  src="https://rod.migos.club/userscripts/toaster.js?v=4.5.0"
 &gt;&lt;/script&gt;
 
 &lt;script&gt;
@@ -1438,6 +1462,7 @@
                 <tbody>
                   <tr><td><code>toast(...args)</code></td><td>Controller</td><td>Mensagem padrão com valores primitivos ou objetos.</td></tr>
                   <tr><td><code>toast.success/info/warning/error()</code></td><td>Controller</td><td>Mensagens semânticas, descritores ricos e erros copiáveis.</td></tr>
+                  <tr><td><code>ToastOptions.icon</code></td><td>SVG | URL | Image descriptor | Node</td><td>Ícone vetorial ou imagem real forçada para uma caixa quadrada 1:1, com cover/contain e fallback semântico.</td></tr>
                   <tr><td><code>toast.message()</code></td><td>Controller</td><td>Toast rico com título, detalhes e ações assíncronas.</td></tr>
                   <tr><td><code>toast.loading()</code></td><td>Loading controller</td><td>Spinner, pulse, progresso e transição para estado terminal.</td></tr>
                   <tr><td><code>toast.confirm()</code></td><td>Promise&lt;T&gt;</td><td>Confirmação com actions, checkbox, atalhos e countdown.</td></tr>
@@ -1465,7 +1490,7 @@
         <footer class="footer">
           <div>
             <strong>Rod Toaster</strong><br>
-            Um toaster que cresceu e virou uma pequena central de operações.
+            Toasts, image icons, media picker e tarefas em uma pequena central de operações.
           </div>
           <div>
             Pressione <span class="kbd">Esc</span> para fechar dialogs ou recolher a pilha.
@@ -1480,11 +1505,57 @@
       "use strict";
 
       const INSTALL_CODE =
-        '<script src="https://rod.migos.club/userscripts/toaster.js?v=4.4.0"><' +
+        '<script src="https://rod.migos.club/userscripts/toaster.js?v=4.5.0"><' +
         '/script>';
 
       const sleep = (ms) =>
         new Promise((resolve) => setTimeout(resolve, ms));
+
+
+      const DEMO_ICON_SVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600">
+          <defs>
+            <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+              <stop stop-color="#6d5dfc"/>
+              <stop offset=".52" stop-color="#63d7ff"/>
+              <stop offset="1" stop-color="#a3ff75"/>
+            </linearGradient>
+          </defs>
+          <rect width="1200" height="600" fill="url(#g)"/>
+          <circle cx="830" cy="170" r="155" fill="white" opacity=".25"/>
+          <circle cx="260" cy="170" r="90" fill="#09090b" opacity=".16"/>
+          <path
+            d="M0 510 260 290l165 155 175-210 250 275 150-145 200 145v90H0Z"
+            fill="#09090b"
+            opacity=".56"
+          />
+        </svg>
+      `.trim();
+
+      const DEMO_ICON_IMAGE =
+        `data:image/svg+xml;charset=utf-8,${encodeURIComponent(DEMO_ICON_SVG)}`;
+
+      const DEMO_LOGO_SVG = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+          <rect width="512" height="512" rx="112" fill="#09090b"/>
+          <path
+            d="M126 266c0-86 49-145 130-145 79 0 130 54 130 133 0 80-53 137-130 137-78 0-130-50-130-125Z"
+            fill="none"
+            stroke="#a3ff75"
+            stroke-width="34"
+          />
+          <path
+            d="M256 151v210M172 256h168"
+            stroke="#78d7ff"
+            stroke-width="27"
+            stroke-linecap="round"
+            opacity=".9"
+          />
+        </svg>
+      `.trim();
+
+      const DEMO_LOGO_IMAGE =
+        `data:image/svg+xml;charset=utf-8,${encodeURIComponent(DEMO_LOGO_SVG)}`;
 
       const icons = {
         play: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7Z"></path></svg>',
@@ -1626,6 +1697,111 @@ toast.error("Não foi possível concluir.");`,
             toast.error("Não foi possível concluir.");
           },
         },
+
+        {
+          id: "image-icon-url",
+          section: "messages",
+          title: "Imagem como icon",
+          description:
+            "Passe uma URL de imagem no mesmo campo icon. O toaster força a mídia para uma caixa quadrada e usa cover por padrão.",
+          tags: "icon image url thumbnail avatar square cover v4.5",
+          code: `toast.success({
+  title: "Post enviado",
+  description: "@rodkisten · thumbnail real como icon",
+  icon: post.thumbnailUrl,
+});`,
+          run() {
+            toast.success({
+              title: "Post enviado",
+              description:
+                "Uma imagem 2:1 foi automaticamente recortada para o icon 1:1.",
+              icon: DEMO_ICON_IMAGE,
+              duration: 8000,
+            });
+          },
+        },
+        {
+          id: "image-icon-descriptor",
+          section: "messages",
+          title: "Image icon configurável",
+          description:
+            "Use descriptor para controlar cover/contain, posição do recorte, CORS, referrer policy, decoding e loading.",
+          tags: "icon image descriptor fit contain cover objectPosition cors referrerPolicy",
+          code: `toast.info({
+  title: "Conta conectada",
+  description: "Logo preservado sem crop.",
+  icon: {
+    src: account.logo,
+    fit: "contain",
+    objectPosition: "center",
+    crossOrigin: "anonymous",
+    referrerPolicy: "no-referrer",
+    decoding: "async",
+    loading: "eager",
+  },
+});`,
+          run() {
+            toast.info({
+              title: "Image descriptor",
+              description:
+                'fit: "contain" preserva toda a arte dentro da caixa quadrada.',
+              icon: {
+                src: DEMO_LOGO_IMAGE,
+                fit: "contain",
+                objectPosition: "center",
+                decoding: "async",
+                loading: "eager",
+              },
+              duration: 8000,
+            });
+          },
+        },
+        {
+          id: "image-icon-element",
+          section: "messages",
+          title: "HTMLImageElement e fallback",
+          description:
+            "Um <img> existente também pode virar icon. Se a fonte falhar, o toaster volta ao ícone semântico do tipo.",
+          tags: "icon htmlimageelement img fallback error semantic",
+          code: `const avatar = document.createElement("img");
+avatar.src = user.avatar;
+avatar.style.objectFit = "cover";
+avatar.style.objectPosition = "50% 30%";
+
+toast.warning({
+  title: "Perfil atualizado",
+  icon: avatar,
+});`,
+          async run() {
+            const image = document.createElement("img");
+            image.src = DEMO_ICON_IMAGE;
+            image.alt = "Preview";
+            image.style.objectFit = "cover";
+            image.style.objectPosition = "72% 38%";
+
+            toast.warning({
+              title: "HTMLImageElement",
+              description:
+                "O toaster normalizou a imagem e aplicou o mesmo layout quadrado.",
+              icon: image,
+              duration: 8000,
+            });
+
+            await sleep(350);
+
+            toast.error({
+              title: "Fallback automático",
+              description:
+                "Esta URL é inválida de propósito. O icon volta para circle-x.",
+              icon: {
+                src: "https://invalid.invalid/rod-toaster-icon-demo.webp",
+                fit: "cover",
+              },
+              duration: 8000,
+            });
+          },
+        },
+
         {
           id: "rich-message",
           section: "messages",
@@ -2257,6 +2433,58 @@ const selectedFiles = await toast.picker({
             }
           },
         },
+
+        {
+          id: "loading-image-icon",
+          section: "async",
+          title: "Loading com thumbnail fixa",
+          description:
+            "Com spinner + image icon, a thumbnail fica parada e um spinner pequeno é sobreposto no canto.",
+          tags: "loading image icon thumbnail spinner overlay progress task",
+          code: `const task = toast.loading({
+  title: "Baixando reel",
+  description: "@usuario · preparando mídia",
+  icon: {
+    src: media.thumbnail,
+    fit: "cover",
+  },
+  animation: "spinner",
+});
+
+task.setProgress(68, {
+  description: "68% baixado",
+  animation: "progress",
+});`,
+          async run() {
+            const task = toast.loading({
+              title: "Baixando reel",
+              description:
+                "A thumbnail fica fixa enquanto o spinner gira no canto.",
+              icon: {
+                src: DEMO_ICON_IMAGE,
+                fit: "cover",
+                objectPosition: "72% center",
+              },
+              animation: "spinner",
+            });
+
+            await sleep(900);
+
+            for (const value of [16, 34, 52, 68, 84, 100]) {
+              task.setProgress(value, {
+                description: `Download · ${value}%`,
+                animation: "progress",
+              });
+              await sleep(260);
+            }
+
+            task.success({
+              title: "Download concluído",
+              description: "A mesma operação chegou ao estado terminal.",
+            });
+          },
+        },
+
         {
           id: "loading",
           section: "async",
@@ -2558,6 +2786,56 @@ await download.run(async ({ task, signal, progress }) => {
             });
           },
         },
+
+        {
+          id: "task-image-icon",
+          section: "tasks",
+          title: "Task com thumbnail persistente",
+          description:
+            "Tasks preservam o image icon durante queued, running, paused, warning, success e error.",
+          tags: "task image icon thumbnail persistent states pause success",
+          code: `const download = toast.task({
+  title: "reel-1080p.mp4",
+  description: "@usuario",
+  icon: {
+    src: media.thumbnail,
+    fit: "cover",
+  },
+  status: "queued",
+  pausable: true,
+  cancellable: true,
+});`,
+          async run() {
+            const task = toast.task({
+              id: `task:image:${Date.now()}`,
+              title: "reel-1080p.mp4",
+              description: "Thumbnail persistente entre estados.",
+              icon: {
+                src: DEMO_ICON_IMAGE,
+                fit: "cover",
+              },
+              status: "queued",
+              pausable: true,
+              cancellable: true,
+            });
+
+            await sleep(500);
+            task.start({ description: "Iniciando download…" });
+
+            for (const value of [18, 38, 62, 82, 100]) {
+              task.setProgress(value, {
+                description: `${value}% baixado`,
+              });
+              await sleep(300);
+            }
+
+            task.success({
+              title: "reel-1080p.mp4",
+              description: "Concluído mantendo a thumbnail.",
+            });
+          },
+        },
+
         {
           id: "group",
           section: "tasks",
@@ -3277,7 +3555,7 @@ toast.toggleTheme();`,
           api.warning?.({
             title: `API ${demo.requires} indisponível`,
             description:
-              `A versão carregada é ${api.version || "desconhecida"}. Atualize para o Rod Toaster 4.4.0 ou superior.`,
+              `A versão carregada é ${api.version || "desconhecida"}. Atualize para o Rod Toaster 4.5.0 ou superior.`,
           });
           return;
         }
@@ -3400,8 +3678,12 @@ toast.toggleTheme();`,
 
         const task = api.loading({
           title: "Rod Toaster",
-          description: "Percorrendo alguns estados…",
-          icon: "sparkles",
+          description: "Percorrendo image icon, loading e picker…",
+          icon: {
+            src: DEMO_ICON_IMAGE,
+            fit: "cover",
+            objectPosition: "72% center",
+          },
           animation: "spinner",
         });
 
