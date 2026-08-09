@@ -955,9 +955,9 @@
   const initialHostWindow = getHighestAccessibleWindow(globalWindow);
   const typedGlobalWindow = globalWindow as WindowWithRodGlobals & typeof globalThis;
   const typedInitialHostWindow = initialHostWindow as WindowWithRodGlobals & typeof globalThis;
-  /**
-  const existingToaster = safeCall(() => typedInitialHostWindow[TOAST_GLOBAL] ?? typedGlobalWindow[TOAST_GLOBAL] ?? null, null);
 
+  const existingToaster = safeCall(() => typedInitialHostWindow[TOAST_GLOBAL] ?? typedGlobalWindow[TOAST_GLOBAL] ?? null, null);
+/*
   if (existingToaster) {
     typedGlobalWindow[TOAST_GLOBAL] = existingToaster;
     typedGlobalWindow.toast = existingToaster;
