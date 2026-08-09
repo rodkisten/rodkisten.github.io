@@ -298,8 +298,13 @@ export default __value;
   };
 }
 
+const now = new Date();
+const gmtMinus3String = now.toLocaleString("en-US", {
+  timeZone: "America/Sao_Paulo"
+});
+
 function generatedBanner(sourceFile, minified = false) {
-  const comment = `Generated from ${relative(ROOT, sourceFile)}. Do not edit directly.`;
+  const comment = `Auto-generated from ${relative(ROOT, sourceFile)}. at ${gmtMinus3String} Do not edit directly.`;
 
   // O prefixo `/*!` preserva o banner legal na saída minificada.
   return minified ? `/*! ${comment} */` : `/* ${comment} */`;
@@ -346,7 +351,7 @@ for (const sourceFile of sourceFiles) {
   registerOutput(outputFiles.iifeMin, sourceFile);
 
   // 1. JavaScript normal: bundle ESM legível, sem wrapper global.
-  configs.push({
+ /* configs.push({
     input: sourceFile,
     output: {
       file: outputFiles.normal,
@@ -357,7 +362,7 @@ for (const sourceFile of sourceFiles) {
     },
     treeshake: true,
   });
-
+*/
   // 2 e 3. IIFE legível e IIFE minificada compartilham o mesmo entry virtual.
   const iifeEntry = makeIifeEntry({
     sourceFile,
@@ -369,6 +374,15 @@ for (const sourceFile of sourceFiles) {
     input: iifeEntry.virtualId,
     plugins: [iifeEntry],
     output: [
+      {
+        file: outputFiles.normal,
+        format: "iife",
+        name: globalName,
+        exports: "default",
+        sourcemap: true,
+        minify: true,
+        banner: generatedBanner(sourceFile),
+      },
       {
         file: outputFiles.iife,
         format: "iife",
