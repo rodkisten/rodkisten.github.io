@@ -1,19 +1,13 @@
 // ==UserScript==
-// @name               All-in-One Video Downloader HD
+// @name               AIO downloader
 // @namespace          https://rod.migos.club/userscripts
-// @version            1.48.0
-// @description        Instagram + Twitter/X media relay with photo, video, carousel support and optional direct download.
+// @version            1.53.0
+// @description        Universal media downloader + Telegram relay with mixed-carousel selection, X bookmark/repost interception and worker-first HLS transfer.
 // @author             @rodkisten
 // @license            MIT
 //
-// @match              https://x.com/*
-// @match              https://*.x.com/*
-// @match              https://twitter.com/*
-// @match              https://*.twitter.com/*
-// @match              https://instagram.com/*
-// @match              https://*.instagram.com/*
+// @match              *://*/*
 // @run-at             document-start
-// @noframes
 //
 // @grant              unsafeWindow
 // @grant              GM_xmlhttpRequest
@@ -22,14 +16,14 @@
 // @grant              GM.openInTab
 //
 // @connect            *
-// @require            https://rod.migos.club/toaster/dist/toaster.iife.js?v=4.3.3
+// @require            https://rod.migos.club/toaster/dist/toaster.js?v=4.3.2&aio=1.53.0
 // ==/UserScript==
 
-(async function AllInOneMediaRelay() {
+(async function AIODownloader() {
   "use strict";
 
-  const VERSION = "1.48.0";
-  const PREFIX = `[AIO Downloader ${VERSION}]`;
+  const VERSION = "1.53.0";
+  const PREFIX = `[AIO downloader ${VERSION}]`;
   const DEBUG = false;
 
   const pageWindow = (() => {
@@ -43,8 +37,6 @@
   const IS_TWITTER = /(^|\.)(x|twitter)\.com$/i.test(location.hostname);
   const IS_INSTAGRAM = /(^|\.)instagram\.com$/i.test(location.hostname);
 
-  if (!IS_TWITTER && !IS_INSTAGRAM) return;
-
   const ACTION = Object.freeze({
     telegram: "telegram",
     download: "download",
@@ -53,6 +45,7 @@
   const MEDIA_KIND = Object.freeze({
     photo: "photo",
     video: "video",
+    audio: "audio",
   });
 
   const CONFIG = Object.freeze({
@@ -81,7 +74,18 @@
       autoBookmarkOpenedReel: true,
       bookmarkAfterTelegram: true,
       sendToTelegramOnBookmark: true,
-      bookmarkCollectionId: "1394391859209832",
+
+      // Single posts stay scoped to the current media. Real carousels are
+      // resolved as the complete ordered set, including mixed photo/video slides.
+      carouselAllMedia: true,
+      carouselSelection: true,
+      carouselProbeDelayMs: 135,
+      carouselProbeMaxSteps: 24,
+      carouselPickerMaxHeightRatio: 0.72,
+      minViewportIntersection: 0.56,
+      siblingVisibleAreaRatio: 0.42,
+
+      bookmarkCollectionId: "",
       bookmarksId: "",
       graphqlUrl: "https://www.instagram.com/api/graphql",
       graphqlDocId: "27365486596441074",
@@ -91,8 +95,22 @@
     twitter: Object.freeze({
       bookmarkAfterTelegram: true,
       sendToTelegramOnBookmark: true,
+      sendToTelegramOnRepost: true,
+      repostConfirmWindowMs: 2_800,
       promptLikeAfterTelegram: true,
       promptLikeDurationMs: 3_000,
+    }),
+
+    providers: Object.freeze({
+      enabled: true,
+      genericMedia: true,
+      directMedia: true,
+      scanInterval: 900,
+      playerScanInterval: 900,
+      networkWindowMs: 45_000,
+      playerWindowMs: 300_000,
+      minVideoWidth: 120,
+      minVideoHeight: 80,
     }),
 
     ui: Object.freeze({
@@ -102,46 +120,27 @@
       minimumVisibleWidth: 50,
       minimumVisibleHeight: 50,
       dragThreshold: 7,
-      dragStoragePrefix: "__aio_media_actions_drag__:v6",
+      dragStoragePrefix: "__aio_media_actions_drag__:v7",
       profileHeader: Object.freeze({
         enabled: true,
         refreshInterval: 1_800,
         avatarSize: 25,
         topOffset: 8,
       }),
-      liquid: Object.freeze({
-        // Safe mode is the default. It uses only CSS + pointer-driven optical
-        // highlights and cannot fail because of WebGL, canvas snapshots or
-        // cross-origin textures.
-        fallbackEnabled: true,
-
-        // Experimental renderer. Turn this on manually only when you want the
-        // full WebGL refraction path. Keeping it false means the engine below
-        // is never initialized and cannot affect media detection or clicks.
-        realEnabled: true,
-
-        buttonSize: 34,
-        iconSize: 17,
-        renderScale: 2,
-        maxFps: 30,
-        refraction: 0.69,
-        chromaticAberration: 0.05,
-        edgeHighlight: 0.075,
-        specular: 0.22,
-        fresnel: 1.0,
-        distortion: 0.006,
-        zRadius: 17,
-        opacity: 0.96,
-        saturation: 0.04,
-        brightness: 0.015,
-        tintStrength: 0.025,
-        maxTiltDegrees: 3.2,
-        maxShiftPixels: 0.85,
-        highlightFollow: 0.30,
+      button: Object.freeze({
+        size: 36,
+        iconSize: 19,
+        carouselLiftMin: 52,
+        carouselLiftMax: 86,
       }),
     }),
 
     historyKey: "__aio_media_action_history__:v5",
+
+    // Stores compact media fingerprints + action metadata in this site's
+    // localStorage. The media bytes themselves are never stored here.
+    mediaUsageKey: "__aio_media_usage_history__:v1",
+    mediaUsageMaxEntries: 4000,
 
     hlsBundle:
       "https://gist.githubusercontent.com/rodkisten/1c69b953b51c7dac50ee3eb5c22050b6/raw/9f5b33d36ca50acea12221b258363c6722b606e6/hls-bundle.js?01",
@@ -153,8 +152,12 @@
       channels: ["-621561106", "-324185513"],
     },
     {
-      sites: ["instagram", "instagram.com"],
+      sites: ["instagram", "instagram.com", "youtube", "youtube.com", "youtu.be"],
       channels: ["-324185513"],
+    },
+    {
+      sites: ["xvideos", "pornhub", "gayporntube", "justthegays.com", "xhamster.com", "pornhub.com"],
+      channels: ["-621561106"],
     },
   ]);
 
@@ -170,6 +173,38 @@
 
   function normalizeText(value) {
     return String(value || "").replace(/\s+/g, " ").trim();
+  }
+
+
+  function isBlobLike(value) {
+    if (!value || typeof value !== "object") return false;
+    if (typeof Blob !== "undefined" && value instanceof Blob) return true;
+    const tag = (() => {
+      try { return Object.prototype.toString.call(value); } catch { return ""; }
+    })();
+    return (
+      tag === "[object Blob]" ||
+      (
+        Number.isFinite(Number(value.size)) &&
+        typeof value.type === "string" &&
+        typeof value.arrayBuffer === "function"
+      )
+    );
+  }
+
+  async function coerceLocalBlob(value, fallbackType = "application/octet-stream") {
+    if (!isBlobLike(value)) {
+      throw new TypeError("Valor preparado não é um Blob utilizável.");
+    }
+
+    try {
+      if (typeof Blob !== "undefined" && value instanceof Blob) return value;
+    } catch {}
+
+    const buffer = await value.arrayBuffer();
+    return new Blob([buffer], {
+      type: String(value.type || fallbackType || "application/octet-stream"),
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -763,6 +798,7 @@
         version: null,
         available: false,
         canConfirm: false,
+        canSelectImages: false,
         loading() { return noopTask; },
         success() { return null; },
         warning() { return null; },
@@ -770,6 +806,7 @@
         info() { return null; },
         debug() { return null; },
         async confirm() { return false; },
+        async selectImages() { return null; },
         diagnostics() {
           return {
             available: false,
@@ -951,6 +988,7 @@
     };
 
     const hasConfirm = typeof raw.confirm === "function";
+    const hasSelectImages = typeof raw.selectImages === "function";
 
     log("RodToaster conectado", {
       source: resolved.source,
@@ -965,6 +1003,7 @@
         configure: typeof raw.configure,
         loading: typeof raw.loading,
         confirm: typeof raw.confirm,
+        selectImages: typeof raw.selectImages,
       },
     });
 
@@ -974,6 +1013,7 @@
       version: raw.version || null,
       available: true,
       canConfirm: hasConfirm,
+      canSelectImages: hasSelectImages,
 
       loading(payload) {
         // Prefer a native loading() only when this toaster build actually has it.
@@ -1027,12 +1067,23 @@
         }
       },
 
+      async selectImages(payload) {
+        if (!hasSelectImages) return null;
+        try {
+          return await raw.selectImages(payload);
+        } catch (error) {
+          warn("RodToaster.selectImages() falhou; usando seletor inline.", error);
+          throw error;
+        }
+      },
+
       diagnostics() {
         return {
           available: true,
           source: resolved.source,
           version: raw.version || null,
           canConfirm: hasConfirm,
+          canSelectImages: hasSelectImages,
           ownKeys: (() => {
             try {
               return Reflect.ownKeys(raw).map(String);
@@ -1076,6 +1127,50 @@
 
     isDash(url) {
       return /\.mpd(?:$|[?#])/i.test(String(url || ""));
+    },
+
+    isAudioUrl(url) {
+      return /\.(?:mp3|m4a|aac|ogg|oga|opus|wav|flac)(?:$|[?#])/i.test(String(url || ""));
+    },
+
+    isVideoUrl(url) {
+      const value = String(url || "");
+      return this.isMp4(value) || this.isHls(value) || this.isDash(value) ||
+        /\.(?:webm|mov|m4v|mkv|ts)(?:$|[?#])/i.test(value) ||
+        /googlevideo\.com\/videoplayback|video\.twimg\.com|vimeocdn\.com|akamaized\.net|tiktokcdn|douyinvod|fbcdn\.net|cdninstagram\.com/i.test(value) ||
+        /[?&](?:mime|type)=video(?:%2F|\/)/i.test(value);
+    },
+
+    isLikelyMediaUrl(url) {
+      const value = String(url || "");
+      if (!/^(?:https?:|blob:|data:)/i.test(value)) return false;
+      if (this.isVideoUrl(value) || this.isAudioUrl(value)) return true;
+      return /\/(?:videoplayback|manifest|playlist)(?:[/?#]|$)/i.test(value) ||
+        /[?&](?:mime|type)=(?:video|audio)(?:%2F|\/)/i.test(value);
+    },
+
+    kindFromUrl(url, fallback = MEDIA_KIND.video) {
+      if (this.isAudioUrl(url)) return MEDIA_KIND.audio;
+      if (this.isVideoUrl(url)) return MEDIA_KIND.video;
+      return fallback;
+    },
+
+    mediaCandidateScore(url, kind = MEDIA_KIND.video) {
+      const value = String(url || "");
+      let score = 0;
+      if (/^https?:/i.test(value)) score += 5_000;
+      if (this.isMp4(value)) score += 100_000;
+      else if (this.isHls(value)) score += 88_000;
+      else if (this.isAudioUrl(value)) score += kind === MEDIA_KIND.audio ? 95_000 : 30_000;
+      else if (/\.(?:webm|mov|m4v)(?:$|[?#])/i.test(value)) score += 84_000;
+      else if (this.isDash(value)) score += 70_000;
+      if (/googlevideo\.com\/videoplayback/i.test(value)) score += 66_000;
+      if (/[?&](?:mime|type)=video%2Fmp4/i.test(value)) score += 30_000;
+      if (/[?&](?:mime|type)=audio%2F/i.test(value)) score += kind === MEDIA_KIND.audio ? 30_000 : -20_000;
+      if (/\.(?:m4s|ts)(?:$|[?#])/i.test(value) || /[?&](?:range|sq)=/i.test(value)) score -= 55_000;
+      if (/^blob:/i.test(value)) score -= 20_000;
+      if (/^data:/i.test(value)) score -= 40_000;
+      return score;
     },
 
     imageUrlFromElement(image) {
@@ -1273,7 +1368,11 @@
       for (const item of items || []) {
         const url = String(item?.url || "").trim();
         if (!url || !/^(https?:|blob:|data:)/i.test(url)) continue;
-        const kind = item.kind === MEDIA_KIND.photo ? MEDIA_KIND.photo : MEDIA_KIND.video;
+        const kind = item.kind === MEDIA_KIND.photo
+          ? MEDIA_KIND.photo
+          : item.kind === MEDIA_KIND.audio
+            ? MEDIA_KIND.audio
+            : MEDIA_KIND.video;
         const key = `${kind}|${url}`;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -1295,7 +1394,8 @@
         if (orderA !== orderB) return orderA - orderB;
 
         if (a.kind !== b.kind) {
-          return a.kind === MEDIA_KIND.video ? -1 : 1;
+          const priority = { [MEDIA_KIND.video]: 0, [MEDIA_KIND.audio]: 1, [MEDIA_KIND.photo]: 2 };
+          return Number(priority[a.kind] ?? 9) - Number(priority[b.kind] ?? 9);
         }
 
         return Number(b.score || 0) - Number(a.score || 0);
@@ -1312,7 +1412,14 @@
       if (mime.includes("mp4")) return "mp4";
       if (mime.includes("webm")) return "webm";
       if (mime.includes("quicktime")) return "mov";
-      return fallbackKind === MEDIA_KIND.photo ? "jpg" : "mp4";
+      if (mime.includes("mpeg")) return fallbackKind === MEDIA_KIND.audio ? "mp3" : "mp4";
+      if (mime.includes("aac")) return "aac";
+      if (mime.includes("ogg")) return "ogg";
+      if (mime.includes("opus")) return "opus";
+      if (mime.includes("wav")) return "wav";
+      if (mime.includes("flac")) return "flac";
+      if (mime.includes("mp4") && fallbackKind === MEDIA_KIND.audio) return "m4a";
+      return fallbackKind === MEDIA_KIND.photo ? "jpg" : fallbackKind === MEDIA_KIND.audio ? "m4a" : "mp4";
     },
 
     extensionFromUrl(url, kind) {
@@ -1323,7 +1430,7 @@
         const extension = parsed.pathname.match(/\.([a-z0-9]{2,5})$/i)?.[1];
         if (extension) return extension.toLowerCase();
       } catch {}
-      return kind === MEDIA_KIND.photo ? "jpg" : "mp4";
+      return kind === MEDIA_KIND.photo ? "jpg" : kind === MEDIA_KIND.audio ? "m4a" : "mp4";
     },
 
     filename(url, provider, kind, index = 0, total = 1, mimeType = "") {
@@ -1348,6 +1455,338 @@
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
     },
   };
+
+
+  // ---------------------------------------------------------------------------
+  // Universal network + player interception. Restored from the pre-social-only
+  // AIO architecture, with a broader player surface and bounded caches.
+  // ---------------------------------------------------------------------------
+
+  const GlobalMediaCapture = (() => {
+    const records = new Map();
+    let installed = false;
+
+    function remember(url, source = "network") {
+      const value = String(url || "").replace(/\\u0026/g, "&").replace(/\\\//g, "/");
+      if (!Media.isLikelyMediaUrl(value)) return;
+      records.set(value, { url: value, source, at: performance.now() });
+      if (records.size > 900) {
+        const oldest = [...records.entries()].sort((a, b) => a[1].at - b[1].at).slice(0, 150);
+        oldest.forEach(([key]) => records.delete(key));
+      }
+    }
+
+    function inspectValue(value, source = "network", depth = 0, seen = new WeakSet()) {
+      if (value == null || depth > 5) return;
+      if (typeof value === "string") {
+        if (value.length < 4096) {
+          try { remember(new URL(value, location.href).href, source); } catch {}
+        }
+        return;
+      }
+      if (typeof value !== "object" || seen.has(value)) return;
+      seen.add(value);
+      const values = Array.isArray(value) ? value.slice(0, 120) : (() => {
+        try { return Object.values(value).slice(0, 160); } catch { return []; }
+      })();
+      values.forEach((child) => inspectValue(child, source, depth + 1, seen));
+    }
+
+    function inspectText(text, source) {
+      const raw = String(text || "");
+      if (!raw || raw.length > 2_500_000) return;
+      const mediaHint = /m3u8|mpd|mp4|webm|videoplayback|googlevideo|video_url|playAddr|play_addr|downloadAddr|audio_url|manifest/i;
+      if (!mediaHint.test(raw)) return;
+      try {
+        const parsed = JSON.parse(raw);
+        inspectValue(parsed, source);
+        return;
+      } catch {}
+      const regex = /https?:\/\/[^"'<>\s]+|https?:\\\/\\\/[^"'<>\s]+/gi;
+      let match;
+      let count = 0;
+      while ((match = regex.exec(raw)) && count < 180) {
+        remember(match[0], source);
+        count += 1;
+      }
+    }
+
+    function candidates(maxAge = CONFIG.providers.networkWindowMs) {
+      const now = performance.now();
+      const values = [];
+      for (const [key, record] of records) {
+        if (now - record.at > maxAge) {
+          records.delete(key);
+          continue;
+        }
+        values.push(record);
+      }
+      return values.sort((a, b) => b.at - a.at).map((record) => record.url);
+    }
+
+    function install() {
+      if (installed || CONFIG.providers.enabled === false) return;
+      installed = true;
+      const root = pageWindow;
+      const marker = "__aioUniversalMedia150";
+
+      try {
+        const originalFetch = root.fetch;
+        if (typeof originalFetch === "function" && !originalFetch[marker]) {
+          async function aioUniversalFetch(...args) {
+            const requestUrl = String(args?.[0]?.url || args?.[0] || "");
+            remember(requestUrl, "fetch-request");
+            const response = await originalFetch.apply(this, args);
+            try {
+              remember(response?.url, "fetch-response-url");
+              const contentType = String(response?.headers?.get?.("content-type") || "");
+              if (/json|text|javascript/i.test(contentType)) {
+                response.clone().text().then((body) => inspectText(body, "fetch-response")).catch(() => {});
+              }
+            } catch {}
+            return response;
+          }
+          Object.defineProperty(aioUniversalFetch, marker, { value: true });
+          root.fetch = aioUniversalFetch;
+        }
+      } catch (error) {
+        debug("Universal fetch interception falhou", error);
+      }
+
+      try {
+        const prototype = root.XMLHttpRequest?.prototype;
+        const originalOpen = prototype?.open;
+        const originalSend = prototype?.send;
+        if (typeof originalOpen === "function" && !originalOpen[marker]) {
+          function aioOpen(method, url, ...rest) {
+            try { this.__aioMediaRequestUrl150 = String(url || ""); } catch {}
+            remember(url, "xhr-request");
+            return originalOpen.call(this, method, url, ...rest);
+          }
+          Object.defineProperty(aioOpen, marker, { value: true });
+          prototype.open = aioOpen;
+        }
+        if (typeof originalSend === "function" && !originalSend[marker]) {
+          function aioSend(...args) {
+            try {
+              this.addEventListener("load", function inspectUniversalXhr() {
+                try {
+                  remember(this.responseURL || this.__aioMediaRequestUrl150, "xhr-response-url");
+                  if (this.responseType === "json") inspectValue(this.response, "xhr-json");
+                  else if (this.responseType === "" || this.responseType === "text") inspectText(this.responseText, "xhr-text");
+                } catch {}
+              }, { once: true });
+            } catch {}
+            return originalSend.apply(this, args);
+          }
+          Object.defineProperty(aioSend, marker, { value: true });
+          prototype.send = aioSend;
+        }
+      } catch (error) {
+        debug("Universal XHR interception falhou", error);
+      }
+    }
+
+    return Object.freeze({ install, remember, inspectValue, candidates, diagnostics: () => ({ installed, records: records.size }) });
+  })();
+
+  class PlayerInterceptorService {
+    targetRecords = new WeakMap();
+    globalRecords = new Map();
+    installed = false;
+
+    remember(url, player, target = null) {
+      if (!Media.isLikelyMediaUrl(url)) return;
+      const value = String(url);
+      const record = { url: value, player: String(player || "player"), at: performance.now() };
+      this.globalRecords.set(`${record.player}|${value}`, record);
+      GlobalMediaCapture.remember(value, `player:${record.player}`);
+      if (isMediaElement(target)) {
+        const bucket = this.targetRecords.get(target) || new Map();
+        bucket.set(`${record.player}|${value}`, record);
+        this.targetRecords.set(target, bucket);
+      }
+    }
+
+    collect(value, depth = 0, seen = new WeakSet()) {
+      if (value == null || depth > 5) return [];
+      if (typeof value === "string") {
+        try {
+          const url = new URL(value, location.href).href;
+          return Media.isLikelyMediaUrl(url) ? [url] : [];
+        } catch { return []; }
+      }
+      if (typeof value !== "object" && typeof value !== "function") return [];
+      if (typeof value === "object" && seen.has(value)) return [];
+      if (typeof value === "object") seen.add(value);
+      if (isMediaElement(value)) return Media.ownVideoUrls(value);
+      const output = [];
+      const values = Array.isArray(value) ? value.slice(0, 120) : (() => {
+        try { return Object.values(value).slice(0, 140); } catch { return []; }
+      })();
+      values.forEach((child) => output.push(...this.collect(child, depth + 1, seen)));
+      return output;
+    }
+
+    media(instance) {
+      if (!instance || (typeof instance !== "object" && typeof instance !== "function")) return null;
+      for (const value of [
+        instance.media, instance.video, instance.audio, instance.element,
+        instance.mediaElement, instance.videoElement, instance.audioElement,
+        instance.plyr?.media, instance.player?.media, instance.provider?.media,
+        instance.el?.(), instance.getMediaElement?.(),
+      ]) {
+        if (isMediaElement(value)) return value;
+        if (isElement(value)) {
+          const media = value.querySelector?.("video,audio");
+          if (isMediaElement(media)) return media;
+        }
+      }
+      return null;
+    }
+
+    inspect(player, instance) {
+      if (!instance || (typeof instance !== "object" && typeof instance !== "function")) return;
+      const target = this.media(instance);
+      for (const key of [
+        "source", "sources", "src", "currentSrc", "playlist", "options", "config",
+        "currentItem", "media", "video", "audio", "provider", "state", "hls", "dash",
+        "manifest", "streamingData", "tech_", "cache_",
+      ]) {
+        try { this.collect(instance[key]).forEach((url) => this.remember(url, `${player}.${key}`, target)); } catch {}
+      }
+      for (const methodName of [
+        "load", "loadSource", "attachSource", "setSource", "setSrc", "src", "attachMedia",
+        "setMedia", "setPlaylist", "playlist", "setup", "configure", "open", "loadVideo",
+      ]) {
+        let original;
+        try { original = instance[methodName]; } catch { continue; }
+        if (typeof original !== "function" || original.__aioPlayerSource150) continue;
+        const interceptor = this;
+        function wrapped(...args) {
+          try { interceptor.collect(args).forEach((url) => interceptor.remember(url, `${player}.${methodName}()`, interceptor.media(this) || target)); } catch {}
+          return original.apply(this, args);
+        }
+        Object.defineProperty(wrapped, "__aioPlayerSource150", { value: true });
+        try { instance[methodName] = wrapped; } catch {}
+      }
+    }
+
+    addCollection(name, value, output) {
+      if (!value) return;
+      if (Array.isArray(value)) value.forEach((entry) => output.push([name, entry]));
+      else if (value instanceof Map) value.forEach((entry) => output.push([name, entry]));
+      else if (typeof value === "object") {
+        const values = (() => { try { return Object.values(value); } catch { return []; } })();
+        if (values.length && values.length < 100) values.forEach((entry) => output.push([name, entry]));
+        else output.push([name, value]);
+      } else if (typeof value === "function") output.push([name, value]);
+    }
+
+    scan() {
+      if (CONFIG.providers.enabled === false) return;
+      const root = pageWindow;
+      const instances = [];
+      try { this.addCollection("Video.js", root.videojs?.getAllPlayers?.(), instances); } catch {}
+      try { this.addCollection("Video.js", root.videojs?.players, instances); } catch {}
+      try { this.addCollection("Plyr", root.Plyr?.instances, instances); } catch {}
+      try { this.addCollection("Plyr", root.plyr, instances); } catch {}
+      try { this.addCollection("Flowplayer", root.flowplayer?.instances || root.flowplayer?.players || root.flowplayerPlayer, instances); } catch {}
+      try { this.addCollection("MediaElement.js", root.mejs?.players || root.mediaelementplayer, instances); } catch {}
+      try { if (typeof root.jwplayer === "function") instances.push(["JW Player", root.jwplayer()]); } catch {}
+
+      [
+        ["Hls.js", root.hls || root.hlsPlayer || root.hlsInstance],
+        ["Shaka Player", root.shakaPlayer || root.shaka_player],
+        ["Presto Player", root.prestoPlayer || root.presto],
+        ["Fluid Player", root.fplayer || root.myFluidPlayer || root.fluidPlayer],
+        ["Vidstack", root.vidstackPlayer || root.vidstack],
+        ["Clappr", root.clapprPlayer || root.clappr],
+        ["Bitmovin", root.bitmovinPlayer || root.bitmovin],
+        ["Dash.js", root.dashPlayer || root.dashjsPlayer || root.dashjs],
+        ["Artplayer", root.artplayer || root.artPlayer],
+        ["DPlayer", root.dp || root.dplayer || root.DPlayerInstance],
+        ["xgplayer", root.xgplayer || root.playerInstance],
+        ["Brightcove", root.bcPlayer || root.brightcovePlayer],
+        ["THEOplayer", root.theoplayer || root.THEOplayerInstance],
+        ["Kaltura", root.kalturaPlayer || root.kdp],
+        ["RxPlayer", root.rxPlayer || root.rxplayer],
+        ["Generic player", root.player],
+        ["Generic videoPlayer", root.videoPlayer],
+        ["Generic mediaPlayer", root.mediaPlayer],
+      ].forEach((entry) => instances.push(entry));
+
+      instances.forEach(([name, instance]) => {
+        try { this.inspect(name, instance); } catch {}
+      });
+
+      document.querySelectorAll?.("video,audio").forEach((media) => {
+        Media.ownVideoUrls(media).forEach((url) => this.remember(url, "DOM", media));
+      });
+
+      const minimum = performance.now() - CONFIG.providers.playerWindowMs;
+      for (const [key, record] of this.globalRecords) {
+        if (record.at < minimum) this.globalRecords.delete(key);
+      }
+    }
+
+    targetCandidates(target) {
+      this.scan();
+      const now = performance.now();
+      return [...new Set(
+        [...(this.targetRecords.get(target)?.values() || [])]
+          .filter((record) => now - record.at <= CONFIG.providers.playerWindowMs)
+          .sort((a, b) => b.at - a.at)
+          .map((record) => record.url),
+      )];
+    }
+
+    candidates(target) {
+      this.scan();
+      const now = performance.now();
+      const exact = [...(this.targetRecords.get(target)?.values() || [])]
+        .filter((record) => now - record.at <= CONFIG.providers.playerWindowMs);
+      const global = [...this.globalRecords.values()]
+        .filter((record) => now - record.at <= Math.min(CONFIG.providers.playerWindowMs, 45_000));
+      return [...new Set([...exact, ...global].sort((a, b) => b.at - a.at).map((record) => record.url))];
+    }
+
+    install() {
+      if (this.installed || CONFIG.providers.enabled === false) return;
+      this.installed = true;
+      this.scan();
+      setInterval(() => this.scan(), Math.max(500, CONFIG.providers.playerScanInterval));
+    }
+
+    diagnostics() {
+      return { installed: this.installed, globalRecords: this.globalRecords.size };
+    }
+  }
+
+  const PlayerInterceptor = new PlayerInterceptorService();
+
+  const ProviderSourceResolvers = Object.freeze({
+    youtube() {
+      const responses = [];
+      try { if (pageWindow.ytInitialPlayerResponse) responses.push(pageWindow.ytInitialPlayerResponse); } catch {}
+      try { if (window.ytInitialPlayerResponse) responses.push(window.ytInitialPlayerResponse); } catch {}
+      try {
+        const raw = pageWindow.ytplayer?.config?.args?.player_response;
+        if (raw) responses.push(typeof raw === "string" ? JSON.parse(raw) : raw);
+      } catch {}
+      const urls = [];
+      for (const response of responses) {
+        const streamingData = response?.streamingData;
+        if (!streamingData) continue;
+        for (const format of [...(streamingData.formats || []), ...(streamingData.adaptiveFormats || [])]) {
+          if (format?.url) urls.push(format.url);
+        }
+        if (streamingData.hlsManifestUrl) urls.push(streamingData.hlsManifestUrl);
+        if (streamingData.dashManifestUrl) urls.push(streamingData.dashManifestUrl);
+      }
+      return urls;
+    },
+  });
 
   function reactObjects(element) {
     if (!isElement(element)) return [];
@@ -1640,7 +2079,7 @@
     install() {
       if (this.installed || !IS_TWITTER) return;
       this.installed = true;
-      const marker = "__aioTwitterCapture148";
+      const marker = "__aioTwitterCapture153";
 
       try {
         const originalFetch = pageWindow.fetch;
@@ -1716,6 +2155,8 @@
   class InstagramCaptureService {
     posts = new Map();
     metadata = new Map();
+    carouselPosts = new Map();
+    carouselLengths = new Map();
     installed = false;
 
     ensurePost(shortcode) {
@@ -1753,6 +2194,161 @@
       if (!previous || Number(item.score || 0) >= Number(previous.score || 0)) {
         post.set(key, { ...item, kind, url });
       }
+    }
+
+    ensureCarousel(shortcode) {
+      const key = String(shortcode || "");
+      let record = this.carouselPosts.get(key);
+      if (!record) {
+        record = new Map();
+        this.carouselPosts.set(key, record);
+      }
+      return record;
+    }
+
+    rememberCarouselItem(shortcode, index, item, total = 0) {
+      const key = String(shortcode || "");
+      const order = Number(index);
+      if (!key || !Number.isInteger(order) || order < 0 || !item?.url) return;
+
+      const record = this.ensureCarousel(key);
+      const kind = item.kind === MEDIA_KIND.video ? MEDIA_KIND.video : MEDIA_KIND.photo;
+      const next = { ...item, kind, order, url: String(item.url), carousel: true };
+      const previous = record.get(order);
+
+      const shouldReplace =
+        !previous ||
+        (kind === MEDIA_KIND.video && previous.kind !== MEDIA_KIND.video) ||
+        (kind === previous.kind && Number(next.score || 0) >= Number(previous.score || 0));
+
+      if (shouldReplace) record.set(order, next);
+
+      const count = Math.max(0, Number(total) || 0);
+      if (count > 1) {
+        this.carouselLengths.set(
+          key,
+          Math.max(count, Number(this.carouselLengths.get(key) || 0)),
+        );
+      }
+    }
+
+    carouselCaption(value) {
+      if (!value || typeof value !== "object") return "";
+      return PayloadSanitizer.cleanText(
+        value.caption?.text ||
+          value.caption_text ||
+          value.edge_media_to_caption?.edges?.[0]?.node?.text ||
+          value.accessibility_caption ||
+          value.accessibilityCaption ||
+          "",
+        { maxLength: 4_000 },
+      );
+    }
+
+    extractCarouselItem(value, index, depth = 0) {
+      if (!value || typeof value !== "object" || depth > 8) return null;
+      const node = value?.node || value;
+      if (!node || typeof node !== "object") return null;
+
+      const mediaType = Number(node.media_type || node.mediaType || 0);
+      const productType = String(node.product_type || node.productType || "").toLowerCase();
+      const bestImage = this.bestImageCandidate(node);
+      const previewUrl =
+        bestImage?.url ||
+        node.display_url ||
+        node.displayUrl ||
+        node.image_url ||
+        node.imageUrl ||
+        node.thumbnail_url ||
+        "";
+      const caption = this.carouselCaption(node);
+
+      const directVideo =
+        node.video_url ||
+        node.videoUrl ||
+        node.video_versions?.[0]?.url ||
+        node.video_versions2?.[0]?.url ||
+        node.video_candidates?.[0]?.url ||
+        "";
+      const bestVideo = this.bestVideoCandidate(node);
+      const videoSignal =
+        mediaType === 2 ||
+        node.is_video === true ||
+        node.isVideo === true ||
+        productType === "clips" ||
+        Boolean(node.has_audio != null && (bestVideo?.url || directVideo)) ||
+        Boolean(bestVideo?.url || directVideo);
+
+      if (videoSignal) {
+        const url = bestVideo?.url || directVideo;
+        if (url) {
+          return {
+            kind: MEDIA_KIND.video,
+            url,
+            previewUrl,
+            caption,
+            order: Number(index),
+            score:
+              Number(bestVideo?.width || node.original_width || node.width || 0) *
+              Number(bestVideo?.height || node.original_height || node.height || 0),
+          };
+        }
+      }
+
+      if (previewUrl) {
+        return {
+          kind: MEDIA_KIND.photo,
+          url: previewUrl,
+          previewUrl,
+          caption,
+          order: Number(index),
+          score:
+            Number(bestImage?.width || node.original_width || node.width || 0) *
+            Number(bestImage?.height || node.original_height || node.height || 0),
+        };
+      }
+
+      for (const child of [node.media, node.item, node.media_or_ad, node.node]) {
+        if (child && child !== node && typeof child === "object") {
+          const nested = this.extractCarouselItem(child, index, depth + 1);
+          if (nested) {
+            if (!nested.caption && caption) nested.caption = caption;
+            return nested;
+          }
+        }
+      }
+
+      return null;
+    }
+
+    carouselInfo(shortcode) {
+      const key = String(shortcode || "");
+      const expected = Math.max(0, Number(this.carouselLengths.get(key) || 0));
+      const explicit = new Map(this.carouselPosts.get(key) || []);
+
+      if (expected > 1) {
+        for (const item of this.items(key)) {
+          const order = Number(item?.order);
+          if (!Number.isInteger(order) || order < 0 || order >= expected) continue;
+          const previous = explicit.get(order);
+          const prefer =
+            !previous ||
+            (item.kind === MEDIA_KIND.video && previous.kind !== MEDIA_KIND.video) ||
+            (item.kind === previous.kind && Number(item.score || 0) > Number(previous.score || 0));
+          if (prefer) explicit.set(order, { ...item, order, carousel: true });
+        }
+      }
+
+      const items = [...explicit.values()]
+        .filter((item) => item?.url)
+        .sort((a, b) => Number(a.order || 0) - Number(b.order || 0));
+
+      return {
+        isCarousel: expected > 1 || items.length > 1,
+        expected,
+        complete: expected > 1 ? items.length >= expected : items.length > 1,
+        items,
+      };
     }
 
     bestImageCandidate(value) {
@@ -1875,9 +2471,19 @@
       }
 
       const carousel = value.carousel_media || value.carouselMedia || value.edge_sidecar_to_children?.edges;
-      if (Array.isArray(carousel) && shortcode) {
+      if (Array.isArray(carousel) && shortcode && carousel.length > 1) {
+        this.carouselLengths.set(
+          shortcode,
+          Math.max(carousel.length, Number(this.carouselLengths.get(shortcode) || 0)),
+        );
+
         carousel.forEach((child, index) => {
-          this.ingest(child?.node || child, shortcode, index, depth + 1, seen);
+          const node = child?.node || child;
+          const carouselItem = this.extractCarouselItem(node, index);
+          if (carouselItem) {
+            this.rememberCarouselItem(shortcode, index, carouselItem, carousel.length);
+          }
+          this.ingest(node, shortcode, index, depth + 1, seen);
         });
       }
 
@@ -1908,7 +2514,7 @@
     install() {
       if (this.installed || !IS_INSTAGRAM) return;
       this.installed = true;
-      const marker = "__aioInstagramCapture148";
+      const marker = "__aioInstagramCapture153";
 
       try {
         const originalFetch = pageWindow.fetch;
@@ -2302,6 +2908,160 @@
     };
   })();
 
+  // ---------------------------------------------------------------------------
+  // Persistent per-media usage history
+  // ---------------------------------------------------------------------------
+
+  const MediaUsage = (() => {
+    const records = new Map();
+
+    try {
+      const stored = JSON.parse(localStorage.getItem(CONFIG.mediaUsageKey) || "[]");
+      if (Array.isArray(stored)) {
+        for (const entry of stored) {
+          if (entry?.key) records.set(String(entry.key), entry);
+        }
+      }
+    } catch {}
+
+    const ephemeralQueryName = /^(?:utm_|igsh|igshid|ref_|token|access_token|auth|authorization|expire|expires|expiry|signature|sig|policy|key-pair-id|x-amz-|x-goog-|x-oss-|x-cdn-|__gda__|oh|oe|hmac|jwt)/i;
+
+    function hash(value) {
+      const text = String(value || "");
+      let h1 = 0x811c9dc5;
+      let h2 = 0x9e3779b9;
+      for (let index = 0; index < text.length; index += 1) {
+        const code = text.charCodeAt(index);
+        h1 ^= code;
+        h1 = Math.imul(h1, 0x01000193);
+        h2 ^= code + ((h2 << 6) >>> 0) + (h2 >>> 2);
+        h2 = Math.imul(h2, 0x85ebca6b);
+      }
+      return `${(h1 >>> 0).toString(36)}${(h2 >>> 0).toString(36)}${text.length.toString(36)}`;
+    }
+
+    function canonicalHttpUrl(value) {
+      try {
+        const url = new URL(String(value), location.href);
+        url.hash = "";
+        const host = url.hostname.toLowerCase();
+
+        // Instagram/Facebook/Twitter CDN paths are durable media identities;
+        // query strings are usually signatures, image sizing or expiry data.
+        if (/(?:^|\.)(?:cdninstagram\.com|fbcdn\.net|twimg\.com)$/i.test(host)) {
+          return `${url.protocol}//${url.host}${url.pathname}`;
+        }
+
+        for (const name of [...url.searchParams.keys()]) {
+          if (ephemeralQueryName.test(name)) url.searchParams.delete(name);
+        }
+
+        // googlevideo uses one generic path, so keep stable content identifiers.
+        if (/(?:^|\.)googlevideo\.com$/i.test(host)) {
+          const stable = new URLSearchParams();
+          for (const name of ["id", "itag", "mime", "clen", "dur", "source"]) {
+            const stableValue = url.searchParams.get(name);
+            if (stableValue) stable.set(name, stableValue);
+          }
+          url.search = stable.toString() ? `?${stable}` : "";
+        } else if (!url.searchParams.size) {
+          url.search = "";
+        }
+
+        return url.href;
+      } catch {
+        return String(value || "").trim();
+      }
+    }
+
+    function sourceIdentity(context, item, index = 0) {
+      const kind = item?.kind === MEDIA_KIND.photo
+        ? MEDIA_KIND.photo
+        : item?.kind === MEDIA_KIND.audio
+          ? MEDIA_KIND.audio
+          : MEDIA_KIND.video;
+      const raw = String(item?.url || "").trim();
+
+      if (/^https?:/i.test(raw)) return `${kind}|${canonicalHttpUrl(raw)}`;
+
+      // blob:/data: URLs are ephemeral. Tie them to the page/post + media slot.
+      return `${kind}|${History.identity(context)}|slot:${Number(index) || 0}|${String(item?.source || "runtime")}`;
+    }
+
+    function key(context, item, index, action) {
+      return `${String(action)}|${hash(sourceIdentity(context, item, index))}`;
+    }
+
+    function save() {
+      try {
+        const limit = Math.max(100, Number(CONFIG.mediaUsageMaxEntries) || 4000);
+        const values = [...records.values()]
+          .sort((a, b) => Number(b.at || 0) - Number(a.at || 0))
+          .slice(0, limit);
+        records.clear();
+        for (const value of values) records.set(value.key, value);
+        localStorage.setItem(CONFIG.mediaUsageKey, JSON.stringify(values));
+      } catch {}
+    }
+
+    function get(context, item, index, action) {
+      return records.get(key(context, item, index, action)) || null;
+    }
+
+    function mark(context, item, index, action, metadata = {}) {
+      const recordKey = key(context, item, index, action);
+      const now = Date.now();
+      const previous = records.get(recordKey);
+      records.set(recordKey, {
+        key: recordKey,
+        at: now,
+        firstAt: Number(previous?.firstAt || previous?.at || now),
+        count: Math.max(0, Number(previous?.count || 0)) + 1,
+        action: String(action),
+        kind: item?.kind || MEDIA_KIND.video,
+        provider: String(context?.providerId || "generic"),
+        pageUrl: PayloadSanitizer.cleanUrl(context?.pageUrl || location.href),
+        source: truncate(sourceIdentity(context, item, index), 320),
+        metadata: PayloadSanitizer.metadata(metadata) || {},
+      });
+      save();
+      return records.get(recordKey);
+    }
+
+    function markMany(context, items, action, metadata = {}) {
+      const values = Media.dedupeItems(items);
+      values.forEach((item, index) => mark(context, item, index, action, metadata));
+      return values.length;
+    }
+
+    function status(context, items, action) {
+      const values = Media.dedupeItems(items);
+      const matches = values.map((item, index) => get(context, item, index, action));
+      const used = matches.filter(Boolean);
+      return {
+        total: values.length,
+        usedCount: used.length,
+        anyUsed: used.length > 0,
+        allUsed: values.length > 0 && used.length === values.length,
+        latestAt: used.reduce((latest, entry) => Math.max(latest, Number(entry?.at || 0)), 0),
+        records: matches,
+      };
+    }
+
+    function diagnostics() {
+      return {
+        key: CONFIG.mediaUsageKey,
+        records: records.size,
+        latestAt: [...records.values()].reduce(
+          (latest, entry) => Math.max(latest, Number(entry?.at || 0)),
+          0,
+        ),
+      };
+    }
+
+    return Object.freeze({ get, mark, markMany, status, diagnostics });
+  })();
+
   function channels(provider, pageUrl) {
     let host = location.hostname.replace(/^www\./, "");
     try {
@@ -2355,6 +3115,34 @@
         .join("\n\n");
     },
 
+    itemCaption(context, item, index = 0) {
+      const cleanContext = PayloadSanitizer.context(context);
+      const escape = (value) =>
+        String(value || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+
+      const itemText = PayloadSanitizer.cleanText(item?.caption || "", {
+        maxLength: 4_000,
+      });
+
+      if (itemText) {
+        return [
+          index === 0 ? `<b>${escape(cleanContext.title || cleanContext.providerId)}</b>` : "",
+          escape(itemText),
+          index === 0
+            ? `<a href="${escape(cleanContext.pageUrl)}">${escape(cleanContext.hostname || location.hostname)}</a>`
+            : "",
+        ]
+          .filter(Boolean)
+          .join("\n\n");
+      }
+
+      return index === 0 ? this.caption(cleanContext) : "";
+    },
+
     albumPayload(context, items) {
       const cleanContext = PayloadSanitizer.context(context);
       const targetChannels = channels(cleanContext.providerId, cleanContext.pageUrl);
@@ -2372,11 +3160,19 @@
             ...(mediaType === "photo"
               ? { photoUrl: mediaUrl }
               : { videoUrl: mediaUrl }),
+            caption: this.itemCaption(cleanContext, item, index),
+            parseMode: "HTML",
             metadata: {
-              carouselIndex: index,
+              carouselIndex: Number.isInteger(Number(item?.order))
+                ? Number(item.order)
+                : index,
+              selectionIndex: index,
               carouselTotal: total,
               carousel: true,
               mediaKind: item.kind,
+              sourceCaption: PayloadSanitizer.cleanText(item?.caption || "", {
+                maxLength: 4_000,
+              }),
             },
           };
         }),
@@ -2403,17 +3199,20 @@
       const cleanContext = PayloadSanitizer.context(context);
       const targetChannels = channels(cleanContext.providerId, cleanContext.pageUrl);
       const isPhoto = item.kind === MEDIA_KIND.photo;
+      const isAudio = item.kind === MEDIA_KIND.audio;
       const mediaUrl = String(item.url);
-      const caption = index === 0 ? this.caption(cleanContext) : "";
+      const caption = this.itemCaption(cleanContext, item, index);
       const contentType =
         prepared?.contentType ||
         (isPhoto
           ? "image/jpeg"
-          : Media.isMp4(mediaUrl)
-            ? "video/mp4"
-            : Media.isHls(mediaUrl)
-              ? "application/vnd.apple.mpegurl"
-              : "application/octet-stream");
+          : isAudio
+            ? (Media.isAudioUrl(mediaUrl) ? "audio/mpeg" : "application/octet-stream")
+            : Media.isMp4(mediaUrl)
+              ? "video/mp4"
+              : Media.isHls(mediaUrl)
+                ? "application/vnd.apple.mpegurl"
+                : "application/octet-stream");
 
       const payload = {
         mediaUrl,
@@ -2426,7 +3225,7 @@
         frameUrl: location.href,
         caption,
         parseMode: "HTML",
-        mediaType: isPhoto ? "photo" : "video",
+        mediaType: isPhoto ? "photo" : isAudio ? "audio" : "video",
         metadata: {
           ...(cleanContext.metadata || {}),
           filename:
@@ -2443,41 +3242,52 @@
           size: Number(prepared?.blob?.size || 0),
           hls: Media.isHls(mediaUrl),
           transferMode: prepared?.blob ? "multipart-file" : "direct-media-url",
-          carouselIndex: index,
+          carouselIndex: Number.isInteger(Number(item?.order))
+            ? Number(item.order)
+            : index,
+          selectionIndex: index,
           carouselTotal: total,
           carousel: total > 1,
           mediaKind: item.kind,
+          sourceCaption: PayloadSanitizer.cleanText(item?.caption || "", {
+            maxLength: 4_000,
+          }),
         },
       };
 
       if (isPhoto) payload.photoUrl = mediaUrl;
+      else if (isAudio) payload.audioUrl = mediaUrl;
       else payload.videoUrl = mediaUrl;
 
       return payload;
     },
 
-    request(payload, prepared = null) {
+    async request(payload, prepared = null) {
+      const headers = {
+        Authorization: `Bearer ${CONFIG.telegram.token}`,
+      };
+
+      let data;
+
+      if (prepared?.blob && isBlobLike(prepared.blob)) {
+        const localBlob = await coerceLocalBlob(
+          prepared.blob,
+          prepared.contentType || payload.metadata?.contentType || "application/octet-stream",
+        );
+        const form = new FormData();
+        form.append("payload", JSON.stringify(payload));
+        form.append(
+          "file",
+          localBlob,
+          prepared.filename || payload.metadata?.filename || "media.bin",
+        );
+        data = form;
+      } else {
+        headers["Content-Type"] = "application/json";
+        data = JSON.stringify(payload);
+      }
+
       return new Promise((resolve, reject) => {
-        const headers = {
-          Authorization: `Bearer ${CONFIG.telegram.token}`,
-        };
-
-        let data;
-
-        if (prepared?.blob instanceof Blob) {
-          const form = new FormData();
-          form.append("payload", JSON.stringify(payload));
-          form.append(
-            "file",
-            prepared.blob,
-            prepared.filename || payload.metadata?.filename || "media.bin",
-          );
-          data = form;
-        } else {
-          headers["Content-Type"] = "application/json";
-          data = JSON.stringify(payload);
-        }
-
         const request = gmRequest({
           method: "POST",
           url: CONFIG.telegram.url,
@@ -2733,6 +3543,27 @@
     );
   }
 
+  function twitterImageLooksLikeMedia(image) {
+    if (!isImageElement(image) || !image.isConnected) return false;
+    if (image.closest?.('[data-testid="videoPlayer"],[data-testid="videoComponent"]')) {
+      return false;
+    }
+
+    const url = Media.imageUrlFromElement(image);
+    if (!url) return false;
+
+    if (
+      /pbs\.twimg\.com\/media\//i.test(url) ||
+      image.closest?.('[data-testid="tweetPhoto"]')
+    ) {
+      const rect = image.getBoundingClientRect?.();
+      if (!rect) return true;
+      return Math.max(rect.width, rect.height) >= 80;
+    }
+
+    return Media.imageLooksLikeContent(image, "twitter");
+  }
+
   function twitterDomItems(root) {
     const items = [];
 
@@ -2747,8 +3578,10 @@
     }
 
     let order = 0;
-    for (const image of root?.querySelectorAll?.("img") || []) {
-      if (!Media.imageLooksLikeContent(image, "twitter")) continue;
+    for (const image of root?.querySelectorAll?.(
+      '[data-testid="tweetPhoto"] img,img[src*="pbs.twimg.com/media/"],img',
+    ) || []) {
+      if (!twitterImageLooksLikeMedia(image)) continue;
       const url = Media.imageUrlFromElement(image);
       if (!url) continue;
       items.push({
@@ -2756,7 +3589,8 @@
         url: Media.normalizeTwitterPhoto(url),
         order: order++,
         score:
-          Number(image.naturalWidth || 0) * Number(image.naturalHeight || 0),
+          Number(image.naturalWidth || image.getBoundingClientRect?.().width || 0) *
+          Number(image.naturalHeight || image.getBoundingClientRect?.().height || 0),
       });
     }
 
@@ -2765,28 +3599,52 @@
 
   function twitterMediaPresence(root) {
     if (!isElement(root)) {
-      return { photos: [], videos: [], hasPhoto: false, hasVideo: false, hasMedia: false };
+      return {
+        photos: [],
+        videos: [],
+        videoContainers: [],
+        hasPhoto: false,
+        hasVideo: false,
+        hasMedia: false,
+      };
     }
 
-    const photos = [...(root.querySelectorAll?.("img") || [])].filter((image) =>
-      Media.imageLooksLikeContent(image, "twitter"),
-    );
-    const videos = [...(root.querySelectorAll?.("video") || [])].filter((video) =>
-      isVideoElement(video) && video.isConnected,
-    );
+    const photos = [
+      ...(root.querySelectorAll?.(
+        '[data-testid="tweetPhoto"] img,img[src*="pbs.twimg.com/media/"],img',
+      ) || []),
+    ].filter(twitterImageLooksLikeMedia);
+
+    const videos = [
+      ...(root.querySelectorAll?.("video") || []),
+    ].filter((video) => isVideoElement(video) && video.isConnected);
+
+    const videoContainers = [
+      ...(root.querySelectorAll?.(
+        '[data-testid="videoPlayer"],[data-testid="videoComponent"]',
+      ) || []),
+    ].filter((element) => isElement(element) && element.isConnected);
+
+    const hasPhoto = photos.length > 0;
+    const hasVideo = videos.length > 0 || videoContainers.length > 0;
 
     return {
       photos,
       videos,
-      hasPhoto: photos.length > 0,
-      hasVideo: videos.length > 0,
-      hasMedia: photos.length > 0 || videos.length > 0,
+      videoContainers,
+      hasPhoto,
+      hasVideo,
+      hasMedia: hasPhoto || hasVideo,
     };
   }
 
   function twitterTarget(root) {
     const presence = twitterMediaPresence(root);
-    const candidates = [...presence.videos, ...presence.photos];
+    const candidates = [
+      ...presence.videos,
+      ...presence.videoContainers,
+      ...presence.photos,
+    ];
 
     return [...candidates].sort(
       (a, b) => Media.visibleScore(b) - Media.visibleScore(a),
@@ -2915,6 +3773,7 @@
 
   function instagramElementBelongsToMediaScope(element, root) {
     if (!isElement(element) || !isElement(root) || !root.contains(element)) return false;
+    if (element.closest?.("#aio-media-actions-root,.aio-carousel-picker")) return false;
     if (element.closest?.("header,nav,footer,aside")) return false;
 
     const routeMode = instagramRouteMode();
@@ -2958,57 +3817,544 @@
     return location.href.split("?")[0];
   }
 
-  function instagramDomItems(root) {
-    const items = [];
-    let order = 0;
+  function instagramCarouselControlLabel(element) {
+    if (!isElement(element)) return "";
+    const values = [
+      element.getAttribute?.("aria-label"),
+      element.getAttribute?.("title"),
+      element.textContent,
+    ];
+    for (const child of element.querySelectorAll?.("[aria-label],[title],title") || []) {
+      values.push(child.getAttribute?.("aria-label"));
+      values.push(child.getAttribute?.("title"));
+      if (String(child.tagName || "").toUpperCase() === "TITLE") values.push(child.textContent);
+    }
+    return normalizeText(values.filter(Boolean).join(" ")).toLowerCase();
+  }
 
-    for (const element of root?.querySelectorAll?.("video,img") || []) {
-      if (!instagramElementBelongsToMediaScope(element, root)) continue;
+  function instagramCarouselControls(root) {
+    const result = { previous: null, next: null };
+    if (!isElement(root)) return result;
 
-      if (isVideoElement(element)) {
-        for (const url of Media.ownVideoUrls(element)) {
-          items.push({
-            kind: MEDIA_KIND.video,
-            url,
-            order: order++,
-            score: Media.isMp4(url) ? 10_000 : 4_000,
-          });
-        }
-        continue;
+    const candidates = [
+      ...(root.querySelectorAll?.(
+        'button,[role="button"],[aria-label],[title]',
+      ) || []),
+    ];
+    const candidateSet = new Set(candidates);
+
+    for (const svg of root.querySelectorAll?.("svg") || []) {
+      const owner =
+        svg.closest?.('button,[role="button"],[aria-label],[title]') ||
+        svg.parentElement;
+      if (isElement(owner) && !candidateSet.has(owner)) {
+        candidateSet.add(owner);
+        candidates.push(owner);
       }
-
-      if (!Media.imageLooksLikeContent(element, "instagram")) continue;
-      const url = Media.imageUrlFromElement(element);
-      if (!url) continue;
-
-      items.push({
-        kind: MEDIA_KIND.photo,
-        url,
-        order: order++,
-        score:
-          Number(element.naturalWidth || 0) *
-          Number(element.naturalHeight || 0),
-      });
     }
 
-    return Media.sortItems(items);
+    for (const element of candidates) {
+      if (!isElement(element) || element.closest?.("header,nav,footer")) continue;
+      const label = instagramCarouselControlLabel(element);
+      if (!label) continue;
+
+      if (
+        !result.previous &&
+        /(?:^|\b)(?:previous|prev|back|anterior|voltar|zurück|précédent|precedente)(?:\b|$)/i.test(label)
+      ) {
+        result.previous = element;
+      }
+
+      if (
+        !result.next &&
+        /(?:^|\b)(?:next|próximo|proximo|seguinte|weiter|suivant|successivo)(?:\b|$)/i.test(label)
+      ) {
+        result.next = element;
+      }
+    }
+
+    if (!result.previous || !result.next) {
+      const target = instagramTarget(root);
+      const targetRect = target?.getBoundingClientRect?.();
+      if (targetRect && targetRect.width > 120 && targetRect.height > 120) {
+        const centerY = targetRect.top + targetRect.height / 2;
+        const maxVerticalDelta = targetRect.height * 0.30;
+
+        for (const element of candidates) {
+          if (!isElement(element) || !element.isConnected) continue;
+          if (!element.querySelector?.("svg") && String(element.tagName || "").toUpperCase() !== "BUTTON") {
+            continue;
+          }
+
+          const rect = element.getBoundingClientRect?.();
+          if (!rect || rect.width < 18 || rect.height < 18 || rect.width > 88 || rect.height > 88) continue;
+
+          const elementCenterY = rect.top + rect.height / 2;
+          if (Math.abs(elementCenterY - centerY) > maxVerticalDelta) continue;
+
+          const elementCenterX = rect.left + rect.width / 2;
+          const leftEdge = targetRect.left + targetRect.width * 0.22;
+          const rightEdge = targetRect.right - targetRect.width * 0.22;
+
+          if (!result.previous && elementCenterX <= leftEdge) result.previous = element;
+          if (!result.next && elementCenterX >= rightEdge) result.next = element;
+        }
+      }
+    }
+
+    return result;
+  }
+
+  function instagramCarouselControlUsable(element) {
+    if (!isElement(element) || !element.isConnected) return false;
+    if (element.hasAttribute?.("disabled") || element.getAttribute?.("aria-disabled") === "true") return false;
+    const rect = element.getBoundingClientRect?.();
+    if (!rect || rect.width < 8 || rect.height < 8) return false;
+    const style = getComputedStyle(element);
+    return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity || 1) > 0.02;
+  }
+
+  function instagramCarouselDomInfo(root) {
+    const controls = instagramCarouselControls(root);
+    let current = 0;
+    let total = 0;
+
+    for (const element of root?.querySelectorAll?.('[aria-label],[title],span,div') || []) {
+      const text = normalizeText(
+        element.getAttribute?.("aria-label") ||
+          element.getAttribute?.("title") ||
+          element.textContent ||
+          "",
+      );
+      const match = text.match(
+        /(?:slide\s*)?(\d{1,2})\s*(?:of|\/|de)\s*(\d{1,2})(?:\s*slides?)?/i,
+      );
+      if (!match) continue;
+      const a = Number(match[1]);
+      const b = Number(match[2]);
+      if (b > 1 && b <= 50 && a >= 1 && a <= b) {
+        current = a;
+        total = b;
+        break;
+      }
+    }
+
+    const routeMode = instagramRouteMode();
+    const routeCanCarousel = routeMode !== "story" && routeMode !== "reels";
+    const isCarousel =
+      routeCanCarousel &&
+      (
+        total > 1 ||
+        instagramCarouselControlUsable(controls.previous) ||
+        instagramCarouselControlUsable(controls.next)
+      );
+
+    return { isCarousel, current, total, ...controls };
+  }
+
+  function instagramLogicalCarouselItems(items, expected = 0) {
+    const groups = new Map();
+    const limit = Math.max(0, Number(expected) || 0);
+
+    for (const item of Media.dedupeItems(items || [])) {
+      const order = Number(item?.order);
+      if (!Number.isInteger(order) || order < 0) continue;
+      if (limit > 1 && order >= limit) continue;
+
+      const previous = groups.get(order);
+      const prefer =
+        !previous ||
+        (item.kind === MEDIA_KIND.video && previous.kind !== MEDIA_KIND.video) ||
+        (
+          item.kind === previous.kind &&
+          (
+            Number(item.score || 0) > Number(previous.score || 0) ||
+            (!previous.caption && item.caption)
+          )
+        );
+
+      if (prefer) groups.set(order, { ...item, order, carousel: true });
+    }
+
+    return [...groups.values()].sort(
+      (a, b) => Number(a.order || 0) - Number(b.order || 0),
+    );
+  }
+
+  function instagramCurrentSlideItem(root, shortcode = "", order = null) {
+    const target = instagramTarget(root);
+    if (!isElement(target)) return null;
+    const numericOrder = Number.isInteger(Number(order)) ? Number(order) : 0;
+    const captured = shortcode ? InstagramStore.items(shortcode) : [];
+    const capturedCarousel = shortcode
+      ? InstagramStore.carouselInfo(shortcode).items
+      : [];
+    const stored = capturedCarousel.find(
+      (item) => Number(item?.order) === numericOrder,
+    );
+
+    if (isVideoElement(target)) {
+      const item = instagramVideoItemFromElement(target, captured);
+      if (!item) return stored?.kind === MEDIA_KIND.video ? stored : null;
+      return {
+        ...stored,
+        ...item,
+        previewUrl:
+          stored?.previewUrl ||
+          target.poster ||
+          target.getAttribute?.("poster") ||
+          "",
+        caption: PayloadSanitizer.cleanText(stored?.caption || "", { maxLength: 4_000 }),
+        order: numericOrder,
+        carousel: true,
+      };
+    }
+
+    if (isImageElement(target)) {
+      const item = instagramPhotoItemFromElement(target);
+      if (!item) return stored?.kind === MEDIA_KIND.photo ? stored : null;
+      return {
+        ...stored,
+        ...item,
+        previewUrl: item.url,
+        caption: PayloadSanitizer.cleanText(stored?.caption || "", { maxLength: 4_000 }),
+        order: numericOrder,
+        carousel: true,
+      };
+    }
+
+    return stored || null;
+  }
+
+  function instagramSlideSignature(root) {
+    const target = instagramTarget(root);
+    if (!isElement(target)) return "none";
+
+    if (isVideoElement(target)) {
+      const own =
+        Media.ownVideoUrls(target)[0] ||
+        target.currentSrc ||
+        target.src ||
+        target.poster ||
+        "";
+      return `video:${String(own)}`;
+    }
+
+    if (isImageElement(target)) {
+      return `photo:${Media.imageUrlFromElement(target) || target.currentSrc || target.src || ""}`;
+    }
+
+    return `${String(target.tagName || "node")}:${Media.visibleScore(target)}`;
+  }
+
+  async function instagramWaitForSlideChange(root, previousSignature, delay) {
+    const timeout = Math.max(250, Number(delay || 135) * 7);
+    const started = Date.now();
+
+    while (Date.now() - started < timeout) {
+      await sleep(Math.min(75, Math.max(30, Number(delay || 135) / 2)));
+      InstagramStore.ingestElement(root);
+      const next = instagramSlideSignature(root);
+      if (next && next !== previousSignature && next !== "none") return next;
+    }
+
+    await sleep(Math.max(40, Number(delay || 135)));
+    return instagramSlideSignature(root);
+  }
+
+  async function instagramClickCarouselControl(root, control, delay) {
+    if (!instagramCarouselControlUsable(control)) return false;
+    const before = instagramSlideSignature(root);
+
+    try {
+      control.click();
+    } catch {
+      return false;
+    }
+
+    const after = await instagramWaitForSlideChange(root, before, delay);
+    return Boolean(after && after !== before);
+  }
+
+  async function instagramProbeCarousel(root, shortcode, expectedHint = 0) {
+    if (!isElement(root)) return [];
+
+    const delay = Math.max(70, Number(CONFIG.instagram.carouselProbeDelayMs) || 135);
+    const maxSteps = Math.max(2, Math.min(32, Number(CONFIG.instagram.carouselProbeMaxSteps) || 24));
+    const expectedHintNumber = Math.max(0, Number(expectedHint) || 0);
+
+    let originalOffset = 0;
+    let currentIndex = 0;
+    const collected = new Map();
+
+    const rememberCurrent = (order) => {
+      InstagramStore.ingestElement(root);
+      const item = instagramCurrentSlideItem(root, shortcode, order);
+      if (!item?.url) return false;
+
+      const previous = collected.get(order);
+      const prefer =
+        !previous ||
+        (item.kind === MEDIA_KIND.video && previous.kind !== MEDIA_KIND.video) ||
+        (item.kind === previous.kind && Number(item.score || 0) >= Number(previous.score || 0));
+
+      if (prefer) collected.set(order, { ...item, order, carousel: true });
+
+      if (shortcode) {
+        InstagramStore.rememberCarouselItem(
+          shortcode,
+          order,
+          item,
+          Math.max(expectedHintNumber, instagramCarouselDomInfo(root).total || 0),
+        );
+      }
+      return true;
+    };
+
+    try {
+      for (let step = 0; step < maxSteps; step += 1) {
+        const previous = instagramCarouselControls(root).previous;
+        if (!instagramCarouselControlUsable(previous)) break;
+        const changed = await instagramClickCarouselControl(root, previous, delay);
+        if (!changed) break;
+        originalOffset += 1;
+      }
+
+      currentIndex = 0;
+      rememberCurrent(currentIndex);
+      const seenSignatures = new Set([instagramSlideSignature(root)]);
+
+      for (let step = 0; step < maxSteps - 1; step += 1) {
+        const info = instagramCarouselDomInfo(root);
+
+        // Traverse until Instagram removes the Next control. Accessibility totals
+        // are useful metadata, but they are not trusted as a stopping condition:
+        // stale "2 of 2" text is common while React is recycling carousel nodes.
+        const next = info.next || instagramCarouselControls(root).next;
+        if (!instagramCarouselControlUsable(next)) break;
+
+        const before = instagramSlideSignature(root);
+        const changed = await instagramClickCarouselControl(root, next, delay);
+        if (!changed) break;
+
+        const signature = instagramSlideSignature(root);
+        if (!signature || signature === before || seenSignatures.has(signature)) break;
+
+        seenSignatures.add(signature);
+        currentIndex += 1;
+        rememberCurrent(currentIndex);
+      }
+    } finally {
+      const restoreSteps = Math.max(0, currentIndex - originalOffset);
+      for (let step = 0; step < restoreSteps; step += 1) {
+        const previous = instagramCarouselControls(root).previous;
+        if (!instagramCarouselControlUsable(previous)) break;
+        const changed = await instagramClickCarouselControl(root, previous, Math.min(delay, 100));
+        if (!changed) break;
+      }
+    }
+
+    return [...collected.values()].sort(
+      (a, b) => Number(a.order || 0) - Number(b.order || 0),
+    );
+  }
+
+  async function instagramCarouselItems(root, shortcode, target) {
+    const domInfo = instagramCarouselDomInfo(root);
+    let storeInfo = shortcode
+      ? InstagramStore.carouselInfo(shortcode)
+      : { isCarousel: false, expected: 0, complete: false, items: [] };
+
+    const isCarousel = storeInfo.isCarousel || domInfo.isCarousel;
+    if (!isCarousel) return null;
+
+    const expected = Math.max(
+      Number(storeInfo.expected) || 0,
+      Number(domInfo.total) || 0,
+    );
+
+    let items = instagramLogicalCarouselItems(storeInfo.items, expected);
+
+    if (
+      CONFIG.instagram.carouselAllMedia !== false &&
+      (
+        instagramCarouselControlUsable(domInfo.previous) ||
+        instagramCarouselControlUsable(domInfo.next) ||
+        items.length < 2 ||
+        (expected > 1 && items.length < expected)
+      )
+    ) {
+      const probed = await instagramProbeCarousel(root, shortcode, expected);
+      InstagramStore.ingestElement(root);
+      storeInfo = shortcode ? InstagramStore.carouselInfo(shortcode) : storeInfo;
+
+      items = instagramLogicalCarouselItems(
+        [...storeInfo.items, ...items, ...probed],
+        Math.max(expected, Number(storeInfo.expected) || 0, Number(domInfo.total) || 0),
+      );
+    }
+
+    if (items.length > 1) return Media.dedupeItems(items);
+
+    const current = instagramViewportItems(
+      root,
+      instagramTarget(root) || target,
+      shortcode ? InstagramStore.items(shortcode) : [],
+    );
+    return Media.dedupeItems(current);
+  }
+
+  function instagramMediaVisibility(element, root) {
+    if (!instagramElementBelongsToMediaScope(element, root)) return null;
+    if (isImageElement(element) && !Media.imageLooksLikeContent(element, "instagram")) return null;
+
+    const visible = Media.visibleRect(element);
+    if (!visible) return null;
+
+    const source = visible.source;
+    const sourceArea = Math.max(1, Number(source.width || 0) * Number(source.height || 0));
+    const visibleArea = Math.max(0, visible.width * visible.height);
+    const intersection = Math.max(0, Math.min(1, visibleArea / sourceArea));
+
+    const viewport = window.visualViewport;
+    const viewportLeft = Number(viewport?.offsetLeft || 0);
+    const viewportTop = Number(viewport?.offsetTop || 0);
+    const viewportWidth = Math.max(1, Number(viewport?.width || innerWidth || 1));
+    const viewportHeight = Math.max(1, Number(viewport?.height || innerHeight || 1));
+    const viewportCenterX = viewportLeft + viewportWidth / 2;
+    const viewportCenterY = viewportTop + viewportHeight / 2;
+    const centerX = visible.left + visible.width / 2;
+    const centerY = visible.top + visible.height / 2;
+    const centerDistance = Math.hypot(
+      (centerX - viewportCenterX) / viewportWidth,
+      (centerY - viewportCenterY) / viewportHeight,
+    );
+
+    let score = visibleArea * (0.65 + intersection * 1.35) - centerDistance * 10_000;
+    if (isVideoElement(element) && !element.paused && !element.ended && intersection >= 0.35) {
+      score += 2_000_000_000;
+    }
+
+    return { element, visible, visibleArea, intersection, centerDistance, score };
+  }
+
+  function instagramVisibleMedia(root) {
+    const entries = [];
+    for (const element of root?.querySelectorAll?.("video,img") || []) {
+      const entry = instagramMediaVisibility(element, root);
+      if (entry) entries.push(entry);
+    }
+    return entries.sort((a, b) => b.score - a.score);
+  }
+
+  function instagramVideoItemFromElement(video, captured = []) {
+    const values = [];
+    const add = (url, source, extraScore = 0) => {
+      const value = String(url || "").trim();
+      if (!value || (!Media.isLikelyMediaUrl(value) && !Media.isBlob(value))) return;
+      values.push({
+        kind: MEDIA_KIND.video,
+        url: value,
+        source,
+        score: Media.mediaCandidateScore(value, MEDIA_KIND.video) + extraScore,
+      });
+    };
+
+    Media.ownVideoUrls(video).forEach((url) => add(url, "visible-dom", 80_000));
+    PlayerInterceptor.targetCandidates(video).forEach((url) => add(url, "visible-player", 55_000));
+
+    // Captured GraphQL data is only a last-resort enrichment when it is
+    // unambiguous. Never select one video out of a captured multi-video post.
+    const capturedVideos = Media.dedupeItems(captured).filter(
+      (item) => item.kind === MEDIA_KIND.video,
+    );
+    if (!values.some((item) => Media.isHttp(item.url)) && capturedVideos.length === 1) {
+      add(capturedVideos[0].url, "captured-single-video", 30_000);
+    }
+
+    const ordered = Media.dedupeItems(values).sort(
+      (a, b) => Number(b.score || 0) - Number(a.score || 0),
+    );
+    const nonBlob = ordered.filter((item) => !Media.isBlob(item.url) && !Media.isData(item.url));
+    return (nonBlob.length ? nonBlob : ordered)[0] || null;
+  }
+
+  function instagramPhotoItemFromElement(image) {
+    const url = Media.imageUrlFromElement(image);
+    if (!url) return null;
+    return {
+      kind: MEDIA_KIND.photo,
+      url,
+      source: "visible-dom",
+      score:
+        Number(image.naturalWidth || image.getBoundingClientRect?.().width || 0) *
+        Number(image.naturalHeight || image.getBoundingClientRect?.().height || 0),
+    };
+  }
+
+  function instagramViewportItems(root, target, captured = []) {
+    if (!isElement(target)) return [];
+
+    const visibleEntries = instagramVisibleMedia(root);
+    const targetEntry =
+      visibleEntries.find((entry) => entry.element === target) ||
+      instagramMediaVisibility(target, root);
+    if (!targetEntry) return [];
+
+    // A visible video is always a single logical action. This is the key guard
+    // against a normal Reel/feed video accidentally becoming a 10-item album.
+    if (isVideoElement(target)) {
+      const item = instagramVideoItemFromElement(target, captured);
+      return item ? [item] : [];
+    }
+
+    // For a photo/carousel, only include photo nodes that are materially visible
+    // in the same current viewport frame. Hidden/offscreen carousel slides and
+    // GraphQL siblings are never included.
+    const minimumIntersection = Math.max(
+      0.15,
+      Math.min(1, Number(CONFIG.instagram.minViewportIntersection || 0.56)),
+    );
+    const minimumAreaRatio = Math.max(
+      0.1,
+      Math.min(1, Number(CONFIG.instagram.siblingVisibleAreaRatio || 0.42)),
+    );
+
+    const targetTop = targetEntry.visible.top;
+    const targetBottom = targetEntry.visible.bottom;
+    const targetHeight = Math.max(1, targetEntry.visible.height);
+
+    const photoEntries = visibleEntries.filter((entry) => {
+      if (!isImageElement(entry.element)) return false;
+      if (entry.intersection < minimumIntersection) return false;
+      if (entry.visibleArea < targetEntry.visibleArea * minimumAreaRatio) return false;
+
+      const overlap = Math.max(
+        0,
+        Math.min(targetBottom, entry.visible.bottom) - Math.max(targetTop, entry.visible.top),
+      );
+      const overlapRatio = overlap / Math.max(1, Math.min(targetHeight, entry.visible.height));
+      return overlapRatio >= 0.62;
+    });
+
+    const selected = photoEntries.length
+      ? photoEntries
+      : [{ ...targetEntry, element: target }];
+
+    return Media.dedupeItems(
+      selected
+        .map((entry) => instagramPhotoItemFromElement(entry.element))
+        .filter(Boolean),
+    );
+  }
+
+  function instagramDomItems(root) {
+    const target = instagramTarget(root);
+    return instagramViewportItems(root, target, []);
   }
 
   function instagramTarget(root) {
-    const candidates = [
-      ...(root?.querySelectorAll?.("video") || []),
-      ...(root?.querySelectorAll?.("img") || []),
-    ].filter((element) => {
-      if (!instagramElementBelongsToMediaScope(element, root)) return false;
-      if (isVideoElement(element)) return true;
-      return Media.imageLooksLikeContent(element, "instagram");
-    });
-
-    // Never anchor controls to the whole article/main as a fallback. A button
-    // only exists when there is a concrete media node to pin it to.
-    return [...candidates].sort(
-      (a, b) => Media.visibleScore(b) - Media.visibleScore(a),
-    )[0] || null;
+    return instagramVisibleMedia(root)[0]?.element || null;
   }
 
   function instagramCaptionCandidates(root) {
@@ -3068,6 +4414,16 @@
     const domCaption = instagramDomCaption(root);
     const capturedCaption = PayloadSanitizer.cleanText(capturedMeta?.caption || "");
     const text = capturedCaption.length >= domCaption.length ? capturedCaption : domCaption;
+    const capturedCarousel = shortcode
+      ? InstagramStore.carouselInfo(shortcode)
+      : { isCarousel: false, expected: 0, complete: false, items: [] };
+    const domCarousel = instagramCarouselDomInfo(root);
+    const isCarousel = Boolean(capturedCarousel.isCarousel || domCarousel.isCarousel);
+    const carouselCount = Math.max(
+      Number(capturedCarousel.expected) || 0,
+      Number(domCarousel.total) || 0,
+      isCarousel ? Number(capturedCarousel.items.length) || 0 : 0,
+    );
 
     return {
       providerId: "instagram",
@@ -3082,8 +4438,15 @@
             instagramShortcode: shortcode,
             mediaId: InstagramBookmark.shortcodeToId(shortcode),
             username: capturedMeta?.username || "",
+            selectionMode: isCarousel ? "carousel-all" : "viewport-current",
+            isCarousel,
+            carouselCount,
           }
-        : {},
+        : {
+            selectionMode: isCarousel ? "carousel-all" : "viewport-current",
+            isCarousel,
+            carouselCount,
+          },
 
       async refresh() {
         await MoreExpander.expand(root, "instagram", { settle: true });
@@ -3091,46 +4454,473 @@
         return instagramContext(root);
       },
 
-      async items() {
+      async items(options = {}) {
         const captured = shortcode ? InstagramStore.items(shortcode) : [];
-        const dom = instagramDomItems(root);
+        const currentTarget = instagramTarget(root) || target;
 
-        const performanceVideos = Media.performance(
-          /cdninstagram\.com|fbcdn\.net/i,
-        )
-          .filter((url) => /\.mp4(?:$|[?#])/i.test(url))
-          .map((url) => ({
-            kind: MEDIA_KIND.video,
-            url,
-            score: 2_000,
-          }));
+        if (isCarousel && CONFIG.instagram.carouselAllMedia !== false) {
+          const info = shortcode
+            ? InstagramStore.carouselInfo(shortcode)
+            : { isCarousel: false, expected: 0, complete: false, items: [] };
 
-        const merged = Media.sortItems([
-          ...captured,
-          ...dom,
-          ...performanceVideos,
-        ]);
+          if (options?.forAction) {
+            const carouselItems = await instagramCarouselItems(
+              root,
+              shortcode,
+              currentTarget,
+            );
+            if (carouselItems?.length > 1) {
+              return Media.dedupeItems(carouselItems);
+            }
+          }
 
-        if (captured.length > 1) return captured;
-
-        const videos = merged.filter((item) => item.kind === MEDIA_KIND.video);
-        const photos = merged.filter((item) => item.kind === MEDIA_KIND.photo);
-
-        if (/\/reel\//i.test(pageUrl) && videos.length) {
-          const direct = videos.filter((item) => Media.isMp4(item.url));
-          return [
-            [...(direct.length ? direct : videos)].sort(
-              (left, right) => Number(right.score || 0) - Number(left.score || 0),
-            )[0],
-          ];
+          // Passive refreshes never operate the carousel. They may still use the
+          // complete captured set so the icon knows this is a mixed carousel.
+          if (info.items.length > 1) {
+            return Media.dedupeItems(info.items);
+          }
         }
 
-        if (photos.length > 1) return photos;
-        if (videos.length && !photos.length) return [videos[0]];
-        return merged;
+        return Media.dedupeItems(
+          instagramViewportItems(root, currentTarget, captured),
+        );
       },
     };
   }
+
+  // ---------------------------------------------------------------------------
+  // Carousel media selection. RodToaster.selectImages() is preferred when the
+  // installed toaster exposes it. Otherwise a compact checkbox grid is rendered
+  // visually inside the post. All media starts selected.
+  // ---------------------------------------------------------------------------
+
+  const CarouselSelection = (() => {
+    let style = null;
+    let active = null;
+
+    function ensureStyle() {
+      if (style?.isConnected) return;
+      style = document.createElement("style");
+      style.id = "aio-carousel-picker-style";
+      style.textContent = `
+        .aio-carousel-picker{
+          position:fixed;z-index:2147483647;display:flex;flex-direction:column;
+          width:min(430px,calc(100vw - 20px));max-height:min(72vh,680px);
+          overflow:hidden;border:1px solid rgba(255,255,255,.20);border-radius:18px;
+          background:rgba(10,12,16,.96);color:#fff;box-shadow:0 18px 60px rgba(0,0,0,.48);
+          font:500 13px/1.35 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+          -webkit-font-smoothing:antialiased;isolation:isolate;pointer-events:auto
+        }
+        .aio-carousel-picker *{box-sizing:border-box}
+        .aio-carousel-picker__header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:14px 14px 10px;border-bottom:1px solid rgba(255,255,255,.10)}
+        .aio-carousel-picker__title{font-size:15px;font-weight:750;letter-spacing:-.015em}
+        .aio-carousel-picker__subtitle{margin-top:3px;color:rgba(255,255,255,.66);font-size:12px}
+        .aio-carousel-picker__close{display:grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:50%;background:rgba(255,255,255,.08);color:#fff;font-size:19px}
+        .aio-carousel-picker__grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px;overflow:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+        .aio-carousel-picker__item{position:relative;display:block;min-width:0;overflow:hidden;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:#15181e;cursor:pointer}
+        .aio-carousel-picker__item:has(input:checked){border-color:rgba(255,255,255,.75);box-shadow:inset 0 0 0 1px rgba(255,255,255,.24)}
+        .aio-carousel-picker__media{position:relative;aspect-ratio:1/1;overflow:hidden;background:#080a0d}
+        .aio-carousel-picker__media img,.aio-carousel-picker__media video{display:block;width:100%;height:100%;object-fit:cover}
+        .aio-carousel-picker__placeholder{display:grid;place-items:center;width:100%;height:100%;font-size:26px;color:rgba(255,255,255,.72)}
+        .aio-carousel-picker__check{position:absolute;top:7px;right:7px;display:grid;place-items:center;width:23px;height:23px;border:1px solid rgba(255,255,255,.7);border-radius:50%;background:rgba(0,0,0,.55);backdrop-filter:blur(4px)}
+        .aio-carousel-picker__check input{position:absolute;opacity:0;pointer-events:none}
+        .aio-carousel-picker__check svg{width:14px;height:14px;opacity:.18;transition:opacity 100ms ease}
+        .aio-carousel-picker__item:has(input:checked) .aio-carousel-picker__check{background:#fff;color:#05070a}
+        .aio-carousel-picker__item:has(input:checked) .aio-carousel-picker__check svg{opacity:1}
+        .aio-carousel-picker__badge{position:absolute;left:7px;top:7px;padding:3px 6px;border-radius:999px;background:rgba(0,0,0,.68);color:#fff;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+        .aio-carousel-picker__caption{display:-webkit-box;min-height:34px;padding:7px 8px 8px;overflow:hidden;color:rgba(255,255,255,.72);font-size:10px;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+        .aio-carousel-picker__footer{display:grid;grid-template-columns:auto 1fr auto;gap:8px;padding:10px;border-top:1px solid rgba(255,255,255,.10)}
+        .aio-carousel-picker__button{min-height:38px;padding:0 12px;border:1px solid rgba(255,255,255,.15);border-radius:11px;background:rgba(255,255,255,.08);color:#fff;font:700 12px/1 -apple-system,BlinkMacSystemFont,system-ui,sans-serif}
+        .aio-carousel-picker__button[data-primary="true"]{background:#fff;color:#07090c;border-color:#fff}
+        .aio-carousel-picker__button:disabled{opacity:.42}
+        @media(max-width:380px){.aio-carousel-picker__grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+      `;
+      (document.head || document.documentElement)?.appendChild(style);
+    }
+
+    function itemCaption(context, item, index) {
+      const explicit = PayloadSanitizer.cleanText(item?.caption || "", {
+        maxLength: 4_000,
+      });
+      if (explicit) return explicit;
+      return index === 0
+        ? PayloadSanitizer.cleanText(context?.text || "", { maxLength: 4_000 })
+        : "";
+    }
+
+    function entries(context, items) {
+      return items.map((item, index) => {
+        const id = `media-${index}`;
+        const caption = itemCaption(context, item, index);
+        const previewUrl = String(
+          item?.previewUrl ||
+            (item?.kind === MEDIA_KIND.photo ? item?.url : "") ||
+            "",
+        );
+
+        return {
+          id,
+          value: id,
+          index,
+          selected: true,
+          checked: true,
+          kind: item.kind,
+          type: item.kind,
+          mediaType: item.kind,
+          url: String(item.url || ""),
+          src: previewUrl || String(item.url || ""),
+          previewUrl,
+          thumbnail: previewUrl,
+          label: `${index + 1}. ${item.kind === MEDIA_KIND.video ? "Vídeo" : item.kind === MEDIA_KIND.photo ? "Foto" : "Áudio"}`,
+          caption,
+          item: {
+            ...item,
+            caption,
+          },
+        };
+      });
+    }
+
+    function normalizeResult(result, sourceEntries) {
+      if (result === false || result?.cancelled === true || result?.canceled === true) {
+        return [];
+      }
+      if (result === true || result === "all" || result?.all === true || result?.selectAll === true) {
+        return sourceEntries.map((entry) => entry.item);
+      }
+
+      let selected =
+        Array.isArray(result)
+          ? result
+          : result?.selectedItems ??
+            result?.selectedImages ??
+            result?.selected ??
+            result?.selectedIds ??
+            result?.selectedIndices ??
+            result?.values ??
+            result?.value ??
+            result?.items ??
+            null;
+
+      if (selected && !Array.isArray(selected) && typeof selected === "object") {
+        selected = Object.entries(selected)
+          .filter(([, enabled]) => Boolean(enabled))
+          .map(([id]) => id);
+      }
+
+      if (!Array.isArray(selected)) return null;
+
+      const ids = new Set();
+      for (const value of selected) {
+        if (typeof value === "number") {
+          ids.add(`media-${value}`);
+        } else if (typeof value === "string") {
+          const direct = sourceEntries.find(
+            (entry) => entry.id === value || entry.url === value,
+          );
+          ids.add(direct?.id || value);
+        } else if (value && typeof value === "object") {
+          if (value.selected === false || value.checked === false) continue;
+          const id = value.id ?? value.value ?? value.key ?? value.index;
+          if (typeof id === "number") ids.add(`media-${id}`);
+          else if (id != null) ids.add(String(id));
+          else if (value.url) {
+            const match = sourceEntries.find((entry) => entry.url === String(value.url));
+            if (match) ids.add(match.id);
+          }
+        }
+      }
+
+      return sourceEntries
+        .filter((entry) => ids.has(entry.id))
+        .map((entry) => entry.item);
+    }
+
+    async function toasterPicker(context, sourceEntries) {
+      if (Toast?.canSelectImages !== true) return null;
+
+      const descriptor = {
+        title: "Carrossel detectado",
+        description: `Selecione as mídias que quer enviar. Todas as ${sourceEntries.length} estão selecionadas por padrão.`,
+        multiple: true,
+        selectAll: true,
+        allSelected: true,
+        defaultSelected: sourceEntries.map((entry) => entry.id),
+        selected: sourceEntries.map((entry) => entry.id),
+        confirmLabel: "Enviar selecionadas",
+        selectAllLabel: "Enviar todos",
+        cancelLabel: "Cancelar",
+        items: sourceEntries.map((entry) => ({
+          id: entry.id,
+          value: entry.id,
+          src: entry.src,
+          url: entry.url,
+          image: entry.previewUrl || entry.src,
+          previewUrl: entry.previewUrl,
+          thumbnail: entry.thumbnail,
+          mediaType: entry.mediaType,
+          type: entry.type,
+          label: entry.label,
+          caption: entry.caption,
+          selected: true,
+          checked: true,
+        })),
+        images: sourceEntries.map((entry) => ({
+          id: entry.id,
+          value: entry.id,
+          src: entry.src,
+          url: entry.url,
+          previewUrl: entry.previewUrl,
+          mediaType: entry.mediaType,
+          type: entry.type,
+          label: entry.label,
+          caption: entry.caption,
+          selected: true,
+          checked: true,
+        })),
+        metadata: {
+          provider: context.providerId,
+          pageUrl: context.pageUrl,
+          total: sourceEntries.length,
+        },
+      };
+
+      try {
+        const result = await Toast.selectImages(descriptor);
+        return normalizeResult(result, sourceEntries);
+      } catch {
+        return null;
+      }
+    }
+
+    function positionPicker(node, context) {
+      const viewport = window.visualViewport;
+      const vx = Number(viewport?.offsetLeft || 0);
+      const vy = Number(viewport?.offsetTop || 0);
+      const vw = Math.max(1, Number(viewport?.width || innerWidth || 1));
+      const vh = Math.max(1, Number(viewport?.height || innerHeight || 1));
+      const rootRect = context?.root?.getBoundingClientRect?.();
+
+      const width = Math.min(
+        430,
+        Math.max(280, Math.min(vw - 20, Number(rootRect?.width || vw) - 16)),
+      );
+      node.style.width = `${Math.round(width)}px`;
+
+      const measured = node.getBoundingClientRect();
+      let left = Number(rootRect?.right || vx + vw) - measured.width - 8;
+      let top = Number(rootRect?.top || vy + 10) + 8;
+
+      left = Math.max(vx + 10, Math.min(vx + vw - measured.width - 10, left));
+      top = Math.max(vy + 10, Math.min(vy + vh - Math.min(measured.height, vh - 20) - 10, top));
+
+      node.style.left = `${Math.round(left)}px`;
+      node.style.top = `${Math.round(top)}px`;
+      node.style.maxHeight = `${Math.round(
+        Math.max(240, vh * Math.min(0.88, Number(CONFIG.instagram.carouselPickerMaxHeightRatio) || 0.72)),
+      )}px`;
+    }
+
+    function inlinePicker(context, sourceEntries) {
+      ensureStyle();
+
+      if (active?.node?.isConnected) {
+        try { active.cancel(); } catch {}
+      }
+
+      return new Promise((resolve) => {
+        const node = document.createElement("section");
+        node.className = "aio-carousel-picker";
+        node.setAttribute("role", "dialog");
+        node.setAttribute("aria-modal", "true");
+        node.setAttribute("aria-label", "Selecionar mídias do carrossel");
+        node.addEventListener("click", (event) => event.stopPropagation());
+        node.addEventListener("pointerdown", (event) => event.stopPropagation());
+
+        const header = document.createElement("div");
+        header.className = "aio-carousel-picker__header";
+        const heading = document.createElement("div");
+        heading.innerHTML = `<div class="aio-carousel-picker__title">Carrossel detectado</div><div class="aio-carousel-picker__subtitle">Todas selecionadas. Desmarque o que não quiser enviar.</div>`;
+        const close = document.createElement("button");
+        close.type = "button";
+        close.className = "aio-carousel-picker__close";
+        close.textContent = "×";
+        close.setAttribute("aria-label", "Cancelar");
+        header.append(heading, close);
+
+        const grid = document.createElement("div");
+        grid.className = "aio-carousel-picker__grid";
+        const checkboxes = [];
+
+        for (const entry of sourceEntries) {
+          const label = document.createElement("label");
+          label.className = "aio-carousel-picker__item";
+
+          const media = document.createElement("div");
+          media.className = "aio-carousel-picker__media";
+
+          if (entry.kind === MEDIA_KIND.photo || entry.previewUrl) {
+            const image = document.createElement("img");
+            image.alt = entry.label;
+            image.loading = "eager";
+            image.decoding = "async";
+            image.referrerPolicy = "no-referrer";
+            image.src = entry.previewUrl || entry.url;
+            media.appendChild(image);
+          } else if (entry.kind === MEDIA_KIND.video && Media.isHttp(entry.url) && !Media.isHls(entry.url)) {
+            const video = document.createElement("video");
+            video.muted = true;
+            video.playsInline = true;
+            video.preload = "metadata";
+            video.src = entry.url;
+            media.appendChild(video);
+          } else {
+            const placeholder = document.createElement("div");
+            placeholder.className = "aio-carousel-picker__placeholder";
+            placeholder.textContent = entry.kind === MEDIA_KIND.video ? "▶" : "◉";
+            media.appendChild(placeholder);
+          }
+
+          const badge = document.createElement("span");
+          badge.className = "aio-carousel-picker__badge";
+          badge.textContent = entry.kind === MEDIA_KIND.video ? "Vídeo" : entry.kind === MEDIA_KIND.photo ? "Foto" : "Áudio";
+
+          const checkWrap = document.createElement("span");
+          checkWrap.className = "aio-carousel-picker__check";
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.checked = true;
+          input.value = entry.id;
+          input.dataset.index = String(entry.index);
+          const checkSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          checkSvg.setAttribute("viewBox", "0 0 16 16");
+          checkSvg.innerHTML = '<path d="m3.2 8.1 3 3.1 6.7-7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>';
+          checkWrap.append(input, checkSvg);
+
+          media.append(badge, checkWrap);
+          label.appendChild(media);
+
+          const caption = document.createElement("span");
+          caption.className = "aio-carousel-picker__caption";
+          caption.textContent = entry.caption || `Mídia ${entry.index + 1}`;
+          label.appendChild(caption);
+
+          grid.appendChild(label);
+          checkboxes.push(input);
+        }
+
+        const footer = document.createElement("div");
+        footer.className = "aio-carousel-picker__footer";
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.className = "aio-carousel-picker__button";
+        cancel.textContent = "Cancelar";
+
+        const all = document.createElement("button");
+        all.type = "button";
+        all.className = "aio-carousel-picker__button";
+        all.textContent = "Todos";
+
+        const send = document.createElement("button");
+        send.type = "button";
+        send.className = "aio-carousel-picker__button";
+        send.dataset.primary = "true";
+
+        footer.append(cancel, all, send);
+        node.append(header, grid, footer);
+
+        let settled = false;
+        const update = () => {
+          const count = checkboxes.filter((input) => input.checked).length;
+          send.disabled = count === 0;
+          send.textContent = count === sourceEntries.length
+            ? `Enviar todos (${count})`
+            : `Enviar ${count}`;
+          all.textContent = count === sourceEntries.length ? "Desmarcar todos" : "Selecionar todos";
+        };
+
+        const cleanup = () => {
+          removeEventListener("resize", reposition);
+          window.visualViewport?.removeEventListener("resize", reposition);
+          window.visualViewport?.removeEventListener("scroll", reposition);
+          document.removeEventListener("keydown", onKey, true);
+          try { node.remove(); } catch {}
+          if (active?.node === node) active = null;
+        };
+
+        const settle = (value) => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve(value);
+        };
+
+        const selected = () =>
+          sourceEntries
+            .filter((entry) => checkboxes[entry.index]?.checked)
+            .map((entry) => entry.item);
+
+        const cancelPicker = () => settle([]);
+        const reposition = () => positionPicker(node, context);
+        const onKey = (event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            cancelPicker();
+          }
+        };
+
+        close.addEventListener("click", cancelPicker);
+        cancel.addEventListener("click", cancelPicker);
+        send.addEventListener("click", () => settle(selected()));
+        all.addEventListener("click", () => {
+          const allChecked = checkboxes.every((input) => input.checked);
+          for (const input of checkboxes) input.checked = !allChecked;
+          update();
+        });
+        for (const input of checkboxes) input.addEventListener("change", update);
+
+        const host = isElement(context?.root) && context.root.isConnected
+          ? context.root
+          : (document.body || document.documentElement);
+        host.appendChild(node);
+        active = { node, cancel: cancelPicker };
+
+        addEventListener("resize", reposition, { passive: true });
+        window.visualViewport?.addEventListener("resize", reposition, { passive: true });
+        window.visualViewport?.addEventListener("scroll", reposition, { passive: true });
+        document.addEventListener("keydown", onKey, true);
+
+        update();
+        requestAnimationFrame(reposition);
+      });
+    }
+
+    async function select(context, items) {
+      const cleanItems = Media.dedupeItems(items || []);
+      if (
+        CONFIG.instagram.carouselSelection === false ||
+        cleanItems.length < 2
+      ) {
+        return cleanItems;
+      }
+
+      Toast?.info?.(
+        {
+          title: "Carrossel detectado",
+          description: `Selecione as mídias que quer enviar ou mantenha todas as ${cleanItems.length} selecionadas.`,
+        },
+        { duration: 3_500, dedupe: true },
+      );
+
+      const sourceEntries = entries(context, cleanItems);
+      const toasterResult = await toasterPicker(context, sourceEntries);
+
+      if (toasterResult !== null) return toasterResult;
+      return inlinePicker(context, sourceEntries);
+    }
+
+    return Object.freeze({ select });
+  })();
 
   // ---------------------------------------------------------------------------
   // Actions
@@ -3151,7 +4941,7 @@
       }
 
       current = PayloadSanitizer.context(current);
-      const items = Media.dedupeItems(await current.items());
+      const items = Media.dedupeItems(await current.items({ forAction: true }));
       return {
         context: current,
         items,
@@ -3176,12 +4966,12 @@
       }
 
       task?.update?.({
-        description: `${item.kind === MEDIA_KIND.photo ? "Baixando foto" : "Baixando vídeo"} ${index + 1}/${total}…`,
+        description: `${item.kind === MEDIA_KIND.photo ? "Baixando foto" : item.kind === MEDIA_KIND.audio ? "Baixando áudio" : "Baixando vídeo"} ${index + 1}/${total}…`,
       });
 
       const downloaded = await gmBlob(item.url, (percentage) =>
         task?.setProgress?.(percentage, {
-          description: `${item.kind === MEDIA_KIND.photo ? "Baixando foto" : "Baixando vídeo"} ${index + 1}/${total} · ${percentage}%`,
+          description: `${item.kind === MEDIA_KIND.photo ? "Baixando foto" : item.kind === MEDIA_KIND.audio ? "Baixando áudio" : "Baixando vídeo"} ${index + 1}/${total} · ${percentage}%`,
         }),
       );
 
@@ -3189,9 +4979,11 @@
         downloaded.blob.type ||
         (item.kind === MEDIA_KIND.photo
           ? "image/jpeg"
-          : Media.isMp4(downloaded.finalUrl)
-            ? "video/mp4"
-            : "application/octet-stream");
+          : item.kind === MEDIA_KIND.audio
+            ? "audio/mpeg"
+            : Media.isMp4(downloaded.finalUrl)
+              ? "video/mp4"
+              : "application/octet-stream");
 
       return {
         blob: downloaded.blob,
@@ -3209,11 +5001,48 @@
 
     async sendTelegramItem(context, item, index, total, task) {
       const failures = [];
+      const requiresPreparedWorkerUpload =
+        item.kind === MEDIA_KIND.video &&
+        (Media.isHls(item.url) || Media.isDash(item.url));
+
+      // HLS/DASH must end at the Worker. Do not hand a manifest to Scriptable
+      // after the expensive local preparation has already succeeded.
+      if (requiresPreparedWorkerUpload) {
+        task?.update?.({
+          description: `Preparando vídeo ${index + 1}/${total} para o Worker…`,
+        });
+
+        const prepared = await this.prepare(
+          context,
+          item,
+          index,
+          total,
+          task,
+        );
+
+        task?.update?.({
+          description: `Enviando vídeo processado ${index + 1}/${total} ao Worker…`,
+        });
+
+        try {
+          return await Telegram.send(
+            context,
+            item,
+            index,
+            total,
+            prepared,
+          );
+        } catch (error) {
+          throw new Error(
+            `Worker recusou o vídeo processado: ${String(error?.message || error)}`,
+          );
+        }
+      }
 
       if (Media.isHttp(item.url)) {
         try {
           task?.update?.({
-            description: `Enviando ${item.kind === MEDIA_KIND.photo ? "foto" : "vídeo"} ${index + 1}/${total}…`,
+            description: `Enviando ${item.kind === MEDIA_KIND.photo ? "foto" : item.kind === MEDIA_KIND.audio ? "áudio" : "vídeo"} ${index + 1}/${total}…`,
           });
           return await Telegram.send(context, item, index, total, null);
         } catch (error) {
@@ -3224,6 +5053,9 @@
 
       try {
         const prepared = await this.prepare(context, item, index, total, task);
+        task?.update?.({
+          description: `Enviando arquivo preparado ${index + 1}/${total} ao Worker…`,
+        });
         return await Telegram.send(context, item, index, total, prepared);
       } catch (error) {
         failures.push(`Multipart: ${String(error?.message || error)}`);
@@ -3244,7 +5076,7 @@
       });
 
       try {
-        const inspected = await this.inspect(context);
+        const inspected = runOptions.inspected || await this.inspect(context);
         context = inspected.context;
         if (!inspected.items.length) {
           throw new Error("Nenhuma foto ou vídeo foi encontrado neste post.");
@@ -3267,9 +5099,15 @@
           ) {
             try {
               task?.update?.({
-                description: `Enviando carrossel com ${total} mídias…`,
+                description: context.metadata?.selectionMode === "viewport-current"
+                  ? `Enviando ${total} mídias visíveis…`
+                  : `Enviando carrossel com ${total} mídias…`,
               });
               await Telegram.sendAlbum(context, inspected.items);
+              MediaUsage.markMany(context, inspected.items, action, {
+                transport: "telegram-album",
+                trigger: String(runOptions.trigger || "button"),
+              });
               sentAsAlbum = true;
             } catch (error) {
               debug(
@@ -3283,6 +5121,10 @@
             for (let index = 0; index < total; index += 1) {
               const item = inspected.items[index];
               await this.sendTelegramItem(context, item, index, total, task);
+              MediaUsage.mark(context, item, index, action, {
+                transport: "telegram-item",
+                trigger: String(runOptions.trigger || "button"),
+              });
             }
           }
 
@@ -3296,7 +5138,9 @@
             title: total > 1 ? `${total} mídias enviadas` : "Enviado",
             description:
               total > 1
-                ? "Todo o carrossel foi enviado para o Telegram."
+                ? context.metadata?.selectionMode === "viewport-current"
+                  ? "As mídias atualmente visíveis foram enviadas para o Telegram."
+                  : "Todo o carrossel foi enviado para o Telegram."
                 : inspected.items[0].kind === MEDIA_KIND.photo
                   ? "Foto enviada para o Telegram."
                   : "Vídeo enviado para o Telegram.",
@@ -3318,6 +5162,10 @@
           const item = inspected.items[index];
           const prepared = await this.prepare(context, item, index, total, task);
           Media.downloadBlob(prepared.blob, prepared.filename);
+          MediaUsage.mark(context, item, index, action, {
+            transport: "browser-download",
+            filename: prepared.filename,
+          });
           if (total > 1) await sleep(120);
         }
 
@@ -3423,8 +5271,10 @@
     installed: false,
     recent: new Map(),
     inFlight: new Set(),
+    pendingTwitterRepost: null,
     counters: {
       twitterClicks: 0,
+      twitterReposts: 0,
       instagramClicks: 0,
       relayed: 0,
       skippedAlreadySent: 0,
@@ -3497,12 +5347,27 @@
       return /\b(save|bookmark|salvar|guardar|adicionar aos salvos|adicionar aos itens salvos)\b/i.test(labels);
     },
 
+    twitterIsRepostMenuAction(element) {
+      if (!isElement(element)) return false;
+      const labels = this.labels(element).join(" | ");
+      if (!labels) return false;
+
+      if (
+        /\b(?:undo|unrepost|unretweet|desfazer|remover repost|remove repost)\b/i.test(labels)
+      ) {
+        return false;
+      }
+
+      return /\b(?:repost|retweet|repostar|republicar|repostear)\b/i.test(labels);
+    },
+
     twitterContextFromButton(button) {
       const root = twitterRootFromElement(button);
       if (!root) return null;
       const presence = twitterMediaPresence(root);
       if (!presence.hasMedia) return null;
       MoreExpander.kick(root, "twitter");
+      TwitterStore.ingestElement(root);
       const context = twitterContext(root);
       return isElement(context.target) ? context : null;
     },
@@ -3513,6 +5378,7 @@
       if (!root && instagramRouteMode() !== "ambient") {
         const candidates = [...document.querySelectorAll("video,img")]
           .filter((element) => {
+            if (element.closest?.(".aio-carousel-picker")) return false;
             if (isVideoElement(element)) return Boolean(Media.visibleRect(element));
             return Media.imageLooksLikeContent(element, "instagram") && Boolean(Media.visibleRect(element));
           })
@@ -3562,6 +5428,59 @@
       }
     },
 
+    watchTwitterRepostConfirmation(root, context) {
+      if (!isElement(root) || !context) return;
+
+      const timeout = Math.max(
+        900,
+        Number(CONFIG.twitter.repostConfirmWindowMs) || 2_800,
+      );
+      const started = Date.now();
+
+      const check = () => {
+        if (Date.now() - started > timeout) return;
+
+        if (
+          root.querySelector?.('[data-testid="unretweet"]') ||
+          root.querySelector?.('[data-testid="unrepost"]')
+        ) {
+          void this.relay(context, "twitter-repost");
+          return;
+        }
+
+        setTimeout(check, 160);
+      };
+
+      setTimeout(check, 140);
+    },
+
+    rememberPendingRepost(button, context) {
+      const root = twitterRootFromElement(button);
+      this.pendingTwitterRepost = {
+        context,
+        root,
+        at: Date.now(),
+      };
+      this.watchTwitterRepostConfirmation(root, context);
+    },
+
+    consumePendingRepost() {
+      const pending = this.pendingTwitterRepost;
+      if (!pending) return null;
+
+      const maximum = Math.max(
+        1_000,
+        Number(CONFIG.twitter.repostConfirmWindowMs) || 2_800,
+      ) + 1_200;
+
+      if (Date.now() - Number(pending.at || 0) > maximum) {
+        this.pendingTwitterRepost = null;
+        return null;
+      }
+
+      return pending;
+    },
+
     install() {
       if (this.installed) return;
       this.installed = true;
@@ -3573,30 +5492,78 @@
 
           const elements = this.eventElements(event);
           if (!elements.length) return;
-          if (elements.some((element) => element.closest?.("#aio-media-actions-root"))) return;
+          if (
+            elements.some(
+              (element) =>
+                element.closest?.("#aio-media-actions-root") ||
+                element.closest?.(".aio-carousel-picker"),
+            )
+          ) {
+            return;
+          }
 
-          if (IS_TWITTER && CONFIG.twitter.sendToTelegramOnBookmark) {
-            const removeBookmark = this.closestFromEvent(
-              event,
-              '[data-testid="removeBookmark"]',
-            );
-            if (removeBookmark) return;
-
-            const bookmark = this.closestFromEvent(
-              event,
-              '[data-testid="bookmark"]',
-            );
-
-            if (bookmark) {
-              this.counters.twitterClicks += 1;
-              const context = this.twitterContextFromButton(bookmark);
-
-              // Resolve context before X mutates/recycles the action row.
-              setTimeout(
-                () => void this.relay(context, "twitter-bookmark"),
-                120,
+          if (IS_TWITTER) {
+            if (CONFIG.twitter.sendToTelegramOnBookmark) {
+              const removeBookmark = this.closestFromEvent(
+                event,
+                '[data-testid="removeBookmark"]',
               );
-              return;
+              if (removeBookmark) return;
+
+              const bookmark = this.closestFromEvent(
+                event,
+                '[data-testid="bookmark"]',
+              );
+
+              if (bookmark) {
+                this.counters.twitterClicks += 1;
+                const context = this.twitterContextFromButton(bookmark);
+
+                setTimeout(
+                  () => void this.relay(context, "twitter-bookmark"),
+                  120,
+                );
+                return;
+              }
+            }
+
+            if (CONFIG.twitter.sendToTelegramOnRepost) {
+              const undo = this.closestFromEvent(
+                event,
+                '[data-testid="unretweet"],[data-testid="unrepost"]',
+              );
+              if (undo) return;
+
+              const repostButton = this.closestFromEvent(
+                event,
+                '[data-testid="retweet"],[data-testid="repost"]',
+              );
+
+              if (repostButton) {
+                const context = this.twitterContextFromButton(repostButton);
+                if (context) {
+                  this.counters.twitterReposts += 1;
+                  this.rememberPendingRepost(repostButton, context);
+                }
+                return;
+              }
+
+              const menuAction = this.closestFromEvent(
+                event,
+                '[role="menuitem"],div[role="menuitem"],button,[role="button"]',
+              );
+
+              if (menuAction && this.twitterIsRepostMenuAction(menuAction)) {
+                const pending = this.consumePendingRepost();
+                if (pending?.context) {
+                  this.counters.twitterReposts += 1;
+                  setTimeout(
+                    () => void this.relay(pending.context, "twitter-repost"),
+                    120,
+                  );
+                  return;
+                }
+              }
             }
           }
 
@@ -3627,8 +5594,12 @@
       );
 
       log("BookmarkBridge instalado", {
-        twitter: IS_TWITTER && CONFIG.twitter.sendToTelegramOnBookmark,
-        instagram: IS_INSTAGRAM && CONFIG.instagram.sendToTelegramOnBookmark,
+        twitterBookmark:
+          IS_TWITTER && CONFIG.twitter.sendToTelegramOnBookmark,
+        twitterRepost:
+          IS_TWITTER && CONFIG.twitter.sendToTelegramOnRepost,
+        instagram:
+          IS_INSTAGRAM && CONFIG.instagram.sendToTelegramOnBookmark,
       });
     },
   };
@@ -3702,499 +5673,8 @@
   // ---------------------------------------------------------------------------
 
   // ---------------------------------------------------------------------------
-  // WebGL Liquid Glass renderer
-  //
-  // Same optical model as @ybouane/liquidglass: one shared WebGL renderer,
-  // rounded-surface height field, biconvex refraction, RGB dispersion,
-  // Fresnel reflection and multi-light specular. The userscript samples the
-  // concrete media node under the control instead of rasterising the full DOM.
   // ---------------------------------------------------------------------------
-
-  const LiquidGlassEngine = (() => {
-    const states = new Map();
-    const decodedSources = new Map();
-    let renderer = null;
-    let frame = 0;
-
-    const VS = `
-      attribute vec2 a_pos;
-      varying vec2 v_uv;
-      void main() {
-        v_uv = a_pos * 0.5 + 0.5;
-        gl_Position = vec4(a_pos, 0.0, 1.0);
-      }
-    `;
-
-    const FS = `
-      precision highp float;
-      uniform sampler2D u_tex;
-      uniform vec2 u_size;
-      uniform vec2 u_centerUV;
-      uniform vec2 u_pxToUV;
-      uniform float u_hasSource;
-      uniform float u_refract;
-      uniform float u_chroma;
-      uniform float u_edgeHL;
-      uniform float u_spec;
-      uniform float u_fresnel;
-      uniform float u_distort;
-      uniform float u_alpha;
-      uniform float u_sat;
-      uniform float u_brightness;
-      uniform float u_tintStrength;
-      uniform vec3 u_tintColor;
-      uniform float u_zRadius;
-      uniform float u_pressed;
-      uniform vec2 u_pointer;
-      uniform float u_time;
-      varying vec2 v_uv;
-
-      float rrSDF(vec2 p, vec2 b, float r) {
-        vec2 q = abs(p) - b + vec2(r);
-        return min(max(q.x, q.y), 0.0) + length(max(q, vec2(0.0))) - r;
-      }
-
-      float bevelHeight(float d, float zR) {
-        if (d <= 0.0) return 0.0;
-        if (d >= zR) return zR;
-        return sqrt(max(0.0, d * (2.0 * zR - d)));
-      }
-
-      float hash(vec2 p) {
-        return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-      }
-
-      void main() {
-        vec2 half_ = u_size * 0.5;
-        float radius = min(half_.x, half_.y);
-        vec2 localPx = (v_uv - 0.5) * u_size;
-        float sdf = rrSDF(localPx, half_, radius);
-        float mask = 1.0 - smoothstep(-1.25, 0.45, sdf);
-        if (mask <= 0.002) {
-          gl_FragColor = vec4(0.0);
-          return;
-        }
-
-        float inside = -sdf;
-        float maxD = min(half_.x, half_.y);
-        float edge = smoothstep(maxD * 0.42, 0.0, inside);
-        float zR = max(2.0, mix(u_zRadius, u_zRadius * 0.54, u_pressed));
-        float e = 1.25;
-        float dC = inside;
-        float dR = -rrSDF(localPx + vec2(e, 0.0), half_, radius);
-        float dL = -rrSDF(localPx - vec2(e, 0.0), half_, radius);
-        float dU = -rrSDF(localPx + vec2(0.0, e), half_, radius);
-        float dD = -rrSDF(localPx - vec2(0.0, e), half_, radius);
-        float hC = bevelHeight(dC, zR);
-        float hR = bevelHeight(dR, zR);
-        float hL = bevelHeight(dL, zR);
-        float hU = bevelHeight(dU, zR);
-        float hD = bevelHeight(dD, zR);
-        vec2 hGrad = vec2(hR - hL, hU - hD) / (2.0 * e);
-        vec3 N = normalize(vec3(-hGrad, 1.0));
-        float depth = smoothstep(0.0, zR, inside);
-
-        float ior = 1.5;
-        float refrPow = 1.0 - 1.0 / ior;
-        float thickness = hC * 2.0;
-        float thickNorm = thickness / max(zR * 2.0, 1.0);
-        vec2 entryRefr = hGrad * refrPow;
-        vec2 exitRefr = hGrad * refrPow;
-        vec2 throughRefr = entryRefr * thickNorm * 0.5;
-        float pressRefraction = mix(1.0, 0.52, u_pressed);
-        vec2 refrPx = (entryRefr + exitRefr + throughRefr) * u_refract * 22.0 * pressRefraction;
-        vec2 centerDir = -localPx / max(half_, vec2(1.0));
-        refrPx += centerDir * u_refract * 3.2 * depth * pressRefraction;
-
-        vec2 noisePos = localPx * 0.10 + vec2(u_time * 0.00009, -u_time * 0.00007);
-        vec2 micro = (vec2(hash(noisePos), hash(noisePos + vec2(37.0))) - 0.5) * u_distort;
-        vec2 base = u_centerUV + localPx * u_pxToUV + refrPx * u_pxToUV + micro;
-        float caS = u_chroma * 12.0 * (edge * 0.72 + 0.28);
-        vec2 caD = N.xy * caS * u_pxToUV;
-
-        vec3 col = vec3(0.0);
-        if (u_hasSource > 0.5) {
-          col = vec3(
-            texture2D(u_tex, clamp(base + caD, 0.001, 0.999)).r,
-            texture2D(u_tex, clamp(base,       0.001, 0.999)).g,
-            texture2D(u_tex, clamp(base - caD, 0.001, 0.999)).b
-          );
-          col *= 1.0 + u_brightness;
-          float lum = dot(col, vec3(0.299, 0.587, 0.114));
-          col = mix(vec3(lum), col, 1.0 + u_sat);
-          col = mix(col, u_tintColor, u_tintStrength * (0.30 + edge * 0.70));
-          col *= 1.0 + 0.045 * depth;
-        }
-
-        float fres = pow(1.0 - abs(N.z), 4.0) * u_fresnel;
-        vec3 V = vec3(0.0, 0.0, 1.0);
-        vec2 pointerN = (u_pointer - 0.5) * 2.0;
-        vec3 L1 = normalize(vec3(0.35 + pointerN.x * 0.85, 0.72 - pointerN.y * 0.85, 1.0));
-        vec3 H1 = normalize(L1 + V);
-        float sp1 = pow(max(dot(N, H1), 0.0), 82.0);
-        vec3 L2 = normalize(vec3(-0.45, -0.35, 1.0));
-        vec3 H2 = normalize(L2 + V);
-        float sp2 = pow(max(dot(N, H2), 0.0), 42.0) * 0.28;
-        vec3 L3 = normalize(vec3(0.0, 0.92, 0.46));
-        vec3 H3 = normalize(L3 + V);
-        float sp3 = pow(max(dot(N, H3), 0.0), 115.0) * 0.52;
-        float totalSpec = (sp1 + sp2 + sp3) * u_spec;
-
-        float borderWidth = 1.15;
-        float innerStroke = smoothstep(-borderWidth - 0.9, -borderWidth, sdf)
-                          * (1.0 - smoothstep(-0.8, 0.0, sdf));
-        float topBias = 0.5 + 0.5 * (-localPx.y / max(half_.y, 1.0));
-        innerStroke *= 0.30 + 0.70 * topBias;
-        float rim = edge * u_edgeHL * 0.20;
-        float innerGlow = smoothstep(4.0, 0.0, -sdf) * u_edgeHL * 0.12;
-        float env = (N.y * 0.5 + 0.5) * fres * 0.075;
-
-        vec3 light = vec3(totalSpec + rim + innerGlow + innerStroke * u_edgeHL * 0.60 + env);
-        vec3 fin = u_hasSource > 0.5 ? col + light : light;
-        fin = mix(fin, vec3(1.0), fres * 0.16);
-        float alpha = mask * (u_hasSource > 0.5 ? u_alpha : 0.34);
-        gl_FragColor = vec4(fin, alpha);
-      }
-    `;
-
-    function compile(gl, type, source) {
-      const shader = gl.createShader(type);
-      gl.shaderSource(shader, source);
-      gl.compileShader(shader);
-      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        const message = gl.getShaderInfoLog(shader) || "Shader WebGL inválido.";
-        gl.deleteShader(shader);
-        throw new Error(message);
-      }
-      return shader;
-    }
-
-    function createRenderer() {
-      if (renderer?.unavailable) return null;
-      if (renderer) return renderer;
-      if (!CONFIG.ui.liquid.realEnabled) return null;
-
-      const canvas = document.createElement("canvas");
-      canvas.width = 2;
-      canvas.height = 2;
-      const gl = canvas.getContext("webgl", {
-        alpha: true,
-        antialias: true,
-        premultipliedAlpha: true,
-        preserveDrawingBuffer: true,
-        powerPreference: "low-power",
-      });
-      if (!gl) {
-        renderer = { unavailable: true };
-        return null;
-      }
-
-      try {
-        const vs = compile(gl, gl.VERTEX_SHADER, VS);
-        const fs = compile(gl, gl.FRAGMENT_SHADER, FS);
-        const program = gl.createProgram();
-        gl.attachShader(program, vs);
-        gl.attachShader(program, fs);
-        gl.linkProgram(program);
-        gl.deleteShader(vs);
-        gl.deleteShader(fs);
-        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-          throw new Error(gl.getProgramInfoLog(program) || "Programa WebGL inválido.");
-        }
-
-        const buffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-
-        const texture = gl.createTexture();
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-
-        const names = [
-          "u_tex", "u_size", "u_centerUV", "u_pxToUV", "u_hasSource", "u_refract",
-          "u_chroma", "u_edgeHL", "u_spec", "u_fresnel", "u_distort", "u_alpha",
-          "u_sat", "u_brightness", "u_tintStrength", "u_tintColor", "u_zRadius",
-          "u_pressed", "u_pointer", "u_time",
-        ];
-        const uniforms = Object.fromEntries(names.map((name) => [name, gl.getUniformLocation(program, name)]));
-        renderer = { canvas, gl, program, buffer, texture, uniforms, aPos: gl.getAttribLocation(program, "a_pos") };
-        return renderer;
-      } catch (error) {
-        warn("Liquid Glass WebGL indisponível", error);
-        renderer = { unavailable: true };
-        return null;
-      }
-    }
-
-    function tintFor(button) {
-      if (button.dataset.action === ACTION.download) return [0.16, 0.88, 0.66];
-      if (button.dataset.kind === MEDIA_KIND.photo) return [0.78, 0.61, 1.0];
-      return [0.50, 0.84, 1.0];
-    }
-
-    function sourceUrlFor(target) {
-      if (!isElement(target)) return "";
-      const tag = String(target.tagName || "").toUpperCase();
-      if (tag === "IMG") return String(target.currentSrc || target.src || target.getAttribute?.("src") || "");
-      if (tag === "VIDEO") return String(target.poster || "");
-      return "";
-    }
-
-    function decodeBlob(blob) {
-      if (typeof createImageBitmap === "function") return createImageBitmap(blob).catch(() => null);
-      return new Promise((resolve) => {
-        const url = URL.createObjectURL(blob);
-        const image = new Image();
-        image.onload = () => { URL.revokeObjectURL(url); resolve(image); };
-        image.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
-        image.src = url;
-      });
-    }
-
-    function requestDecodedSource(state, target) {
-      const url = sourceUrlFor(target);
-      if (!/^https?:/i.test(url)) return;
-      if (state.fallbackUrl === url && (state.fallbackSource || state.fallbackPending)) return;
-      state.fallbackUrl = url;
-      state.fallbackSource = null;
-      const cached = decodedSources.get(url);
-      if (cached) {
-        state.fallbackSource = cached;
-        state.dirty = true;
-        schedule();
-        return;
-      }
-      state.fallbackPending = gmBlob(url)
-        .then(({ blob }) => decodeBlob(blob))
-        .then((source) => {
-          if (!source) return null;
-          decodedSources.set(url, source);
-          state.fallbackSource = source;
-          state.dirty = true;
-          schedule();
-          return source;
-        })
-        .catch((error) => { debug("Liquid Glass media snapshot indisponível", error); return null; })
-        .finally(() => { state.fallbackPending = null; });
-    }
-
-    function intrinsicSize(source, target) {
-      const tag = String(target?.tagName || "").toUpperCase();
-      if (tag === "VIDEO") {
-        return { width: Number(target.videoWidth || source?.videoWidth || source?.width || 0), height: Number(target.videoHeight || source?.videoHeight || source?.height || 0) };
-      }
-      return { width: Number(target?.naturalWidth || source?.naturalWidth || source?.width || 0), height: Number(target?.naturalHeight || source?.naturalHeight || source?.height || 0) };
-    }
-
-    function parseObjectPosition(value) {
-      const parts = String(value || "50% 50%").trim().split(/\s+/);
-      const parse = (part) => {
-        const token = String(part || "50%").toLowerCase();
-        if (token === "left" || token === "top") return 0;
-        if (token === "right" || token === "bottom") return 1;
-        if (token === "center") return 0.5;
-        if (/%$/.test(token)) return Math.max(0, Math.min(1, Number.parseFloat(token) / 100));
-        return 0.5;
-      };
-      return { x: parse(parts[0]), y: parse(parts[1] || parts[0]) };
-    }
-
-    function sampling(target, source, buttonRect) {
-      const rect = target.getBoundingClientRect();
-      const intrinsic = intrinsicSize(source, target);
-      if (!rect.width || !rect.height || !intrinsic.width || !intrinsic.height) return null;
-      let renderedWidth = rect.width;
-      let renderedHeight = rect.height;
-      let fit = "fill";
-      let position = { x: 0.5, y: 0.5 };
-      try {
-        const style = getComputedStyle(target);
-        fit = style.objectFit || "fill";
-        position = parseObjectPosition(style.objectPosition);
-      } catch {}
-      if (fit !== "fill") {
-        const contain = Math.min(rect.width / intrinsic.width, rect.height / intrinsic.height);
-        const cover = Math.max(rect.width / intrinsic.width, rect.height / intrinsic.height);
-        let scale = fit === "contain" ? contain : fit === "cover" ? cover : 1;
-        if (fit === "scale-down") scale = Math.min(1, contain);
-        renderedWidth = intrinsic.width * scale;
-        renderedHeight = intrinsic.height * scale;
-      }
-      const renderedLeft = rect.left + (rect.width - renderedWidth) * position.x;
-      const renderedTop = rect.top + (rect.height - renderedHeight) * position.y;
-      const centerX = buttonRect.left + buttonRect.width * 0.5;
-      const centerY = buttonRect.top + buttonRect.height * 0.5;
-      const x = (centerX - renderedLeft) / renderedWidth;
-      const y = (centerY - renderedTop) / renderedHeight;
-      return {
-        centerUV: [Math.max(0.001, Math.min(0.999, x)), Math.max(0.001, Math.min(0.999, 1 - y))],
-        pxToUV: [1 / renderedWidth, 1 / renderedHeight],
-      };
-    }
-
-    function tryUpload(gl, source) {
-      try {
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
-        return true;
-      } catch {
-        return false;
-      }
-    }
-
-    function resizeDisplayCanvas(state, widthCss, heightCss) {
-      const scale = Math.max(1, Math.min(Number(CONFIG.ui.liquid.renderScale || 2), Number(devicePixelRatio || 1)));
-      const width = Math.max(2, Math.round(widthCss * scale));
-      const height = Math.max(2, Math.round(heightCss * scale));
-      if (state.canvas.width !== width || state.canvas.height !== height) {
-        state.canvas.width = width;
-        state.canvas.height = height;
-        state.canvas.style.width = `${widthCss}px`;
-        state.canvas.style.height = `${heightCss}px`;
-      }
-      return { width, height };
-    }
-
-    function render(state, now) {
-      const r = createRenderer();
-      if (!r) return false;
-      const button = state.button;
-      const target = state.getTarget?.();
-      if (!button?.isConnected || !isElement(target) || !target.isConnected) return false;
-      const buttonRect = button.getBoundingClientRect();
-      if (buttonRect.width < 4 || buttonRect.height < 4 || !Media.visibleRect(target)) return false;
-      const { width, height } = resizeDisplayCanvas(state, buttonRect.width, buttonRect.height);
-      const gl = r.gl;
-      if (r.canvas.width !== width || r.canvas.height !== height) { r.canvas.width = width; r.canvas.height = height; }
-      gl.viewport(0, 0, width, height);
-      gl.clearColor(0, 0, 0, 0);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      gl.useProgram(r.program);
-      gl.bindBuffer(gl.ARRAY_BUFFER, r.buffer);
-      gl.enableVertexAttribArray(r.aPos);
-      gl.vertexAttribPointer(r.aPos, 2, gl.FLOAT, false, 0, 0);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, r.texture);
-
-      let source = target;
-      const tag = String(target.tagName || "").toUpperCase();
-      const directReady = tag === "IMG" ? Boolean(target.complete && target.naturalWidth) : tag === "VIDEO" ? Number(target.readyState || 0) >= 2 && Number(target.videoWidth || 0) > 0 : false;
-      let hasSource = false;
-      if (directReady && state.directBlockedTarget !== target) {
-        hasSource = tryUpload(gl, target);
-        if (!hasSource) { state.directBlockedTarget = target; requestDecodedSource(state, target); }
-      }
-      if (!hasSource && state.fallbackSource) {
-        source = state.fallbackSource;
-        hasSource = tryUpload(gl, source);
-      }
-      if (!hasSource) requestDecodedSource(state, target);
-
-      const sample = sampling(target, source, buttonRect) || { centerUV: [0.5, 0.5], pxToUV: [1 / Math.max(1, buttonRect.width), 1 / Math.max(1, buttonRect.height)] };
-      const cfg = CONFIG.ui.liquid;
-      const tint = tintFor(button);
-      gl.uniform1i(r.uniforms.u_tex, 0);
-      gl.uniform2f(r.uniforms.u_size, buttonRect.width, buttonRect.height);
-      gl.uniform2f(r.uniforms.u_centerUV, sample.centerUV[0], sample.centerUV[1]);
-      gl.uniform2f(r.uniforms.u_pxToUV, sample.pxToUV[0], sample.pxToUV[1]);
-      gl.uniform1f(r.uniforms.u_hasSource, hasSource ? 1 : 0);
-      gl.uniform1f(r.uniforms.u_refract, Number(cfg.refraction || 0.69));
-      gl.uniform1f(r.uniforms.u_chroma, Number(cfg.chromaticAberration || 0.05));
-      gl.uniform1f(r.uniforms.u_edgeHL, Number(cfg.edgeHighlight || 0.075));
-      gl.uniform1f(r.uniforms.u_spec, Number(cfg.specular || 0.22));
-      gl.uniform1f(r.uniforms.u_fresnel, Number(cfg.fresnel || 1));
-      gl.uniform1f(r.uniforms.u_distort, Number(cfg.distortion || 0));
-      gl.uniform1f(r.uniforms.u_alpha, Number(cfg.opacity || 0.96));
-      gl.uniform1f(r.uniforms.u_sat, Number(cfg.saturation || 0));
-      gl.uniform1f(r.uniforms.u_brightness, Number(cfg.brightness || 0));
-      gl.uniform1f(r.uniforms.u_tintStrength, Number(cfg.tintStrength || 0));
-      gl.uniform3f(r.uniforms.u_tintColor, tint[0], tint[1], tint[2]);
-      gl.uniform1f(r.uniforms.u_zRadius, Math.max(4, Math.min(Number(cfg.zRadius || 17), buttonRect.width * 0.5)));
-      gl.uniform1f(r.uniforms.u_pressed, state.pressed ? 1 : 0);
-      gl.uniform2f(r.uniforms.u_pointer, state.pointerX, state.pointerY);
-      gl.uniform1f(r.uniforms.u_time, now);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-      state.context2d.clearRect(0, 0, width, height);
-      state.context2d.drawImage(r.canvas, 0, 0, width, height);
-      state.canvas.dataset.aioGlassSource = hasSource ? "media" : "optical-fallback";
-      state.lastRender = now;
-      state.dirty = false;
-      return true;
-    }
-
-    function tick(now) {
-      frame = 0;
-      let keepRunning = false;
-      const frameInterval = 1000 / Math.max(1, Number(CONFIG.ui.liquid.maxFps || 30));
-      for (const [button, state] of states) {
-        if (!button.isConnected) { states.delete(button); continue; }
-        const target = state.getTarget?.();
-        const videoDynamic = isVideoElement(target) && !target.paused && !target.ended;
-        const interactive = state.pressed || state.active;
-        if (videoDynamic || interactive) keepRunning = true;
-        if (state.dirty || interactive || (videoDynamic && now - state.lastRender >= frameInterval)) render(state, now);
-      }
-      if (keepRunning) frame = requestAnimationFrame(tick);
-    }
-
-    function schedule() {
-      if (!frame) frame = requestAnimationFrame(tick);
-    }
-
-    return Object.freeze({
-      register(button, getTarget) {
-        if (!CONFIG.ui.liquid.realEnabled || !button) return null;
-        const canvas = button.querySelector?.(".aio-liquid-canvas");
-        if (!canvas) return null;
-        let state = states.get(button);
-        if (!state || state.canvas !== canvas) {
-          state = {
-            button,
-            canvas,
-            context2d: canvas.getContext("2d", { alpha: true }),
-            getTarget,
-            pointerX: 0.5,
-            pointerY: 0.34,
-            pressed: false,
-            active: false,
-            dirty: true,
-            lastRender: 0,
-            directBlockedTarget: null,
-            fallbackUrl: "",
-            fallbackSource: null,
-            fallbackPending: null,
-          };
-          states.set(button, state);
-        } else {
-          state.getTarget = getTarget;
-          state.dirty = true;
-        }
-        schedule();
-        return state;
-      },
-      unregister(button) { states.delete(button); },
-      mark(button) { const state = states.get(button); if (!state) return; state.dirty = true; schedule(); },
-      setInteraction(button, next = {}) {
-        const state = states.get(button);
-        if (!state) return;
-        if (Number.isFinite(next.x)) state.pointerX = Math.max(0, Math.min(1, Number(next.x)));
-        if (Number.isFinite(next.y)) state.pointerY = Math.max(0, Math.min(1, Number(next.y)));
-        if (typeof next.pressed === "boolean") state.pressed = next.pressed;
-        if (typeof next.active === "boolean") state.active = next.active;
-        state.dirty = true;
-        schedule();
-      },
-      diagnostics() { return { webgl: Boolean(createRenderer()), controls: states.size, decodedSources: decodedSources.size }; },
-    });
-  })();
-
-
-  // ---------------------------------------------------------------------------
-  // Instagram logged-in account header
+  // Instagram account header
   // ---------------------------------------------------------------------------
 
   const InstagramAccountHeader = (() => {
@@ -4223,6 +5703,9 @@
     let root = null;
     let style = null;
     let avatar = null;
+    let avatarShell = null;
+    let avatarFallback = null;
+    let avatarObjectUrl = "";
     let profileLink = null;
     let usernameNode = null;
     let versionNode = null;
@@ -4293,6 +5776,7 @@
         const username = normalizeUsername(viewer.username);
         if (!username) continue;
         const avatarUrl = avatarUrlFrom(viewer);
+        if (!avatarUrl) continue;
         return {
           username,
           avatarUrl,
@@ -4314,6 +5798,11 @@
         'a[aria-label*="Perfil" i][href] img',
         'a[title*="Profile" i][href] img',
         'a[title*="Perfil" i][href] img',
+        'a[href] img[alt*="profile picture" i]',
+        'a[href] img[alt*="foto do perfil" i]',
+        'img[alt*="profile picture" i]',
+        'img[alt*="foto do perfil" i]',
+        'a[href] img',
       ];
 
       const seen = new Set();
@@ -4323,7 +5812,7 @@
           if (!isImageElement(image) || seen.has(image)) continue;
           seen.add(image);
 
-          const anchor = image.closest?.("a[href]");
+          const anchor = image.closest?.("a[href]") || image.parentElement?.closest?.("a[href]");
           if (!anchor) continue;
           if (anchor.closest?.("article,[role='dialog']")) continue;
 
@@ -4464,103 +5953,40 @@
 
     function ensureStyle() {
       if (style?.isConnected) return style;
-
-      const avatarSize = Math.max(20, Number(CONFIG.ui.profileHeader.avatarSize) || 25);
+      const avatarSize = Math.max(22, Number(CONFIG.ui.profileHeader.avatarSize) || 27);
       style = document.createElement("style");
       style.id = "aio-instagram-account-header-style";
       style.textContent = `
         #aio-media-actions-root #aio-instagram-account-header{
-          --aio-profile-bg:#171717;
-          --aio-profile-fg:#fff;
-          --aio-profile-muted:rgba(255,255,255,.76);
-          --aio-profile-chip:rgba(0,0,0,.18);
-          --aio-profile-ring:rgba(255,255,255,.34);
-          --aio-profile-shadow:rgba(0,0,0,.30);
-          position:fixed;
-          top:calc(env(safe-area-inset-top) + ${Math.max(0, Number(CONFIG.ui.profileHeader.topOffset) || 8)}px);
-          left:50%;
-          z-index:2147483647;
-          display:none;
-          align-items:center;
-          gap:7px;
-          min-height:${avatarSize + 8}px;
-          max-width:min(86vw,390px);
-          padding:4px 8px 4px 4px;
-          border:1px solid color-mix(in srgb,var(--aio-profile-fg) 20%,transparent);
-          border-radius:999px;
-          background:var(--aio-profile-bg);
-          color:var(--aio-profile-fg);
-          box-shadow:
-            0 8px 26px var(--aio-profile-shadow),
-            inset 0 1px rgba(255,255,255,.18);
-          transform:translateX(-50%);
-          pointer-events:auto;
-          box-sizing:border-box;
-          font:600 12px/1.15 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;
-          -webkit-font-smoothing:antialiased;
-          user-select:none;
-          -webkit-user-select:none;
-          isolation:isolate
+          --aio-profile-bg:#171717;--aio-profile-fg:#fff;--aio-profile-muted:rgba(255,255,255,.76);
+          --aio-profile-chip:rgba(255,255,255,.16);--aio-profile-ring:rgba(255,255,255,.34);
+          position:fixed;top:calc(env(safe-area-inset-top) + ${Math.max(0, Number(CONFIG.ui.profileHeader.topOffset) || 8)}px);
+          left:50%;z-index:2147483647;display:none;align-items:center;gap:7px;min-height:${avatarSize + 10}px;
+          max-width:min(90vw,430px);padding:5px 8px 5px 5px;border:.7px solid rgba(255,255,255,.26);
+          border-radius:999px;background:color-mix(in srgb,var(--aio-profile-bg) 86%,transparent);color:var(--aio-profile-fg);
+          -webkit-backdrop-filter:blur(14px) saturate(1.16);backdrop-filter:blur(14px) saturate(1.16);
+          box-shadow:inset 0 .125em .125em #0000000d,inset 0 -.125em .125em #ffffff40,0 .125em .125em -.125em #0003,
+            inset 0 0 .1em .18em #ffffff22,0 .225em .05em #0000000d,0 .2em #ffffff42,inset 0 .2em .05em #00000020;
+          transform:translateX(-50%);pointer-events:auto;box-sizing:border-box;
+          font:650 12px/1.15 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;
+          -webkit-font-smoothing:antialiased;user-select:none;-webkit-user-select:none;isolation:isolate
         }
         #aio-media-actions-root #aio-instagram-account-header[data-ready="true"]{display:flex}
-        #aio-media-actions-root #aio-instagram-account-header .aio-profile-link{
-          display:grid;
-          grid-template-columns:${avatarSize}px minmax(0,1fr);
-          align-items:center;
-          gap:7px;
-          min-width:0;
-          color:inherit;
-          text-decoration:none;
-          outline:0;
-          border-radius:999px
+        #aio-media-actions-root #aio-instagram-account-header .aio-profile-link{display:grid;grid-template-columns:${avatarSize}px minmax(0,1fr);align-items:center;gap:7px;min-width:0;color:inherit;text-decoration:none;outline:0;border-radius:999px}
+        #aio-media-actions-root #aio-instagram-account-header .aio-profile-avatar-shell{position:relative;display:grid;place-items:center;width:${avatarSize}px;height:${avatarSize}px;border-radius:50%;overflow:hidden;background:var(--aio-profile-chip);
+          box-shadow:0 0 0 1px var(--aio-profile-ring),inset 0 .08em .1em rgba(255,255,255,.28),0 .18em .42em rgba(0,0,0,.22);transition:box-shadow 100ms ease,transform 100ms ease}
+        #aio-media-actions-root #aio-instagram-account-header .aio-profile-link:active .aio-profile-avatar-shell{
+          box-shadow:inset 0 .125em .125em #0000000d,inset 0 -.125em .125em #ffffff80,0 .125em .125em -.125em #0003,
+            inset 0 0 .1em .25em #fff3,0 .225em .05em #0000000d,0 .25em #ffffffbf,inset 0 .25em .05em #00000026;
+          transform:translateY(.04em) scale(.96)
         }
-        #aio-media-actions-root #aio-instagram-account-header .aio-profile-link:focus-visible{
-          box-shadow:0 0 0 2px var(--aio-profile-fg)
-        }
-        #aio-media-actions-root #aio-instagram-account-header .aio-profile-avatar{
-          display:block;
-          width:${avatarSize}px;
-          height:${avatarSize}px;
-          min-width:${avatarSize}px;
-          border-radius:50%;
-          object-fit:cover;
-          background:var(--aio-profile-chip);
-          box-shadow:
-            0 0 0 1px var(--aio-profile-ring),
-            0 2px 8px rgba(0,0,0,.22)
-        }
-        #aio-media-actions-root #aio-instagram-account-header .aio-profile-username{
-          min-width:0;
-          max-width:190px;
-          overflow:hidden;
-          text-overflow:ellipsis;
-          white-space:nowrap;
-          letter-spacing:-.01em
-        }
-        #aio-media-actions-root #aio-instagram-account-header .aio-profile-version{
-          display:inline-flex;
-          align-items:center;
-          justify-content:center;
-          min-height:22px;
-          padding:0 7px;
-          border:1px solid color-mix(in srgb,var(--aio-profile-fg) 15%,transparent);
-          border-radius:999px;
-          background:var(--aio-profile-chip);
-          color:var(--aio-profile-muted);
-          font-size:10px;
-          font-weight:750;
-          letter-spacing:.02em;
-          white-space:nowrap;
-          box-sizing:border-box
-        }
-        @supports not (color:color-mix(in srgb,white,black)){
-          #aio-media-actions-root #aio-instagram-account-header{
-            border-color:rgba(255,255,255,.22)
-          }
-          #aio-media-actions-root #aio-instagram-account-header .aio-profile-version{
-            border-color:rgba(255,255,255,.18)
-          }
-        }
+        #aio-media-actions-root #aio-instagram-account-header .aio-profile-avatar{position:absolute;inset:0;display:block;width:100%;height:100%;border-radius:50%;object-fit:cover;opacity:0;transition:opacity 150ms ease}
+        #aio-media-actions-root #aio-instagram-account-header .aio-profile-avatar-shell[data-loaded="true"] .aio-profile-avatar{opacity:1}
+        #aio-media-actions-root #aio-instagram-account-header .aio-profile-avatar-fallback{display:grid;place-items:center;width:100%;height:100%;color:var(--aio-profile-fg);opacity:.84}
+        #aio-media-actions-root #aio-instagram-account-header .aio-profile-avatar-shell[data-loaded="true"] .aio-profile-avatar-fallback{opacity:0}
+        #aio-media-actions-root #aio-instagram-account-header .aio-profile-avatar-fallback svg{width:62%;height:62%;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+        #aio-media-actions-root #aio-instagram-account-header .aio-profile-username{min-width:0;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:-.01em}
+        #aio-media-actions-root #aio-instagram-account-header .aio-profile-version{display:inline-flex;align-items:center;justify-content:center;min-height:22px;padding:0 7px;border:.7px solid rgba(255,255,255,.20);border-radius:999px;background:var(--aio-profile-chip);color:var(--aio-profile-muted);font-size:10px;font-weight:760;letter-spacing:.02em;white-space:nowrap}
       `;
       (document.head || document.documentElement)?.appendChild(style);
       return style;
@@ -4580,6 +6006,8 @@
         root = existing;
         profileLink = root.querySelector(".aio-profile-link");
         avatar = root.querySelector(".aio-profile-avatar");
+        avatarShell = root.querySelector(".aio-profile-avatar-shell");
+        avatarFallback = root.querySelector(".aio-profile-avatar-fallback");
         usernameNode = root.querySelector(".aio-profile-username");
         versionNode = root.querySelector(".aio-profile-version");
         return root;
@@ -4589,32 +6017,69 @@
       root.id = "aio-instagram-account-header";
       root.dataset.ready = "false";
       root.setAttribute("role", "group");
-      root.setAttribute("aria-label", `All-in-One Downloader ${VERSION}`);
+      root.setAttribute("aria-label", `AIO downloader ${VERSION}`);
 
       profileLink = document.createElement("a");
       profileLink.className = "aio-profile-link";
       profileLink.rel = "noopener";
 
+      avatarShell = document.createElement("span");
+      avatarShell.className = "aio-profile-avatar-shell";
+      avatarShell.dataset.loaded = "false";
+
       avatar = document.createElement("img");
       avatar.className = "aio-profile-avatar";
       avatar.alt = "";
       avatar.decoding = "async";
+      avatar.loading = "eager";
+
+      avatarFallback = document.createElement("span");
+      avatarFallback.className = "aio-profile-avatar-fallback";
+      avatarFallback.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5.8 19c.8-3.7 3-5.5 6.2-5.5s5.4 1.8 6.2 5.5"/></svg>';
+      avatarShell.append(avatar, avatarFallback);
 
       usernameNode = document.createElement("span");
       usernameNode.className = "aio-profile-username";
 
       versionNode = document.createElement("span");
       versionNode.className = "aio-profile-version";
-      versionNode.textContent = `Downloader v${VERSION}`;
+      versionNode.textContent = `AIO downloader v${VERSION}`;
 
-      profileLink.append(avatar, usernameNode);
+      profileLink.append(avatarShell, usernameNode);
       root.append(profileLink, versionNode);
       uiRoot.appendChild(root);
       return root;
     }
 
     function findIdentity() {
-      return viewerFromGlobals() || domIdentity();
+      const fromGlobal = viewerFromGlobals();
+      const fromDom = domIdentity();
+      if (fromGlobal && fromDom && fromGlobal.username.toLowerCase() === fromDom.username.toLowerCase()) {
+        return { ...fromGlobal, ...fromDom, avatarUrl: fromDom.avatarUrl || fromGlobal.avatarUrl, source: `${fromGlobal.source}+${fromDom.source}` };
+      }
+      return fromDom || fromGlobal;
+    }
+
+    function setAvatarSource(url, username) {
+      const value = String(url || "").trim();
+      if (!avatar || !avatarShell || !value) return;
+      avatarShell.dataset.loaded = "false";
+      avatar.alt = `@${username}`;
+
+      const loaded = () => { avatarShell.dataset.loaded = "true"; };
+      avatar.onload = loaded;
+      avatar.onerror = () => {
+        if (avatar.dataset.proxyAttempted === "true") return;
+        avatar.dataset.proxyAttempted = "true";
+        void gmBlob(value).then(({ blob }) => {
+          if (avatarObjectUrl) { try { URL.revokeObjectURL(avatarObjectUrl); } catch {} }
+          avatarObjectUrl = URL.createObjectURL(blob);
+          avatar.src = avatarObjectUrl;
+        }).catch((error) => debug("Avatar Instagram via GM falhou", error));
+      };
+      avatar.dataset.proxyAttempted = "false";
+      avatar.src = value;
+      if (avatar.complete && avatar.naturalWidth > 0) loaded();
     }
 
     function apply(next) {
@@ -4637,10 +6102,9 @@
       profileLink.href = identity.profileUrl;
       profileLink.title = `Abrir @${username}`;
       profileLink.setAttribute("aria-label", `Abrir perfil @${username}`);
-      avatar.src = identity.avatarUrl;
-      avatar.alt = `@${username}`;
+      setAvatarSource(identity.avatarUrl, username);
       usernameNode.textContent = `@${username}`;
-      versionNode.textContent = `Downloader v${VERSION}`;
+      versionNode.textContent = `AIO downloader v${VERSION}`;
 
       node.style.setProperty("--aio-profile-bg", theme.hex);
       node.style.setProperty("--aio-profile-fg", theme.foreground);
@@ -4797,205 +6261,82 @@
 
     ensureStyles() {
       if (this.style?.isConnected) return;
-      const size = CONFIG.ui.liquid.buttonSize;
-      const iconSize = CONFIG.ui.liquid.iconSize;
+      const size = CONFIG.ui.button.size;
+      const iconSize = CONFIG.ui.button.iconSize;
       const style = document.createElement("style");
       style.id = "aio-media-actions-style";
       style.textContent = `
         #aio-media-actions-root .aio-group{
-          position:fixed;z-index:2147483647;display:none;align-items:center;gap:5px;
-          width:max-content;padding:1px;border:0;border-radius:999px;background:transparent;
-          box-shadow:none;pointer-events:auto;touch-action:none;user-select:none;
-          -webkit-user-select:none;box-sizing:border-box
+          position:fixed;z-index:2147483647;display:none;align-items:center;gap:6px;
+          width:max-content;padding:0;border:0;background:transparent;box-shadow:none;
+          pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;box-sizing:border-box
         }
-
-        /*
-         * Stable Liquid fallback, enabled by default.
-         * No canvas, shader, snapshot or filter URL is required. The apparent
-         * volume comes from several independent optical layers, a moving
-         * specular hotspot and inner/outer meniscus highlights.
-         */
+        #aio-media-actions-root .aio-button-wrap{
+          position:relative;display:grid;place-items:center;width:${size}px;height:${size}px;pointer-events:auto
+        }
         #aio-media-actions-root .aio-button{
-          --aio-liquid-x:50%;
-          --aio-liquid-y:34%;
-          --aio-liquid-shift-x:0px;
-          --aio-liquid-shift-y:0px;
-          --aio-liquid-tilt-x:0deg;
-          --aio-liquid-tilt-y:0deg;
-          --aio-liquid-scale:1;
-          --aio-liquid-accent:210 92% 68%;
-          position:relative;
-          display:inline-grid;
-          place-items:center;
-          width:${size}px;
-          min-width:${size}px;
-          height:${size}px;
-          min-height:${size}px;
-          padding:0;
-          overflow:hidden;
-          border:.6px solid rgba(255,255,255,.24);
-          border-radius:50%;
-          outline:0;
-          color:rgba(255,255,255,.91);
-          cursor:pointer;
-          appearance:none;
-          -webkit-appearance:none;
-          touch-action:none;
-          box-sizing:border-box;
-          isolation:isolate;
-          background:
-            radial-gradient(circle at var(--aio-liquid-x) var(--aio-liquid-y),
-              rgba(255,255,255,.30) 0 5%,
-              rgba(255,255,255,.10) 17%,
-              rgba(255,255,255,.025) 37%,
-              rgba(255,255,255,0) 58%),
-            radial-gradient(circle at 73% 79%,
-              hsla(var(--aio-liquid-accent)/.11) 0 10%,
-              rgba(255,255,255,0) 49%),
-            linear-gradient(145deg,
-              rgba(255,255,255,.105) 0%,
-              rgba(255,255,255,.028) 35%,
-              rgba(8,13,22,.075) 70%,
-              rgba(255,255,255,.045) 100%),
-            rgba(20,28,40,.11);
-          -webkit-backdrop-filter:blur(8px) saturate(1.14) contrast(1.015);
-          backdrop-filter:blur(8px) saturate(1.14) contrast(1.015);
-          box-shadow:
-            0 5px 14px rgba(0,0,0,.16),
-            0 1px 2px rgba(0,0,0,.11),
-            inset 0 .8px .75px rgba(255,255,255,.38),
-            inset .8px .2px 1.1px rgba(255,255,255,.13),
-            inset 0 -1px 1.35px rgba(3,8,18,.18),
-            0 0 0 .35px rgba(255,255,255,.08);
-          transform-origin:50% 56%;
-          transform:perspective(180px)
-            translate3d(var(--aio-liquid-shift-x),var(--aio-liquid-shift-y),0)
-            rotateX(var(--aio-liquid-tilt-x))
-            rotateY(var(--aio-liquid-tilt-y))
-            scale(var(--aio-liquid-scale));
-          transition:
-            transform 250ms cubic-bezier(.22,1,.36,1),
-            opacity 150ms ease,
-            border-color 180ms ease,
-            box-shadow 180ms ease,
-            background 180ms ease;
+          --aio-media-color:#075985;
+          position:relative;display:grid;place-items:center;width:${size}px;min-width:${size}px;
+          height:${size}px;min-height:${size}px;padding:0;overflow:visible;border:1px solid rgba(255,255,255,.82);
+          border-radius:50%;outline:0;color:var(--aio-media-color);cursor:pointer;appearance:none;-webkit-appearance:none;
+          touch-action:manipulation;box-sizing:border-box;isolation:isolate;
+          background:rgba(10,12,16,.68);
+          box-shadow:0 3px 11px rgba(0,0,0,.34),inset 0 0 0 1px rgba(0,0,0,.18);
+          transform:scale(1);transition:transform 110ms ease,opacity 120ms ease,background-color 120ms ease,border-color 120ms ease
         }
-
         #aio-media-actions-root .aio-button::before{
-          content:"";
-          position:absolute;
-          inset:.7px;
-          z-index:0;
-          border-radius:inherit;
-          pointer-events:none;
-          background:
-            radial-gradient(circle at var(--aio-liquid-x) var(--aio-liquid-y),
-              rgba(255,255,255,.44) 0 2.5%,
-              rgba(255,255,255,.18) 8%,
-              rgba(255,255,255,0) 31%),
-            linear-gradient(160deg,
-              rgba(255,255,255,.19),
-              rgba(255,255,255,.025) 36%,
-              rgba(255,255,255,0) 63%);
-          opacity:.72;
-          mix-blend-mode:screen;
-          transform:translateZ(0);
+          content:"";position:absolute;inset:-1px;border:1px solid #fff;border-radius:inherit;
+          opacity:.72;mix-blend-mode:difference;pointer-events:none
         }
-
-        #aio-media-actions-root .aio-button::after{
-          content:"";
-          position:absolute;
-          inset:1.2px;
-          z-index:1;
-          border-radius:inherit;
-          pointer-events:none;
-          border:.45px solid rgba(255,255,255,.13);
-          box-shadow:
-            inset 1.1px 1.6px 2px rgba(255,255,255,.09),
-            inset -1px -1.2px 2px rgba(0,0,0,.10);
-          background:
-            radial-gradient(ellipse at 35% 8%,rgba(255,255,255,.12),transparent 43%),
-            radial-gradient(ellipse at 78% 92%,hsla(var(--aio-liquid-accent)/.055),transparent 42%);
+        #aio-media-actions-root .aio-button:hover,#aio-media-actions-root .aio-button:focus-visible{
+          background:rgba(4,6,10,.80);border-color:#fff
         }
-
-        #aio-media-actions-root .aio-liquid-canvas{
-          position:absolute;inset:0;z-index:0;display:none;width:100%;height:100%;
-          border-radius:inherit;pointer-events:none;opacity:1
+        #aio-media-actions-root .aio-button:active{transform:scale(.94)}
+        #aio-media-actions-root .aio-button:disabled,#aio-media-actions-root .aio-button[aria-busy="true"]{
+          cursor:wait;pointer-events:none;opacity:.72
         }
-
-        #aio-media-actions-root .aio-button[data-liquid-mode="real"] .aio-liquid-canvas{
-          display:block
+        #aio-media-actions-root .aio-button-content{
+          position:relative;display:grid;place-items:center;width:100%;height:100%;pointer-events:none
         }
-
-        #aio-media-actions-root .aio-button[data-liquid-mode="real"]::before,
-        #aio-media-actions-root .aio-button[data-liquid-mode="real"]::after{
-          opacity:.34
+        #aio-media-actions-root .aio-icon-slot,#aio-media-actions-root .aio-spinner{
+          grid-area:1/1;display:grid;place-items:center
         }
-
-        #aio-media-actions-root .aio-liquid-content{
-          position:relative;z-index:3;display:grid;place-items:center;width:100%;height:100%;
-          pointer-events:none;filter:drop-shadow(0 1px .55px rgba(0,0,0,.28));transform:translateZ(0)
+        #aio-media-actions-root .aio-button[aria-busy="true"] .aio-icon-slot{display:none}
+        #aio-media-actions-root .aio-spinner{
+          display:none;width:${iconSize}px;height:${iconSize}px;animation:aio-spin .72s linear infinite
         }
-
-        #aio-media-actions-root .aio-button:hover,
-        #aio-media-actions-root .aio-button:focus-visible{
-          --aio-liquid-scale:1.035;
-          border-color:rgba(255,255,255,.32);
-          box-shadow:
-            0 6px 16px rgba(0,0,0,.18),
-            inset 0 .9px .9px rgba(255,255,255,.44),
-            inset 0 -1px 1.4px rgba(0,0,0,.13),
-            0 0 0 .45px rgba(255,255,255,.11)
+        #aio-media-actions-root .aio-button[aria-busy="true"] .aio-spinner{display:block}
+        #aio-media-actions-root .aio-icon-slot svg{width:${iconSize}px;height:${iconSize}px;overflow:visible;pointer-events:none}
+        #aio-media-actions-root .aio-glyph-halo{
+          fill:none;stroke:rgba(255,255,255,.94);stroke-width:4.6;stroke-linecap:round;stroke-linejoin:round;
+          filter:drop-shadow(0 1px 1px rgba(0,0,0,.72))
         }
-
-        #aio-media-actions-root .aio-button[data-liquid-pressed="true"],
-        #aio-media-actions-root .aio-button:active{
-          --aio-liquid-scale:.94;
-          transition-duration:85ms;
-          box-shadow:
-            0 2px 6px rgba(0,0,0,.15),
-            inset 0 .5px .6px rgba(255,255,255,.24),
-            inset 0 -1.2px 1.8px rgba(0,0,0,.19)
+        #aio-media-actions-root .aio-media-glyph{
+          fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round
         }
-
-        #aio-media-actions-root .aio-button[aria-busy="true"]{opacity:.42;pointer-events:none}
-        #aio-media-actions-root .aio-button[data-action="telegram"][data-kind="photo"]{
-          --aio-liquid-accent:273 84% 72%;
-          color:rgba(250,247,255,.91);
-          border-color:rgba(221,214,254,.25)
+        #aio-media-actions-root .aio-used-dot,#aio-media-actions-root .aio-used-check{opacity:0;transition:opacity 120ms ease}
+        #aio-media-actions-root .aio-used-dot{fill:#14532d;stroke:#fff;stroke-width:1.15}
+        #aio-media-actions-root .aio-used-check{fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+        #aio-media-actions-root .aio-button[data-used="true"] .aio-used-dot,
+        #aio-media-actions-root .aio-button[data-used="true"] .aio-used-check,
+        #aio-media-actions-root .aio-button[data-used="partial"] .aio-used-dot,
+        #aio-media-actions-root .aio-button[data-used="partial"] .aio-used-check{opacity:1}
+        #aio-media-actions-root .aio-button[data-used="partial"] .aio-used-dot,
+        #aio-media-actions-root .aio-button[data-used="partial"] .aio-used-check{opacity:.72}
+        #aio-media-actions-root .aio-button[data-used="true"]{border-color:#86efac;background:rgba(5,26,14,.78)}
+        #aio-media-actions-root .aio-spinner circle{
+          fill:none;stroke:rgba(255,255,255,.92);stroke-width:4.4;stroke-linecap:round;opacity:.94
         }
-        #aio-media-actions-root .aio-button[data-action="telegram"][data-kind="video"]{
-          --aio-liquid-accent:200 94% 66%;
-          color:rgba(244,251,255,.92);
-          border-color:rgba(186,230,253,.25)
+        #aio-media-actions-root .aio-spinner path{
+          fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round
         }
-        #aio-media-actions-root .aio-button[data-action="download"]{
-          --aio-liquid-accent:158 72% 59%;
-          color:rgba(240,253,248,.91);
-          border-color:rgba(167,243,208,.23)
-        }
-        #aio-media-actions-root .aio-button[data-done="telegram"],
-        #aio-media-actions-root .aio-button[data-done="download"]{
-          border-color:rgba(255,255,255,.34);
-          box-shadow:
-            0 5px 14px rgba(0,0,0,.17),
-            0 0 0 .45px rgba(255,255,255,.13),
-            inset 0 .8px .9px rgba(255,255,255,.42)
-        }
-        #aio-media-actions-root .aio-button svg{
-          width:${iconSize}px;height:${iconSize}px;overflow:visible;pointer-events:none
-        }
-        #aio-media-actions-root .aio-button .aio-icon-main{
-          fill:none;stroke:currentColor;stroke-width:1.05;stroke-linecap:round;stroke-linejoin:round
-        }
-        #aio-media-actions-root .aio-button .aio-icon-plane{
-          fill:currentColor;stroke:none;opacity:.84
-        }
+        #aio-media-actions-root .aio-button[data-kind="photo"]{--aio-media-color:#6D28D9}
+        #aio-media-actions-root .aio-button[data-kind="video"]{--aio-media-color:#075985}
+        #aio-media-actions-root .aio-button[data-kind="audio"]{--aio-media-color:#0F766E}
+        @keyframes aio-spin{to{transform:rotate(360deg)}}
         @media(prefers-reduced-motion:reduce){
-          #aio-media-actions-root .aio-button{transition-duration:.01ms!important;transform:none!important}
-        }
-        @media(prefers-contrast:more){
-          #aio-media-actions-root .aio-button{border-color:rgba(255,255,255,.5)}
+          #aio-media-actions-root .aio-button{transition:none!important}
+          #aio-media-actions-root .aio-spinner{animation-duration:1.4s}
         }
       `;
       (document.head || document.documentElement)?.appendChild(style);
@@ -5010,179 +6351,57 @@
       return this.ids.get(element);
     },
 
-    photoTelegramIcon() {
+    mediaGlyphIcon() {
       return `
-        <svg viewBox="0 0 28 28" aria-hidden="true">
-          <g class="aio-icon-main">
-            <path d="M3.8 10.2h2.8l1.4-2.1h6.8l1.4 2.1h2.4v10.2H3.8z"/>
-            <circle cx="11.2" cy="15.2" r="3.1"/>
-            <path d="M6.4 12.4h.1"/>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <g class="aio-glyph-halo">
+            <rect x="3.25" y="5.25" width="17.5" height="13.5" rx="3.1"/>
+            <path d="m10.1 9.15 5.25 2.85-5.25 2.85z"/>
           </g>
-          <path class="aio-icon-plane" d="M25.1 3.1c.7-.3 1.3.2 1.1.9l-2.3 9.1c-.2.7-.7.9-1.3.5l-2.7-2-1.4 1.3c-.2.2-.4.3-.7.3l.2-3 5.2-4.7c.3-.2 0-.4-.3-.2l-6.4 4-2.7-.8c-.6-.2-.6-.6.1-.9z"/>
+          <g class="aio-media-glyph">
+            <rect x="3.25" y="5.25" width="17.5" height="13.5" rx="3.1"/>
+            <path d="m10.1 9.15 5.25 2.85-5.25 2.85z"/>
+          </g>
+          <circle class="aio-used-dot" cx="18.25" cy="18.15" r="4.25"/>
+          <path class="aio-used-check" d="m16.35 18.15 1.25 1.3 2.65-2.85"/>
         </svg>
       `;
     },
 
-    videoTelegramIcon() {
-      return `
-        <svg viewBox="0 0 28 28" aria-hidden="true">
-          <g class="aio-icon-main">
-            <rect x="3.6" y="8.8" width="15.2" height="11.8" rx="2"/>
-            <path d="M6.3 8.8v11.8M16.1 8.8v11.8M3.6 12h3M3.6 17.4h3M16.1 12h2.7M16.1 17.4h2.7"/>
-            <path d="m9.6 12.6 4.4 2.1-4.4 2.2z"/>
-          </g>
-          <path class="aio-icon-plane" d="M25.1 3.1c.7-.3 1.3.2 1.1.9l-2.3 9.1c-.2.7-.7.9-1.3.5l-2.7-2-1.4 1.3c-.2.2-.4.3-.7.3l.2-3 5.2-4.7c.3-.2 0-.4-.3-.2l-6.4 4-2.7-.8c-.6-.2-.6-.6.1-.9z"/>
-        </svg>
-      `;
+    spinnerIcon() {
+      return '<svg class="aio-spinner" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.2"/><path d="M12 3.8a8.2 8.2 0 0 1 7.7 5.35"/></svg>';
     },
 
-    downloadIcon() {
-      return `
-        <svg viewBox="0 0 28 28" aria-hidden="true">
-          <g class="aio-icon-main">
-            <path d="M14 4.5v12"/>
-            <path d="m9.8 12.7 4.2 4.2 4.2-4.2"/>
-            <path d="M6 21.5h16"/>
-          </g>
-        </svg>
-      `;
-    },
-
-    liquidMarkup(icon) {
-      const canvas = CONFIG.ui.liquid.realEnabled
-        ? '<canvas class="aio-liquid-canvas" aria-hidden="true"></canvas>'
-        : '';
-      return `${canvas}<span class="aio-liquid-content">${icon}</span>`;
+    buttonMarkup(icon) {
+      return `<span class="aio-button-content"><span class="aio-icon-slot">${icon}</span>${this.spinnerIcon()}</span>`;
     },
 
     setButtonKind(button, kind) {
       if (!button) return;
-      const normalizedKind = kind === MEDIA_KIND.photo ? MEDIA_KIND.photo : MEDIA_KIND.video;
+      const normalizedKind = kind === MEDIA_KIND.photo
+        ? MEDIA_KIND.photo
+        : kind === MEDIA_KIND.audio
+          ? MEDIA_KIND.audio
+          : MEDIA_KIND.video;
       button.dataset.kind = normalizedKind;
+      const slot = button.querySelector?.(".aio-icon-slot");
+      if (slot) slot.innerHTML = this.mediaGlyphIcon();
+      else button.innerHTML = this.buttonMarkup(this.mediaGlyphIcon());
+
       if (button.dataset.action === ACTION.telegram) {
-        const icon = normalizedKind === MEDIA_KIND.photo ? this.photoTelegramIcon() : this.videoTelegramIcon();
-        const content = button.querySelector?.(".aio-liquid-content");
-        if (content) content.innerHTML = icon;
-        else button.innerHTML = this.liquidMarkup(icon);
-        button.title = normalizedKind === MEDIA_KIND.photo ? "Enviar foto(s) para o Telegram" : "Enviar vídeo para o Telegram";
-        button.setAttribute("aria-label", button.title);
+        button.title = normalizedKind === MEDIA_KIND.photo
+          ? "Enviar foto para o Telegram"
+          : normalizedKind === MEDIA_KIND.audio
+            ? "Enviar áudio para o Telegram"
+            : "Enviar vídeo para o Telegram";
+      } else {
+        button.title = normalizedKind === MEDIA_KIND.photo
+          ? "Baixar foto"
+          : normalizedKind === MEDIA_KIND.audio
+            ? "Baixar áudio"
+            : "Baixar vídeo";
       }
-      if (CONFIG.ui.liquid.realEnabled) {
-        try {
-          LiquidGlassEngine.mark(button);
-        } catch (error) {
-          debug("Liquid Glass mark falhou", error);
-        }
-      }
-    },
-
-    bindLiquidInteraction(button, state) {
-      if (button.__aioLiquidBound) return;
-
-      const fallbackEnabled = CONFIG.ui.liquid.fallbackEnabled !== false;
-      const realEnabled = CONFIG.ui.liquid.realEnabled === true;
-      if (!fallbackEnabled && !realEnabled) {
-        button.dataset.liquidMode = "plain";
-        return;
-      }
-
-      button.__aioLiquidBound = true;
-      button.dataset.liquidMode = realEnabled ? "real" : "fallback";
-
-      // The experimental engine is opt-in. In the default fallback mode not a
-      // single WebGL call is made, which keeps the UI independent from canvas,
-      // CORS texture rules and Safari WebGL quirks.
-      if (realEnabled) {
-        try {
-          LiquidGlassEngine.register(button, () => state.target);
-        } catch (error) {
-          debug("Liquid Glass real falhou; mantendo fallback CSS.", error);
-          button.dataset.liquidMode = "fallback";
-          const canvas = button.querySelector?.(".aio-liquid-canvas");
-          if (canvas) canvas.style.display = "none";
-        }
-      }
-
-      let frame = 0;
-      let targetX = 0.5;
-      let targetY = 0.34;
-      let currentX = targetX;
-      let currentY = targetY;
-      let pressed = false;
-      let active = false;
-
-      const apply = () => {
-        frame = 0;
-        const follow = Math.max(0.05, Math.min(1, CONFIG.ui.liquid.highlightFollow));
-        currentX += (targetX - currentX) * follow;
-        currentY += (targetY - currentY) * follow;
-
-        const nx = (currentX - 0.5) * 2;
-        const ny = (currentY - 0.5) * 2;
-        button.style.setProperty("--aio-liquid-x", `${(currentX * 100).toFixed(2)}%`);
-        button.style.setProperty("--aio-liquid-y", `${(currentY * 100).toFixed(2)}%`);
-        button.style.setProperty("--aio-liquid-shift-x", `${(nx * CONFIG.ui.liquid.maxShiftPixels).toFixed(2)}px`);
-        button.style.setProperty("--aio-liquid-shift-y", `${(ny * CONFIG.ui.liquid.maxShiftPixels).toFixed(2)}px`);
-        button.style.setProperty("--aio-liquid-tilt-x", `${(-ny * CONFIG.ui.liquid.maxTiltDegrees).toFixed(2)}deg`);
-        button.style.setProperty("--aio-liquid-tilt-y", `${(nx * CONFIG.ui.liquid.maxTiltDegrees).toFixed(2)}deg`);
-        button.dataset.liquidPressed = String(pressed);
-
-        if (button.dataset.liquidMode === "real") {
-          try {
-            LiquidGlassEngine.setInteraction(button, {
-              x: currentX,
-              y: currentY,
-              pressed,
-              active,
-            });
-          } catch (error) {
-            debug("Liquid Glass interaction falhou; voltando ao fallback.", error);
-            button.dataset.liquidMode = "fallback";
-          }
-        }
-
-        if (
-          Math.abs(targetX - currentX) > 0.002 ||
-          Math.abs(targetY - currentY) > 0.002
-        ) {
-          frame = requestAnimationFrame(apply);
-        }
-      };
-
-      const scheduleInteraction = () => {
-        if (!frame) frame = requestAnimationFrame(apply);
-      };
-
-      const point = (event) => {
-        const rect = button.getBoundingClientRect();
-        if (!rect.width || !rect.height) return;
-        targetX = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-        targetY = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
-        scheduleInteraction();
-      };
-
-      const relax = () => {
-        pressed = false;
-        active = false;
-        targetX = 0.5;
-        targetY = 0.34;
-        scheduleInteraction();
-      };
-
-      button.addEventListener("pointerenter", (event) => {
-        active = true;
-        point(event);
-      }, { passive: true });
-      button.addEventListener("pointermove", point, { passive: true });
-      button.addEventListener("pointerdown", (event) => {
-        active = true;
-        pressed = true;
-        point(event);
-      }, { passive: true });
-      button.addEventListener("pointerup", relax, { passive: true });
-      button.addEventListener("pointercancel", relax, { passive: true });
-      button.addEventListener("pointerleave", relax, { passive: true });
-      scheduleInteraction();
+      button.setAttribute("aria-label", button.title);
     },
 
     async detectKind(state) {
@@ -5190,9 +6409,12 @@
         const context = state.getContext();
         const items = Media.dedupeItems(await context.items());
         const hasVideo = items.some((item) => item.kind === MEDIA_KIND.video);
-        return hasVideo ? MEDIA_KIND.video : MEDIA_KIND.photo;
+        const hasAudio = items.some((item) => item.kind === MEDIA_KIND.audio);
+        if (hasVideo) return MEDIA_KIND.video;
+        if (hasAudio) return MEDIA_KIND.audio;
+        return MEDIA_KIND.photo;
       } catch {
-        return isVideoElement(state.target) ? MEDIA_KIND.video : MEDIA_KIND.photo;
+        return isVideoElement(state.target) ? MEDIA_KIND.video : isAudioElement(state.target) ? MEDIA_KIND.audio : MEDIA_KIND.photo;
       }
     },
 
@@ -5204,12 +6426,12 @@
         return;
       }
 
-      // Make the group measurable before calculating its fixed position.
       group.style.visibility = "hidden";
       group.style.display = "inline-flex";
 
-      const width = Math.max(38, Number(group.offsetWidth || 38));
-      const height = Math.max(38, Number(group.offsetHeight || 38));
+      const fallbackSize = Math.max(36, Number(CONFIG.ui.button.size) || 36);
+      const width = Math.max(fallbackSize, Number(group.offsetWidth || fallbackSize));
+      const height = Math.max(fallbackSize, Number(group.offsetHeight || fallbackSize));
       const padding = CONFIG.ui.padding;
       const viewport = window.visualViewport;
       const viewportLeft = Number(viewport?.offsetLeft || 0);
@@ -5218,9 +6440,19 @@
       const viewportHeight = Math.max(1, Number(viewport?.height || innerHeight || 1));
       const viewportRight = viewportLeft + viewportWidth;
       const viewportBottom = viewportTop + viewportHeight;
+      const mediaRight = Number(visible.right ?? (visible.left + visible.width));
 
-      let left = visible.left + padding;
+      // Default placement is center-right, inset inside the media. Carousel arrows
+      // also live at the vertical center, so carousel controls are lifted above it.
+      let left = mediaRight - width - padding;
       let top = visible.top + Math.max(0, (visible.height - height) / 2);
+
+      if (group.dataset.carousel === "true") {
+        const liftMin = Math.max(36, Number(CONFIG.ui.button.carouselLiftMin) || 52);
+        const liftMax = Math.max(liftMin, Number(CONFIG.ui.button.carouselLiftMax) || 86);
+        const lift = Math.max(liftMin, Math.min(liftMax, Number(visible.height || 0) * 0.14));
+        top -= lift;
+      }
 
       const saved = (() => {
         try {
@@ -5391,83 +6623,114 @@
       group.id = id;
       group.className = "aio-group";
 
-      const state = {
-        group,
-        target,
-        getContext,
-        buttons: new Map(),
-      };
+      const state = { group, target, getContext, buttons: new Map() };
 
       for (const action of this.actions()) {
+        const wrap = document.createElement("span");
+        wrap.className = "aio-button-wrap";
+
         const button = document.createElement("button");
         button.type = "button";
         button.className = "aio-button";
         button.dataset.action = action;
-
-        if (action === ACTION.download) {
-          button.dataset.kind = "download";
-          button.innerHTML = this.liquidMarkup(this.downloadIcon());
-          button.title = "Baixar mídia";
-          button.setAttribute("aria-label", "Baixar mídia");
-        } else {
-          this.setButtonKind(
-            button,
-            isVideoElement(target) ? MEDIA_KIND.video : MEDIA_KIND.photo,
-          );
-        }
-
-        this.bindLiquidInteraction(button, state);
+        button.innerHTML = this.buttonMarkup(this.mediaGlyphIcon());
+        this.setButtonKind(button, isVideoElement(target) ? MEDIA_KIND.video : isAudioElement(target) ? MEDIA_KIND.audio : MEDIA_KIND.photo);
         state.buttons.set(action, button);
 
         button.addEventListener("click", async (event) => {
           event.preventDefault();
           event.stopPropagation();
-          if (button.getAttribute("aria-busy") === "true") return;
-          button.setAttribute("aria-busy", "true");
+          if (button.__aioActionPending || button.disabled || button.getAttribute("aria-busy") === "true") return;
+          button.__aioActionPending = true;
 
           try {
-            const context = state.getContext();
+            const initialContext = state.getContext();
+            let inspected = await Actions.inspect(initialContext);
 
-            if (History.get(context, action) && Toast?.canConfirm === true) {
+            const selectableCarousel =
+              inspected.items.length > 1 &&
+              (
+                inspected.context?.metadata?.isCarousel === true ||
+                inspected.context?.providerId === "twitter"
+              );
+
+            if (selectableCarousel) {
+              const selectedItems = await CarouselSelection.select(
+                inspected.context,
+                inspected.items,
+              );
+              if (!selectedItems.length) return;
+
+              inspected = {
+                ...inspected,
+                items: selectedItems,
+                primary: selectedItems[0] || null,
+                context: {
+                  ...inspected.context,
+                  metadata: {
+                    ...(inspected.context.metadata || {}),
+                    selectionMode: "carousel-selected",
+                    selectedMediaCount: selectedItems.length,
+                    originalMediaCount: inspected.items.length,
+                  },
+                },
+              };
+            }
+
+            const usage = MediaUsage.status(inspected.context, inspected.items, action);
+
+            if (usage.anyUsed) {
+              if (Toast?.canConfirm !== true) {
+                Toast?.warning?.({
+                  title: "Mídia já utilizada",
+                  description: "O RodToaster carregado não oferece confirmação interativa. A ação foi cancelada para evitar repetir sem querer.",
+                  duration: 5_000,
+                });
+                return;
+              }
+
+              const noun = usage.total === 1
+                ? inspected.items[0]?.kind === MEDIA_KIND.photo
+                  ? "Esta foto"
+                  : inspected.items[0]?.kind === MEDIA_KIND.audio
+                    ? "Este áudio"
+                    : "Este vídeo"
+                : `${usage.usedCount} de ${usage.total} mídias`;
+              const verb = action === ACTION.telegram ? "já foi enviada" : "já foi baixada";
+              const pluralVerb = action === ACTION.telegram ? "já foram enviadas" : "já foram baixadas";
+
               const repeat = await Toast.confirm({
-                title:
-                  action === ACTION.telegram
-                    ? "Enviar novamente?"
-                    : "Baixar novamente?",
-                description: "Essa ação já foi concluída para este post.",
+                title: action === ACTION.telegram ? "Enviar novamente?" : "Baixar novamente?",
+                description: usage.total === 1
+                  ? `${noun} ${verb} antes. Deseja repetir?`
+                  : `${noun} ${pluralVerb} antes. Deseja repetir a seleção atual?`,
                 duration: 0,
                 dismissible: true,
                 actions: [
-                  {
-                    id: "cancel",
-                    label: "Cancelar",
-                    variant: "secondary",
-                    value: false,
-                    handle: () => false,
-                  },
-                  {
-                    id: "repeat",
-                    label: "Repetir",
-                    variant: "primary",
-                    value: true,
-                    handle: () => true,
-                  },
+                  { id: "cancel", label: "Cancelar", variant: "secondary", value: false, handle: () => false },
+                  { id: "repeat", label: action === ACTION.telegram ? "Enviar de novo" : "Baixar de novo", variant: "primary", value: true, handle: () => true },
                 ],
               });
-
               if (repeat !== true) return;
             }
 
-            await Actions.run(action, context);
+            button.disabled = true;
+            button.setAttribute("aria-busy", "true");
+            wrap.dataset.busy = "true";
+            await Actions.run(action, inspected.context, { inspected });
             await this.refresh(state);
           } catch (error) {
             debug("Ação do botão falhou", error);
           } finally {
+            button.__aioActionPending = false;
             button.removeAttribute("aria-busy");
+            button.disabled = false;
+            wrap.dataset.busy = "false";
           }
         });
 
-        group.appendChild(button);
+        wrap.append(button);
+        group.appendChild(wrap);
       }
 
       root.appendChild(group);
@@ -5479,17 +6742,62 @@
 
     async refresh(state) {
       const context = state.getContext();
-      const kind = await this.detectKind(state);
+      let items = [];
+
+      try {
+        items = Media.dedupeItems(await context.items());
+      } catch {}
+
+      const hasVideo = items.some((item) => item.kind === MEDIA_KIND.video);
+      const hasAudio = items.some((item) => item.kind === MEDIA_KIND.audio);
+      const kind = hasVideo
+        ? MEDIA_KIND.video
+        : hasAudio
+          ? MEDIA_KIND.audio
+          : items.length
+            ? MEDIA_KIND.photo
+            : await this.detectKind(state);
+      const isCarousel = Boolean(context.metadata?.isCarousel);
+
+      state.group.dataset.carousel = String(isCarousel);
+      state.group.dataset.mediaCount = String(items.length);
 
       for (const [action, button] of state.buttons) {
-        if (action === ACTION.telegram) this.setButtonKind(button, kind);
+        this.setButtonKind(button, kind);
 
-        if (History.get(context, action)) {
+        if (isCarousel && items.length > 1) {
+          button.title = action === ACTION.telegram
+            ? `Enviar carrossel (${items.length} mídias) para o Telegram`
+            : `Baixar carrossel (${items.length} mídias)`;
+          button.setAttribute("aria-label", button.title);
+        }
+
+        const usage = MediaUsage.status(context, items, action);
+
+        if (usage.allUsed) {
+          button.dataset.used = "true";
           button.dataset.done = action;
+        } else if (usage.anyUsed) {
+          button.dataset.used = "partial";
+          delete button.dataset.done;
         } else {
+          button.dataset.used = "false";
           delete button.dataset.done;
         }
+
+        button.dataset.usedCount = String(usage.usedCount);
+        button.dataset.mediaCount = String(usage.total);
+
+        if (usage.anyUsed) {
+          const baseTitle = String(button.title || "").replace(/ · .*$/, "");
+          button.title = usage.allUsed
+            ? `${baseTitle} · já utilizado`
+            : `${baseTitle} · ${usage.usedCount}/${usage.total} já utilizados`;
+          button.setAttribute("aria-label", button.title);
+        }
       }
+
+      this.position(state.group, state.target);
     },
 
     repositionAll() {
@@ -5520,7 +6828,6 @@
     detach(id) {
       const state = this.groups.get(id);
       if (!state) return false;
-      state.group.querySelectorAll?.(".aio-button").forEach((button) => LiquidGlassEngine.unregister(button));
       try { state.group.remove(); } catch {}
       this.groups.delete(id);
       return true;
@@ -5535,21 +6842,144 @@
             state.group.isConnected &&
             getComputedStyle(state.group).display !== "none",
         ).length,
-        liquidGlass: {
-          fallbackEnabled: CONFIG.ui.liquid.fallbackEnabled !== false,
-          realEnabled: CONFIG.ui.liquid.realEnabled === true,
-          mode: CONFIG.ui.liquid.realEnabled === true
-            ? "real-webgl"
-            : CONFIG.ui.liquid.fallbackEnabled !== false
-              ? "fallback-css"
-              : "plain",
-          buttonSize: CONFIG.ui.liquid.buttonSize,
-          iconSize: CONFIG.ui.liquid.iconSize,
-          engine: CONFIG.ui.liquid.realEnabled
-            ? LiquidGlassEngine.diagnostics()
-            : { webgl: false, controls: 0, decodedSources: 0, cold: true },
+        buttonDesign: {
+          mode: "contrast-difference",
+          liquidGlass: false,
+          defaultPosition: "center-right",
+          carouselLift: true,
+          buttonSize: CONFIG.ui.button.size,
+          iconSize: CONFIG.ui.button.iconSize,
         },
       };
+    },
+  };
+
+
+  // ---------------------------------------------------------------------------
+  // Restored universal providers. Instagram/X keep their specialized post/photo
+  // logic; every other site gets deep video/audio/player interception.
+  // ---------------------------------------------------------------------------
+
+  const ProviderIdentity = Object.freeze({
+    fromHost(hostname = location.hostname) {
+      const host = String(hostname || "").toLowerCase().replace(/^www\./, "");
+      const table = [
+        ["youtube", /(^|\.)youtube\.com$|^youtu\.be$/],
+        ["tiktok", /(^|\.)tiktok\.com$/],
+        ["threads", /(^|\.)threads\.com$/],
+        ["douyin", /(^|\.)douyin\.com$/],
+        ["xiaohongshu", /(^|\.)(xiaohongshu\.com|xhslink\.com)$/],
+        ["ted", /(^|\.)ted\.com$/],
+        ["facebook", /(^|\.)(facebook\.com|fb\.watch)$/],
+        ["pinterest", /(^|\.)pinterest\./],
+        ["snapchat", /(^|\.)snapchat\.com$/],
+        ["spotify", /(^|\.)spotify\.com$/],
+        ["telegram-web", /^web\.telegram\.org$/],
+        ["vimeo", /(^|\.)vimeo\.com$/],
+        ["dailymotion", /(^|\.)dailymotion\.com$/],
+        ["twitch", /(^|\.)twitch\.tv$/],
+        ["reddit", /(^|\.)reddit\.com$/],
+      ];
+      return table.find(([, pattern]) => pattern.test(host))?.[0] || "generic";
+    },
+  });
+
+  function genericPageUrl(providerId) {
+    if (["tiktok", "instagram", "twitter", "threads"].includes(providerId)) return location.href.split("?")[0];
+    return location.href;
+  }
+
+  function genericMediaContext(media) {
+    const providerId = ProviderIdentity.fromHost();
+    const kind = isAudioElement(media) ? MEDIA_KIND.audio : MEDIA_KIND.video;
+    return {
+      providerId,
+      target: media,
+      root: media,
+      pageUrl: genericPageUrl(providerId),
+      hostname: location.hostname.replace(/^www\./, ""),
+      title: PayloadSanitizer.cleanTitle(document.title || providerId),
+      text: "",
+      metadata: { universalPlayer: true, tagName: String(media.tagName || "").toLowerCase() },
+      async items() {
+        const values = [];
+        const add = (url, source, extraScore = 0) => {
+          const value = String(url || "").trim();
+          if (!Media.isLikelyMediaUrl(value)) return;
+          const inferred = kind === MEDIA_KIND.audio ? MEDIA_KIND.audio : Media.kindFromUrl(value, MEDIA_KIND.video);
+          if (kind === MEDIA_KIND.audio && inferred !== MEDIA_KIND.audio && !Media.isAudioUrl(value)) return;
+          values.push({ kind: kind === MEDIA_KIND.audio ? MEDIA_KIND.audio : MEDIA_KIND.video, url: value, source, score: Media.mediaCandidateScore(value, kind) + extraScore });
+        };
+
+        Media.ownVideoUrls(media).forEach((url) => add(url, "dom", 40_000));
+        PlayerInterceptor.candidates(media).forEach((url) => add(url, "player", 25_000));
+        GlobalMediaCapture.candidates().forEach((url) => add(url, "network", 8_000));
+        Media.performance().forEach((url) => add(url, "performance", 2_000));
+        if (providerId === "youtube") ProviderSourceResolvers.youtube().forEach((url) => add(url, "youtube-player-response", 55_000));
+
+        const ordered = Media.dedupeItems(values).sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+        const nonBlob = ordered.filter((item) => !Media.isBlob(item.url) && !Media.isData(item.url));
+        const usable = nonBlob.length ? nonBlob : ordered;
+        return usable.length ? [usable[0]] : [];
+      },
+    };
+  }
+
+  const GenericMediaProvider = {
+    ids: new WeakMap(),
+    mounted: new Set(),
+    sequence: 0,
+
+    eligible(media) {
+      if (!isMediaElement(media) || !media.isConnected) return false;
+      if (IS_TWITTER || IS_INSTAGRAM) return false;
+      const rect = media.getBoundingClientRect?.();
+      if (!rect) return false;
+      if (isVideoElement(media)) {
+        const width = Math.max(Number(rect.width || 0), Number(media.videoWidth || 0));
+        const height = Math.max(Number(rect.height || 0), Number(media.videoHeight || 0));
+        if (width < CONFIG.providers.minVideoWidth || height < CONFIG.providers.minVideoHeight) return false;
+      }
+      return true;
+    },
+
+    id(media) {
+      if (!this.ids.has(media)) {
+        this.sequence += 1;
+        this.ids.set(media, `aio-universal-media-${this.sequence}`);
+      }
+      return this.ids.get(media);
+    },
+
+    mount(media) {
+      if (!this.eligible(media)) return;
+      this.mounted.add(media);
+      Ui.attach(this.id(media), media, () => genericMediaContext(media));
+    },
+
+    scan(root = document) {
+      if (CONFIG.providers.genericMedia === false || IS_TWITTER || IS_INSTAGRAM) return;
+      if (isMediaElement(root)) this.mount(root);
+      root.querySelectorAll?.("video,audio").forEach((media) => this.mount(media));
+      for (const media of [...this.mounted]) {
+        if (!media.isConnected) {
+          Ui.detach(this.id(media));
+          this.mounted.delete(media);
+        }
+      }
+    },
+  };
+
+  const DirectMediaProvider = {
+    mounted: false,
+    run() {
+      if (this.mounted || CONFIG.providers.directMedia === false) return;
+      const type = String(document.contentType || "").toLowerCase();
+      const direct = /^(?:video|audio)\//.test(type) || Media.isLikelyMediaUrl(location.href);
+      if (!direct) return;
+      const media = document.querySelector?.("video,audio");
+      if (isMediaElement(media)) GenericMediaProvider.mount(media);
+      this.mounted = true;
     },
   };
 
@@ -5708,6 +7138,9 @@
     warn("Ui.ensureRoot() falhou", error);
   }
 
+  try { GlobalMediaCapture.install(); } catch (error) { warn("GlobalMediaCapture.install() falhou", error); }
+  try { PlayerInterceptor.install(); } catch (error) { warn("PlayerInterceptor.install() falhou", error); }
+
   try {
     InstagramAccountHeader.install();
   } catch (error) {
@@ -5726,6 +7159,12 @@
     } catch (error) {
       warn("InstagramProvider.scan() falhou", error);
     }
+
+    try {
+      if (!IS_TWITTER && !IS_INSTAGRAM) GenericMediaProvider.scan(root);
+    } catch (error) {
+      warn("GenericMediaProvider.scan() falhou", error);
+    }
   };
 
   try {
@@ -5741,6 +7180,7 @@
   }
 
   scan(document);
+  try { DirectMediaProvider.run(); } catch (error) { warn("DirectMediaProvider.run() falhou", error); }
   Ui.repositionAll();
 
   const observer = new MutationObserver((mutations) => {
@@ -5785,10 +7225,15 @@
       expandAttempts: CONFIG.content.expandAttempts,
       sanitizeBeforeWorker: true,
     },
-    provider: IS_TWITTER ? "twitter" : "instagram",
+    provider: IS_TWITTER ? "twitter" : IS_INSTAGRAM ? "instagram" : ProviderIdentity.fromHost(),
     features: CONFIG.features,
     ui: Ui.diagnostics(),
     instagramAccountHeader: InstagramAccountHeader.diagnostics(),
+    universal: {
+      network: GlobalMediaCapture.diagnostics(),
+      players: PlayerInterceptor.diagnostics(),
+      genericMounted: GenericMediaProvider.mounted.size,
+    },
     twitterCapturedIds: [...TwitterStore.posts.keys()],
     instagramCapturedShortcodes: [...InstagramStore.posts.keys()],
     instagramAutoBookmark: {
@@ -5836,6 +7281,12 @@
     twitter: {
       capture: TwitterStore,
       bookmarkBridge: BookmarkBridge,
+    },
+    universal: {
+      players: PlayerInterceptor,
+      network: GlobalMediaCapture,
+      generic: GenericMediaProvider,
+      provider: () => ProviderIdentity.fromHost(),
     },
   };
 
