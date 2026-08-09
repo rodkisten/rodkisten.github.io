@@ -8,7 +8,7 @@
   <title>Rod Toaster · Playground e documentação</title>
   <meta
     name="description"
-    content="Landing page interativa com todos os usos do Rod Toaster: mensagens, loading, confirmações, tarefas, grupos, retry, undo, scopes, eventos e persistência."
+    content="Landing page interativa do Rod Toaster v4.4: mensagens, loading, confirmações, picker de imagens e vídeos, tarefas, grupos, retry, undo, scopes, eventos, temas e persistência."
   >
 
   <style>
@@ -524,6 +524,115 @@
     .mini-toast-progress {
       color: var(--accent);
       font: 700 10px/1 var(--font-mono);
+    }
+
+    .mini-picker {
+      display: grid;
+      gap: 10px;
+      margin: -8px 0 22px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(7, 7, 9, 0.68);
+    }
+
+    .mini-picker-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
+      font: 650 10px/1 var(--font-mono);
+    }
+
+    .mini-picker-head strong {
+      color: var(--accent);
+      font-weight: 750;
+    }
+
+    .mini-picker-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .mini-picker-item {
+      position: relative;
+      aspect-ratio: 1;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background:
+        radial-gradient(circle at 28% 25%, rgba(255,255,255,.22), transparent 24%),
+        linear-gradient(145deg, rgba(120, 215, 255, .28), rgba(198, 167, 255, .16) 52%, rgba(163, 255, 117, .18));
+      box-shadow: 0 8px 18px rgba(0,0,0,.18);
+    }
+
+    .mini-picker-item:nth-child(2) {
+      background:
+        radial-gradient(circle at 68% 22%, rgba(255,255,255,.2), transparent 22%),
+        linear-gradient(145deg, rgba(251, 113, 133, .28), rgba(250, 204, 21, .15));
+    }
+
+    .mini-picker-item:nth-child(3) {
+      background:
+        radial-gradient(circle at 50% 40%, rgba(255,255,255,.16), transparent 30%),
+        linear-gradient(145deg, rgba(120, 215, 255, .2), rgba(12, 12, 18, .72));
+    }
+
+    .mini-picker-item:nth-child(4) {
+      background:
+        radial-gradient(circle at 30% 70%, rgba(255,255,255,.18), transparent 30%),
+        linear-gradient(145deg, rgba(163, 255, 117, .24), rgba(120, 215, 255, .1));
+    }
+
+    .mini-picker-item::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      box-shadow: inset 0 0 0 1px transparent;
+    }
+
+    .mini-picker-item.is-selected::after {
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,.9);
+    }
+
+    .mini-picker-item i,
+    .mini-picker-item b {
+      position: absolute;
+      z-index: 2;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      font-style: normal;
+    }
+
+    .mini-picker-item i {
+      bottom: 5px;
+      left: 5px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      color: #fff;
+      background: rgba(0,0,0,.46);
+      font: 700 8px/18px var(--font-mono);
+      backdrop-filter: blur(8px);
+    }
+
+    .mini-picker-item b {
+      top: 5px;
+      right: 5px;
+      width: 18px;
+      height: 18px;
+      color: #08080a;
+      background: rgba(255,255,255,.94);
+      font: 800 9px/1 var(--font-sans);
+    }
+
+    .mini-picker-item:not(.is-selected) b {
+      color: #fff;
+      background: rgba(0,0,0,.42);
     }
 
     .install-label {
@@ -1110,7 +1219,7 @@
     }
   </style>
 
-  <script src="https://rod.migos.club/toaster/toaster.js?v=4.0.0"></script>
+  <script src="https://rod.migos.club/userscripts/toaster.js?v=4.4.0"></script>
 </head>
 
 <body>
@@ -1131,6 +1240,21 @@
         <span class="status-dot"></span>
         <span data-status-label>Carregando API…</span>
       </span>
+
+      <button class="button button-ghost" type="button" data-action="toggle-theme" title="Alternar tema do toaster">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2"></path>
+          <path d="M12 20v2"></path>
+          <path d="m4.93 4.93 1.42 1.42"></path>
+          <path d="m17.66 17.66 1.41 1.41"></path>
+          <path d="M2 12h2"></path>
+          <path d="M20 12h2"></path>
+          <path d="m6.34 17.66-1.41 1.41"></path>
+          <path d="m19.07 4.93-1.41 1.42"></path>
+        </svg>
+        <span>Tema</span>
+      </button>
 
       <button class="button button-ghost" type="button" data-action="minimize">
         <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -1157,10 +1281,10 @@
           <span class="hero-gradient">trabalha com você.</span>
         </h1>
         <p class="hero-description">
-          Mensagens, confirmações, prompts, progresso, filas, tarefas persistentes,
-          retries, undo, grupos ponderados, eventos e um pequeno gerenciador de
-          downloads. Tudo em um único arquivo, isolado por Shadow DOM e pronto
-          para sobreviver a navegações SPA.
+          Mensagens, confirmações, prompts, picker visual de imagens e vídeos,
+          progresso, filas, tarefas persistentes, retries, undo, grupos ponderados,
+          eventos e um pequeno gerenciador de downloads. Tudo em um único arquivo,
+          isolado por Shadow DOM e pronto para sobreviver a navegações SPA.
         </p>
 
         <div class="hero-actions">
@@ -1213,6 +1337,19 @@
             <span class="mini-toast-progress">68%</span>
           </div>
 
+          <div class="mini-picker" aria-hidden="true">
+            <div class="mini-picker-head">
+              <span>Carrossel do Instagram</span>
+              <strong>4 de 6</strong>
+            </div>
+            <div class="mini-picker-grid">
+              <span class="mini-picker-item is-selected"><i>1</i><b>✓</b></span>
+              <span class="mini-picker-item is-selected"><i>2</i><b>✓</b></span>
+              <span class="mini-picker-item is-video"><i>3</i><b>▶</b></span>
+              <span class="mini-picker-item is-selected"><i>4</i><b>✓</b></span>
+            </div>
+          </div>
+
           <div class="install-label">
             <span>Instalação via script</span>
             <span>zero build</span>
@@ -1220,7 +1357,7 @@
 
           <div class="code-shell">
             <pre><code>&lt;script
-  src="https://rod.migos.club/userscripts/toaster.js"
+  src="https://rod.migos.club/userscripts/toaster.js?v=4.4.0"
 &gt;&lt;/script&gt;
 
 &lt;script&gt;
@@ -1261,7 +1398,7 @@
               id="search"
               class="search"
               type="search"
-              placeholder="Buscar confirm, task, retry, progresso…"
+              placeholder="Buscar picker, confirm, task, retry, progresso…"
               autocomplete="off"
               spellcheck="false"
             >
@@ -1273,7 +1410,7 @@
         <div id="empty-results" class="empty-results">
           <div>
             <h3>Nenhum exemplo encontrado</h3>
-            <p>Experimente buscar por “task”, “confirm”, “evento” ou “loading”.</p>
+            <p>Experimente buscar por “picker”, “task”, “confirm”, “evento” ou “loading”.</p>
           </div>
         </div>
 
@@ -1305,7 +1442,8 @@
                   <tr><td><code>toast.loading()</code></td><td>Loading controller</td><td>Spinner, pulse, progresso e transição para estado terminal.</td></tr>
                   <tr><td><code>toast.confirm()</code></td><td>Promise&lt;T&gt;</td><td>Confirmação com actions, checkbox, atalhos e countdown.</td></tr>
                   <tr><td><code>toast.prompt()</code></td><td>Promise&lt;string|null&gt;</td><td>Entrada de texto simples ou multiline com validação.</td></tr>
-                  <tr><td><code>toast.select()</code></td><td>Promise&lt;T|T[]|null&gt;</td><td>Seleção única ou múltipla.</td></tr>
+                  <tr><td><code>toast.select()</code></td><td>Promise&lt;T|T[]|null&gt;</td><td>Seleção textual única ou múltipla.</td></tr>
+                  <tr><td><code>toast.picker&lt;T&gt;()</code></td><td>Promise&lt;PickerResult&lt;T&gt;&gt;</td><td>Grid visual para imagens e vídeos, Blob/File, seleção múltipla e retorno por item, ID, index ou descriptor.</td></tr>
                   <tr><td><code>toast.undo()</code></td><td>Promise&lt;boolean&gt;</td><td>Janela temporária para desfazer uma ação.</td></tr>
                   <tr><td><code>toast.promise()</code></td><td>Promise&lt;T&gt;</td><td>Mapeia uma Promise para loading, success e error.</td></tr>
                   <tr><td><code>toast.task()</code></td><td>Task controller</td><td>Tarefa com progresso, pause, resume, cancel e persistência.</td></tr>
@@ -1315,7 +1453,9 @@
                   <tr><td><code>toast.on/once/off/emit()</code></td><td>unsubscribe / void</td><td>Eventos de lifecycle, actions, tarefas e grupos.</td></tr>
                   <tr><td><code>toast.update/progress/resolve()</code></td><td>Controller</td><td>Atualização imperativa baseada em ID.</td></tr>
                   <tr><td><code>toast.minimize/restore()</code></td><td>boolean</td><td>Controla o gerenciador compacto de tarefas.</td></tr>
-                  <tr><td><code>toast.configure()</code></td><td>Config</td><td>Posição, persistência, duração, inspeção e navegação SPA.</td></tr>
+                  <tr><td><code>toast.setTheme/toggleTheme()</code></td><td>dark | light</td><td>Alterna tema em runtime ou acompanha o sistema com auto.</td></tr>
+                  <tr><td><code>toast.setSize/getSize()</code></td><td>compact | comfortable | large</td><td>Controla densidade e escala do componente.</td></tr>
+                  <tr><td><code>toast.configure()</code></td><td>Config</td><td>Posição, tema, tamanho, persistência, duração, inspeção e navegação SPA.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1340,7 +1480,7 @@
       "use strict";
 
       const INSTALL_CODE =
-        '<script src="https://rod.migos.club/userscripts/toaster.js"><' +
+        '<script src="https://rod.migos.club/userscripts/toaster.js?v=4.4.0"><' +
         '/script>';
 
       const sleep = (ms) =>
@@ -1367,6 +1507,13 @@
             "Confirm, prompt, select, checkbox, atalhos e contagem regressiva.",
         },
         {
+          id: "media",
+          title: "Picker de mídia",
+          kicker: "Instagram & carrosséis",
+          description:
+            "Grid visual para imagens e vídeos, seleção múltipla, limites, Blob/File e retornos tipados.",
+        },
+        {
           id: "async",
           title: "Operações assíncronas",
           kicker: "Estado vivo",
@@ -1386,6 +1533,71 @@
           kicker: "Arquitetura",
           description:
             "Scopes, eventos, IDs, configuração, inspeção e controles globais.",
+        },
+      ];
+
+      function makeDemoMediaSvg(label, from, to) {
+        const svg = `
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 900">
+            <defs>
+              <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                <stop stop-color="${from}"/>
+                <stop offset="1" stop-color="${to}"/>
+              </linearGradient>
+              <filter id="noise">
+                <feTurbulence type="fractalNoise" baseFrequency=".78" numOctaves="3" stitchTiles="stitch"/>
+                <feColorMatrix type="saturate" values="0"/>
+                <feComponentTransfer><feFuncA type="table" tableValues="0 .09"/></feComponentTransfer>
+              </filter>
+            </defs>
+            <rect width="900" height="900" rx="72" fill="url(#g)"/>
+            <circle cx="720" cy="160" r="250" fill="rgba(255,255,255,.12)"/>
+            <circle cx="120" cy="760" r="310" fill="rgba(0,0,0,.12)"/>
+            <rect width="900" height="900" filter="url(#noise)" opacity=".65"/>
+            <text x="58" y="810" fill="white" font-family="system-ui,sans-serif" font-size="58" font-weight="750">${label}</text>
+          </svg>
+        `;
+        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+      }
+
+      const DEMO_MEDIA = [
+        {
+          id: "ig-1",
+          type: "image",
+          src: makeDemoMediaSvg("Foto 01", "#5f76ff", "#b772ff"),
+          label: "Foto 01",
+        },
+        {
+          id: "ig-2",
+          type: "image",
+          src: makeDemoMediaSvg("Foto 02", "#ff5d79", "#ffb15c"),
+          label: "Foto 02",
+        },
+        {
+          id: "ig-3",
+          type: "video",
+          src: "https://example.invalid/demo-reel.mp4",
+          poster: makeDemoMediaSvg("Vídeo 03", "#0f8fb8", "#0d152d"),
+          label: "Vídeo 03",
+        },
+        {
+          id: "ig-4",
+          type: "image",
+          src: makeDemoMediaSvg("Foto 04", "#2ea76f", "#6ed7db"),
+          label: "Foto 04",
+        },
+        {
+          id: "ig-5",
+          type: "video",
+          src: "https://example.invalid/demo-story.mp4",
+          poster: makeDemoMediaSvg("Vídeo 05", "#7d58d6", "#dc69a7"),
+          label: "Vídeo 05",
+        },
+        {
+          id: "ig-6",
+          type: "image",
+          src: makeDemoMediaSvg("Foto 06", "#7b8a35", "#e4bc54"),
+          label: "Foto 06",
         },
       ];
 
@@ -1859,6 +2071,189 @@ toast.error("Não foi possível concluir.");`,
 
             if (restored) {
               toast.success("Usuário restaurado.");
+            }
+          },
+        },
+        {
+          id: "picker-carousel",
+          section: "media",
+          title: "Picker de carrossel",
+          description:
+            "Seleção visual de fotos e vídeos com tudo selecionado por padrão, perfeito para o carrossel do Instagram.",
+          tags: "picker media instagram carousel images videos defaultAllSelected download",
+          requires: "picker",
+          code: `const selected = await toast.picker({
+  title: "Baixar carrossel",
+  description: "Escolha as mídias que deseja baixar.",
+  icon: "download",
+  items: carouselItems,
+  multiple: true,
+  defaultAllSelected: true,
+  downloadLabel: true,
+  showLabels: true,
+  showType: true,
+});
+
+console.log(selected);`,
+          async run() {
+            const selected = await toast.picker({
+              title: "Baixar carrossel",
+              description: "Escolha as mídias que deseja baixar.",
+              icon: "download",
+              items: DEMO_MEDIA,
+              multiple: true,
+              defaultAllSelected: true,
+              downloadLabel: true,
+              showLabels: true,
+              showType: true,
+              selectAllLabel: "Selecionar tudo",
+              clearAllLabel: "Limpar",
+              cancelLabel: "Cancelar",
+              confirmLabel: "Baixar",
+            });
+
+            if (selected) {
+              toast.success({
+                title: "Seleção pronta",
+                description: `${selected.length} mídia(s) escolhida(s).`,
+              });
+            }
+          },
+        },
+        {
+          id: "picker-descriptors",
+          section: "media",
+          title: "IDs, indexes e descriptors",
+          description:
+            "Controle o formato do retorno sem perder a referência ao item original.",
+          tags: "picker returnType ids indexes descriptors typed selection",
+          requires: "picker",
+          code: `const selected = await toast.picker({
+  title: "Selecionar slides",
+  items: carouselItems,
+  defaultSelected: ["ig-1", "ig-3"],
+  returnType: "descriptors",
+  countLabel: ({ selected, total }) =>
+    \`\${selected}/\${total} escolhidos\`,
+  onChange({ selectedIds }) {
+    console.log("seleção:", selectedIds);
+  },
+});`,
+          async run() {
+            const selected = await toast.picker({
+              title: "Selecionar slides",
+              description: "O retorno desta demo usa descriptors normalizados.",
+              items: DEMO_MEDIA,
+              defaultSelected: ["ig-1", "ig-3"],
+              returnType: "descriptors",
+              countLabel: ({ selected, total }) =>
+                `${selected}/${total} escolhidos`,
+              confirmLabel: "Usar seleção",
+              onChange({ selectedIds }) {
+                console.debug("[picker] selectedIds", selectedIds);
+              },
+            });
+
+            if (selected) {
+              toast.message({
+                title: "Descriptors selecionados",
+                description: `${selected.length} item(ns) retornado(s).`,
+                icon: "image",
+                details: selected,
+              });
+            }
+          },
+        },
+        {
+          id: "picker-limits",
+          section: "media",
+          title: "Limites e metadata",
+          description:
+            "Defina mínimo/máximo, custom label e receba reason, actionId, IDs e indexes com returnMeta.",
+          tags: "picker minSelected maxSelected returnMeta metadata validation",
+          requires: "picker",
+          code: `const result = await toast.picker({
+  title: "Escolha entre 2 e 4 mídias",
+  items: carouselItems,
+  minSelected: 2,
+  maxSelected: 4,
+  defaultSelected: ["ig-1", "ig-2"],
+  returnType: "ids",
+  returnMeta: true,
+  countLabel: "{selected} de {total}",
+});
+
+console.log(result.selectedIds);
+console.log(result.value);`,
+          async run() {
+            const result = await toast.picker({
+              title: "Escolha entre 2 e 4 mídias",
+              description: "O botão só fica válido dentro do intervalo.",
+              items: DEMO_MEDIA,
+              minSelected: 2,
+              maxSelected: 4,
+              defaultSelected: ["ig-1", "ig-2"],
+              returnType: "ids",
+              returnMeta: true,
+              countLabel: "{selected} de {total}",
+              confirmLabel: "Continuar",
+            });
+
+            if (result) {
+              toast.message({
+                title: "Metadata do picker",
+                description: `${result.selectedCount} selecionado(s).`,
+                icon: "list",
+                details: result,
+              });
+            }
+          },
+        },
+        {
+          id: "picker-files",
+          section: "media",
+          title: "Blob e File locais",
+          description:
+            "O picker cria object URLs temporárias para Blob/File e limpa tudo quando o dialog fecha.",
+          tags: "picker blob file objectURL local media cleanup",
+          requires: "picker",
+          code: `const files = [
+  new File([svgOne], "cover-1.svg", {
+    type: "image/svg+xml",
+  }),
+  new File([svgTwo], "cover-2.svg", {
+    type: "image/svg+xml",
+  }),
+];
+
+const selectedFiles = await toast.picker({
+  title: "Arquivos locais",
+  items: files,
+  defaultAllSelected: true,
+  returnType: "items",
+});`,
+          async run() {
+            const firstSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#647cff"/><stop offset="1" stop-color="#c36df6"/></linearGradient></defs><rect width="800" height="800" rx="70" fill="url(#g)"/><text x="52" y="730" fill="white" font-size="60" font-family="system-ui" font-weight="700">cover-1.svg</text></svg>`;
+            const secondSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#ff6b7d"/><stop offset="1" stop-color="#ffc45c"/></linearGradient></defs><rect width="800" height="800" rx="70" fill="url(#g)"/><text x="52" y="730" fill="white" font-size="60" font-family="system-ui" font-weight="700">cover-2.svg</text></svg>`;
+            const files = [
+              new File([firstSvg], "cover-1.svg", { type: "image/svg+xml" }),
+              new File([secondSvg], "cover-2.svg", { type: "image/svg+xml" }),
+            ];
+
+            const selected = await toast.picker({
+              title: "Arquivos locais",
+              description: "Blob/File recebem preview via object URL temporária.",
+              items: files,
+              defaultAllSelected: true,
+              returnType: "items",
+              confirmLabel: "Usar arquivos",
+            });
+
+            if (selected) {
+              toast.success({
+                title: "Arquivos selecionados",
+                description: selected.map((file) => file.name).join(", "),
+              });
             }
           },
         },
@@ -2587,6 +2982,45 @@ toast.repairHost();`,
           },
         },
         {
+          id: "theme-size",
+          section: "architecture",
+          title: "Tema e densidade",
+          description:
+            "Troque dark/light/auto em runtime e alterne entre compact, comfortable e large.",
+          tags: "theme dark light auto size compact comfortable large",
+          code: `toast.setTheme("light");
+toast.setSize("comfortable");
+
+console.log(toast.getTheme());
+console.log(toast.getSize());
+
+toast.toggleTheme();`,
+          async run() {
+            const originalTheme = toast.getTheme?.().theme || "auto";
+            const originalSize = toast.getSize?.() || "compact";
+
+            toast.setTheme?.("light");
+            toast.setSize?.("large");
+            toast.info({
+              title: "Tema light · large",
+              description: "O próximo estado muda para dark · compact.",
+            });
+
+            await sleep(1500);
+
+            toast.setTheme?.("dark");
+            toast.setSize?.("compact");
+            toast.success({
+              title: "Tema dark · compact",
+              description: "A configuração original será restaurada em instantes.",
+            });
+
+            await sleep(1500);
+            toast.setTheme?.(originalTheme);
+            toast.setSize?.(originalSize);
+          },
+        },
+        {
           id: "configuration",
           section: "architecture",
           title: "Configuração global",
@@ -2595,6 +3029,8 @@ toast.repairHost();`,
           tags: "configure config position dedupe stack inspector shadow dom",
           code: `toast.configure({
   position: "top-center",
+  theme: "auto",
+  size: "compact",
   duration: 5000,
   maxToasts: 20,
   dedupe: true,
@@ -2611,6 +3047,8 @@ toast.repairHost();`,
           run() {
             const config = toast.configure({
               position: "top-center",
+              theme: "auto",
+              size: "compact",
               duration: 5000,
               maxToasts: 20,
               dedupe: true,
@@ -2707,7 +3145,7 @@ toast.repairHost();`,
             <li>
               <a class="sidebar-link" href="#reference">
                 <span>Referência da API</span>
-                <span class="sidebar-count">17</span>
+                <span class="sidebar-count">20</span>
               </a>
             </li>
           `,
@@ -2832,6 +3270,18 @@ toast.repairHost();`,
           return;
         }
 
+        if (
+          demo.requires &&
+          typeof api[demo.requires] !== "function"
+        ) {
+          api.warning?.({
+            title: `API ${demo.requires} indisponível`,
+            description:
+              `A versão carregada é ${api.version || "desconhecida"}. Atualize para o Rod Toaster 4.4.0 ou superior.`,
+          });
+          return;
+        }
+
         const original = button?.innerHTML;
 
         if (button) {
@@ -2880,11 +3330,22 @@ toast.repairHost();`,
         const api = getToast();
 
         if (api) {
-          runtimeStatus.dataset.state = "ready";
-          statusLabel.textContent = `API pronta · v${api.version || "?"}`;
+          const hasPicker = typeof api.picker === "function";
+          runtimeStatus.dataset.state = hasPicker ? "ready" : "error";
+          statusLabel.textContent = hasPicker
+            ? `API pronta · v${api.version || "?"} · picker`
+            : `API antiga · v${api.version || "?"} · sem picker`;
 
           document.querySelectorAll("[data-version]").forEach((node) => {
             node.textContent = api.version || "?";
+          });
+
+          document.querySelectorAll("[data-run]").forEach((button) => {
+            const demo = demos.find((item) => item.id === button.dataset.run);
+            button.disabled = Boolean(
+              demo?.requires &&
+              typeof api[demo.requires] !== "function"
+            );
           });
 
           return;
@@ -2964,6 +3425,28 @@ toast.repairHost();`,
           title: "Tudo pronto",
           description: "Escolha uma API e clique em Executar.",
         });
+
+        await sleep(700);
+
+        if (typeof api.picker === "function") {
+          const selected = await api.picker({
+            title: "Novo na v4.4 · Media Picker",
+            description: "Selecione algumas mídias para concluir a demo.",
+            items: DEMO_MEDIA.slice(0, 4),
+            defaultAllSelected: true,
+            downloadLabel: true,
+            confirmLabel: "Continuar",
+            selectAllLabel: "Tudo",
+            clearAllLabel: "Limpar",
+          });
+
+          if (selected) {
+            api.success({
+              title: "Picker funcionando",
+              description: `${selected.length} mídia(s) selecionada(s).`,
+            });
+          }
+        }
       }
 
       function bindEvents() {
@@ -3005,6 +3488,15 @@ toast.repairHost();`,
             });
           } else if (action === "minimize") {
             api?.minimize?.();
+          } else if (action === "toggle-theme") {
+            const resolved = api?.toggleTheme?.();
+            if (resolved) {
+              api.info?.({
+                title: `Tema ${resolved}`,
+                description: "Tema do Rod Toaster alterado em runtime.",
+                duration: 2200,
+              });
+            }
           }
         });
 
