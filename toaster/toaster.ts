@@ -3,7 +3,7 @@
 
 /*
  * Rod Super Toaster
- * Version 4.4.0
+ * Version 4.5.0
  *
  * Browser-first, bundler-optional TypeScript IIFE.
  * Compile with: tsc --target ES2022 --lib ES2022,DOM --strict
@@ -12,7 +12,7 @@
 (function installRodToaster(globalWindow: Window & typeof globalThis): void {
   "use strict";
 
-  const VERSION = "4.4.0" as const;
+  const VERSION = "4.5.0" as const;
   const TOAST_GLOBAL = "RodToaster" as const;
   const INSPECTOR_GLOBAL = "RodObjectInspector" as const;
   const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -42,6 +42,34 @@
   type TimerHandle = number | null;
   type MaybePromise<T> = T | Promise<T>;
   type SvgIconName = keyof typeof SVG_ICONS;
+  type ToastImageFit = "cover" | "contain";
+
+  interface ToastImageIconDescriptor extends UnknownRecord {
+    src: string | URL;
+    alt?: string;
+    fit?: ToastImageFit;
+    objectPosition?: string;
+    crossOrigin?: "" | "anonymous" | "use-credentials";
+    referrerPolicy?: ReferrerPolicy;
+    decoding?: "auto" | "sync" | "async";
+    loading?: "eager" | "lazy";
+  }
+
+  type ToastIcon =
+    | SvgIconName
+    | string
+    | URL
+    | Node
+    | ToastImageIconDescriptor
+    | false
+    | null;
+
+  type TaskIcon =
+    | SvgIconName
+    | string
+    | URL
+    | ToastImageIconDescriptor
+    | false;
 
   type PickerMediaType = "image" | "video";
   type PickerReturnType = "items" | "ids" | "indexes" | "descriptors";
@@ -315,7 +343,7 @@
     loadingState?: LoadingState;
     title?: unknown;
     description?: unknown;
-    icon?: SvgIconName | Node | false | null;
+    icon?: ToastIcon;
     animation?: LoadingAnimation;
     loadingAnimation?: LoadingAnimation;
     progress?: number | string | null;
@@ -397,7 +425,7 @@
     loadingState: LoadingState;
     title: string;
     description: string;
-    icon: SvgIconName | Node | false;
+    icon: Exclude<ToastIcon, null>;
     animation: LoadingAnimation;
     progress: number | null;
     progressLabel: string | null;
@@ -453,7 +481,7 @@
     id: string;
     title: string;
     description: string;
-    icon: SvgIconName | false;
+    icon: Exclude<TaskIcon, URL>;
     status: TaskStatus;
     progress: number | null;
     progressLabel: string | null;
@@ -476,7 +504,7 @@
     toastId?: string;
     title?: unknown;
     description?: unknown;
-    icon?: SvgIconName | false;
+    icon?: TaskIcon;
     status?: TaskStatus;
     progress?: unknown;
     progressLabel?: unknown;
@@ -939,6 +967,33 @@
     return isElementLike(value) && String((value as Element).tagName).toUpperCase() === "INPUT";
   }
 
+  function isImageElement(value: unknown): value is HTMLImageElement {
+    return isElementLike(value) && String((value as Element).tagName).toUpperCase() === "IMG";
+  }
+
+  function isUrlObject(value: unknown): value is URL {
+    return isObject(value) &&
+      typeof (value as { href?: unknown }).href === "string" &&
+      safeCall(() => Object.prototype.toString.call(value) === "[object URL]", false);
+  }
+
+  function isToastImageIconDescriptor(value: unknown): value is ToastImageIconDescriptor {
+    return isPlainObject(value) && (
+      typeof value.src === "string" ||
+      isUrlObject(value.src)
+    );
+  }
+
+  function looksLikeImageSource(value: string): boolean {
+    const source = value.trim();
+    if (!source) return false;
+    return (
+      /^(?:https?:|blob:|data:image\/|file:)/i.test(source) ||
+      /^(?:\/|\.\.?\/)/.test(source) ||
+      /\.(?:avif|bmp|gif|heic|heif|ico|jpe?g|png|svg|webp)(?:[?#].*)?$/i.test(source)
+    );
+  }
+
   function isUnknownRecord(value: unknown): value is UnknownRecord {
     return typeof value === "object" && value !== null && !Array.isArray(value);
   }
@@ -1002,6 +1057,93 @@
     return typeof value === "string" && ALLOWED_TASK_STATUSES.has(value as TaskStatus)
       ? (value as TaskStatus)
       : "queued";
+  }
+
+  function normalizeImageIconDescriptor(
+    value: ToastImageIconDescriptor | URL | string | HTMLImageElement,
+  ): ToastImageIconDescriptor {
+    if (isImageElement(value)) {
+      return {
+        src: value.currentSrc || value.src,
+        alt: value.alt,
+        fit: (value.style.objectFit === "contain" ? "contain" : "cover"),
+        objectPosition: value.style.objectPosition || "center",
+        crossOrigin: value.crossOrigin === "anonymous" || value.crossOrigin === "use-credentials"
+          ? value.crossOrigin
+          : undefined,
+        referrerPolicy: (value.referrerPolicy || undefined) as ReferrerPolicy | undefined,
+        decoding: value.decoding || "async",
+        loading: value.loading || "eager",
+      };
+    }
+
+    if (typeof value === "string" || isUrlObject(value)) {
+      return { src: typeof value === "string" ? value : value.href };
+    }
+
+    return {
+      ...value,
+      src: isUrlObject(value.src) ? value.src.href : String(value.src),
+      fit: value.fit === "contain" ? "contain" : "cover",
+      objectPosition: value.objectPosition || "center",
+    };
+  }
+
+  function getImageIconDescriptor(value: unknown): ToastImageIconDescriptor | null {
+    if (isImageElement(value)) return normalizeImageIconDescriptor(value);
+    if (isToastImageIconDescriptor(value)) return normalizeImageIconDescriptor(value);
+    if (isUrlObject(value)) return normalizeImageIconDescriptor(value);
+    if (typeof value === "string" && !hasOwn(SVG_ICONS, value) && looksLikeImageSource(value)) {
+      return normalizeImageIconDescriptor(value);
+    }
+    return null;
+  }
+
+  function normalizeTaskIcon(value: TaskIcon | null | undefined, fallback: SvgIconName): Exclude<TaskIcon, URL> {
+    if (value === false) return false;
+    if (isUrlObject(value)) return value.href;
+    if (isToastImageIconDescriptor(value)) return normalizeImageIconDescriptor(value);
+    if (typeof value === "string") return value;
+    return fallback;
+  }
+
+  function iconKeyHash(value: string): string {
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+  }
+
+  function createImageIcon(
+    documentRef: Document,
+    descriptor: ToastImageIconDescriptor,
+  ): HTMLImageElement {
+    const normalized = normalizeImageIconDescriptor(descriptor);
+    const image = documentRef.createElement("img");
+    image.className = "rod-toast__icon-image";
+    image.src = String(normalized.src);
+    image.alt = normalized.alt ?? "";
+    image.draggable = false;
+    image.decoding = normalized.decoding ?? "async";
+    image.loading = normalized.loading ?? "eager";
+    image.style.objectFit = normalized.fit === "contain" ? "contain" : "cover";
+    image.style.objectPosition = normalized.objectPosition || "center";
+
+    if (
+      normalized.crossOrigin === "" ||
+      normalized.crossOrigin === "anonymous" ||
+      normalized.crossOrigin === "use-credentials"
+    ) {
+      image.crossOrigin = normalized.crossOrigin;
+    }
+
+    if (normalized.referrerPolicy) {
+      image.referrerPolicy = normalized.referrerPolicy;
+    }
+
+    return image;
   }
 
   function createSvgIcon(documentRef: Document, name: SvgIconName | string, size = 18): SVGSVGElement {
@@ -1252,14 +1394,14 @@
       .rod-toast-stack[data-position^="bottom"] .rod-toast{transform:translate3d(0,14px,0) scale(.975);transform-origin:bottom center}.rod-toast::before{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(118deg,rgba(255,255,255,.035),transparent 34%,transparent 74%,rgba(255,255,255,.012));pointer-events:none}.rod-toast[data-visible="true"]{opacity:1;transform:translate3d(0,0,0) scale(1)}.rod-toast:hover{border-color:var(--rod-border-strong)}
       .rod-toast-stack[data-theme="light"] .rod-toast{background:var(--rod-toast-bg)}
       .rod-toast-stack[data-expanded="true"][data-has-many="true"] .rod-toast[data-item-expanded="false"]{max-height:64px;min-height:64px;overflow:hidden;cursor:pointer}.rod-toast-stack[data-expanded="true"][data-has-many="true"] .rod-toast[data-item-expanded="false"] .rod-toast__content{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rod-toast-stack[data-expanded="true"][data-has-many="true"] .rod-toast[data-item-expanded="true"]{max-height:min(68dvh,720px);overflow:auto;border-color:var(--rod-border-strong);background:var(--rod-surface-raised);box-shadow:var(--rod-shadow-raised)}
-      .rod-toast__icon{position:relative;display:grid;place-items:center;width:26px;min-width:26px;height:26px;color:var(--rod-toast-accent);user-select:none;transition:color 180ms,transform 420ms var(--rod-ease-spring)}.rod-toast__icon svg{width:22px;height:22px;overflow:visible}.rod-toast[data-visible="true"] .rod-toast__icon{animation:rod-toast-icon-enter 520ms 90ms var(--rod-ease-spring) both}
+      .rod-toast__icon{position:relative;display:grid;place-items:center;width:26px;min-width:26px;height:26px;aspect-ratio:1/1;color:var(--rod-toast-accent);user-select:none;transition:color 180ms,transform 420ms var(--rod-ease-spring)}.rod-toast__icon svg{width:22px;height:22px;overflow:visible}.rod-toast__icon-image{display:block;width:100%!important;height:100%!important;min-width:100%;max-width:none!important;aspect-ratio:1/1;border-radius:7px;background:var(--rod-overlay);object-fit:cover;object-position:center;pointer-events:none;user-select:none;-webkit-user-drag:none}.rod-toast__icon[data-rod-icon-kind="image"]{isolation:isolate}.rod-toast[data-visible="true"] .rod-toast__icon{animation:rod-toast-icon-enter 520ms 90ms var(--rod-ease-spring) both}
       .rod-toast__content{position:relative;z-index:1;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;min-width:0;color:inherit;font-size:15px;letter-spacing:-.012em;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}.rod-toast__arg{min-width:0;max-width:100%}.rod-toast__actions{position:relative;z-index:2;display:flex;align-items:center;gap:4px;margin:0}
       .rod-toast__count{display:none;min-width:27px;height:27px;padding:0 7px;border:1px solid var(--rod-border);border-radius:999px;background:var(--rod-overlay);color:var(--rod-muted);font:700 10px/25px system-ui,sans-serif;text-align:center}.rod-toast__count[data-visible="true"]{display:block}
       .rod-toast__close,.rod-toast__expand,.rod-toast__minimize{display:grid;place-items:center;width:38px;min-width:38px;height:38px;padding:0;border-radius:12px;color:var(--rod-muted);transition:transform 160ms var(--rod-ease-spring),background-color 140ms,border-color 140ms,color 140ms}.rod-toast__close:hover,.rod-toast__expand:hover,.rod-toast__minimize:hover,.rod-toast__close:focus-visible,.rod-toast__expand:focus-visible,.rod-toast__minimize:focus-visible{border-color:var(--rod-border);background:var(--rod-hover);color:var(--rod-text-strong);transform:scale(1.04)}.rod-toast__expand,.rod-toast__minimize{display:none}.rod-toast[data-loading="true"] .rod-toast__minimize,.rod-toast-stack[data-expanded="true"][data-has-many="true"] .rod-toast__expand{display:grid}.rod-toast[data-item-expanded="true"] .rod-toast__expand svg{transform:rotate(180deg)}
       .rod-token--null{color:rgb(216,180,254)}.rod-token--undefined,.rod-token--meta{color:rgb(212,212,216)}.rod-token--string{color:rgb(253,186,116)}.rod-token--number{color:rgb(190,242,100)}.rod-token--boolean{color:rgb(147,197,253);font-weight:600}.rod-token--symbol{color:rgb(94,234,212)}.rod-token--function{color:rgb(253,224,71)}.rod-toast__inspector-placeholder{color:var(--rod-muted);font-style:italic}
       .rod-toast__loading-copy,.rod-toast__confirm-copy,.rod-toast__rich-copy,.rod-toast__interactive-copy{display:grid;gap:6px;min-width:0;width:100%}.rod-toast__loading-title,.rod-toast__confirm-title,.rod-toast__rich-title,.rod-toast__interactive-title{color:var(--rod-text-strong);font:680 15px/1.34 Inter,system-ui,sans-serif;letter-spacing:-.02em}.rod-toast__loading-description,.rod-toast__confirm-description,.rod-toast__rich-description,.rod-toast__interactive-description{color:var(--rod-muted);font:430 13px/1.5 Inter,system-ui,sans-serif;letter-spacing:-.01em}
       .rod-toast[data-loading="true"][data-loading-icon="false"]{grid-template-columns:minmax(0,1fr) auto}.rod-toast[data-loading="true"][data-loading-icon="false"] .rod-toast__icon{display:none}.rod-toast[data-loading="true"][data-loading-content-empty="true"]{grid-template-columns:auto auto;justify-content:center;width:fit-content;min-width:0;max-width:min(100%,280px);margin-inline:auto}.rod-toast[data-loading="true"][data-loading-content-empty="true"] .rod-toast__content{display:none}
-      .rod-toast__progress{display:grid;gap:7px;width:100%;margin-top:8px}.rod-toast__progress-meta{display:flex;justify-content:flex-end;min-height:14px;color:var(--rod-muted-soft);font:650 10px/1 system-ui,sans-serif}.rod-toast__progress-track{position:relative;width:100%;height:4px;overflow:hidden;border-radius:999px;background:var(--rod-overlay)}.rod-toast__progress-bar{position:absolute;inset:0 auto 0 0;width:var(--rod-loading-progress,0%);border-radius:inherit;background:linear-gradient(90deg,color-mix(in srgb,var(--rod-toast-accent) 84%,transparent),var(--rod-toast-accent));transition:width 420ms var(--rod-ease-soft)}.rod-toast:not([data-loading-animation="progress"]) .rod-toast__progress{display:none}.rod-toast[data-loading-indeterminate="true"] .rod-toast__progress-bar{width:38%;animation:rod-toast-progress-indeterminate 1.1s cubic-bezier(.4,0,.2,1) infinite}.rod-toast[data-loading-state="loading"] [data-loading-spinner="true"]{animation:rod-toast-spinner 850ms linear infinite}.rod-toast[data-loading-state="loading"] [data-loading-pulse="true"]{animation:rod-toast-pulse 1.35s cubic-bezier(.4,0,.6,1) infinite}
+      .rod-toast__progress{display:grid;gap:7px;width:100%;margin-top:8px}.rod-toast__progress-meta{display:flex;justify-content:flex-end;min-height:14px;color:var(--rod-muted-soft);font:650 10px/1 system-ui,sans-serif}.rod-toast__progress-track{position:relative;width:100%;height:4px;overflow:hidden;border-radius:999px;background:var(--rod-overlay)}.rod-toast__progress-bar{position:absolute;inset:0 auto 0 0;width:var(--rod-loading-progress,0%);border-radius:inherit;background:linear-gradient(90deg,color-mix(in srgb,var(--rod-toast-accent) 84%,transparent),var(--rod-toast-accent));transition:width 420ms var(--rod-ease-soft)}.rod-toast:not([data-loading-animation="progress"]) .rod-toast__progress{display:none}.rod-toast[data-loading-indeterminate="true"] .rod-toast__progress-bar{width:38%;animation:rod-toast-progress-indeterminate 1.1s cubic-bezier(.4,0,.2,1) infinite}.rod-toast[data-loading-state="loading"] [data-loading-spinner="true"]{animation:rod-toast-spinner 850ms linear infinite}.rod-toast[data-loading-state="loading"] .rod-toast__icon[data-rod-icon-kind="image"][data-loading-spinner="true"]{animation:none}.rod-toast[data-loading-state="loading"] .rod-toast__icon[data-rod-icon-kind="image"][data-loading-spinner="true"]::after{content:"";position:absolute;z-index:2;right:-4px;bottom:-4px;width:12px;height:12px;border:2px solid var(--rod-surface);border-top-color:var(--rod-toast-accent);border-radius:999px;background:var(--rod-surface);box-shadow:0 1px 4px rgba(0,0,0,.28);animation:rod-toast-spinner 700ms linear infinite}.rod-toast[data-loading-state="loading"] [data-loading-pulse="true"]{animation:rod-toast-pulse 1.35s cubic-bezier(.4,0,.6,1) infinite}
       .rod-toast[data-confirm="true"],.rod-toast[data-rich="true"],.rod-toast[data-interactive="true"]{min-width:min(470px,calc(100vw - 28px));max-width:min(620px,calc(100vw - 28px));padding-block:19px;touch-action:pan-y}.rod-toast[data-confirm="true"] .rod-toast__content,.rod-toast[data-rich="true"] .rod-toast__content,.rod-toast[data-interactive="true"] .rod-toast__content{display:block;width:100%}.rod-toast[data-confirm="true"] .rod-toast__minimize,.rod-toast[data-rich="true"] .rod-toast__minimize,.rod-toast[data-interactive="true"] .rod-toast__minimize,.rod-toast[data-confirm="true"] .rod-toast__expand,.rod-toast[data-rich="true"] .rod-toast__expand,.rod-toast[data-interactive="true"] .rod-toast__expand{display:none!important}
       .rod-toast__confirm,.rod-toast__rich,.rod-toast__interactive{display:grid;gap:17px;width:100%;min-width:0}.rod-toast__confirm-actions{display:flex;flex-wrap:nowrap;justify-content:flex-end;gap:9px;width:100%;overflow-x:auto;scrollbar-width:none}.rod-toast__confirm-actions::-webkit-scrollbar{display:none}.rod-toast__confirm-actions .rod-toast__confirm-button{flex:1 1 0;min-width:0}.rod-toast__action-bar,.rod-toast__task-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:9px;width:100%}.rod-toast__confirm-button,.rod-toast__action-button,.rod-toast__task-button{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:0 15px;border:1px solid var(--rod-border);border-radius:12px;outline:0;background:var(--rod-overlay);color:var(--rod-text);font:650 12px/1 system-ui,sans-serif;cursor:pointer;transition:transform 160ms var(--rod-ease-spring),background-color 140ms,border-color 140ms,color 140ms}.rod-toast__confirm-button:hover:not(:disabled),.rod-toast__action-button:hover:not(:disabled),.rod-toast__task-button:hover:not(:disabled){border-color:var(--rod-border-strong);background:var(--rod-hover);transform:translateY(-2px)}.rod-toast__confirm-button:disabled,.rod-toast__action-button:disabled,.rod-toast__task-button:disabled{opacity:.5;cursor:wait}.rod-toast__confirm-button[data-variant="primary"],.rod-toast__action-button[data-variant="primary"]{border-color:var(--rod-text-strong);background:var(--rod-text-strong);color:var(--rod-surface)}.rod-toast__confirm-button[data-variant="danger"],.rod-toast__action-button[data-variant="danger"]{border-color:rgba(248,113,113,.3);background:rgba(127,29,29,.22);color:rgba(252,165,165,.98)}.rod-toast__confirm-button[data-variant="ghost"],.rod-toast__action-button[data-variant="ghost"]{border-color:transparent;background:transparent;color:var(--rod-muted)}
       .rod-toast__details{overflow:hidden;border:1px solid var(--rod-border);border-radius:12px;background:var(--rod-overlay)}.rod-toast__details summary{display:flex;align-items:center;min-height:36px;padding:0 11px;color:var(--rod-muted);font:600 11px/1 system-ui,sans-serif;cursor:pointer}.rod-toast__details-body{max-height:280px;overflow:auto;padding:10px;border-top:1px solid var(--rod-border);font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
@@ -1272,7 +1414,7 @@
      
       .rod-toast-stack[data-size="compact"]{--rod-toast-width:min(420px,calc(100vw - 16px));--rod-toaster-font-size:11px;--rod-toaster-line-height:1;gap:4px}
       .rod-toast-stack[data-size="compact"] .rod-toast{min-height:48px;max-height:min(64dvh,620px);gap:9px;padding:8px 6px 8px 10px;border-radius:12px}
-      .rod-toast-stack[data-size="compact"] .rod-toast__icon{width:19px;min-width:19px;height:19px}.rod-toast-stack[data-size="compact"] .rod-toast__icon svg{width:14px;height:14px}
+      .rod-toast-stack[data-size="compact"] .rod-toast__icon{width:19px;min-width:19px;height:19px}.rod-toast-stack[data-size="compact"] .rod-toast__icon svg{width:14px;height:14px}.rod-toast-stack[data-size="compact"] .rod-toast__icon-image{border-radius:5px}
       .rod-toast-stack[data-size="compact"] .rod-toast__content{font-size:13px;line-height:1.38}.rod-toast-stack[data-size="compact"] .rod-toast__actions{gap:1px}
       .rod-toast-stack[data-size="compact"] .rod-toast__close,.rod-toast-stack[data-size="compact"] .rod-toast__expand,.rod-toast-stack[data-size="compact"] .rod-toast__minimize{width:31px;min-width:31px;height:31px;border-radius:9px}
       .rod-toast-stack[data-size="compact"] .rod-toast__loading-copy,.rod-toast-stack[data-size="compact"] .rod-toast__confirm-copy,.rod-toast-stack[data-size="compact"] .rod-toast__rich-copy,.rod-toast-stack[data-size="compact"] .rod-toast__interactive-copy{gap:3px}
@@ -1290,7 +1432,7 @@
       .rod-toast-stack[data-size="comfortable"] .rod-toast__confirm-button,.rod-toast-stack[data-size="comfortable"] .rod-toast__action-button,.rod-toast-stack[data-size="comfortable"] .rod-toast__task-button{min-height:38px;padding:0 13px}
       .rod-toast-stack[data-size="large"]{--rod-toast-width:min(640px,calc(100vw - 32px));--rod-toaster-font-size:16px;--rod-toaster-line-height:1.52;gap:13px}
       .rod-toast-stack[data-size="large"] .rod-toast{min-height:88px;gap:17px;padding:20px 16px 20px 22px;border-radius:24px}
-      .rod-toast-stack[data-size="large"] .rod-toast__icon{width:31px;min-width:31px;height:31px}.rod-toast-stack[data-size="large"] .rod-toast__icon svg{width:26px;height:26px}
+      .rod-toast-stack[data-size="large"] .rod-toast__icon{width:31px;min-width:31px;height:31px}.rod-toast-stack[data-size="large"] .rod-toast__icon svg{width:26px;height:26px}.rod-toast-stack[data-size="large"] .rod-toast__icon-image{border-radius:9px}
       .rod-toast-stack[data-size="large"] .rod-toast__content{font-size:16px}.rod-toast-stack[data-size="large"] .rod-toast__close,.rod-toast-stack[data-size="large"] .rod-toast__expand,.rod-toast-stack[data-size="large"] .rod-toast__minimize{width:44px;min-width:44px;height:44px;border-radius:14px}
       .rod-toast-stack[data-size="large"] .rod-toast__loading-title,.rod-toast-stack[data-size="large"] .rod-toast__confirm-title,.rod-toast-stack[data-size="large"] .rod-toast__rich-title,.rod-toast-stack[data-size="large"] .rod-toast__interactive-title{font-size:17px}.rod-toast-stack[data-size="large"] .rod-toast__loading-description,.rod-toast-stack[data-size="large"] .rod-toast__confirm-description,.rod-toast-stack[data-size="large"] .rod-toast__rich-description,.rod-toast-stack[data-size="large"] .rod-toast__interactive-description{font-size:14px}
       .rod-toast-stack[data-size="large"] .rod-toast[data-confirm="true"],.rod-toast-stack[data-size="large"] .rod-toast[data-rich="true"],.rod-toast-stack[data-size="large"] .rod-toast[data-interactive="true"]{min-width:min(560px,calc(100vw - 32px));max-width:min(700px,calc(100vw - 32px));padding-block:22px}
@@ -2140,7 +2282,7 @@
       loadingState: options.loadingState === "settled" ? "settled" : "loading",
       title: options.title == null ? "" : String(options.title),
       description: options.description == null ? "" : String(options.description),
-      icon: icon as SvgIconName | Node | false,
+      icon: icon as Exclude<ToastIcon, null>,
       animation,
       progress,
       progressLabel: options.progressLabel == null ? null : String(options.progressLabel),
@@ -2241,12 +2383,42 @@
     if (iconValue === false) {
       if (node.childNodes.length) node.replaceChildren();
       node.dataset.rodIconKey = "false";
+      node.dataset.rodIconKind = "none";
       return false;
+    }
+
+    const imageDescriptor = getImageIconDescriptor(iconValue);
+
+    if (imageDescriptor) {
+      const normalized = normalizeImageIconDescriptor(imageDescriptor);
+      const source = String(normalized.src);
+      const fit = normalized.fit === "contain" ? "contain" : "cover";
+      const objectPosition = normalized.objectPosition || "center";
+      const key = `image:${iconKeyHash(`${source}|${fit}|${objectPosition}`)}`;
+
+      if (node.dataset.rodIconKey === key && node.firstChild) {
+        node.dataset.rodIconKind = "image";
+        return true;
+      }
+
+      const image = createImageIcon(documentRef, normalized);
+      image.addEventListener("error", () => {
+        if (node.dataset.rodIconKey !== key) return;
+        node.replaceChildren(createSvgIcon(documentRef, fallbackName, 17));
+        node.dataset.rodIconKey = `svg:${fallbackName}`;
+        node.dataset.rodIconKind = "svg";
+      }, { once: true });
+
+      node.replaceChildren(image);
+      node.dataset.rodIconKey = key;
+      node.dataset.rodIconKind = "image";
+      return true;
     }
 
     if (isDomNode(iconValue)) {
       node.replaceChildren(iconValue.cloneNode(true));
       node.dataset.rodIconKey = `node:${getObjectId(iconValue as object)}`;
+      node.dataset.rodIconKind = "node";
       return true;
     }
 
@@ -2254,9 +2426,13 @@
       ? iconValue
       : fallbackName;
     const key = `svg:${iconName}`;
-    if (node.dataset.rodIconKey === key && node.firstChild) return true;
+    if (node.dataset.rodIconKey === key && node.firstChild) {
+      node.dataset.rodIconKind = "svg";
+      return true;
+    }
     node.replaceChildren(createSvgIcon(documentRef, iconName, 17));
     node.dataset.rodIconKey = key;
+    node.dataset.rodIconKind = "svg";
     return true;
   }
 
@@ -4181,7 +4357,7 @@
       id,
       title: String(options.title ?? "Task"),
       description: String(options.description ?? ""),
-      icon: options.icon === false ? false : options.icon ?? "clock",
+      icon: normalizeTaskIcon(options.icon, "clock"),
       status: normalizeTaskStatus(options.status ?? "queued"),
       progress: normalizeProgress(options.progress),
       progressLabel: options.progressLabel == null ? null : String(options.progressLabel),
@@ -4301,7 +4477,7 @@
       if (dismissed) return task;
       if (hasOwn(next, "title")) taskState.title = String(next.title ?? "");
       if (hasOwn(next, "description")) taskState.description = String(next.description ?? "");
-      if (hasOwn(next, "icon")) taskState.icon = next.icon === false ? false : next.icon ?? "circle";
+      if (hasOwn(next, "icon")) taskState.icon = normalizeTaskIcon(next.icon, "circle");
       if (hasOwn(next, "status")) taskState.status = normalizeTaskStatus(next.status);
       if (hasOwn(next, "progress")) taskState.progress = normalizeProgress(next.progress);
       if (hasOwn(next, "progressLabel")) taskState.progressLabel = next.progressLabel == null ? null : String(next.progressLabel);
@@ -4309,35 +4485,39 @@
       taskState.updatedAt = Date.now();
       paused = taskState.status === "paused";
 
-      let semanticIcon: SvgIconName | false;
+      let semanticIcon: Exclude<TaskIcon, URL>;
       let semanticAnimation: LoadingAnimation;
+      const persistentImageIcon = getImageIconDescriptor(taskState.icon)
+        ? taskState.icon
+        : null;
+
       switch (taskState.status) {
         case "queued":
-          semanticIcon = taskState.icon || "clock";
+          semanticIcon = (persistentImageIcon ?? taskState.icon) || "clock";
           semanticAnimation = "pulse";
           break;
         case "running":
-          semanticIcon = taskState.icon || "loader-circle";
+          semanticIcon = (persistentImageIcon ?? taskState.icon) || "loader-circle";
           semanticAnimation = taskState.progress === null ? "spinner" : "progress";
           break;
         case "paused":
-          semanticIcon = "pause";
+          semanticIcon = persistentImageIcon ?? "pause";
           semanticAnimation = "none";
           break;
         case "warning":
-          semanticIcon = "triangle-alert";
+          semanticIcon = persistentImageIcon ?? "triangle-alert";
           semanticAnimation = "none";
           break;
         case "cancelled":
-          semanticIcon = "square";
+          semanticIcon = persistentImageIcon ?? "square";
           semanticAnimation = "none";
           break;
         case "success":
-          semanticIcon = "check";
+          semanticIcon = persistentImageIcon ?? "check";
           semanticAnimation = "none";
           break;
         case "error":
-          semanticIcon = "circle-x";
+          semanticIcon = persistentImageIcon ?? "circle-x";
           semanticAnimation = "none";
           break;
       }
