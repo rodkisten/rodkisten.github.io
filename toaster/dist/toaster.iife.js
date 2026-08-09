@@ -1,4 +1,4 @@
-/* Auto-generated from toaster/toaster.ts. at 8/9/2026, 12:19:11 PM Do not edit directly. */
+/* Auto-generated from toaster/toaster.ts. at 8/9/2026, 12:21:03 PM Do not edit directly. */
 var RodToaster = (function() {
 
 //#region \0rolldown/runtime.js
@@ -22,7 +22,7 @@ var RodToaster = (function() {
 	var toaster_exports = /* @__PURE__ */ __exportAll({ default: () => toaster_default });
 	(function installRodToaster(globalWindow) {
 		"use strict";
-		const VERSION = "4.3.0";
+		const VERSION = "4.4.0";
 		const TOAST_GLOBAL = "RodToaster";
 		const INSPECTOR_GLOBAL = "RodObjectInspector";
 		const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -142,6 +142,7 @@ var RodToaster = (function() {
 			copy: `<rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>`,
 			pause: `<path d="M9 5v14"></path><path d="M15 5v14"></path>`,
 			play: `<path d="m8 5 11 7-11 7Z"></path>`,
+			image: `<rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="8.5" cy="9" r="1.5"></circle><path d="m21 15-5-5L5 20"></path>`,
 			square: `<rect x="5" y="5" width="14" height="14" rx="2"></rect>`,
 			list: `<path d="M8 6h13"></path><path d="M8 12h13"></path><path d="M8 18h13"></path><path d="M3 6h.01"></path><path d="M3 12h.01"></path><path d="M3 18h.01"></path>`,
 			folder: `<path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3Z"></path>`,
@@ -335,6 +336,11 @@ var RodToaster = (function() {
 			const prototype = safeCall(() => Object.getPrototypeOf(value), null);
 			return prototype === Object.prototype || prototype === null;
 		}
+		function isBlobLike(value) {
+			if (!isObject(value)) return false;
+			const tag = safeCall(() => Object.prototype.toString.call(value), "");
+			return tag === "[object Blob]" || tag === "[object File]";
+		}
 		function toErrorMessage(error) {
 			if (error instanceof Error) return error.message || error.name;
 			return String(error);
@@ -430,18 +436,23 @@ var RodToaster = (function() {
 		const typedGlobalWindow = globalWindow;
 		const typedInitialHostWindow = initialHostWindow;
 		const existingToaster = safeCall(() => typedInitialHostWindow[TOAST_GLOBAL] ?? typedGlobalWindow[TOAST_GLOBAL] ?? null, null);
-		const isValidToaster = (value) => typeof value === "function" && typeof value.loading === "function" && typeof value.success === "function" && typeof value.error === "function" && typeof value.confirm === "function";
+		function isValidToaster(value) {
+			if (typeof value !== "function") return false;
+			const candidate = value;
+			return typeof candidate.loading === "function" && typeof candidate.success === "function" && typeof candidate.error === "function" && typeof candidate.confirm === "function" && typeof candidate.picker === "function";
+		}
 		if (isValidToaster(existingToaster)) {
 			typedGlobalWindow[TOAST_GLOBAL] = existingToaster;
 			typedGlobalWindow.toast = existingToaster;
 			return;
 		}
 		const existingState = safeCall(() => typedInitialHostWindow[STATE_SYMBOL] ?? null, null);
-		if (existingState?.api) {
+		if (isValidToaster(existingState?.api)) {
 			typedGlobalWindow[TOAST_GLOBAL] = existingState.api;
 			typedGlobalWindow.toast = existingState.api;
 			return;
 		}
+		safeCall(() => initialHostWindow.document.getElementById(TOAST_HOST_ID)?.remove(), void 0);
 		const state = {
 			version: VERSION,
 			api: null,
@@ -602,7 +613,6 @@ var RodToaster = (function() {
       .rod-toast-stack[data-size="compact"] .rod-toast__confirm-button,.rod-toast-stack[data-size="compact"] .rod-toast__action-button,.rod-toast-stack[data-size="compact"] .rod-toast__task-button{min-height:32px;padding:0 10px;border-radius:9px;font-size:9px}
       .rod-toast-stack[data-size="compact"] .rod-toast[data-visible="true"] .rod-toast__icon{animation:none}
       
-      
       .rod-toast-stack[data-size="comfortable"]{--rod-toast-width:min(520px,calc(100vw - 24px));--rod-toaster-font-size:14px;--rod-toaster-line-height:1.46;gap:10px}
       .rod-toast-stack[data-size="comfortable"] .rod-toast{min-height:70px;gap:13px;padding:14px 11px 14px 16px;border-radius:19px}
       .rod-toast-stack[data-size="comfortable"] .rod-toast__content{font-size:14px}.rod-toast-stack[data-size="comfortable"] .rod-toast__close,.rod-toast-stack[data-size="comfortable"] .rod-toast__expand,.rod-toast-stack[data-size="comfortable"] .rod-toast__minimize{width:36px;min-width:36px;height:36px;border-radius:11px}
@@ -616,7 +626,39 @@ var RodToaster = (function() {
       .rod-toast-stack[data-size="large"] .rod-toast[data-confirm="true"],.rod-toast-stack[data-size="large"] .rod-toast[data-rich="true"],.rod-toast-stack[data-size="large"] .rod-toast[data-interactive="true"]{min-width:min(560px,calc(100vw - 32px));max-width:min(700px,calc(100vw - 32px));padding-block:22px}
       .rod-toast-stack[data-size="large"] .rod-toast__confirm-button,.rod-toast-stack[data-size="large"] .rod-toast__action-button,.rod-toast-stack[data-size="large"] .rod-toast__task-button{min-height:46px;padding:0 18px;font-size:13px}
       @media(max-width:560px){.rod-toast-stack[data-size="compact"],.rod-toast-stack[data-size="comfortable"],.rod-toast-stack[data-size="large"]{--rod-toast-width:calc(100vw - 16px)}.rod-toast-stack[data-size="large"] .rod-toast{min-height:78px;gap:14px;padding:17px 12px 17px 16px}.rod-toast-stack[data-size="large"] .rod-toast[data-confirm="true"],.rod-toast-stack[data-size="large"] .rod-toast[data-rich="true"],.rod-toast-stack[data-size="large"] .rod-toast[data-interactive="true"]{min-width:0;max-width:none}}
-      @media(prefers-reduced-motion:reduce){.rod-toast,.rod-toast__content,.rod-toast__actions,.rod-toast__icon,.rod-toast__expand svg,.rod-toast-stack__list::before,.rod-toast-stack__list::after{transition-duration:1ms!important;animation-duration:1ms!important}}
+
+      /* Media picker */
+      .rod-toast-stack .rod-toast[data-interactive-kind="picker"]{width:min(760px,calc(100vw - 20px));min-width:min(620px,calc(100vw - 20px));max-width:min(760px,calc(100vw - 20px));max-height:min(86dvh,860px);padding-block:16px;touch-action:pan-y}
+      .rod-toast[data-interactive-kind="picker"] .rod-toast__interactive{gap:14px}
+      .rod-toast__picker{display:grid;gap:11px;min-width:0;width:100%}
+      .rod-toast__picker-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+      .rod-toast__picker-count{min-width:0;overflow:hidden;color:var(--rod-muted);font:620 11px/1.25 ui-sans-serif,system-ui,-apple-system,sans-serif;font-variant-numeric:tabular-nums;text-overflow:ellipsis;white-space:nowrap}
+      .rod-toast__picker-tools{display:flex;flex:0 0 auto;align-items:center;gap:6px}
+      .rod-toast__picker-tool{appearance:none;display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:0 9px;border:1px solid var(--rod-border);border-radius:9px;outline:0;background:var(--rod-overlay);color:var(--rod-muted);font:650 10px/1 ui-sans-serif,system-ui,-apple-system,sans-serif;cursor:pointer;touch-action:manipulation;transition:color 150ms,background-color 150ms,border-color 150ms,opacity 150ms,transform 240ms var(--rod-ease-spring)}
+      .rod-toast__picker-tool:hover:not(:disabled),.rod-toast__picker-tool:focus-visible:not(:disabled){border-color:var(--rod-border-strong);background:var(--rod-hover);color:var(--rod-text-strong);transform:translateY(-1px)}
+      .rod-toast__picker-tool:active:not(:disabled){transform:translateY(0) scale(.97)}.rod-toast__picker-tool:disabled{cursor:default;opacity:.38}
+      .rod-toast__picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--rod-picker-item-min,112px),1fr));gap:var(--rod-picker-gap,8px);width:100%;max-height:min(50dvh,470px);overflow-x:hidden;overflow-y:auto;padding:1px 3px 3px 1px;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--rod-border-strong) transparent;-webkit-overflow-scrolling:touch}
+      .rod-toast__picker-item{appearance:none;position:relative;isolation:isolate;display:block;width:100%;aspect-ratio:var(--rod-picker-aspect-ratio,1 / 1);min-width:0;padding:0;overflow:hidden;border:1px solid var(--rod-border);border-radius:var(--rod-picker-radius,13px);outline:0;background:linear-gradient(145deg,var(--rod-overlay),transparent),var(--rod-surface-raised);color:var(--rod-text);cursor:pointer;touch-action:manipulation;transform:translateZ(0);transition:border-color 170ms,box-shadow 220ms,opacity 170ms,transform 300ms var(--rod-ease-spring)}
+      .rod-toast__picker-item:hover:not(:disabled),.rod-toast__picker-item:focus-visible:not(:disabled){border-color:var(--rod-border-strong);box-shadow:0 8px 24px rgba(0,0,0,.18),0 0 0 1px color-mix(in srgb,var(--rod-text-strong) 7%,transparent);transform:translateY(-2px) scale(1.012)}
+      .rod-toast__picker-item:active:not(:disabled){transform:scale(.985)}
+      .rod-toast__picker-item[data-selected="true"]{border-color:color-mix(in srgb,var(--rod-text-strong) 62%,var(--rod-border));box-shadow:0 0 0 2px color-mix(in srgb,var(--rod-text-strong) 72%,transparent) inset,0 10px 28px rgba(0,0,0,.2)}
+      .rod-toast__picker-item:disabled{cursor:default;opacity:.38;filter:grayscale(.35)}
+      .rod-toast__picker-media{position:absolute;inset:0;z-index:0;display:block;width:100%;height:100%;object-fit:cover;background:var(--rod-overlay);pointer-events:none;user-select:none;-webkit-user-drag:none;transition:filter 220ms,transform 420ms var(--rod-ease-spring)}
+      .rod-toast__picker-item:hover:not(:disabled) .rod-toast__picker-media{transform:scale(1.035)}
+      .rod-toast__picker-item[data-selected="false"] .rod-toast__picker-media{filter:saturate(.76) brightness(.78)}
+      .rod-toast-stack[data-theme="light"] .rod-toast__picker-item[data-selected="false"] .rod-toast__picker-media{filter:saturate(.82) brightness(.93)}
+      .rod-toast__picker-shade{position:absolute;inset:0;z-index:1;background:linear-gradient(to top,rgba(0,0,0,.5),transparent 48%);pointer-events:none;opacity:.72;transition:opacity 180ms}.rod-toast__picker-item[data-selected="true"] .rod-toast__picker-shade{opacity:.38}
+      .rod-toast__picker-check{position:absolute;top:8px;right:8px;z-index:3;display:grid;place-items:center;width:24px;height:24px;border:1px solid rgba(255,255,255,.42);border-radius:999px;background:rgba(10,10,11,.5);color:rgba(255,255,255,.96);box-shadow:0 2px 8px rgba(0,0,0,.2),0 1px 0 rgba(255,255,255,.14) inset;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);opacity:.82;transform:scale(.9);transition:opacity 160ms,transform 300ms var(--rod-ease-spring),background-color 160ms,border-color 160ms;pointer-events:none}
+      .rod-toast__picker-check svg{width:14px;height:14px;stroke-width:2.4;opacity:0;transform:scale(.6);transition:opacity 160ms,transform 280ms var(--rod-ease-spring)}
+      .rod-toast__picker-item[data-selected="true"] .rod-toast__picker-check{border-color:rgba(255,255,255,.88);background:rgba(250,250,250,.96);color:rgba(20,20,21,.98);opacity:1;transform:scale(1)}
+      .rod-toast__picker-item[data-selected="true"] .rod-toast__picker-check svg{opacity:1;transform:scale(1)}
+      .rod-toast__picker-index,.rod-toast__picker-kind{position:absolute;z-index:3;display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:22px;padding:0 7px;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(10,10,11,.5);color:rgba(255,255,255,.94);box-shadow:0 2px 8px rgba(0,0,0,.16);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font:700 9px/1 ui-sans-serif,system-ui,-apple-system,sans-serif;font-variant-numeric:tabular-nums;pointer-events:none}
+      .rod-toast__picker-index{bottom:8px;left:8px}.rod-toast__picker-kind{right:8px;bottom:8px;gap:4px;min-width:0;padding-inline:6px;text-transform:uppercase}.rod-toast__picker-kind svg{width:12px;height:12px}
+      .rod-toast__picker-label{position:absolute;right:8px;bottom:8px;left:40px;z-index:2;overflow:hidden;color:rgba(255,255,255,.96);font:650 10px/1.2 ui-sans-serif,system-ui,-apple-system,sans-serif;text-align:left;text-overflow:ellipsis;text-shadow:0 1px 5px rgba(0,0,0,.58);white-space:nowrap;pointer-events:none}.rod-toast__picker-label[data-has-kind="true"]{right:62px}
+      .rod-toast__picker-empty{display:grid;place-items:center;min-height:150px;padding:24px;border:1px dashed var(--rod-border);border-radius:13px;color:var(--rod-muted);background:var(--rod-overlay);font:500 12px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif;text-align:center}
+      .rod-toast__picker-item[data-media-error="true"]::after{content:"Preview unavailable";position:absolute;inset:0;z-index:2;display:grid;place-items:center;padding:12px;background:var(--rod-surface-raised);color:var(--rod-muted);font:600 10px/1.3 system-ui,sans-serif;text-align:center}
+      @media(max-width:560px){.rod-toast-stack .rod-toast[data-interactive-kind="picker"]{width:calc(100vw - 16px);min-width:0;max-width:calc(100vw - 16px);max-height:calc(100dvh - 18px)}.rod-toast__picker-grid{grid-template-columns:repeat(auto-fill,minmax(var(--rod-picker-item-min-mobile,88px),1fr));max-height:min(50dvh,420px);gap:7px}.rod-toast__picker-toolbar{align-items:flex-start;flex-direction:column}.rod-toast__picker-tools{width:100%}.rod-toast__picker-tool{flex:1}}
+      @media(prefers-reduced-motion:reduce){.rod-toast,.rod-toast__content,.rod-toast__actions,.rod-toast__icon,.rod-toast__expand svg,.rod-toast-stack__list::before,.rod-toast-stack__list::after,.rod-toast__picker-item,.rod-toast__picker-media,.rod-toast__picker-check{transition-duration:1ms!important;animation-duration:1ms!important}}
     `;
 			return style;
 		}
@@ -1841,7 +1883,7 @@ var RodToaster = (function() {
 					return updateLoading([{
 						...next,
 						progress: value,
-						animation: next.animation ?? options.animation ?? "progress"
+						animation: next.animation ?? "progress"
 					}]);
 				},
 				success(...inputArgs) {
@@ -2187,6 +2229,7 @@ var RodToaster = (function() {
 					controller,
 					options
 				}) ?? {};
+				if (typeof bodyApi.cleanup === "function") cleanupCallbacks.push(bodyApi.cleanup);
 				getValues = () => ({
 					...bodyApi.getValues?.() ?? {},
 					...checkboxApi.node ? { checked: checkboxApi.getValue() } : {}
@@ -2574,6 +2617,434 @@ var RodToaster = (function() {
 					const selection = values.selection;
 					if (options.required && (selection == null || Array.isArray(selection) && selection.length === 0)) return options.requiredMessage ?? "Choose an option.";
 					return typeof options.validate === "function" ? options.validate(selection) : true;
+				},
+				resolveValue(action, values) {
+					if (action.id === "cancel") return action.hasValue ? action.value : null;
+					return action.hasValue ? action.value : values.selection;
+				}
+			});
+		}
+		function inferPickerMediaType(value, fallback = "image") {
+			if (typeof value !== "string") {
+				if (value.isVideo === true || Number(value.media_type) === 2) return "video";
+				if (Number(value.media_type) === 1) return "image";
+				const explicit = String(value.type ?? value.kind ?? value.mediaType ?? value.mimeType ?? "").toLowerCase();
+				if (explicit.startsWith("video") || explicit === "reel") return "video";
+				if (explicit.startsWith("image") || explicit === "photo") return "image";
+			}
+			const source = typeof value === "string" ? value : String(value.src ?? value.url ?? value.mediaUrl ?? value.href ?? value.preview ?? value.thumbnail ?? value.poster ?? "");
+			if (/\.(?:mp4|webm|mov|m4v|mkv|avi|ogv|3gp|ts|m3u8)(?:$|[?#])/i.test(source)) return "video";
+			if (/\.(?:jpe?g|png|webp|gif|avif|bmp|svg)(?:$|[?#])/i.test(source)) return "image";
+			return fallback;
+		}
+		function normalizePickerItems(source, options = {}) {
+			const values = Array.isArray(source) ? source : source == null ? [] : [source];
+			const objectUrls = [];
+			const usedIds = /* @__PURE__ */ new Set();
+			const hostWindow = state.hostWindow ?? initialHostWindow;
+			return {
+				items: values.map((input, index) => {
+					const blobLike = isBlobLike(input);
+					const descriptorLike = !blobLike && isUnknownRecord(input) && [
+						"src",
+						"url",
+						"mediaUrl",
+						"href",
+						"poster",
+						"thumbnail",
+						"preview",
+						"previewUrl",
+						"id",
+						"pk",
+						"key",
+						"code",
+						"type",
+						"kind",
+						"mediaType",
+						"mimeType",
+						"media_type",
+						"isVideo"
+					].some((key) => key in input);
+					const raw = descriptorLike ? input : {};
+					let srcCandidate = descriptorLike ? raw.src ?? raw.url ?? raw.mediaUrl ?? raw.href ?? null : blobLike ? null : input;
+					if (blobLike && !srcCandidate) {
+						const objectUrl = safeCall(() => hostWindow.URL.createObjectURL(input), null);
+						if (objectUrl) {
+							srcCandidate = objectUrl;
+							objectUrls.push(objectUrl);
+						}
+					}
+					if (srcCandidate == null) return null;
+					const src = String(srcCandidate).trim();
+					if (!src) return null;
+					const rawBaseId = String(raw.id ?? raw.pk ?? raw.key ?? raw.code ?? index);
+					let id = rawBaseId;
+					let collision = 1;
+					while (usedIds.has(id)) {
+						id = `${rawBaseId}:${collision}`;
+						collision += 1;
+					}
+					usedIds.add(id);
+					const type = inferPickerMediaType({
+						...raw,
+						src,
+						type: raw.type ?? (blobLike ? input.type : void 0)
+					}, options.defaultMediaType ?? "image");
+					const posterCandidate = raw.poster ?? raw.thumbnail ?? raw.preview ?? raw.previewUrl ?? null;
+					const label = String(raw.label ?? raw.title ?? raw.filename ?? raw.name ?? "");
+					const alt = String(raw.alt ?? raw.label ?? `${type === "video" ? "Video" : "Image"} ${index + 1}`);
+					return {
+						id,
+						index,
+						type,
+						src,
+						poster: posterCandidate == null ? null : String(posterCandidate),
+						label,
+						alt,
+						disabled: Boolean(raw.disabled),
+						selected: hasOwn(raw, "selected") ? Boolean(raw.selected) : null,
+						original: input
+					};
+				}).filter((item) => item !== null),
+				objectUrls
+			};
+		}
+		function getInitialPickerSelection(items, options) {
+			const selectable = items.filter((item) => !item.disabled);
+			if (!selectable.length) return /* @__PURE__ */ new Set();
+			const requested = options.value ?? options.selected ?? options.defaultSelected;
+			const requestedIds = /* @__PURE__ */ new Set();
+			if (Array.isArray(requested)) requested.forEach((value) => requestedIds.add(String(value)));
+			else if (requested !== void 0 && requested !== null && requested !== true && requested !== false && requested !== "all") requestedIds.add(String(requested));
+			const shouldSelectAll = options.defaultAllSelected === true || options.allSelectedByDefault === true || options.defaultSelected === "all" || options.defaultSelected === true || options.value === "all" || options.value === true || options.selected === "all" || options.selected === true;
+			const selected = /* @__PURE__ */ new Set();
+			for (const item of items) {
+				if (item.disabled) continue;
+				if (item.selected === true) {
+					selected.add(item.id);
+					continue;
+				}
+				if (item.selected === false) continue;
+				if (shouldSelectAll || requestedIds.has(item.id) || requestedIds.has(String(item.index))) selected.add(item.id);
+			}
+			if (options.multiple === false) {
+				const first = items.find((item) => selected.has(item.id) && !item.disabled) ?? (shouldSelectAll ? selectable[0] : null);
+				return new Set(first ? [first.id] : []);
+			}
+			return selected;
+		}
+		function showPickerToast(descriptor = {}) {
+			const options = isPlainObject(descriptor) ? { ...descriptor } : {};
+			const normalized = normalizePickerItems(options.items ?? options.media ?? options.sources ?? [], options);
+			const items = normalized.items;
+			const multiple = options.multiple !== false;
+			const minimum = Number.isFinite(Number(options.minSelected)) ? Math.max(0, Number(options.minSelected)) : options.required === false ? 0 : 1;
+			const maximum = Number.isFinite(Number(options.maxSelected)) ? Math.max(multiple ? minimum : 1, Number(options.maxSelected)) : multiple ? Infinity : 1;
+			const selectedIds = getInitialPickerSelection(items, {
+				...options,
+				multiple
+			});
+			if (Number.isFinite(maximum) && selectedIds.size > maximum) {
+				let kept = 0;
+				for (const item of items) {
+					if (!selectedIds.has(item.id)) continue;
+					kept += 1;
+					if (kept > maximum) selectedIds.delete(item.id);
+				}
+			}
+			options.shortcuts ??= {
+				Escape: "cancel",
+				"Meta+Enter": "confirm",
+				"Control+Enter": "confirm"
+			};
+			return showActionDialog(options, {
+				kind: "picker",
+				icon: "image",
+				dismissValue: hasOwn(options, "dismissValue") ? options.dismissValue : null,
+				fallbackActions: [{
+					id: "cancel",
+					label: options.cancelLabel ?? "Cancel",
+					icon: "circle-x",
+					variant: "secondary",
+					value: hasOwn(options, "dismissValue") ? options.dismissValue : null
+				}, {
+					id: "confirm",
+					label: options.confirmLabel ?? (options.downloadLabel ? "Download" : "Use selected"),
+					icon: options.confirmIcon ?? (options.downloadLabel ? "download" : "check"),
+					variant: "primary"
+				}],
+				buildBody({ document, body, node, controller }) {
+					const root = document.createElement("div");
+					const toolbar = document.createElement("div");
+					const count = document.createElement("div");
+					const tools = document.createElement("div");
+					const selectAll = document.createElement("button");
+					const clearAll = document.createElement("button");
+					const grid = document.createElement("div");
+					const empty = document.createElement("div");
+					const buttonsById = /* @__PURE__ */ new Map();
+					root.className = "rod-toast__picker";
+					toolbar.className = "rod-toast__picker-toolbar";
+					count.className = "rod-toast__picker-count";
+					tools.className = "rod-toast__picker-tools";
+					grid.className = "rod-toast__picker-grid";
+					grid.setAttribute("role", "listbox");
+					grid.setAttribute("aria-multiselectable", String(multiple));
+					empty.className = "rod-toast__picker-empty";
+					if (Number.isFinite(Number(options.columns)) && Number(options.columns) > 0) grid.style.gridTemplateColumns = `repeat(${Math.max(1, Math.floor(Number(options.columns)))},minmax(0,1fr))`;
+					if (Number.isFinite(Number(options.itemMinWidth))) grid.style.setProperty("--rod-picker-item-min", `${Math.max(64, Number(options.itemMinWidth))}px`);
+					if (options.aspectRatio) grid.style.setProperty("--rod-picker-aspect-ratio", String(options.aspectRatio));
+					if (Number.isFinite(Number(options.gap))) grid.style.setProperty("--rod-picker-gap", `${Math.max(0, Number(options.gap))}px`);
+					selectAll.type = "button";
+					clearAll.type = "button";
+					selectAll.className = "rod-toast__picker-tool";
+					clearAll.className = "rod-toast__picker-tool";
+					selectAll.textContent = options.selectAllLabel ?? "Select all";
+					clearAll.textContent = options.clearAllLabel ?? "Clear";
+					const selectableCount = items.filter((item) => !item.disabled).length;
+					const getSelectedItems = () => items.filter((item) => !item.disabled && selectedIds.has(item.id));
+					const getSelectionValue = () => {
+						const selected = getSelectedItems();
+						switch (options.returnType ?? "items") {
+							case "ids": return selected.map((item) => item.id);
+							case "indexes": return selected.map((item) => item.index);
+							case "descriptors": return selected.map((item) => ({
+								id: item.id,
+								index: item.index,
+								type: item.type,
+								src: item.src,
+								poster: item.poster,
+								label: item.label,
+								alt: item.alt,
+								disabled: item.disabled,
+								original: item.original
+							}));
+							default: return selected.map((item) => item.original);
+						}
+					};
+					const syncConfirmButton = () => {
+						const hostWindow = state.hostWindow ?? initialHostWindow;
+						(hostWindow.requestAnimationFrame?.bind(hostWindow) ?? ((callback) => hostWindow.setTimeout(() => callback(performance.now()), 0)))(() => {
+							const confirm = node.querySelector("[data-action-id=\"confirm\"]");
+							const label = confirm?.querySelector("span");
+							const selectedCount = selectedIds.size;
+							const valid = selectedCount >= minimum && selectedCount <= maximum;
+							if (confirm) confirm.disabled = !valid;
+							if (label && options.dynamicConfirmLabel !== false) {
+								const base = options.confirmLabel ?? (options.downloadLabel ? "Download" : "Use selected");
+								label.textContent = selectedCount > 0 ? `${base} (${selectedCount})` : base;
+							}
+						});
+					};
+					const notifyChange = () => {
+						const selected = getSelectedItems();
+						safeCall(() => options.onChange?.({
+							selected: selected.map((item) => item.original),
+							selectedIds: selected.map((item) => item.id),
+							selectedIndexes: selected.map((item) => item.index),
+							selectedCount: selected.length,
+							totalItems: items.length,
+							controller
+						}), void 0);
+					};
+					const renderSelectionState = () => {
+						const selectedCount = getSelectedItems().length;
+						if (options.countLabel === false) {
+							count.textContent = "";
+							count.hidden = true;
+						} else {
+							count.hidden = false;
+							if (typeof options.countLabel === "function") count.textContent = String(options.countLabel({
+								selected: selectedCount,
+								total: selectableCount
+							}));
+							else if (typeof options.countLabel === "string") count.textContent = options.countLabel.replace(/\{selected\}/g, String(selectedCount)).replace(/\{total\}/g, String(selectableCount));
+							else count.textContent = `${selectedCount} of ${selectableCount} selected`;
+						}
+						buttonsById.forEach((button, id) => {
+							const active = selectedIds.has(id);
+							button.dataset.selected = String(active);
+							button.setAttribute("aria-pressed", String(active));
+							button.setAttribute("aria-selected", String(active));
+						});
+						selectAll.disabled = !multiple || selectableCount === 0 || selectedCount >= Math.min(selectableCount, maximum);
+						clearAll.disabled = selectedCount === 0;
+						syncConfirmButton();
+						notifyChange();
+					};
+					const setSelected = (item, active, render = true) => {
+						if (item.disabled) return false;
+						if (!multiple) {
+							selectedIds.clear();
+							if (active) selectedIds.add(item.id);
+						} else if (active) {
+							if (selectedIds.size >= maximum && !selectedIds.has(item.id)) return false;
+							selectedIds.add(item.id);
+						} else selectedIds.delete(item.id);
+						if (render) renderSelectionState();
+						return true;
+					};
+					const toggle = (item) => {
+						const active = selectedIds.has(item.id);
+						if (active && !multiple && minimum > 0) return;
+						setSelected(item, !active);
+					};
+					const makeMedia = (item) => {
+						let media;
+						if (item.type === "video" && !item.poster) {
+							const video = document.createElement("video");
+							video.src = item.src;
+							video.muted = true;
+							video.playsInline = true;
+							video.preload = options.videoPreload ?? "metadata";
+							video.setAttribute("playsinline", "");
+							video.setAttribute("webkit-playsinline", "");
+							media = video;
+						} else {
+							const image = document.createElement("img");
+							image.src = item.poster ?? item.src;
+							image.alt = item.alt;
+							image.loading = "lazy";
+							image.decoding = "async";
+							media = image;
+						}
+						media.className = "rod-toast__picker-media";
+						media.draggable = false;
+						if (options.crossOrigin) media.crossOrigin = options.crossOrigin;
+						return media;
+					};
+					items.forEach((item) => {
+						const button = document.createElement("button");
+						const media = makeMedia(item);
+						const shade = document.createElement("span");
+						const check = document.createElement("span");
+						const index = document.createElement("span");
+						const kind = document.createElement("span");
+						const label = document.createElement("span");
+						button.type = "button";
+						button.className = "rod-toast__picker-item";
+						button.dataset.pickerId = item.id;
+						button.dataset.selected = String(selectedIds.has(item.id));
+						button.disabled = item.disabled;
+						button.setAttribute("role", "option");
+						button.setAttribute("aria-pressed", String(selectedIds.has(item.id)));
+						button.setAttribute("aria-selected", String(selectedIds.has(item.id)));
+						button.setAttribute("aria-label", item.label || `${item.type} ${item.index + 1}`);
+						media.addEventListener("error", () => {
+							button.dataset.mediaError = "true";
+						}, { once: true });
+						shade.className = "rod-toast__picker-shade";
+						check.className = "rod-toast__picker-check";
+						check.append(createSvgIcon(document, "check", 14));
+						index.className = "rod-toast__picker-index";
+						index.textContent = String(item.index + 1);
+						kind.className = "rod-toast__picker-kind";
+						kind.hidden = options.showType === false;
+						kind.append(createSvgIcon(document, item.type === "video" ? "play" : "image", 12));
+						const kindText = document.createElement("span");
+						kindText.textContent = item.type === "video" ? options.videoLabel ?? "Video" : options.imageLabel ?? "Photo";
+						kind.append(kindText);
+						label.className = "rod-toast__picker-label";
+						label.textContent = item.label;
+						label.hidden = !item.label || options.showLabels === false;
+						label.dataset.hasKind = String(!kind.hidden);
+						button.append(media, shade, check, index);
+						if (!kind.hidden) button.append(kind);
+						if (!label.hidden) button.append(label);
+						button.addEventListener("click", (event) => {
+							event.preventDefault();
+							event.stopPropagation();
+							toggle(item);
+						});
+						buttonsById.set(item.id, button);
+						grid.append(button);
+					});
+					grid.addEventListener("keydown", (event) => {
+						if (![
+							"ArrowLeft",
+							"ArrowRight",
+							"ArrowUp",
+							"ArrowDown",
+							"Home",
+							"End"
+						].includes(event.key)) return;
+						const target = event.target;
+						if (!isElementLike(target) || !target.matches(".rod-toast__picker-item")) return;
+						const enabled = [...buttonsById.values()].filter((button) => !button.disabled);
+						const currentIndex = enabled.indexOf(target);
+						if (currentIndex < 0 || !enabled.length) return;
+						let nextIndex = currentIndex;
+						const currentButton = enabled[currentIndex];
+						const approximateColumns = Math.max(1, Math.round(grid.clientWidth / Math.max(1, currentButton.offsetWidth + (Number(options.gap) || 8))));
+						if (event.key === "ArrowLeft") nextIndex = currentIndex - 1;
+						else if (event.key === "ArrowRight") nextIndex = currentIndex + 1;
+						else if (event.key === "ArrowUp") nextIndex = currentIndex - approximateColumns;
+						else if (event.key === "ArrowDown") nextIndex = currentIndex + approximateColumns;
+						else if (event.key === "Home") nextIndex = 0;
+						else if (event.key === "End") nextIndex = enabled.length - 1;
+						nextIndex = clamp(nextIndex, 0, enabled.length - 1);
+						if (nextIndex === currentIndex) return;
+						event.preventDefault();
+						enabled[nextIndex]?.focus({ preventScroll: true });
+						enabled[nextIndex]?.scrollIntoView({
+							block: "nearest",
+							inline: "nearest"
+						});
+					});
+					if (!items.length) empty.textContent = options.emptyMessage ?? "No images or videos available.";
+					if (options.showSelectionTools !== false && multiple && items.length) {
+						selectAll.addEventListener("click", (event) => {
+							event.preventDefault();
+							event.stopPropagation();
+							for (const item of items) {
+								if (item.disabled || selectedIds.size >= maximum) continue;
+								selectedIds.add(item.id);
+							}
+							renderSelectionState();
+						});
+						clearAll.addEventListener("click", (event) => {
+							event.preventDefault();
+							event.stopPropagation();
+							selectedIds.clear();
+							renderSelectionState();
+						});
+						tools.append(selectAll, clearAll);
+					}
+					toolbar.append(count);
+					if (tools.childElementCount) toolbar.append(tools);
+					root.append(toolbar, items.length ? grid : empty);
+					body.append(root);
+					renderSelectionState();
+					return {
+						focus() {
+							const preferred = items.find((item) => selectedIds.has(item.id) && !item.disabled) ?? items.find((item) => !item.disabled);
+							buttonsById.get(preferred?.id ?? "")?.focus({ preventScroll: true });
+						},
+						getValues() {
+							const selected = getSelectedItems();
+							return {
+								selection: getSelectionValue(),
+								selected: selected.map((item) => item.original),
+								selectedIds: selected.map((item) => item.id),
+								selectedIndexes: selected.map((item) => item.index),
+								selectedCount: selected.length,
+								totalItems: items.length
+							};
+						},
+						cleanup() {
+							const hostWindow = state.hostWindow ?? initialHostWindow;
+							hostWindow.setTimeout(() => {
+								for (const url of normalized.objectUrls) safeCall(() => hostWindow.URL.revokeObjectURL(url), void 0);
+							}, 500);
+						}
+					};
+				},
+				async validate({ action, values }) {
+					if (action.id === "cancel") return true;
+					const selectedCount = Number(values.selectedCount) || 0;
+					if (selectedCount < minimum) return options.requiredMessage ?? (minimum === 1 ? "Select at least one item." : `Select at least ${minimum} items.`);
+					if (selectedCount > maximum) return options.validationMessage ?? `Select at most ${maximum} items.`;
+					return typeof options.validate === "function" ? options.validate(values.selection) : true;
 				},
 				resolveValue(action, values) {
 					if (action.id === "cancel") return action.hasValue ? action.value : null;
@@ -3481,6 +3952,11 @@ var RodToaster = (function() {
 				confirm: (descriptor) => showConfirmToast(enrichDescriptor(descriptor)),
 				prompt: (descriptor) => showPromptToast(enrichDescriptor(descriptor)),
 				select: (descriptor) => showSelectToast(enrichDescriptor(descriptor)),
+				picker: (descriptor) => showPickerToast({
+					...defaults,
+					...descriptor ?? {},
+					scope: scopeName
+				}),
 				undo: (descriptor) => showUndoToast(enrichDescriptor(descriptor)),
 				task: (descriptor) => createTaskController(enrichDescriptor(descriptor)),
 				promise: (input, descriptor) => showPromiseToast(input, enrichDescriptor(descriptor)),
@@ -3527,6 +4003,7 @@ var RodToaster = (function() {
 		toastApi.confirm = (descriptor = {}) => showConfirmToast(descriptor);
 		toastApi.prompt = (descriptor = {}) => showPromptToast(descriptor);
 		toastApi.select = (descriptor = {}) => showSelectToast(descriptor);
+		toastApi.picker = (descriptor = {}) => showPickerToast(descriptor);
 		toastApi.undo = (descriptor = {}) => showUndoToast(descriptor);
 		toastApi.task = (descriptor = {}) => createTaskController(descriptor);
 		toastApi.promise = (input, descriptor = {}) => showPromiseToast(input, descriptor);
@@ -3561,7 +4038,7 @@ var RodToaster = (function() {
 			return record.updateLoading([{
 				...next,
 				progress: value,
-				animation: next.animation ?? record.options.animation ?? "progress"
+				animation: next.animation ?? "progress"
 			}]);
 		};
 		toastApi.resolve = (id, type = "success", ...inputArgs) => {
