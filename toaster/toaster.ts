@@ -3,7 +3,7 @@
 
 /*
  * Rod Super Toaster
- * Version 4.5.1
+ * Version 4.6.0
  *
  * Browser-first, bundler-optional TypeScript IIFE.
  * Compile with: tsc --target ES2022 --lib ES2022,DOM --strict
@@ -12,7 +12,7 @@
 (function installRodToaster(globalWindow: Window & typeof globalThis): void {
   "use strict";
 
-  const VERSION = "4.5.1" as const;
+  const VERSION = "4.6.0" as const;
   const TOAST_GLOBAL = "RodToaster" as const;
   const INSPECTOR_GLOBAL = "RodObjectInspector" as const;
   const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -38,13 +38,14 @@
   type TaskStatus = "queued" | "running" | "paused" | "success" | "error" | "warning" | "cancelled";
   type TaskStorageName = "sessionStorage" | "localStorage";
   type ShadowMode = "open" | "closed";
+  type ToastLane = "notification" | "task" | "interaction";
   type UnknownRecord = Record<string, unknown>;
   type TimerHandle = number | null;
   type MaybePromise<T> = T | Promise<T>;
   type SvgIconName = keyof typeof SVG_ICONS;
   type ToastImageFit = "cover" | "contain";
 
-  interface ToastImageIconDescriptor extends UnknownRecord {
+  interface ToastImageIconDescriptor {
     src: string | URL;
     alt?: string;
     fit?: ToastImageFit;
@@ -78,7 +79,7 @@
   type PickerReturnType = "items" | "ids" | "indexes" | "descriptors";
   type PickerSelectionSeed = "all" | boolean | string | number | readonly (string | number)[];
 
-  interface PickerItemDescriptor extends UnknownRecord {
+  interface PickerItemDescriptor {
     id?: string | number;
     pk?: string | number;
     key?: string | number;
@@ -118,6 +119,8 @@
     alt: string;
     disabled: boolean;
     original: T;
+    transient?: boolean;
+    dispose?(): void;
   }
 
   type PickerSelectionValue<T extends PickerSource = PickerSource> =
@@ -135,7 +138,7 @@
     controller: ToastController;
   }
 
-  interface PickerMeta<T extends PickerSource = PickerSource> extends UnknownRecord {
+  interface PickerMeta<T extends PickerSource = PickerSource> {
     value: PickerSelectionValue<T> | null;
     reason: string;
     actionId: string | null;
@@ -162,6 +165,8 @@
     defaultSelected?: PickerSelectionSeed;
     selected?: PickerSelectionSeed;
     value?: PickerSelectionSeed;
+    defaultSelectedIndexes?: readonly number[];
+    selectedIndexes?: readonly number[];
     multiple?: boolean;
     minSelected?: number;
     maxSelected?: number;
@@ -183,6 +188,9 @@
     countLabel?: false | string | ((state: { selected: number; total: number }) => string);
     videoPreload?: "none" | "metadata" | "auto";
     crossOrigin?: "" | "anonymous" | "use-credentials";
+    virtualizeAfter?: number;
+    overscanRows?: number;
+    mediaRootMargin?: string;
     returnType?: PickerReturnType;
     onChange?(event: PickerChangeEvent<T>): void;
   }
@@ -270,7 +278,7 @@
     checked: Record<string, boolean>;
   }
 
-  interface ToastActionDescriptor extends UnknownRecord {
+  interface ToastActionDescriptor {
     id?: string | number;
     label?: string;
     loadingLabel?: string;
@@ -317,10 +325,11 @@
     autoAction?: string;
   }
 
-  interface ToastOptions extends UnknownRecord {
+  interface ToastOptions {
     [OPTIONS_SYMBOL]?: true;
     duration?: number;
     type?: ToastType;
+    lane?: ToastLane;
     id?: string | number | null;
     dedupe?: boolean;
     dedupeWindow?: number;
@@ -383,7 +392,7 @@
     cancelLabel?: string;
     confirmLabel?: string;
     multiple?: boolean;
-    options?: SelectChoice[];
+    options?: readonly (SelectChoice<unknown> | unknown)[];
     validate?(value: unknown): MaybePromise<boolean | string | undefined>;
     actionLabel?: string;
     actionIcon?: SvgIconName;
@@ -393,14 +402,22 @@
     undo?(context: ToastActionContext): MaybePromise<unknown>;
   }
 
-  interface SelectChoice {
-    value?: unknown;
+  interface SelectChoice<T = unknown> {
+    value: T;
     label?: unknown;
     disabled?: boolean;
   }
 
+  interface SelectOptions<T = unknown> extends Omit<ToastOptions, "options" | "value" | "validate"> {
+    options?: readonly (SelectChoice<T> | T)[];
+    value?: T | readonly T[];
+    multiple?: boolean;
+    validate?(value: T | T[] | null): MaybePromise<boolean | string | undefined>;
+  }
+
   interface NormalizedToastOptions {
     type: ToastType;
+    lane: ToastLane;
     id: string | null;
     duration: number;
     dedupe: boolean;
@@ -463,6 +480,7 @@
     bumpDuplicate(): ToastController;
     readonly removed: boolean;
     dialogActions?: NormalizedActionDescriptor[];
+    externalUpdate?: (next: ToastOptions) => ToastController;
   }
 
   interface ToastController {
@@ -502,8 +520,9 @@
     update(next?: Partial<TaskDescriptor>): TaskController;
   }
 
-  interface TaskDescriptor extends UnknownRecord {
+  interface TaskDescriptor {
     id?: string;
+    key?: string;
     toastId?: string;
     title?: unknown;
     description?: unknown;
@@ -553,12 +572,12 @@
     run<T>(executor: (context: TaskExecutorContext) => Promise<T>): Promise<T>;
   }
 
-  interface TaskGroupDescriptor extends UnknownRecord {
+  interface TaskGroupDescriptor {
     id?: string;
     parentTaskId?: string;
     title?: string;
     description?: string;
-    icon?: SvgIconName;
+    icon?: TaskIcon;
     scope?: string;
     metadata?: UnknownRecord;
     persist?: boolean;
@@ -612,7 +631,7 @@
     loading(descriptor?: ToastOptions): ToastController | null;
     confirm(descriptor?: ToastOptions): Promise<unknown>;
     prompt(descriptor?: ToastOptions): Promise<unknown>;
-    select(descriptor?: ToastOptions): Promise<unknown>;
+    select<T = unknown>(descriptor?: SelectOptions<T>): Promise<T | T[] | null>;
     picker<T extends PickerSource = PickerSource>(descriptor?: PickerOptions<T>): Promise<PickerResult<T>>;
     undo(descriptor?: ToastOptions): Promise<unknown>;
     task(descriptor?: TaskDescriptor): TaskController | null;
@@ -650,7 +669,9 @@
      * This beats authored z-index values and stacking contexts.
      */
     useTopLayer: boolean;
+    idleHostTtl: number;
     persistTasks: boolean;
+    taskProgressPersistInterval: number;
     restoreTasksOnLoad: boolean;
     taskStorage: TaskStorageName;
     taskStorageKey: string;
@@ -689,11 +710,17 @@
     fallbackToLightDom: boolean;
   }
 
+  interface DialogStackEntry {
+    record: ToastRecord;
+    previousFocus: HTMLElement | null;
+  }
+
   interface HostContext {
     window: Window & typeof globalThis;
     document: Document;
     container: HTMLDivElement;
     list: HTMLDivElement;
+    interactionList: HTMLDivElement;
   }
 
   interface ToasterState {
@@ -721,12 +748,15 @@
     themeCleanup: (() => void) | null;
     managerNode: HTMLButtonElement | null;
     list: HTMLDivElement | null;
+    interactionList: HTMLDivElement | null;
     toolbar: HTMLDivElement | null;
     stackCountNode: HTMLDivElement | null;
     managerCountNode: HTMLSpanElement | null;
     listeners: Map<string, Set<ToastEventListener>>;
     tasks: Map<string, TaskController>;
     groups: Map<string, TaskGroup>;
+    dialogStack: DialogStackEntry[];
+    failedImageKeys: Set<string>;
     restoredTasks: boolean;
     outsidePointerDownHandler: ((event: PointerEvent) => void) | null;
     inspectorPromise: Promise<ObjectInspectorApi> | null;
@@ -741,6 +771,9 @@
     topLayerObserver: MutationObserver | null;
     topLayerCleanup: (() => void) | null;
     taskPersistTimer: number | null;
+    taskPersistLastAt: number;
+    idleDestroyTimer: number | null;
+    destroying: boolean;
   }
 
   interface ToasterApi {
@@ -754,7 +787,7 @@
     loading(...args: unknown[]): ToastController | null;
     confirm(descriptor?: ToastOptions): Promise<unknown>;
     prompt(descriptor?: ToastOptions): Promise<unknown>;
-    select(descriptor?: ToastOptions): Promise<unknown>;
+    select<T = unknown>(descriptor?: SelectOptions<T>): Promise<T | T[] | null>;
     picker<T extends PickerSource = PickerSource>(descriptor?: PickerOptions<T>): Promise<PickerResult<T>>;
     undo(descriptor?: ToastOptions): Promise<unknown>;
     task(descriptor?: TaskDescriptor): TaskController | null;
@@ -797,6 +830,8 @@
     getHostMode(): "shadow" | "light-dom" | null;
     bringToFront(): boolean;
     isTopLayer(): boolean;
+    destroy(reason?: string): void;
+    noConflict(): ToasterApi;
     repairHost(): HTMLDivElement | null;
     readonly version: string;
     readonly objectInspector: ObjectInspectorApi | null;
@@ -887,7 +922,9 @@
     persistAcrossSpaNavigation: true,
     minimizeOnSpaNavigation: true,
     useTopLayer: true,
+    idleHostTtl: 0,
     persistTasks: false,
+    taskProgressPersistInterval: 900,
     restoreTasksOnLoad: true,
     taskStorage: "sessionStorage",
     taskStorageKey: "__rod_super_toaster_tasks_v1__",
@@ -926,20 +963,24 @@
     fallbackToLightDom: true,
   };
 
-  const OPTION_KEYS = new Set<string>([
-    "duration", "type", "id", "dedupe", "dedupeWindow", "pauseOnInteraction", "closeButton", "role",
-    "swipeToDismiss", "swipeThreshold", "swipeVelocity", "inspectDepth", "inspectItems", "previewItems",
-    "showPrototype", "showNonEnumerable", "showObjectLength", "virtualizeInspector", "virtualizeAfter",
-    "virtualRowHeight", "virtualOverscan", "virtualMaxHeight", "unmountInspectorOnCollapse", "loading",
-    "loadingState", "title", "description", "icon", "animation", "progress", "progressLabel", "dismissible",
-    "actions", "scope", "metadata", "details", "onDismiss",
-  ]);
+  const TOAST_OPTION_KEY_LIST = [
+    "duration", "type", "lane", "id", "dedupe", "dedupeWindow", "pauseOnInteraction",
+    "closeButton", "role", "swipeToDismiss", "swipeThreshold", "swipeVelocity",
+    "inspectDepth", "inspectItems", "previewItems", "showPrototype", "showNonEnumerable",
+    "showObjectLength", "virtualizeInspector", "virtualizeAfter", "virtualRowHeight",
+    "virtualOverscan", "virtualMaxHeight", "unmountInspectorOnCollapse", "loading",
+    "loadingState", "title", "description", "icon", "animation", "loadingAnimation",
+    "progress", "progressLabel", "dismissible", "actions", "scope", "metadata", "details",
+    "detailsLabel", "onDismiss", "checkbox", "countdown", "shortcuts", "dismissValue",
+    "returnMeta", "validation", "validationMessage", "rejectOnActionError", "copyError",
+    "copyLabel", "error", "inputLabel", "inputType", "value", "placeholder", "autocomplete",
+    "spellcheck", "minLength", "maxLength", "required", "requiredMessage", "multiline",
+    "cancelLabel", "confirmLabel", "multiple", "options", "actionLabel", "actionIcon",
+    "variant", "loadingLabel", "successLabel", "undo",
+  ] as const;
 
-  const LOADING_DESCRIPTOR_KEYS = new Set<string>([
-    "title", "description", "icon", "animation", "progress", "progressLabel", "duration", "id", "dedupe",
-    "dedupeWindow", "pauseOnInteraction", "closeButton", "role", "swipeToDismiss", "swipeThreshold",
-    "swipeVelocity", "scope", "metadata", "onDismiss",
-  ]);
+  const OPTION_KEYS = new Set<string>(TOAST_OPTION_KEY_LIST);
+  const LOADING_DESCRIPTOR_KEYS = OPTION_KEYS;
 
   const ALLOWED_LOADING_ANIMATIONS = new Set<LoadingAnimation>(["spinner", "pulse", "progress", "none"]);
   const ALLOWED_POSITIONS = new Set<ToastPosition>([
@@ -1137,7 +1178,6 @@
     const normalized = normalizeImageIconDescriptor(descriptor);
     const image = documentRef.createElement("img");
     image.className = "rod-toast__icon-image";
-    image.src = String(normalized.src);
     image.alt = normalized.alt ?? "";
     image.draggable = false;
     image.decoding = normalized.decoding ?? "async";
@@ -1157,6 +1197,7 @@
       image.referrerPolicy = normalized.referrerPolicy;
     }
 
+    image.src = String(normalized.src);
     return image;
   }
 
@@ -1188,10 +1229,6 @@
     }
 
     return template.cloneNode(true) as SVGSVGElement;
-  }
-
-  function setSvgIcon(node: Element, documentRef: Document, name: SvgIconName | string, size = 18): void {
-    node.replaceChildren(createSvgIcon(documentRef, name, size));
   }
 
   function parseLoadingInput(inputArgs: readonly unknown[], base: ToastOptions = {}): ToastOptions {
@@ -1234,7 +1271,12 @@
   const typedGlobalWindow = globalWindow as WindowWithRodGlobals & typeof globalThis;
   const typedInitialHostWindow = initialHostWindow as WindowWithRodGlobals & typeof globalThis;
 
-  const existingToaster = safeCall(() => typedInitialHostWindow[TOAST_GLOBAL] ?? typedGlobalWindow[TOAST_GLOBAL] ?? null, null);
+  const previousRodToaster = safeCall(() => typedInitialHostWindow[TOAST_GLOBAL] ?? null, null);
+  const previousToastGlobal = safeCall(() => typedInitialHostWindow.toast ?? null, null);
+  const existingToaster = safeCall(
+    () => typedInitialHostWindow[TOAST_GLOBAL] ?? typedGlobalWindow[TOAST_GLOBAL] ?? null,
+    null,
+  );
 
   function isValidToaster(value: unknown): value is ToasterApi {
     if (typeof value !== "function") return false;
@@ -1245,7 +1287,8 @@
       typeof candidate.error === "function" &&
       typeof candidate.confirm === "function" &&
       typeof candidate.picker === "function" &&
-      typeof candidate.bringToFront === "function"
+      typeof candidate.bringToFront === "function" &&
+      typeof candidate.destroy === "function"
     );
   }
 
@@ -1262,7 +1305,42 @@
     return;
   }
 
+  function teardownLegacyRuntime(candidate: unknown): void {
+    if (!candidate || typeof candidate !== "object") return;
+    const legacy = candidate as {
+      api?: unknown;
+      spaCleanup?: (() => void) | null;
+      historyRestore?: (() => void) | null;
+      themeCleanup?: (() => void) | null;
+      topLayerCleanup?: (() => void) | null;
+      spaObserver?: MutationObserver | null;
+      topLayerObserver?: MutationObserver | null;
+      hostElement?: HTMLElement | null;
+      taskPersistTimer?: number | null;
+      hostWindow?: Window | null;
+    };
+
+    const legacyApi = legacy.api as { destroy?: (reason?: string) => void } | null | undefined;
+    if (typeof legacyApi?.destroy === "function") {
+      safeCall(() => legacyApi.destroy?.("upgrade"), undefined);
+      return;
+    }
+
+    safeCall(() => legacy.spaCleanup?.(), undefined);
+    safeCall(() => legacy.historyRestore?.(), undefined);
+    safeCall(() => legacy.themeCleanup?.(), undefined);
+    safeCall(() => legacy.topLayerCleanup?.(), undefined);
+    safeCall(() => legacy.spaObserver?.disconnect(), undefined);
+    safeCall(() => legacy.topLayerObserver?.disconnect(), undefined);
+    if (legacy.taskPersistTimer != null) {
+      safeCall(() => (legacy.hostWindow ?? initialHostWindow).clearTimeout(legacy.taskPersistTimer!), undefined);
+    }
+    safeCall(() => legacy.hostElement?.remove(), undefined);
+  }
+
+  teardownLegacyRuntime(existingState);
   safeCall(() => initialHostWindow.document.getElementById(TOAST_HOST_ID)?.remove(), undefined);
+  safeCall(() => { delete typedInitialHostWindow[STATE_SYMBOL]; }, undefined);
 
   const state: ToasterState = {
     version: VERSION,
@@ -1289,12 +1367,15 @@
     themeCleanup: null,
     managerNode: null,
     list: null,
+    interactionList: null,
     toolbar: null,
     stackCountNode: null,
     managerCountNode: null,
     listeners: new Map(),
     tasks: new Map(),
     groups: new Map(),
+    dialogStack: [],
+    failedImageKeys: new Set(),
     restoredTasks: false,
     outsidePointerDownHandler: null,
     inspectorPromise: null,
@@ -1309,6 +1390,9 @@
     topLayerObserver: null,
     topLayerCleanup: null,
     taskPersistTimer: null,
+    taskPersistLastAt: 0,
+    idleDestroyTimer: null,
+    destroying: false,
   };
 
   try {
@@ -1420,7 +1504,12 @@
       .rod-toast-stack[data-position^="top"]{top:max(env(safe-area-inset-top,0px),16px);right:max(env(safe-area-inset-right,0px),16px);left:max(env(safe-area-inset-left,0px),16px)}
       .rod-toast-stack[data-position^="bottom"]{right:max(env(safe-area-inset-right,0px),16px);bottom:max(env(safe-area-inset-bottom,0px),16px);left:max(env(safe-area-inset-left,0px),16px);flex-direction:column-reverse}
       .rod-toast-stack[data-position$="left"]{align-items:flex-start}.rod-toast-stack[data-position$="right"]{align-items:flex-end}
-      .rod-toast-stack__list,.rod-toast-stack__toolbar{width:var(--rod-toast-width)}
+      .rod-toast-stack__list,.rod-toast-stack__toolbar,.rod-toast-stack__interactions{width:var(--rod-toast-width)}
+      .rod-toast-stack__interactions{position:relative;z-index:4;display:flex;flex-direction:column;align-items:stretch;gap:11px;min-width:0;pointer-events:none}
+      .rod-toast-stack__interactions:empty{display:none}
+      .rod-toast-stack__interactions .rod-toast{pointer-events:auto}
+      .rod-toast-stack__interactions .rod-toast[data-dialog-active="false"]{display:none!important}
+      .rod-toast-stack[data-has-interaction="true"] .rod-toast-stack__manager,.rod-toast-stack[data-has-interaction="true"] .rod-toast-stack__toolbar,.rod-toast-stack[data-has-interaction="true"] .rod-toast-stack__list{visibility:hidden;pointer-events:none!important}
       .rod-toast-stack__manager{appearance:none;position:relative;display:none;place-items:center;align-self:center;width:50px;height:50px;padding:0;border:1px solid var(--rod-border);border-radius:999px;outline:0;background:var(--rod-surface);color:var(--rod-text-strong);box-shadow:var(--rod-shadow-raised);pointer-events:auto;touch-action:manipulation;cursor:pointer;animation:rod-toast-manager-enter 480ms var(--rod-ease-spring) both;transition:transform 300ms var(--rod-ease-spring),background-color 180ms,border-color 180ms}
       .rod-toast-stack__manager:hover,.rod-toast-stack__manager:focus-visible{border-color:var(--rod-border-strong);background:var(--rod-surface-raised);transform:translateY(-2px) scale(1.04)}
       .rod-toast-stack__manager svg{width:19px;height:19px;animation:rod-toast-spinner 850ms linear infinite}
@@ -1453,7 +1542,7 @@
       .rod-toast[data-loading="true"][data-loading-icon="false"]{grid-template-columns:minmax(0,1fr) auto}.rod-toast[data-loading="true"][data-loading-icon="false"] .rod-toast__icon{display:none}.rod-toast[data-loading="true"][data-loading-content-empty="true"]{grid-template-columns:auto auto;justify-content:center;width:fit-content;min-width:0;max-width:min(100%,280px);margin-inline:auto}.rod-toast[data-loading="true"][data-loading-content-empty="true"] .rod-toast__content{display:none}
       .rod-toast__progress{display:grid;gap:7px;width:100%;margin-top:8px}.rod-toast__progress-meta{display:flex;justify-content:flex-end;min-height:14px;color:var(--rod-muted-soft);font:650 10px/1 system-ui,sans-serif}.rod-toast__progress-track{position:relative;width:100%;height:4px;overflow:hidden;border-radius:999px;background:var(--rod-overlay)}.rod-toast__progress-bar{position:absolute;inset:0 auto 0 0;width:var(--rod-loading-progress,0%);border-radius:inherit;background:linear-gradient(90deg,color-mix(in srgb,var(--rod-toast-accent) 84%,transparent),var(--rod-toast-accent));transition:width 420ms var(--rod-ease-soft)}.rod-toast:not([data-loading-animation="progress"]) .rod-toast__progress{display:none}.rod-toast[data-loading-indeterminate="true"] .rod-toast__progress-bar{width:38%;animation:rod-toast-progress-indeterminate 1.1s cubic-bezier(.4,0,.2,1) infinite}.rod-toast[data-loading-state="loading"] [data-loading-spinner="true"]{animation:rod-toast-spinner 850ms linear infinite}.rod-toast[data-loading-state="loading"] .rod-toast__icon[data-rod-icon-kind="image"][data-loading-spinner="true"]{animation:none}.rod-toast[data-loading-state="loading"] .rod-toast__icon[data-rod-icon-kind="image"][data-loading-spinner="true"]::after{content:"";position:absolute;z-index:2;right:-4px;bottom:-4px;width:12px;height:12px;border:2px solid var(--rod-surface);border-top-color:var(--rod-toast-accent);border-radius:999px;background:var(--rod-surface);box-shadow:0 1px 4px rgba(0,0,0,.28);animation:rod-toast-spinner 700ms linear infinite}.rod-toast[data-loading-state="loading"] [data-loading-pulse="true"]{animation:rod-toast-pulse 1.35s cubic-bezier(.4,0,.6,1) infinite}
       .rod-toast[data-confirm="true"],.rod-toast[data-rich="true"],.rod-toast[data-interactive="true"]{min-width:min(470px,calc(100vw - 28px));max-width:min(620px,calc(100vw - 28px));padding-block:19px;touch-action:pan-y}.rod-toast[data-confirm="true"] .rod-toast__content,.rod-toast[data-rich="true"] .rod-toast__content,.rod-toast[data-interactive="true"] .rod-toast__content{display:block;width:100%}.rod-toast[data-confirm="true"] .rod-toast__minimize,.rod-toast[data-rich="true"] .rod-toast__minimize,.rod-toast[data-interactive="true"] .rod-toast__minimize,.rod-toast[data-confirm="true"] .rod-toast__expand,.rod-toast[data-rich="true"] .rod-toast__expand,.rod-toast[data-interactive="true"] .rod-toast__expand{display:none!important}
-      .rod-toast__confirm,.rod-toast__rich,.rod-toast__interactive{display:grid;gap:17px;width:100%;min-width:0}.rod-toast__confirm-actions{display:flex;flex-wrap:nowrap;justify-content:flex-end;gap:9px;width:100%;overflow-x:auto;scrollbar-width:none}.rod-toast__confirm-actions::-webkit-scrollbar{display:none}.rod-toast__confirm-actions .rod-toast__confirm-button{flex:1 1 0;min-width:0}.rod-toast__action-bar,.rod-toast__task-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:9px;width:100%}.rod-toast__confirm-button,.rod-toast__action-button,.rod-toast__task-button{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:0 15px;border:1px solid var(--rod-border);border-radius:12px;outline:0;background:var(--rod-overlay);color:var(--rod-text);font:650 12px/1 system-ui,sans-serif;cursor:pointer;transition:transform 160ms var(--rod-ease-spring),background-color 140ms,border-color 140ms,color 140ms}.rod-toast__confirm-button:hover:not(:disabled),.rod-toast__action-button:hover:not(:disabled),.rod-toast__task-button:hover:not(:disabled){border-color:var(--rod-border-strong);background:var(--rod-hover);transform:translateY(-2px)}.rod-toast__confirm-button:disabled,.rod-toast__action-button:disabled,.rod-toast__task-button:disabled{opacity:.5;cursor:wait}.rod-toast__confirm-button[data-variant="primary"],.rod-toast__action-button[data-variant="primary"]{border-color:var(--rod-text-strong);background:var(--rod-text-strong);color:var(--rod-surface)}.rod-toast__confirm-button[data-variant="danger"],.rod-toast__action-button[data-variant="danger"]{border-color:rgba(248,113,113,.3);background:rgba(127,29,29,.22);color:rgba(252,165,165,.98)}.rod-toast__confirm-button[data-variant="ghost"],.rod-toast__action-button[data-variant="ghost"]{border-color:transparent;background:transparent;color:var(--rod-muted)}
+      .rod-toast__confirm,.rod-toast__rich,.rod-toast__interactive{display:grid;gap:17px;width:100%;min-width:0}.rod-toast__interactive-body{min-width:0;min-height:0}.rod-toast__confirm-actions{display:flex;flex-wrap:nowrap;justify-content:flex-end;gap:9px;width:100%;overflow-x:auto;scrollbar-width:none}.rod-toast__confirm-actions::-webkit-scrollbar{display:none}.rod-toast__confirm-actions .rod-toast__confirm-button{flex:1 1 0;min-width:0}.rod-toast__action-bar,.rod-toast__task-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:9px;width:100%}.rod-toast__confirm-button,.rod-toast__action-button,.rod-toast__task-button{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:0 15px;border:1px solid var(--rod-border);border-radius:12px;outline:0;background:var(--rod-overlay);color:var(--rod-text);font:650 12px/1 system-ui,sans-serif;cursor:pointer;transition:transform 160ms var(--rod-ease-spring),background-color 140ms,border-color 140ms,color 140ms}.rod-toast__confirm-button:hover:not(:disabled),.rod-toast__action-button:hover:not(:disabled),.rod-toast__task-button:hover:not(:disabled){border-color:var(--rod-border-strong);background:var(--rod-hover);transform:translateY(-2px)}.rod-toast__confirm-button:disabled,.rod-toast__action-button:disabled,.rod-toast__task-button:disabled{opacity:.5;cursor:wait}.rod-toast__confirm-button[data-variant="primary"],.rod-toast__action-button[data-variant="primary"]{border-color:var(--rod-text-strong);background:var(--rod-text-strong);color:var(--rod-surface)}.rod-toast__confirm-button[data-variant="danger"],.rod-toast__action-button[data-variant="danger"]{border-color:rgba(248,113,113,.3);background:rgba(127,29,29,.22);color:rgba(252,165,165,.98)}.rod-toast__confirm-button[data-variant="ghost"],.rod-toast__action-button[data-variant="ghost"]{border-color:transparent;background:transparent;color:var(--rod-muted)}
       .rod-toast__details{overflow:hidden;border:1px solid var(--rod-border);border-radius:12px;background:var(--rod-overlay)}.rod-toast__details summary{display:flex;align-items:center;min-height:36px;padding:0 11px;color:var(--rod-muted);font:600 11px/1 system-ui,sans-serif;cursor:pointer}.rod-toast__details-body{max-height:280px;overflow:auto;padding:10px;border-top:1px solid var(--rod-border);font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
       .rod-toast__field{display:grid;gap:6px;min-width:0}.rod-toast__field-label{color:var(--rod-muted);font:600 10px/1.2 system-ui,sans-serif}.rod-toast__input,.rod-toast__select,.rod-toast__textarea{appearance:none;width:100%;min-width:0;min-height:40px;padding:9px 11px;border:1px solid var(--rod-border);border-radius:12px;outline:0;background:var(--rod-overlay);color:var(--rod-text-strong);font:16px/1.45 system-ui,sans-serif}.rod-toast__textarea{min-height:96px;resize:vertical}.rod-toast__input:focus,.rod-toast__select:focus,.rod-toast__textarea:focus{border-color:var(--rod-border-strong);box-shadow:0 0 0 4px color-mix(in srgb,var(--rod-focus) 18%,transparent)}
       .rod-toast__checkboxes{display:grid;gap:7px}.rod-toast__checkbox{display:flex;align-items:flex-start;gap:8px;color:var(--rod-muted);font:11px/1.45 system-ui,sans-serif;cursor:pointer}.rod-toast__checkbox input{width:15px;height:15px;margin:1px 0 0;accent-color:var(--rod-text-strong)}
@@ -1490,36 +1579,17 @@
       @media(max-width:560px){.rod-toast-stack[data-size="compact"],.rod-toast-stack[data-size="comfortable"],.rod-toast-stack[data-size="large"]{--rod-toast-width:calc(100vw - 16px)}.rod-toast-stack[data-size="large"] .rod-toast{min-height:78px;gap:14px;padding:17px 12px 17px 16px}.rod-toast-stack[data-size="large"] .rod-toast[data-confirm="true"],.rod-toast-stack[data-size="large"] .rod-toast[data-rich="true"],.rod-toast-stack[data-size="large"] .rod-toast[data-interactive="true"]{min-width:0;max-width:none}}
 
       /* Media picker */
-      .rod-toast-stack .rod-toast[data-interactive-kind="picker"]{width:min(760px,calc(100vw - 20px));min-width:min(620px,calc(100vw - 20px));max-width:min(760px,calc(100vw - 20px));max-height:min(86dvh,860px);padding-block:16px;touch-action:pan-y}
-      .rod-toast[data-interactive-kind="picker"] .rod-toast__interactive{gap:14px}
-      .rod-toast__picker{display:grid;gap:11px;min-width:0;width:100%}
-      .rod-toast__picker-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
-      .rod-toast__picker-count{min-width:0;overflow:hidden;color:var(--rod-muted);font:620 11px/1.25 ui-sans-serif,system-ui,-apple-system,sans-serif;font-variant-numeric:tabular-nums;text-overflow:ellipsis;white-space:nowrap}
-      .rod-toast__picker-tools{display:flex;flex:0 0 auto;align-items:center;gap:6px}
-      .rod-toast__picker-tool{appearance:none;display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:0 9px;border:1px solid var(--rod-border);border-radius:9px;outline:0;background:var(--rod-overlay);color:var(--rod-muted);font:650 10px/1 ui-sans-serif,system-ui,-apple-system,sans-serif;cursor:pointer;touch-action:manipulation;transition:color 150ms,background-color 150ms,border-color 150ms,opacity 150ms,transform 240ms var(--rod-ease-spring)}
-      .rod-toast__picker-tool:hover:not(:disabled),.rod-toast__picker-tool:focus-visible:not(:disabled){border-color:var(--rod-border-strong);background:var(--rod-hover);color:var(--rod-text-strong);transform:translateY(-1px)}
-      .rod-toast__picker-tool:active:not(:disabled){transform:translateY(0) scale(.97)}.rod-toast__picker-tool:disabled{cursor:default;opacity:.38}
-      .rod-toast__picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--rod-picker-item-min,112px),1fr));gap:var(--rod-picker-gap,8px);width:100%;max-height:min(50dvh,470px);overflow-x:hidden;overflow-y:auto;padding:1px 3px 3px 1px;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--rod-border-strong) transparent;-webkit-overflow-scrolling:touch}
-      .rod-toast__picker-item{appearance:none;position:relative;isolation:isolate;display:block;width:100%;aspect-ratio:var(--rod-picker-aspect-ratio,1 / 1);min-width:0;padding:0;overflow:hidden;border:1px solid var(--rod-border);border-radius:var(--rod-picker-radius,13px);outline:0;background:linear-gradient(145deg,var(--rod-overlay),transparent),var(--rod-surface-raised);color:var(--rod-text);cursor:pointer;touch-action:manipulation;transform:translateZ(0);transition:border-color 170ms,box-shadow 220ms,opacity 170ms,transform 300ms var(--rod-ease-spring)}
-      .rod-toast__picker-item:hover:not(:disabled),.rod-toast__picker-item:focus-visible:not(:disabled){border-color:var(--rod-border-strong);box-shadow:0 8px 24px rgba(0,0,0,.18),0 0 0 1px color-mix(in srgb,var(--rod-text-strong) 7%,transparent);transform:translateY(-2px) scale(1.012)}
-      .rod-toast__picker-item:active:not(:disabled){transform:scale(.985)}
-      .rod-toast__picker-item[data-selected="true"]{border-color:color-mix(in srgb,var(--rod-text-strong) 62%,var(--rod-border));box-shadow:0 0 0 2px color-mix(in srgb,var(--rod-text-strong) 72%,transparent) inset,0 10px 28px rgba(0,0,0,.2)}
-      .rod-toast__picker-item:disabled{cursor:default;opacity:.38;filter:grayscale(.35)}
-      .rod-toast__picker-media{position:absolute;inset:0;z-index:0;display:block;width:100%;height:100%;object-fit:cover;background:var(--rod-overlay);pointer-events:none;user-select:none;-webkit-user-drag:none;transition:filter 220ms,transform 420ms var(--rod-ease-spring)}
-      .rod-toast__picker-item:hover:not(:disabled) .rod-toast__picker-media{transform:scale(1.035)}
-      .rod-toast__picker-item[data-selected="false"] .rod-toast__picker-media{filter:saturate(.76) brightness(.78)}
-      .rod-toast-stack[data-theme="light"] .rod-toast__picker-item[data-selected="false"] .rod-toast__picker-media{filter:saturate(.82) brightness(.93)}
-      .rod-toast__picker-shade{position:absolute;inset:0;z-index:1;background:linear-gradient(to top,rgba(0,0,0,.5),transparent 48%);pointer-events:none;opacity:.72;transition:opacity 180ms}.rod-toast__picker-item[data-selected="true"] .rod-toast__picker-shade{opacity:.38}
-      .rod-toast__picker-check{position:absolute;top:8px;right:8px;z-index:3;display:grid;place-items:center;width:24px;height:24px;border:1px solid rgba(255,255,255,.42);border-radius:999px;background:rgba(10,10,11,.5);color:rgba(255,255,255,.96);box-shadow:0 2px 8px rgba(0,0,0,.2),0 1px 0 rgba(255,255,255,.14) inset;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);opacity:.82;transform:scale(.9);transition:opacity 160ms,transform 300ms var(--rod-ease-spring),background-color 160ms,border-color 160ms;pointer-events:none}
-      .rod-toast__picker-check svg{width:14px;height:14px;stroke-width:2.4;opacity:0;transform:scale(.6);transition:opacity 160ms,transform 280ms var(--rod-ease-spring)}
-      .rod-toast__picker-item[data-selected="true"] .rod-toast__picker-check{border-color:rgba(255,255,255,.88);background:rgba(250,250,250,.96);color:rgba(20,20,21,.98);opacity:1;transform:scale(1)}
-      .rod-toast__picker-item[data-selected="true"] .rod-toast__picker-check svg{opacity:1;transform:scale(1)}
-      .rod-toast__picker-index,.rod-toast__picker-kind{position:absolute;z-index:3;display:inline-flex;align-items:center;justify-content:center;min-width:24px;min-height:22px;padding:0 7px;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(10,10,11,.5);color:rgba(255,255,255,.94);box-shadow:0 2px 8px rgba(0,0,0,.16);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font:700 9px/1 ui-sans-serif,system-ui,-apple-system,sans-serif;font-variant-numeric:tabular-nums;pointer-events:none}
-      .rod-toast__picker-index{bottom:8px;left:8px}.rod-toast__picker-kind{right:8px;bottom:8px;gap:4px;min-width:0;padding-inline:6px;text-transform:uppercase}.rod-toast__picker-kind svg{width:12px;height:12px}
-      .rod-toast__picker-label{position:absolute;right:8px;bottom:8px;left:40px;z-index:2;overflow:hidden;color:rgba(255,255,255,.96);font:650 10px/1.2 ui-sans-serif,system-ui,-apple-system,sans-serif;text-align:left;text-overflow:ellipsis;text-shadow:0 1px 5px rgba(0,0,0,.58);white-space:nowrap;pointer-events:none}.rod-toast__picker-label[data-has-kind="true"]{right:62px}
-      .rod-toast__picker-empty{display:grid;place-items:center;min-height:150px;padding:24px;border:1px dashed var(--rod-border);border-radius:13px;color:var(--rod-muted);background:var(--rod-overlay);font:500 12px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif;text-align:center}
-      .rod-toast__picker-item[data-media-error="true"]::after{content:"Preview unavailable";position:absolute;inset:0;z-index:2;display:grid;place-items:center;padding:12px;background:var(--rod-surface-raised);color:var(--rod-muted);font:600 10px/1.3 system-ui,sans-serif;text-align:center}
-      @media(max-width:560px){.rod-toast-stack .rod-toast[data-interactive-kind="picker"]{width:calc(100vw - 16px);min-width:0;max-width:calc(100vw - 16px);max-height:calc(100dvh - 18px)}.rod-toast__picker-grid{grid-template-columns:repeat(auto-fill,minmax(var(--rod-picker-item-min-mobile,88px),1fr));max-height:min(50dvh,420px);gap:7px}.rod-toast__picker-toolbar{align-items:flex-start;flex-direction:column}.rod-toast__picker-tools{width:100%}.rod-toast__picker-tool{flex:1}}
+      .rod-toast-stack .rod-toast[data-interactive-kind="picker"]{width:min(760px,calc(100vw - 20px));min-width:min(620px,calc(100vw - 20px));max-width:min(760px,calc(100vw - 20px));height:min(760px,calc(100dvh - max(env(safe-area-inset-top,0px),12px) - max(env(safe-area-inset-bottom,0px),12px) - 24px));max-height:min(860px,calc(100dvh - max(env(safe-area-inset-top,0px),12px) - max(env(safe-area-inset-bottom,0px),12px) - 24px));grid-template-columns:minmax(0,1fr) auto;align-items:stretch;padding:14px 10px 12px 14px;overflow:hidden;touch-action:pan-y}
+      .rod-toast[data-interactive-kind="picker"]>.rod-toast__icon{display:none}.rod-toast[data-interactive-kind="picker"]>.rod-toast__content{min-height:0;overflow:hidden}.rod-toast[data-interactive-kind="picker"]>.rod-toast__actions{align-self:start}
+      .rod-toast[data-interactive-kind="picker"] .rod-toast__interactive{grid-template-rows:auto minmax(0,1fr);grid-auto-rows:auto;gap:11px;height:100%;min-height:0;overflow:hidden}.rod-toast[data-interactive-kind="picker"] .rod-toast__interactive-body{min-height:0;overflow:hidden}.rod-toast[data-interactive-kind="picker"] .rod-toast__confirm-actions{position:relative;z-index:3;flex:none;padding-top:2px;overflow:visible;background:var(--rod-surface)}
+      .rod-toast__picker{display:grid;grid-template-rows:auto minmax(0,1fr);gap:9px;min-width:0;width:100%;height:100%;min-height:0}.rod-toast__picker-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}.rod-toast__picker-count{min-width:0;overflow:hidden;color:var(--rod-muted);font:620 11px/1.25 ui-sans-serif,system-ui,-apple-system,sans-serif;font-variant-numeric:tabular-nums;text-overflow:ellipsis;white-space:nowrap}.rod-toast__picker-tools{display:flex;flex:0 0 auto;align-items:center;gap:6px}
+      .rod-toast__picker-tool{appearance:none;display:inline-flex;align-items:center;justify-content:center;min-height:30px;padding:0 9px;border:1px solid var(--rod-border);border-radius:9px;outline:0;background:var(--rod-overlay);color:var(--rod-muted);font:650 10px/1 ui-sans-serif,system-ui,-apple-system,sans-serif;cursor:pointer;touch-action:manipulation;transition:color 150ms,background-color 150ms,border-color 150ms,opacity 150ms,transform 240ms var(--rod-ease-spring)}.rod-toast__picker-tool:hover:not(:disabled),.rod-toast__picker-tool:focus-visible:not(:disabled){border-color:var(--rod-border-strong);background:var(--rod-hover);color:var(--rod-text-strong);transform:translateY(-1px)}.rod-toast__picker-tool:active:not(:disabled){transform:translateY(0) scale(.97)}.rod-toast__picker-tool:disabled{cursor:default;opacity:.38}
+      .rod-toast__picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--rod-picker-item-min,112px),1fr));align-content:start;gap:var(--rod-picker-gap,8px);width:100%;height:100%;min-height:0;overflow-x:hidden;overflow-y:auto;padding:1px 3px 7px 1px;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--rod-border-strong) transparent;-webkit-overflow-scrolling:touch;scroll-padding:8px}.rod-toast__picker-item{appearance:none;position:relative;isolation:isolate;display:block;width:100%;aspect-ratio:var(--rod-picker-aspect-ratio,1 / 1);min-width:0;padding:0;overflow:hidden;border:1px solid var(--rod-border);border-radius:var(--rod-picker-radius,13px);outline:0;background:linear-gradient(145deg,var(--rod-overlay),transparent),var(--rod-surface-raised);color:var(--rod-text);cursor:pointer;touch-action:manipulation;transform:translateZ(0);content-visibility:auto;contain-intrinsic-size:auto 128px;transition:border-color 170ms,box-shadow 220ms,opacity 170ms,transform 300ms var(--rod-ease-spring)}
+      .rod-toast__picker-item:hover:not(:disabled),.rod-toast__picker-item:focus-visible:not(:disabled){border-color:var(--rod-border-strong);box-shadow:0 8px 24px rgba(0,0,0,.18),0 0 0 1px color-mix(in srgb,var(--rod-text-strong) 7%,transparent);transform:translateY(-2px) scale(1.012)}.rod-toast__picker-item:active:not(:disabled){transform:scale(.985)}.rod-toast__picker-item[data-selected="true"]{border-color:color-mix(in srgb,var(--rod-text-strong) 62%,var(--rod-border));box-shadow:0 0 0 2px color-mix(in srgb,var(--rod-text-strong) 72%,transparent) inset,0 10px 28px rgba(0,0,0,.2)}.rod-toast__picker-item:disabled{cursor:default;opacity:.38;filter:grayscale(.35)}
+      .rod-toast__picker-media{position:absolute;inset:0;z-index:0;display:block;width:100%;height:100%;object-fit:cover;background:var(--rod-overlay);pointer-events:none;user-select:none;-webkit-user-drag:none;transition:filter 220ms,transform 420ms var(--rod-ease-spring)}.rod-toast__picker-item:hover:not(:disabled) .rod-toast__picker-media{transform:scale(1.035)}.rod-toast__picker-item[data-selected="false"] .rod-toast__picker-media{filter:saturate(.76) brightness(.78)}.rod-toast-stack[data-theme="light"] .rod-toast__picker-item[data-selected="false"] .rod-toast__picker-media{filter:saturate(.82) brightness(.93)}
+      .rod-toast__picker-shade{position:absolute;inset:0;z-index:1;background:linear-gradient(to top,rgba(0,0,0,.48),transparent 46%);pointer-events:none;opacity:.66;transition:opacity 180ms}.rod-toast__picker-item[data-selected="true"] .rod-toast__picker-shade{opacity:.32}.rod-toast__picker-check{position:absolute;top:8px;right:8px;z-index:3;display:grid;place-items:center;width:25px;height:25px;border:1px solid rgba(255,255,255,.42);border-radius:999px;background:rgba(10,10,11,.48);color:rgba(255,255,255,.96);box-shadow:0 2px 8px rgba(0,0,0,.2),0 1px 0 rgba(255,255,255,.14) inset;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);opacity:.78;transform:scale(.9);transition:opacity 160ms,transform 300ms var(--rod-ease-spring),background-color 160ms,border-color 160ms;pointer-events:none}.rod-toast__picker-check svg{width:14px;height:14px;stroke-width:2.4;opacity:0;transform:scale(.6);transition:opacity 160ms,transform 280ms var(--rod-ease-spring)}.rod-toast__picker-item[data-selected="true"] .rod-toast__picker-check{border-color:rgba(255,255,255,.88);background:rgba(250,250,250,.96);color:rgba(20,20,21,.98);opacity:1;transform:scale(1)}.rod-toast__picker-item[data-selected="true"] .rod-toast__picker-check svg{opacity:1;transform:scale(1)}
+      .rod-toast__picker-index,.rod-toast__picker-kind{position:absolute;z-index:3;display:inline-flex;align-items:center;justify-content:center;min-width:22px;min-height:21px;padding:0 6px;border:1px solid rgba(255,255,255,.22);border-radius:999px;background:rgba(10,10,11,.48);color:rgba(255,255,255,.94);box-shadow:0 2px 8px rgba(0,0,0,.16);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);font:700 9px/1 ui-sans-serif,system-ui,-apple-system,sans-serif;font-variant-numeric:tabular-nums;pointer-events:none}.rod-toast__picker-index{bottom:8px;left:8px}.rod-toast__picker-kind{right:8px;bottom:8px;gap:4px;min-width:0;padding-inline:6px;text-transform:uppercase}.rod-toast__picker-kind svg{width:11px;height:11px}.rod-toast__picker-index[hidden],.rod-toast__picker-kind[hidden],.rod-toast__picker-label[hidden]{display:none!important}.rod-toast__picker-label{position:absolute;right:8px;bottom:8px;left:38px;z-index:2;overflow:hidden;color:rgba(255,255,255,.96);font:650 10px/1.2 ui-sans-serif,system-ui,-apple-system,sans-serif;text-align:left;text-overflow:ellipsis;text-shadow:0 1px 5px rgba(0,0,0,.58);white-space:nowrap;pointer-events:none}.rod-toast__picker-label[data-has-kind="true"]{right:58px}.rod-toast__picker-empty{display:grid;place-items:center;min-height:150px;padding:24px;border:1px dashed var(--rod-border);border-radius:13px;color:var(--rod-muted);background:var(--rod-overlay);font:500 12px/1.5 ui-sans-serif,system-ui,-apple-system,sans-serif;text-align:center}.rod-toast__picker-item[data-media-error="true"]::after{content:"Preview unavailable";position:absolute;inset:0;z-index:2;display:grid;place-items:center;padding:12px;background:var(--rod-surface-raised);color:var(--rod-muted);font:600 10px/1.3 system-ui,sans-serif;text-align:center}
+      @media(max-width:560px){.rod-toast-stack .rod-toast[data-interactive-kind="picker"]{width:calc(100vw - 10px);min-width:0;max-width:calc(100vw - 10px);height:calc(100dvh - max(env(safe-area-inset-top,0px),8px) - max(env(safe-area-inset-bottom,0px),8px) - 12px);max-height:none;padding:11px 8px 9px 11px;border-radius:17px}.rod-toast[data-interactive-kind="picker"] .rod-toast__interactive{gap:9px}.rod-toast[data-interactive-kind="picker"] .rod-toast__interactive-copy{gap:3px}.rod-toast[data-interactive-kind="picker"] .rod-toast__interactive-title{font-size:13px}.rod-toast[data-interactive-kind="picker"] .rod-toast__interactive-description{font-size:11px;line-height:1.35}.rod-toast__picker{gap:7px}.rod-toast__picker-grid{grid-template-columns:repeat(auto-fill,minmax(var(--rod-picker-item-min-mobile,104px),1fr));gap:6px;padding-bottom:5px}.rod-toast__picker-toolbar{align-items:center;flex-direction:row;gap:6px}.rod-toast__picker-tools{width:auto;gap:4px}.rod-toast__picker-tool{flex:0 0 auto;min-height:28px;padding-inline:8px;font-size:9px}.rod-toast[data-interactive-kind="picker"] .rod-toast__confirm-actions{gap:6px;padding-top:0}.rod-toast[data-interactive-kind="picker"] .rod-toast__confirm-button{min-height:38px!important}.rod-toast__picker-label{font-size:9px}}
       @media(prefers-reduced-motion:reduce){.rod-toast,.rod-toast__content,.rod-toast__actions,.rod-toast__icon,.rod-toast__expand svg,.rod-toast-stack__list::before,.rod-toast-stack__list::after,.rod-toast__picker-item,.rod-toast__picker-media,.rod-toast__picker-check{transition-duration:1ms!important;animation-duration:1ms!important}}
     `;
     return style;
@@ -1774,8 +1844,65 @@
     if (node.textContent !== value) node.textContent = value;
   }
 
+  function getStackRecords(): ToastRecord[] {
+    return state.toasts.filter((record) => record.options.lane !== "interaction" && !record.removed);
+  }
+
+  function getNotificationRecords(): ToastRecord[] {
+    return state.toasts.filter((record) => record.options.lane === "notification" && !record.removed);
+  }
+
+  function getTopDialogEntry(): DialogStackEntry | null {
+    return state.dialogStack.at(-1) ?? null;
+  }
+
+  function isTopDialog(record: ToastRecord): boolean {
+    return getTopDialogEntry()?.record === record;
+  }
+
+  function syncDialogStack(): void {
+    const top = getTopDialogEntry();
+    for (const entry of state.dialogStack) {
+      const active = entry === top && !entry.record.removed;
+      entry.record.node.dataset.dialogActive = String(active);
+      entry.record.node.setAttribute("aria-hidden", String(!active));
+      entry.record.node.inert = !active;
+    }
+    if (state.container) {
+      setDataValue(state.container, "hasInteraction", String(Boolean(top)));
+    }
+  }
+
+  function registerDialog(record: ToastRecord, previousFocus: Element | null): void {
+    const focus =
+      previousFocus && typeof (previousFocus as HTMLElement).focus === "function"
+        ? previousFocus as HTMLElement
+        : null;
+    state.dialogStack.push({ record, previousFocus: focus });
+    syncDialogStack();
+  }
+
+  function unregisterDialog(record: ToastRecord): void {
+    const index = state.dialogStack.findIndex((entry) => entry.record === record);
+    if (index < 0) return;
+    const [removedEntry] = state.dialogStack.splice(index, 1);
+    syncDialogStack();
+
+    const hostWindow = state.hostWindow ?? initialHostWindow;
+    hostWindow.queueMicrotask(() => {
+      const top = getTopDialogEntry();
+      if (top?.record.node.isConnected) {
+        safeCall(() => top.record.node.focus({ preventScroll: true }), undefined);
+        return;
+      }
+      if (removedEntry?.previousFocus?.isConnected) {
+        safeCall(() => removedEntry.previousFocus?.focus({ preventScroll: true }), undefined);
+      }
+    });
+  }
+
   function setManagerMinimized(minimized: boolean): boolean {
-    const count = state.toasts.length;
+    const count = getStackRecords().length;
     state.managerMinimized = Boolean(minimized) && count > 0;
     syncStackLayout();
     if (!state.managerMinimized && count > 1) setStackExpanded(true);
@@ -1786,7 +1913,7 @@
     const container = state.container;
     if (!container) return;
 
-    const records = state.toasts;
+    const records = getStackRecords();
     const count = records.length;
     let taskCount = 0;
 
@@ -1794,7 +1921,7 @@
       const record = records[sourceIndex];
       setDataValue(record.node, "stackIndex", String(stackIndex));
       if (!record.node.dataset.itemExpanded) record.node.dataset.itemExpanded = "false";
-      if (record.options.metadata?.taskId) taskCount += 1;
+      if (record.options.lane === "task" || record.options.metadata?.taskId) taskCount += 1;
     }
 
     if (count === 0) state.managerMinimized = false;
@@ -1811,6 +1938,7 @@
     setDataValue(container, "stackDepth", String(stackDepth));
     setDataValue(container, "count", String(count));
     setDataValue(container, "hasMany", String(count > 1));
+    setDataValue(container, "hasInteraction", String(Boolean(getTopDialogEntry())));
     setDataValue(container, "size", state.config.size);
 
     const stackHeight = `${Math.max(180, state.config.stackMaxHeight)}px`;
@@ -1845,8 +1973,8 @@
   }
 
   function setExpandedToast(record: ToastRecord, expanded: boolean): void {
-    if (record.removed) return;
-    for (const candidate of state.toasts) {
+    if (record.removed || record.options.lane === "interaction") return;
+    for (const candidate of getStackRecords()) {
       setDataValue(candidate.node, "itemExpanded", String(candidate === record && expanded));
     }
     if (expanded) {
@@ -1855,7 +1983,7 @@
   }
 
   function setStackExpanded(expanded: boolean): void {
-    const records = state.toasts;
+    const records = getStackRecords();
     if (!state.config.stacked || records.length <= 1) {
       state.stackExpanded = false;
       for (const record of records) setDataValue(record.node, "itemExpanded", "false");
@@ -2043,16 +2171,19 @@
     }
 
     const promoteAfterExternalTopLayerChange = (event: Event): void => {
-      if (!state.toasts.length || event.target === state.hostElement) return;
+      if (!state.toasts.length) return;
 
       const toggleEvent = event as Event & { newState?: string };
-      if (
-        typeof toggleEvent.newState === "string" &&
-        toggleEvent.newState !== "open"
-      ) {
+      if (event.target === state.hostElement) {
+        // Pages may call hidePopover() generically. Re-open only when the host
+        // really ended up closed; our synchronous hide/show reorder remains open.
+        hostWindow.queueMicrotask(() => {
+          if (state.toasts.length && !isHostInTopLayer()) promoteHostToTopLayer(false);
+        });
         return;
       }
 
+      if (typeof toggleEvent.newState === "string" && toggleEvent.newState !== "open") return;
       hostWindow.queueMicrotask(() => {
         if (state.toasts.length) promoteHostToTopLayer(true);
       });
@@ -2171,7 +2302,7 @@
     });
 
     const pageHideHandler = (): void => {
-      if (state.config.persistTasks) flushTaskSnapshots();
+      flushTaskSnapshots();
     };
     hostWindow.addEventListener("pagehide", pageHideHandler);
     callbacks.push(() => hostWindow.removeEventListener("pagehide", pageHideHandler));
@@ -2180,13 +2311,16 @@
     if (!safeCall(() => Boolean(patchedWindow[HISTORY_PATCH_SYMBOL]), false)) {
       const history = hostWindow.history;
       const originals: Partial<Record<"pushState" | "replaceState", History["pushState"]>> = {};
+      const patchedMethods: Partial<Record<"pushState" | "replaceState", History["pushState"]>> = {};
       for (const methodName of ["pushState", "replaceState"] as const) {
         const original = history[methodName];
         originals[methodName] = original;
-        history[methodName] = function patchedHistoryMethod(data: unknown, unused: string, url?: string | URL | null): void {
+        const patched = function patchedHistoryMethod(this: History, data: unknown, unused: string, url?: string | URL | null): void {
           Reflect.apply(original, this, [data, unused, url]);
           safeCall(() => hostWindow.dispatchEvent(new hostWindow.CustomEvent("rod:toaster:navigation")), false);
-        };
+        } as History["pushState"];
+        patchedMethods[methodName] = patched;
+        history[methodName] = patched;
       }
       safeCall(() => {
         Object.defineProperty(patchedWindow, HISTORY_PATCH_SYMBOL, { value: true, configurable: true });
@@ -2194,7 +2328,8 @@
       state.historyRestore = () => {
         for (const methodName of ["pushState", "replaceState"] as const) {
           const original = originals[methodName];
-          if (original) history[methodName] = original;
+          const patched = patchedMethods[methodName];
+          if (original && patched && history[methodName] === patched) history[methodName] = original;
         }
         safeCall(() => { delete patchedWindow[HISTORY_PATCH_SYMBOL]; }, undefined);
       };
@@ -2233,6 +2368,10 @@
     state.themeCleanup = null;
     state.themeMediaQuery = null;
     if (!options.keepPersistence) state.spaCleanup?.();
+    if (state.idleDestroyTimer !== null) {
+      (state.hostWindow ?? initialHostWindow).clearTimeout(state.idleDestroyTimer);
+      state.idleDestroyTimer = null;
+    }
     state.hostElement?.remove();
     state.hostElement = null;
     state.shadowRoot = null;
@@ -2242,6 +2381,7 @@
     state.managerNode = null;
     state.managerCountNode = null;
     state.list = null;
+    state.interactionList = null;
     state.toolbar = null;
     state.stackCountNode = null;
     state.inspectorRuntime = null;
@@ -2250,13 +2390,40 @@
     state.managerMinimized = false;
   }
 
+  function handleHostIdle(): void {
+    if (state.toasts.length || !state.hostElement) return;
+    if (isHostInTopLayer()) safeCall(() => (state.hostElement as TopLayerHostElement).hidePopover?.(), undefined);
+    state.topLayerActive = false;
+    state.hostElement.dataset.rodToasterTopLayer = "idle";
+
+    if (state.idleDestroyTimer !== null) {
+      (state.hostWindow ?? initialHostWindow).clearTimeout(state.idleDestroyTimer);
+      state.idleDestroyTimer = null;
+    }
+    const ttl = Math.max(0, Number(state.config.idleHostTtl) || 0);
+    if (ttl > 0) {
+      state.idleDestroyTimer = (state.hostWindow ?? initialHostWindow).setTimeout(() => {
+        state.idleDestroyTimer = null;
+        if (!state.toasts.length) destroyHost({ keepPersistence: state.config.persistAcrossSpaNavigation });
+      }, ttl);
+    }
+  }
+
+  function cancelIdleHostDestroy(): void {
+    if (state.idleDestroyTimer !== null) {
+      (state.hostWindow ?? initialHostWindow).clearTimeout(state.idleDestroyTimer);
+      state.idleDestroyTimer = null;
+    }
+  }
+
   function ensureHost(): HostContext | null {
     if (
       state.hostElement?.isConnected &&
       state.hostWindow &&
       state.hostDocument &&
       state.container &&
-      state.list
+      state.list &&
+      state.interactionList
     ) {
       applyHostDominanceStyles(state.hostElement);
       promoteHostToTopLayer(false);
@@ -2265,6 +2432,7 @@
         document: state.hostDocument,
         container: state.container,
         list: state.list,
+        interactionList: state.interactionList,
       };
     }
 
@@ -2275,14 +2443,14 @@
     const parent = hostDocument.documentElement ?? hostDocument.body;
     if (!parent) return null;
 
-    if (state.hostElement && !state.hostElement.isConnected && state.hostDocument === hostDocument && state.container && state.list) {
+    if (state.hostElement && !state.hostElement.isConnected && state.hostDocument === hostDocument && state.container && state.list && state.interactionList) {
       applyHostDominanceStyles(state.hostElement);
       parent.appendChild(state.hostElement);
       installTopLayerGuard(hostWindow, hostDocument);
       installSpaPersistence(hostWindow, hostDocument);
       promoteHostToTopLayer(true);
       syncStackLayout();
-      return { window: state.hostWindow ?? hostWindow, document: state.hostDocument, container: state.container, list: state.list };
+      return { window: state.hostWindow ?? hostWindow, document: state.hostDocument, container: state.container, list: state.list, interactionList: state.interactionList };
     }
 
     if (state.hostElement?.isConnected) destroyHost();
@@ -2290,8 +2458,8 @@
 
     const hostElement = hostDocument.createElement("div") as TopLayerHostElement;
     hostElement.id = TOAST_HOST_ID;
-    hostElement.setAttribute("aria-live", "polite");
-    hostElement.setAttribute("aria-atomic", "false");
+    // Each toast owns its status/alert semantics. The host itself is not a live
+    // region, avoiding duplicate screen-reader announcements.
     if (state.config.useTopLayer && typeof hostElement.showPopover === "function") {
       hostElement.setAttribute("popover", "manual");
     }
@@ -2323,6 +2491,7 @@
     const minimizeButton = hostDocument.createElement("button");
     const collapseButton = hostDocument.createElement("button");
     const clearButton = hostDocument.createElement("button");
+    const interactionList = hostDocument.createElement("div");
     const list = hostDocument.createElement("div");
 
     container.className = "rod-toast-stack";
@@ -2382,8 +2551,9 @@
       event.preventDefault();
       event.stopPropagation();
       let delayIndex = 0;
-      for (let index = state.toasts.length - 1; index >= 0; index -= 1) {
-        const record = state.toasts[index];
+      const records = getStackRecords();
+      for (let index = records.length - 1; index >= 0; index -= 1) {
+        const record = records[index];
         hostWindow.setTimeout(() => record.dismiss(false, null, "dismissAll"), delayIndex * 28);
         delayIndex += 1;
       }
@@ -2391,8 +2561,9 @@
 
     toolbarActions.append(minimizeButton, collapseButton, clearButton);
     toolbar.append(toolbarLabel, toolbarActions);
+    interactionList.className = "rod-toast-stack__interactions";
     list.className = "rod-toast-stack__list";
-    container.append(managerButton, toolbar, list);
+    container.append(interactionList, managerButton, toolbar, list);
     renderRoot.append(createStyles(hostDocument, hostMode), container);
     parent.append(hostElement);
 
@@ -2406,6 +2577,7 @@
     state.managerNode = managerButton;
     state.managerCountNode = managerCount;
     state.list = list;
+    state.interactionList = interactionList;
     state.toolbar = toolbar;
     state.stackCountNode = toolbarLabel;
 
@@ -2417,7 +2589,9 @@
 
     for (let index = state.toasts.length - 1; index >= 0; index -= 1) {
       const record = state.toasts[index];
-      if (!record.node.isConnected) list.append(record.node);
+      if (!record.node.isConnected) {
+        (record.options.lane === "interaction" ? interactionList : list).append(record.node);
+      }
     }
 
     const inspectorApi = getObjectInspectorApi();
@@ -2438,8 +2612,9 @@
       if (!path.includes(hostElement)) setStackExpanded(false);
     };
     hostDocument.addEventListener("pointerdown", state.outsidePointerDownHandler, true);
+    syncDialogStack();
     syncStackLayout();
-    return { window: hostWindow, document: hostDocument, container, list };
+    return { window: hostWindow, document: hostDocument, container, list, interactionList };
   }
 
   function createTextNode(documentRef: Document, text: string, className = ""): HTMLSpanElement {
@@ -2530,8 +2705,16 @@
       : options.icon ?? (loading ? state.config.loadingIcon : TOAST_COLORS[type].icon);
     const durationCandidate = Number(options.duration);
     const dedupeWindowCandidate = Number(options.dedupeWindow);
+    const lane: ToastLane =
+      options.lane === "interaction" || options.lane === "task" || options.lane === "notification"
+        ? options.lane
+        : loading
+          ? "task"
+          : "notification";
+
     return {
       type,
+      lane,
       id: options.id == null ? null : String(options.id),
       duration: Number.isFinite(durationCandidate) ? durationCandidate : defaultDuration,
       dedupe: options.dedupe ?? state.config.dedupe,
@@ -2600,13 +2783,20 @@
     if (index >= 0) state.toasts.splice(index, 1);
     if (record.options.id && state.recordsById.get(record.options.id) === record) state.recordsById.delete(record.options.id);
     if (record.dedupeKey && state.dedupeRecords.get(record.dedupeKey) === record) state.dedupeRecords.delete(record.dedupeKey);
+    if (record.options.lane === "interaction") unregisterDialog(record);
   }
 
-  function enforceToastLimit(): void {
-    while (state.toasts.length >= state.config.maxToasts) {
-      const oldest = state.toasts[0];
-      if (!oldest) break;
-      oldest.dismiss(true, null, "limit");
+  function enforceToastLimit(incoming: NormalizedToastOptions): void {
+    if (incoming.lane !== "notification") return;
+    const limit = Math.max(1, state.config.maxToasts);
+    let notifications = getNotificationRecords();
+    while (notifications.length >= limit) {
+      // Prefer evicting ephemeral notifications. Persistent notifications are
+      // a second choice. Task and interaction lanes are never evicted here.
+      const candidate = notifications.find((record) => record.options.duration > 0) ?? notifications[0];
+      if (!candidate) break;
+      candidate.dismiss(true, null, "limit");
+      notifications = getNotificationRecords();
     }
   }
 
@@ -2675,7 +2865,21 @@
       const source = String(normalized.src);
       const fit = normalized.fit === "contain" ? "contain" : "cover";
       const objectPosition = normalized.objectPosition || "center";
-      const key = `image:${iconKeyHash(`${source}|${fit}|${objectPosition}`)}`;
+      const keyPayload = [
+        source, fit, objectPosition, normalized.crossOrigin ?? "",
+        normalized.referrerPolicy ?? "", normalized.decoding ?? "async", normalized.loading ?? "eager",
+      ].join("|");
+      const key = `image:${iconKeyHash(keyPayload)}`;
+
+      if (state.failedImageKeys.has(key)) {
+        const fallbackKey = `failed:${key}:svg:${fallbackName}`;
+        if (node.dataset.rodIconKey !== fallbackKey || !node.firstChild) {
+          node.replaceChildren(createSvgIcon(documentRef, fallbackName, 17));
+          node.dataset.rodIconKey = fallbackKey;
+        }
+        node.dataset.rodIconKind = "svg";
+        return true;
+      }
 
       if (node.dataset.rodIconKey === key && node.firstChild) {
         node.dataset.rodIconKind = "image";
@@ -2684,9 +2888,10 @@
 
       const image = createImageIcon(documentRef, normalized);
       image.addEventListener("error", () => {
+        state.failedImageKeys.add(key);
         if (node.dataset.rodIconKey !== key) return;
         node.replaceChildren(createSvgIcon(documentRef, fallbackName, 17));
-        node.dataset.rodIconKey = `svg:${fallbackName}`;
+        node.dataset.rodIconKey = `failed:${key}:svg:${fallbackName}`;
         node.dataset.rodIconKind = "svg";
       }, { once: true });
 
@@ -2827,27 +3032,30 @@
   }
 
   function createToastRecord(args: unknown[], rawOptions: ToastOptions): { record: ToastRecord; controller: ToastController } | null {
+    const options = normalizeToastOptions(rawOptions);
+    cancelIdleHostDestroy();
     const host = ensureHost();
     if (!host) {
       safeCall(() => console.log(`[${String(rawOptions.type ?? "toast")}]`, ...args), undefined);
       return null;
     }
 
-    enforceToastLimit();
-    const options = normalizeToastOptions(rawOptions);
+    if (options.id) {
+      const existing = state.recordsById.get(options.id);
+      if (existing && !existing.removed) existing.dismiss(true, null, "replaced");
+    }
+    enforceToastLimit(options);
     const palette = getToastPalette(options.type);
     const node = host.document.createElement("div");
     const icon = host.document.createElement("div");
     const content = host.document.createElement("div");
     const actions = host.document.createElement("div");
     const count = host.document.createElement("div");
-    const loadingCopy = host.document.createElement("div");
-    const loadingTitle = host.document.createElement("div");
-    const loadingDescription = host.document.createElement("div");
-    const progress = host.document.createElement("div");
-    const progressMeta = host.document.createElement("div");
-    const progressTrack = host.document.createElement("div");
-    const progressBar = host.document.createElement("div");
+    let loadingCopy: HTMLDivElement | null = null;
+    let loadingTitle: HTMLDivElement | null = null;
+    let loadingDescription: HTMLDivElement | null = null;
+    let progressMeta: HTMLDivElement | null = null;
+    let progressBar: HTMLDivElement | null = null;
 
     node.className = "rod-toast";
     node.setAttribute("role", options.role);
@@ -2861,17 +3069,8 @@
     count.className = "rod-toast__count";
     count.textContent = "1";
     count.dataset.visible = "false";
-    loadingCopy.className = "rod-toast__loading-copy";
-    loadingTitle.className = "rod-toast__loading-title";
-    loadingDescription.className = "rod-toast__loading-description";
-    progress.className = "rod-toast__progress";
-    progressMeta.className = "rod-toast__progress-meta";
-    progressTrack.className = "rod-toast__progress-track";
-    progressBar.className = "rod-toast__progress-bar";
-    progressTrack.append(progressBar);
-    progress.append(progressMeta, progressTrack);
-    loadingCopy.append(loadingTitle, loadingDescription, progress);
     node.dataset.itemExpanded = "false";
+    node.dataset.lane = options.lane;
     node.dataset.completing = "false";
     node.dataset.successExit = "false";
     actions.append(count);
@@ -2888,7 +3087,38 @@
     let record!: ToastRecord;
     let controller!: ToastController;
 
+    const ensureLoadingNodes = (): {
+      copy: HTMLDivElement;
+      title: HTMLDivElement;
+      description: HTMLDivElement;
+      progressMeta: HTMLDivElement;
+      progressBar: HTMLDivElement;
+    } => {
+      if (loadingCopy && loadingTitle && loadingDescription && progressMeta && progressBar) {
+        return { copy: loadingCopy, title: loadingTitle, description: loadingDescription, progressMeta, progressBar };
+      }
+      const progress = host.document.createElement("div");
+      const progressTrack = host.document.createElement("div");
+      loadingCopy = host.document.createElement("div");
+      loadingTitle = host.document.createElement("div");
+      loadingDescription = host.document.createElement("div");
+      progressMeta = host.document.createElement("div");
+      progressBar = host.document.createElement("div");
+      loadingCopy.className = "rod-toast__loading-copy";
+      loadingTitle.className = "rod-toast__loading-title";
+      loadingDescription.className = "rod-toast__loading-description";
+      progress.className = "rod-toast__progress";
+      progressMeta.className = "rod-toast__progress-meta";
+      progressTrack.className = "rod-toast__progress-track";
+      progressBar.className = "rod-toast__progress-bar";
+      progressTrack.append(progressBar);
+      progress.append(progressMeta, progressTrack);
+      loadingCopy.append(loadingTitle, loadingDescription, progress);
+      return { copy: loadingCopy, title: loadingTitle, description: loadingDescription, progressMeta, progressBar };
+    };
+
     const renderLoading = (nextOptions: NormalizedToastOptions): void => {
+      const loadingUi = ensureLoadingNodes();
       const hasTitle = Boolean(nextOptions.title);
       const hasDescription = Boolean(nextOptions.description);
       const hasProgress = nextOptions.animation === "progress";
@@ -2907,10 +3137,10 @@
       setDataValue(icon, "loadingSpinner", String(nextOptions.loadingState === "loading" && nextOptions.animation === "spinner"));
       setDataValue(icon, "loadingPulse", String(nextOptions.loadingState === "loading" && nextOptions.animation === "pulse"));
 
-      setTextValue(loadingTitle, nextOptions.title);
-      if (loadingTitle.hidden === hasTitle) loadingTitle.hidden = !hasTitle;
-      setTextValue(loadingDescription, nextOptions.description);
-      if (loadingDescription.hidden === hasDescription) loadingDescription.hidden = !hasDescription;
+      setTextValue(loadingUi.title, nextOptions.title);
+      if (loadingUi.title.hidden === hasTitle) loadingUi.title.hidden = !hasTitle;
+      setTextValue(loadingUi.description, nextOptions.description);
+      if (loadingUi.description.hidden === hasDescription) loadingUi.description.hidden = !hasDescription;
 
       const progressPercent = nextOptions.progress === null ? 0 : Math.round(nextOptions.progress * 100);
       const progressValue = `${progressPercent}%`;
@@ -2919,12 +3149,12 @@
       }
 
       const progressText = nextOptions.progressLabel ?? (nextOptions.progress === null ? "" : `${progressPercent}%`);
-      setTextValue(progressMeta, progressText);
+      setTextValue(loadingUi.progressMeta, progressText);
       const hideProgressMeta = !progressText || nextOptions.animation !== "progress";
-      if (progressMeta.hidden !== hideProgressMeta) progressMeta.hidden = hideProgressMeta;
+      if (loadingUi.progressMeta.hidden !== hideProgressMeta) loadingUi.progressMeta.hidden = hideProgressMeta;
 
-      if (content.firstChild !== loadingCopy || content.childNodes.length !== 1) {
-        content.replaceChildren(loadingCopy);
+      if (content.firstChild !== loadingUi.copy || content.childNodes.length !== 1) {
+        content.replaceChildren(loadingUi.copy);
       }
     };
 
@@ -2970,13 +3200,16 @@
         state.activeLoadingCount = Math.max(0, state.activeLoadingCount - 1);
       }
       const dismissEvent: ToastDismissEvent = { reason: dismissReason, record, controller, scope: options.scope };
-      safeCall(() => options.onDismiss?.(dismissEvent), undefined);
+
+      // Internal state is committed before user callbacks. This makes onDismiss
+      // safely re-entrant, including maxToasts=1 + creating another toast.
       removeRecord(record);
       state.recordsByNode.delete(node);
       node.remove();
-      if (hasEventListeners("dismiss")) emitEvent("dismiss", dismissEvent as unknown as UnknownRecord);
       syncStackLayout();
-      if (!state.toasts.length) destroyHost({ keepPersistence: state.config.persistAcrossSpaNavigation });
+      if (hasEventListeners("dismiss")) emitEvent("dismiss", dismissEvent as unknown as UnknownRecord);
+      safeCall(() => options.onDismiss?.(dismissEvent), undefined);
+      if (!state.toasts.length) handleHostIdle();
     };
 
     const playSuccessExit = (): void => {
@@ -3063,7 +3296,6 @@
       applyToastPalette(node, nextOptions.type);
       if (node.getAttribute("role") !== nextOptions.role) node.setAttribute("role", nextOptions.role);
       renderArgs(nextArgs, nextOptions);
-      promoteHostToTopLayer(false);
       resetTimer(nextOptions.duration);
 
       if (shouldEmitUpdate && previous) {
@@ -3156,8 +3388,10 @@
       },
     };
 
-    actions.append(createMinimizeButton(host.document));
-    actions.append(createExpandButton(host.document, () => record));
+    if (options.lane !== "interaction") {
+      actions.append(createMinimizeButton(host.document));
+      actions.append(createExpandButton(host.document, () => record));
+    }
     if (options.closeButton) actions.append(createCloseButton(host.document, () => dismiss(false, null, "close")));
 
     if (options.pauseOnInteraction) {
@@ -3170,7 +3404,7 @@
     }
 
     node.addEventListener("keydown", (event) => {
-      if (event.key !== "Escape") return;
+      if (options.lane === "interaction" || event.key !== "Escape") return;
       if (state.stackExpanded) {
         event.preventDefault();
         event.stopPropagation();
@@ -3183,9 +3417,10 @@
     });
 
     renderArgs(args, options);
-    host.list.prepend(node);
+    (options.lane === "interaction" ? host.interactionList : host.list).prepend(node);
     state.toasts.push(record);
     state.recordsByNode.set(node, record);
+    if (options.id) state.recordsById.set(options.id, record);
     promoteHostToTopLayer(true);
     if (options.loading && options.loadingState === "loading") state.activeLoadingCount += 1;
     if (hasEventListeners("create")) {
@@ -3403,6 +3638,8 @@
     focus?(): void;
     getValues?(): UnknownRecord;
     cleanup?(): void;
+    syncActionState?(): void;
+    onActionsReady?(): void;
   }
 
   interface ActionDialogSettings {
@@ -3433,16 +3670,18 @@
   }
 
   function showActionDialog(descriptor: ToastOptions | string = {}, settings: ActionDialogSettings = {}): Promise<unknown> {
-    const options: ToastOptions = isPlainObject(descriptor) ? { ...descriptor } : { title: String(descriptor ?? "") };
+    const options: ToastOptions = isPlainObject(descriptor) ? { ...descriptor } as ToastOptions : { title: String(descriptor ?? "") };
     const fallbackActions = settings.fallbackActions ?? [
       { id: "cancel", label: "Cancel", icon: "circle-x", variant: "secondary", value: settings.dismissValue ?? false },
       { id: "confirm", label: "Confirm", icon: "check", variant: "primary", value: true },
     ];
     const normalizedActions = normalizeActionDescriptors(options.actions, fallbackActions);
     const dismissValue = hasOwn(options, "dismissValue") ? options.dismissValue : settings.dismissValue ?? false;
+    const previousFocus = safeCall(() => (state.hostDocument ?? initialHostWindow.document).activeElement, null);
 
     return new Promise<unknown>((resolve, reject) => {
       let settled = false;
+      let actionInFlight = false;
       let countdownTimer: TimerHandle = null;
       let remainingSeconds = 0;
       let initialSeconds = 0;
@@ -3451,6 +3690,7 @@
 
       const created = createToastRecord([], {
         type: typeof options.type === "string" && hasOwn(TOAST_COLORS, options.type) ? options.type : settings.type ?? "default",
+        lane: "interaction",
         title: options.title,
         description: options.description,
         icon: options.icon === undefined ? settings.icon ?? "circle" : options.icon,
@@ -3473,6 +3713,7 @@
       }
 
       const { controller, record } = created;
+      registerDialog(record, previousFocus);
       const node = controller.element;
       const content = node.querySelector<HTMLDivElement>(".rod-toast__content");
       const iconNode = node.querySelector<HTMLElement>(".rod-toast__icon");
@@ -3499,11 +3740,13 @@
       const countdownTrack = documentRef.createElement("div");
       const countdownBar = documentRef.createElement("div");
       const actionsNode = documentRef.createElement("div");
+      const dialogToken = `${record.createdAt}-${Math.random().toString(36).slice(2, 8)}`;
 
       root.className = "rod-toast__interactive";
       copy.className = "rod-toast__interactive-copy";
       title.className = "rod-toast__interactive-title";
       description.className = "rod-toast__interactive-description";
+      body.className = "rod-toast__interactive-body";
       validation.className = "rod-toast__validation";
       validation.dataset.visible = "false";
       countdown.className = "rod-toast__countdown";
@@ -3511,10 +3754,14 @@
       countdownTrack.className = "rod-toast__countdown-track";
       countdownBar.className = "rod-toast__countdown-bar";
       actionsNode.className = "rod-toast__confirm-actions";
+      title.id = `rod-toast-dialog-title-${dialogToken}`;
+      description.id = `rod-toast-dialog-description-${dialogToken}`;
       title.textContent = String(options.title ?? "");
       title.hidden = !title.textContent;
       description.textContent = String(options.description ?? "");
       description.hidden = !description.textContent;
+      if (!title.hidden) node.setAttribute("aria-labelledby", title.id);
+      if (!description.hidden) node.setAttribute("aria-describedby", description.id);
       countdownTrack.append(countdownBar);
       countdown.append(countdownLabel, countdownTrack);
       copy.append(title, description);
@@ -3548,8 +3795,9 @@
       function finish(value: unknown, reason = "action", actionId: string | null = null): void {
         if (settled) return;
         settled = true;
+        const values = getValues();
         cleanup();
-        resolve(formatDialogResult(options, value, reason, actionId, getValues()));
+        resolve(formatDialogResult(options, value, reason, actionId, values));
       }
 
       const setValidation = (message: unknown): void => {
@@ -3561,10 +3809,14 @@
         if (hasOwn(next, "title")) {
           title.textContent = String(next.title ?? "");
           title.hidden = !title.textContent;
+          if (title.hidden) node.removeAttribute("aria-labelledby");
+          else node.setAttribute("aria-labelledby", title.id);
         }
         if (hasOwn(next, "description")) {
           description.textContent = String(next.description ?? "");
           description.hidden = !description.textContent;
+          if (description.hidden) node.removeAttribute("aria-describedby");
+          else node.setAttribute("aria-describedby", description.id);
         }
         if (hasOwn(next, "details")) {
           const nextDetails = createDetailsNode(documentRef, next.details, String(next.detailsLabel ?? options.detailsLabel ?? "Details"));
@@ -3575,21 +3827,36 @@
         if (hasOwn(next, "validation")) setValidation(next.validation);
         return controller;
       };
+      record.externalUpdate = (next: ToastOptions) => updateDialog(next as unknown as UnknownRecord);
 
-      const setButtonsBusy = (
-        activeButton: (HTMLButtonElement & { __rodAction: NormalizedActionDescriptor }) | null,
-        action: NormalizedActionDescriptor,
-        busy: boolean,
-      ): void => {
+      const syncButtons = (): void => {
         buttons.forEach((button) => {
           const descriptorForButton = button.__rodAction;
           const lockedByCountdown = descriptorForButton.disabledUntilCountdown && remainingSeconds > 0;
-          button.disabled = busy || descriptorForButton.disabled || lockedByCountdown;
-          button.dataset.busy = String(busy && button === activeButton);
+          button.disabled = actionInFlight || descriptorForButton.disabled || lockedByCountdown;
         });
-        if (activeButton) {
-          const label = activeButton.querySelector("span");
-          if (label) label.textContent = busy && action.loadingLabel ? action.loadingLabel : action.label;
+        bodyApi.syncActionState?.();
+      };
+
+      const setButtonBusyVisual = (
+        button: HTMLButtonElement & { __rodAction: NormalizedActionDescriptor },
+        action: NormalizedActionDescriptor,
+        busy: boolean,
+        originalIcon: Node | null,
+      ): void => {
+        const label = button.querySelector("span");
+        if (busy) {
+          if (label && action.loadingLabel) label.textContent = action.loadingLabel;
+          const currentSvg = button.querySelector("svg");
+          const loader = createSvgIcon(documentRef, "loader-circle", 15);
+          if (currentSvg) currentSvg.replaceWith(loader);
+          else button.insertBefore(loader, label);
+          button.dataset.busy = "true";
+        } else {
+          button.querySelector("svg")?.remove();
+          if (originalIcon) button.insertBefore(originalIcon.cloneNode(true), label);
+          if (label) label.textContent = action.label;
+          button.dataset.busy = "false";
         }
       };
 
@@ -3598,32 +3865,34 @@
         button: HTMLButtonElement & { __rodAction: NormalizedActionDescriptor },
         event: Event | null,
       ): Promise<void> => {
-        if (settled || button.disabled) return;
+        if (settled || actionInFlight || button.disabled || !isTopDialog(record)) return;
         setValidation("");
-        const values = getValues();
-        const validationResult = await settings.validate?.({ action, values, options });
-        if (validationResult !== true && validationResult !== undefined) {
-          setValidation(validationResult === false ? options.validationMessage ?? "Please review this value." : validationResult);
-          return;
-        }
-        const currentSvg = button.querySelector("svg");
-        const originalIcon = currentSvg?.cloneNode(true) ?? null;
-        const labelNode = button.querySelector("span");
-        setButtonsBusy(button, action, true);
-        const loader = createSvgIcon(documentRef, "loader-circle", 15);
-        if (currentSvg) currentSvg.replaceWith(loader);
-        else button.insertBefore(loader, labelNode);
-        let closedByContext = false;
-        const close = (value: unknown = action.value, reason = "action"): void => {
-          closedByContext = true;
-          finish(value, reason, action.id);
-          controller.dismiss(reason);
-        };
+        actionInFlight = true;
+        const originalIcon = button.querySelector("svg")?.cloneNode(true) ?? null;
+        syncButtons();
+        setButtonBusyVisual(button, action, true, originalIcon);
 
         try {
+          const values = getValues();
+          const validationResult = await settings.validate?.({ action, values, options });
+          if (validationResult !== true && validationResult !== undefined) {
+            setValidation(validationResult === false ? options.validationMessage ?? "Please review this value." : validationResult);
+            actionInFlight = false;
+            setButtonBusyVisual(button, action, false, originalIcon);
+            syncButtons();
+            return;
+          }
+
+          let closedByContext = false;
+          const close = (value: unknown = action.value, reason = "action"): void => {
+            closedByContext = true;
+            finish(value, reason, action.id);
+            controller.dismiss(reason);
+          };
+
           emitEvent("action", { phase: "start", actionId: action.id, action: action.raw, controller, scope: options.scope ?? null } as unknown as UnknownRecord);
           let result = action.handle
-            ? await action.handle({
+            ? await Promise.resolve().then(() => action.handle!({
                 action: action.raw,
                 controller,
                 event,
@@ -3633,7 +3902,7 @@
                 setValidation,
                 values,
                 checked: isUnknownRecord(values.checked) ? values.checked as Record<string, boolean> : {},
-              })
+              }))
             : undefined;
           if (closedByContext) return;
           if (result === undefined) {
@@ -3643,10 +3912,11 @@
                 ? action.value
                 : action.id;
           }
-          if (action.successLabel && labelNode) {
-            labelNode.textContent = action.successLabel;
+          if (action.successLabel) {
+            const labelNode = button.querySelector("span");
+            if (labelNode) labelNode.textContent = action.successLabel;
             button.querySelector("svg")?.replaceWith(createSvgIcon(documentRef, "check", 15));
-            await new Promise<void>((resolveDelay) => (state.hostWindow ?? initialHostWindow).setTimeout(resolveDelay, 260));
+            await new Promise<void>((resolveDelay) => (state.hostWindow ?? initialHostWindow).setTimeout(resolveDelay, 220));
           }
           emitEvent("action", { phase: "success", actionId: action.id, action: action.raw, result, controller, scope: options.scope ?? null } as unknown as UnknownRecord);
           if (action.close) {
@@ -3654,18 +3924,16 @@
             controller.dismiss("action");
             return;
           }
-          button.querySelector("svg")?.remove();
-          if (originalIcon) button.insertBefore(originalIcon, labelNode);
-          if (labelNode) labelNode.textContent = action.label;
-          setButtonsBusy(button, action, false);
+          actionInFlight = false;
+          setButtonBusyVisual(button, action, false, originalIcon);
+          syncButtons();
         } catch (error: unknown) {
           emitEvent("action", { phase: "error", actionId: action.id, action: action.raw, error, controller, scope: options.scope ?? null } as unknown as UnknownRecord);
+          actionInFlight = false;
+          setButtonBusyVisual(button, action, false, originalIcon);
+          syncButtons();
           if (options.rejectOnActionError === false) {
             setValidation(toErrorMessage(error));
-            button.querySelector("svg")?.remove();
-            if (originalIcon) button.insertBefore(originalIcon, labelNode);
-            if (labelNode) labelNode.textContent = action.label;
-            setButtonsBusy(button, action, false);
             return;
           }
           if (!settled) {
@@ -3712,8 +3980,8 @@
           const action = button.__rodAction;
           const label = button.querySelector("span");
           if (label && button.dataset.busy !== "true") label.textContent = action.labelTemplate.replace(/\{seconds\}/g, String(remainingSeconds));
-          button.disabled = action.disabled || (action.disabledUntilCountdown && remainingSeconds > 0);
         });
+        syncButtons();
       };
 
       if (initialSeconds > 0) {
@@ -3731,34 +3999,50 @@
       }
 
       const shortcuts = new Map<string, string>();
-      Object.entries(options.shortcuts ?? {}).forEach(([shortcut, actionId]) => shortcuts.set(normalizeShortcutName(shortcut), String(actionId)));
-      normalizedActions.forEach((action) => { if (action.shortcut) shortcuts.set(normalizeShortcutName(action.shortcut), action.id); });
+      Object.entries(options.shortcuts ?? {}).forEach(([shortcut, actionId]) => {
+        const normalizedShortcut = normalizeShortcutName(shortcut);
+        if (options.dismissible === false && normalizedShortcut === "Escape") return;
+        shortcuts.set(normalizedShortcut, String(actionId));
+      });
+      normalizedActions.forEach((action) => {
+        if (!action.shortcut) return;
+        const normalizedShortcut = normalizeShortcutName(action.shortcut);
+        if (options.dismissible === false && normalizedShortcut === "Escape") return;
+        shortcuts.set(normalizedShortcut, action.id);
+      });
+
       const keyHandler = (event: KeyboardEvent): void => {
-        if (settled) return;
+        if (settled || !isTopDialog(record)) return;
+        if (event.key === "Escape" && options.dismissible === false) return;
         const actionId = shortcuts.get(shortcutFromEvent(event));
         if (actionId) {
           const button = buttonByActionId.get(actionId);
-          if (button) {
+          if (button && !button.disabled) {
             event.preventDefault();
-            event.stopPropagation();
+            event.stopImmediatePropagation();
             button.click();
             return;
           }
         }
         if (event.key === "Escape" && options.dismissible !== false) {
           event.preventDefault();
-          event.stopPropagation();
+          event.stopImmediatePropagation();
           controller.dismiss("escape");
         }
       };
       documentRef.addEventListener("keydown", keyHandler, true);
       cleanupCallbacks.push(() => documentRef.removeEventListener("keydown", keyHandler, true));
+
+      bodyApi.onActionsReady?.();
+      syncButtons();
+      syncDialogStack();
       setManagerMinimized(false);
       syncStackLayout();
       const preferredButton = buttons.find((button) => !button.disabled && button.dataset.variant === "primary") ?? buttons.find((button) => !button.disabled);
       const hostWindow = state.hostWindow ?? initialHostWindow;
       const requestFrame = hostWindow.requestAnimationFrame?.bind(hostWindow) ?? ((callback: FrameRequestCallback) => hostWindow.setTimeout(() => callback(performance.now()), 0));
       requestFrame(() => {
+        if (!isTopDialog(record)) return;
         bodyApi.focus?.();
         if (!bodyApi.focus) preferredButton?.focus({ preventScroll: true });
         iconNode?.setAttribute("aria-hidden", "true");
@@ -3833,16 +4117,18 @@
     });
   }
 
-  function showSelectToast(descriptor: ToastOptions = {}): Promise<unknown> {
-    const options: ToastOptions = isPlainObject(descriptor) ? { ...descriptor } : {};
+  function showSelectToast<T = unknown>(descriptor: SelectOptions<T> = {}): Promise<T | T[] | null> {
+    const options: SelectOptions<T> = isPlainObject(descriptor) ? { ...descriptor } as SelectOptions<T> : {};
     options.shortcuts ??= { Escape: "cancel", Enter: "confirm" };
     let select: HTMLSelectElement | null = null;
     const choices = Array.isArray(options.options) ? options.options : [];
-    return showActionDialog(options, {
+    const valuesByToken = new Map<string, T>();
+
+    const promise = showActionDialog(options as ToastOptions, {
       kind: "select",
       dismissValue: hasOwn(options, "dismissValue") ? options.dismissValue : null,
       fallbackActions: [
-        { id: "cancel", label: options.cancelLabel ?? "Cancel", icon: "circle-x", variant: "secondary", value: hasOwn(options, "dismissValue") ? options.dismissValue : null },
+        { id: "cancel", label: options.cancelLabel ?? "Cancel", icon: "circle-x", variant: "secondary", value: null },
         { id: "confirm", label: options.confirmLabel ?? "Select", icon: "check", variant: "primary" },
       ],
       buildBody({ document, body }) {
@@ -3855,15 +4141,22 @@
         label.hidden = !options.inputLabel;
         select.className = "rod-toast__select";
         select.multiple = Boolean(options.multiple);
+        const initialValues = options.multiple
+          ? (Array.isArray(options.value) ? options.value : options.value === undefined ? [] : [options.value])
+          : [options.value];
+
         choices.forEach((choice, index) => {
-          const choiceDescriptor: SelectChoice = isUnknownRecord(choice) ? choice : { value: choice, label: choice };
+          const isDescriptor = isUnknownRecord(choice) && hasOwn(choice, "value");
+          const value = (isDescriptor ? choice.value : choice) as T;
+          const choiceLabel = isDescriptor ? choice.label : choice;
+          const disabled = isDescriptor ? Boolean(choice.disabled) : false;
+          const token = `choice:${index}`;
+          valuesByToken.set(token, value);
           const option = document.createElement("option");
-          option.value = String(choiceDescriptor.value ?? index);
-          option.textContent = String(choiceDescriptor.label ?? choiceDescriptor.value ?? index);
-          option.disabled = Boolean(choiceDescriptor.disabled);
-          option.selected = options.multiple
-            ? Array.isArray(options.value) && options.value.map(String).includes(option.value)
-            : String(options.value ?? "") === option.value;
+          option.value = token;
+          option.textContent = String(choiceLabel ?? value ?? index);
+          option.disabled = disabled;
+          option.selected = initialValues.some((candidate) => Object.is(candidate, value));
           select!.append(option);
         });
         field.append(label, select);
@@ -3871,24 +4164,27 @@
         return {
           focus: () => select?.focus({ preventScroll: true }),
           getValues: () => {
-            const selected = select ? Array.from(select.selectedOptions, (option) => option.value) : [];
-            return { selection: options.multiple ? selected : selected[0] ?? null };
+            const tokens = select ? Array.from(select.selectedOptions, (option) => option.value) : [];
+            const selectedValues = tokens.map((token) => valuesByToken.get(token) as T);
+            return { selection: options.multiple ? selectedValues : selectedValues[0] ?? null };
           },
         };
       },
       async validate({ action, values }) {
         if (action.id === "cancel") return true;
-        const selection = values.selection;
+        const selection = values.selection as T | T[] | null;
         if (options.required && (selection == null || (Array.isArray(selection) && selection.length === 0))) {
           return options.requiredMessage ?? "Choose an option.";
         }
         return typeof options.validate === "function" ? options.validate(selection) : true;
       },
       resolveValue(action, values) {
-        if (action.id === "cancel") return action.hasValue ? action.value : null;
+        if (action.id === "cancel") return null;
         return action.hasValue ? action.value : values.selection;
       },
     });
+
+    return promise as Promise<T | T[] | null>;
   }
 
   function inferPickerMediaType(value: PickerItemDescriptor | string, fallback: PickerMediaType = "image"): PickerMediaType {
@@ -3997,6 +4293,7 @@
           alt,
           disabled: Boolean(raw.disabled),
           selected: hasOwn(raw, "selected") ? Boolean(raw.selected) : null,
+          transient: blobLike,
           original: input,
         };
       })
@@ -4019,6 +4316,10 @@
     } else if (requested !== undefined && requested !== null && requested !== true && requested !== false && requested !== "all") {
       requestedIds.add(String(requested));
     }
+    const requestedIndexes = new Set<number>([
+      ...(options.defaultSelectedIndexes ?? []),
+      ...(options.selectedIndexes ?? []),
+    ].filter((value) => Number.isInteger(value) && value >= 0));
 
     const shouldSelectAll =
       options.defaultAllSelected === true ||
@@ -4038,7 +4339,7 @@
         continue;
       }
       if (item.selected === false) continue;
-      if (shouldSelectAll || requestedIds.has(item.id) || requestedIds.has(String(item.index))) {
+      if (shouldSelectAll || requestedIds.has(item.id) || requestedIndexes.has(item.index)) {
         selected.add(item.id);
       }
     }
@@ -4052,22 +4353,25 @@
   }
 
   function showPickerToast<T extends PickerSource = PickerSource>(descriptor: PickerOptions<T> = {}): Promise<PickerResult<T>> {
-    const options: PickerOptions<T> = isPlainObject(descriptor) ? { ...descriptor } : {};
+    const options: PickerOptions<T> = isPlainObject(descriptor) ? { ...descriptor } as PickerOptions<T> : {};
     const rawSource = options.items ?? options.media ?? options.sources ?? [];
     const normalized = normalizePickerItems<T>(rawSource, options);
     const items = normalized.items;
     const multiple = options.multiple !== false;
-    const minimum = Number.isFinite(Number(options.minSelected))
-      ? Math.max(0, Number(options.minSelected))
+    const requestedMinimum = Number.isFinite(Number(options.minSelected))
+      ? Math.max(0, Math.floor(Number(options.minSelected)))
       : options.required === false
         ? 0
         : 1;
-    const maximum = Number.isFinite(Number(options.maxSelected))
-      ? Math.max(multiple ? minimum : 1, Number(options.maxSelected))
+    const minimum = multiple ? requestedMinimum : Math.min(1, requestedMinimum);
+    const requestedMaximum = Number.isFinite(Number(options.maxSelected))
+      ? Math.max(0, Math.floor(Number(options.maxSelected)))
       : multiple
         ? Infinity
         : 1;
+    const maximum = multiple ? Math.max(minimum, requestedMaximum) : 1;
     const selectedIds = getInitialPickerSelection(items, { ...options, multiple });
+    const preservedObjectUrls = new Set<string>();
 
     if (Number.isFinite(maximum) && selectedIds.size > maximum) {
       let kept = 0;
@@ -4104,6 +4408,7 @@
         },
       ],
       buildBody({ document, body, node, controller }) {
+        const hostWindow = state.hostWindow ?? initialHostWindow;
         const root = document.createElement("div");
         const toolbar = document.createElement("div");
         const count = document.createElement("div");
@@ -4113,6 +4418,22 @@
         const grid = document.createElement("div");
         const empty = document.createElement("div");
         const buttonsById = new Map<string, HTMLButtonElement>();
+        const mediaObserver = items.length > Math.max(1, Number(options.virtualizeAfter) || 60) && typeof IntersectionObserver === "function"
+          ? new IntersectionObserver((entries, observer) => {
+              for (const entry of entries) {
+                if (!entry.isIntersecting) continue;
+                const media = entry.target as HTMLImageElement | HTMLVideoElement;
+                const source = media.dataset.rodPickerSrc;
+                if (source && !media.getAttribute("src")) media.src = source;
+                const poster = media.dataset.rodPickerPoster;
+                if (poster && media instanceof HTMLVideoElement) media.poster = poster;
+                observer.unobserve(media);
+              }
+            }, {
+              root: grid,
+              rootMargin: options.mediaRootMargin ?? "320px 0px",
+            })
+          : null;
 
         root.className = "rod-toast__picker";
         toolbar.className = "rod-toast__picker-toolbar";
@@ -4130,9 +4451,7 @@
           grid.style.setProperty("--rod-picker-item-min", `${Math.max(64, Number(options.itemMinWidth))}px`);
         }
         if (options.aspectRatio) grid.style.setProperty("--rod-picker-aspect-ratio", String(options.aspectRatio));
-        if (Number.isFinite(Number(options.gap))) {
-          grid.style.setProperty("--rod-picker-gap", `${Math.max(0, Number(options.gap))}px`);
-        }
+        if (Number.isFinite(Number(options.gap))) grid.style.setProperty("--rod-picker-gap", `${Math.max(0, Number(options.gap))}px`);
 
         selectAll.type = "button";
         clearAll.type = "button";
@@ -4147,6 +4466,22 @@
           (item) => !item.disabled && selectedIds.has(item.id),
         );
 
+        const makeDisposableDescriptor = (item: PickerNormalizedDescriptor<T>): PickerNormalizedDescriptor<T> => {
+          if (!item.transient) return { ...item };
+          preservedObjectUrls.add(item.src);
+          let disposed = false;
+          return {
+            ...item,
+            transient: true,
+            dispose() {
+              if (disposed) return;
+              disposed = true;
+              preservedObjectUrls.delete(item.src);
+              safeCall(() => (state.hostWindow ?? initialHostWindow).URL.revokeObjectURL(item.src), undefined);
+            },
+          };
+        };
+
         const getSelectionValue = (): PickerSelectionValue<T> => {
           const selected = getSelectedItems();
           switch (options.returnType ?? "items") {
@@ -4155,17 +4490,7 @@
             case "indexes":
               return selected.map((item) => item.index);
             case "descriptors":
-              return selected.map((item) => ({
-                id: item.id,
-                index: item.index,
-                type: item.type,
-                src: item.src,
-                poster: item.poster,
-                label: item.label,
-                alt: item.alt,
-                disabled: item.disabled,
-                original: item.original,
-              }));
+              return selected.map(makeDisposableDescriptor);
             case "items":
             default:
               return selected.map((item) => item.original);
@@ -4173,19 +4498,16 @@
         };
 
         const syncConfirmButton = (): void => {
-          const hostWindow = state.hostWindow ?? initialHostWindow;
-          const requestFrame = hostWindow.requestAnimationFrame?.bind(hostWindow) ?? ((callback: FrameRequestCallback) => hostWindow.setTimeout(() => callback(performance.now()), 0));
-          requestFrame(() => {
-            const confirm = node.querySelector<HTMLButtonElement>('[data-action-id="confirm"]');
-            const label = confirm?.querySelector("span");
-            const selectedCount = selectedIds.size;
-            const valid = selectedCount >= minimum && selectedCount <= maximum;
-            if (confirm) confirm.disabled = !valid;
-            if (label && options.dynamicConfirmLabel !== false) {
-              const base = options.confirmLabel ?? (options.downloadLabel ? "Download" : "Use selected");
-              label.textContent = selectedCount > 0 ? `${base} (${selectedCount})` : base;
-            }
-          });
+          const confirm = node.querySelector<HTMLButtonElement>('[data-action-id="confirm"]');
+          if (!confirm) return;
+          const label = confirm.querySelector("span");
+          const selectedCount = selectedIds.size;
+          const valid = selectedCount >= minimum && selectedCount <= maximum;
+          if (confirm.dataset.busy !== "true") confirm.disabled = !valid;
+          if (label && options.dynamicConfirmLabel !== false && confirm.dataset.busy !== "true") {
+            const base = options.confirmLabel ?? (options.downloadLabel ? "Download" : "Use selected");
+            label.textContent = selectedCount > 0 ? `${base} (${selectedCount})` : base;
+          }
         };
 
         const notifyChange = (): void => {
@@ -4200,10 +4522,17 @@
           }), undefined);
         };
 
-        const renderSelectionState = (): void => {
-          const selected = getSelectedItems();
-          const selectedCount = selected.length;
+        const syncButton = (id: string): void => {
+          const button = buttonsById.get(id);
+          if (!button) return;
+          const active = selectedIds.has(id);
+          button.dataset.selected = String(active);
+          button.setAttribute("aria-pressed", String(active));
+          button.setAttribute("aria-selected", String(active));
+        };
 
+        const renderSelectionState = (changedIds?: Iterable<string>): void => {
+          const selectedCount = selectedIds.size;
           if (options.countLabel === false) {
             count.textContent = "";
             count.hidden = true;
@@ -4220,12 +4549,11 @@
             }
           }
 
-          buttonsById.forEach((button, id) => {
-            const active = selectedIds.has(id);
-            button.dataset.selected = String(active);
-            button.setAttribute("aria-pressed", String(active));
-            button.setAttribute("aria-selected", String(active));
-          });
+          if (changedIds) {
+            for (const id of changedIds) syncButton(id);
+          } else {
+            for (const id of buttonsById.keys()) syncButton(id);
+          }
 
           selectAll.disabled = !multiple || selectableCount === 0 || selectedCount >= Math.min(selectableCount, maximum);
           clearAll.disabled = selectedCount === 0;
@@ -4233,18 +4561,23 @@
           notifyChange();
         };
 
-        const setSelected = (item: PickerNormalizedDescriptor<T>, active: boolean, render = true): boolean => {
+        const setSelected = (item: PickerNormalizedDescriptor<T>, active: boolean): boolean => {
           if (item.disabled) return false;
+          const changed = new Set<string>();
           if (!multiple) {
+            for (const id of selectedIds) changed.add(id);
             selectedIds.clear();
             if (active) selectedIds.add(item.id);
+            changed.add(item.id);
           } else if (active) {
             if (selectedIds.size >= maximum && !selectedIds.has(item.id)) return false;
             selectedIds.add(item.id);
+            changed.add(item.id);
           } else {
             selectedIds.delete(item.id);
+            changed.add(item.id);
           }
-          if (render) renderSelectionState();
+          renderSelectionState(changed);
           return true;
         };
 
@@ -4254,20 +4587,31 @@
           setSelected(item, !active);
         };
 
+        const loadMedia = (media: HTMLImageElement | HTMLVideoElement, item: PickerNormalizedDescriptor<T>): void => {
+          if (mediaObserver) {
+            media.dataset.rodPickerSrc = item.type === "video" ? item.src : item.poster ?? item.src;
+            if (item.type === "video" && item.poster) media.dataset.rodPickerPoster = item.poster;
+            mediaObserver.observe(media);
+          } else if (media instanceof hostWindow.HTMLVideoElement) {
+            media.src = item.src;
+            if (item.poster) media.poster = item.poster;
+          } else {
+            media.src = item.poster ?? item.src;
+          }
+        };
+
         const makeMedia = (item: PickerNormalizedDescriptor<T>): HTMLImageElement | HTMLVideoElement => {
           let media: HTMLImageElement | HTMLVideoElement;
           if (item.type === "video" && !item.poster) {
             const video = document.createElement("video");
-            video.src = item.src;
             video.muted = true;
             video.playsInline = true;
-            video.preload = options.videoPreload ?? "metadata";
+            video.preload = mediaObserver ? "none" : options.videoPreload ?? "none";
             video.setAttribute("playsinline", "");
             video.setAttribute("webkit-playsinline", "");
             media = video;
           } else {
             const image = document.createElement("img");
-            image.src = item.poster ?? item.src;
             image.alt = item.alt;
             image.loading = "lazy";
             image.decoding = "async";
@@ -4276,6 +4620,7 @@
           media.className = "rod-toast__picker-media";
           media.draggable = false;
           if (options.crossOrigin) media.crossOrigin = options.crossOrigin;
+          loadMedia(media, item);
           return media;
         };
 
@@ -4308,17 +4653,23 @@
           index.className = "rod-toast__picker-index";
           index.textContent = String(item.index + 1);
           kind.className = "rod-toast__picker-kind";
-          kind.hidden = options.showType === false;
+
+          const normalizedLabel = item.label.trim().toLowerCase();
+          const typePattern = item.type === "video" ? /\b(v[ií]deo|video)\b/i : /\b(foto|photo|image|imagem)\b/i;
+          const labelHasType = typePattern.test(item.label);
+          const labelHasIndex = new RegExp(`^\\s*0*${item.index + 1}(?:\\s|[.·:_-]|$)`, "i").test(item.label);
+
+          kind.hidden = options.showType === false || labelHasType;
           kind.append(createSvgIcon(document, item.type === "video" ? "play" : "image", 12));
           const kindText = document.createElement("span");
-          kindText.textContent = item.type === "video"
-            ? options.videoLabel ?? "Video"
-            : options.imageLabel ?? "Photo";
+          kindText.textContent = item.type === "video" ? options.videoLabel ?? "Video" : options.imageLabel ?? "Photo";
           kind.append(kindText);
+          index.hidden = labelHasIndex;
           label.className = "rod-toast__picker-label";
           label.textContent = item.label;
-          label.hidden = !item.label || options.showLabels === false;
+          label.hidden = !normalizedLabel || options.showLabels === false;
           label.dataset.hasKind = String(!kind.hidden);
+          if (index.hidden) label.style.left = "8px";
 
           button.append(media, shade, check, index);
           if (!kind.hidden) button.append(kind);
@@ -4339,7 +4690,6 @@
           const enabled = [...buttonsById.values()].filter((button) => !button.disabled);
           const currentIndex = enabled.indexOf(target as HTMLButtonElement);
           if (currentIndex < 0 || !enabled.length) return;
-
           let nextIndex = currentIndex;
           const currentButton = enabled[currentIndex];
           const approximateColumns = Math.max(1, Math.round(grid.clientWidth / Math.max(1, currentButton.offsetWidth + (Number(options.gap) || 8))));
@@ -4349,7 +4699,6 @@
           else if (event.key === "ArrowDown") nextIndex = currentIndex + approximateColumns;
           else if (event.key === "Home") nextIndex = 0;
           else if (event.key === "End") nextIndex = enabled.length - 1;
-
           nextIndex = clamp(nextIndex, 0, enabled.length - 1);
           if (nextIndex === currentIndex) return;
           event.preventDefault();
@@ -4357,25 +4706,26 @@
           enabled[nextIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" });
         });
 
-        if (!items.length) {
-          empty.textContent = options.emptyMessage ?? "No images or videos available.";
-        }
+        if (!items.length) empty.textContent = options.emptyMessage ?? "No images or videos available.";
 
         if (options.showSelectionTools !== false && multiple && items.length) {
           selectAll.addEventListener("click", (event) => {
             event.preventDefault();
             event.stopPropagation();
+            const changed = new Set<string>();
             for (const item of items) {
               if (item.disabled || selectedIds.size >= maximum) continue;
+              if (!selectedIds.has(item.id)) changed.add(item.id);
               selectedIds.add(item.id);
             }
-            renderSelectionState();
+            renderSelectionState(changed);
           });
           clearAll.addEventListener("click", (event) => {
             event.preventDefault();
             event.stopPropagation();
+            const changed = new Set(selectedIds);
             selectedIds.clear();
-            renderSelectionState();
+            renderSelectionState(changed);
           });
           tools.append(selectAll, clearAll);
         }
@@ -4388,6 +4738,11 @@
 
         return {
           focus() {
+            // iOS Safari may scroll a nested picker to the focused option. Do
+            // not autofocus grid items on coarse/touch pointers.
+            const hostWindow = state.hostWindow ?? initialHostWindow;
+            const finePointer = safeCall(() => hostWindow.matchMedia?.("(pointer: fine)")?.matches === true, false);
+            if (!finePointer) return;
             const preferred = items.find((item) => selectedIds.has(item.id) && !item.disabled) ?? items.find((item) => !item.disabled);
             buttonsById.get(preferred?.id ?? "")?.focus({ preventScroll: true });
           },
@@ -4402,13 +4757,14 @@
               totalItems: items.length,
             };
           },
+          syncActionState: syncConfirmButton,
           cleanup() {
+            mediaObserver?.disconnect();
             const hostWindow = state.hostWindow ?? initialHostWindow;
-            hostWindow.setTimeout(() => {
-              for (const url of normalized.objectUrls) {
-                safeCall(() => hostWindow.URL.revokeObjectURL(url), undefined);
-              }
-            }, 500);
+            for (const url of normalized.objectUrls) {
+              if (preservedObjectUrls.has(url)) continue;
+              safeCall(() => hostWindow.URL.revokeObjectURL(url), undefined);
+            }
           },
         };
       },
@@ -4418,9 +4774,7 @@
         if (selectedCount < minimum) {
           return options.requiredMessage ?? (minimum === 1 ? "Select at least one item." : `Select at least ${minimum} items.`);
         }
-        if (selectedCount > maximum) {
-          return options.validationMessage ?? `Select at most ${maximum} items.`;
-        }
+        if (selectedCount > maximum) return options.validationMessage ?? `Select at most ${maximum} items.`;
         return typeof options.validate === "function" ? options.validate(values.selection) : true;
       },
       resolveValue(action, values) {
@@ -4441,7 +4795,7 @@
     const type: ToastType = forcedType ?? (typeof options.type === "string" && hasOwn(TOAST_COLORS, options.type) ? options.type : "default");
     const created = createToastRecord([], { ...options, type, dedupe: options.dedupe ?? false });
     if (!created) return null;
-    const { controller } = created;
+    const { controller, record } = created;
     const node = controller.element;
     const content = node.querySelector<HTMLDivElement>(".rod-toast__content");
     if (!content) return controller;
@@ -4507,7 +4861,7 @@
           button.dataset.busy = "true";
           const originalLabel = label.textContent ?? action.label;
           if (action.loadingLabel) label.textContent = action.loadingLabel;
-          void Promise.resolve(
+          void Promise.resolve().then(() =>
             action.handle
               ? action.handle({
                   action: action.raw,
@@ -4560,6 +4914,7 @@
       render(options);
       return controller;
     };
+    record.externalUpdate = controller.updateRich;
     return controller;
   }
 
@@ -4596,15 +4951,90 @@
   }
 
   function isTaskSnapshot(value: unknown): value is TaskSnapshot {
-    return isUnknownRecord(value) && typeof value.id === "string" && typeof value.title === "string" && typeof value.status === "string";
+    return isUnknownRecord(value) &&
+      typeof value.id === "string" &&
+      typeof value.title === "string" &&
+      typeof value.status === "string" &&
+      ALLOWED_TASK_STATUSES.has(value.status as TaskStatus);
+  }
+
+  function toStorageSafeValue(
+    value: unknown,
+    seen = new WeakSet<object>(),
+    depth = 0,
+  ): unknown {
+    if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+    if (value === undefined) return null;
+    if (typeof value === "bigint") return `${value}n`;
+    if (typeof value === "symbol") return safeCall(() => value.toString(), "Symbol(?)");
+    if (typeof value === "function") return `[Function: ${value.name || "anonymous"}]`;
+    if (!isObject(value)) return String(value);
+    if (depth >= 10) return "[MaxDepth]";
+    if (isDomNode(value)) return `[Node: ${(value as Node).nodeName}]`;
+    if (value instanceof Date) return safeCall(() => value.toISOString(), String(value));
+    if (value instanceof RegExp) return String(value);
+    if (value instanceof Error) {
+      return {
+        name: value.name,
+        message: value.message,
+        stack: value.stack ?? null,
+        cause: toStorageSafeValue(value.cause, seen, depth + 1),
+      };
+    }
+    if (seen.has(value)) return "[Circular]";
+    seen.add(value);
+    if (Array.isArray(value)) {
+      return value.slice(0, 1000).map((entry) => toStorageSafeValue(entry, seen, depth + 1));
+    }
+    if (value instanceof Map) {
+      return {
+        __type: "Map",
+        entries: Array.from(value.entries()).slice(0, 1000).map(([key, entry]) => [
+          toStorageSafeValue(key, seen, depth + 1),
+          toStorageSafeValue(entry, seen, depth + 1),
+        ]),
+      };
+    }
+    if (value instanceof Set) {
+      return {
+        __type: "Set",
+        values: Array.from(value.values()).slice(0, 1000).map((entry) => toStorageSafeValue(entry, seen, depth + 1)),
+      };
+    }
+    const output: UnknownRecord = {};
+    let count = 0;
+    for (const key of safeCall(() => Object.keys(value), [] as string[])) {
+      if (count >= 1000) {
+        output.__truncated = true;
+        break;
+      }
+      output[key] = toStorageSafeValue(safeCall(() => (value as UnknownRecord)[key], undefined), seen, depth + 1);
+      count += 1;
+    }
+    return output;
+  }
+
+  function sanitizeTaskSnapshot(snapshot: TaskSnapshot): TaskSnapshot {
+    const safeMetadata = toStorageSafeValue(snapshot.metadata);
+    return {
+      ...snapshot,
+      metadata: isUnknownRecord(safeMetadata) ? safeMetadata : { value: safeMetadata },
+    };
+  }
+
+  function hasPersistableTasks(): boolean {
+    for (const task of state.tasks.values()) {
+      if (task.persist && !task.dismissed) return true;
+    }
+    return false;
   }
 
   function flushTaskSnapshots(): void {
+    const hostWindow = state.hostWindow ?? initialHostWindow;
     if (state.taskPersistTimer !== null) {
-      (state.hostWindow ?? initialHostWindow).clearTimeout(state.taskPersistTimer);
+      hostWindow.clearTimeout(state.taskPersistTimer);
       state.taskPersistTimer = null;
     }
-    if (!state.config.persistTasks) return;
     const storage = getTaskStorage();
     if (!storage) return;
 
@@ -4612,25 +5042,66 @@
     const limit = Math.max(1, state.config.maxPersistedTasks);
     for (const task of state.tasks.values()) {
       if (!task.persist || task.dismissed) continue;
-      snapshots.push(task.snapshot());
-      if (snapshots.length > limit) snapshots.shift();
+      try {
+        snapshots.push(sanitizeTaskSnapshot(task.snapshot()));
+        if (snapshots.length > limit) snapshots.shift();
+      } catch (error: unknown) {
+        emitEvent("task:persist-error", { task, error } as unknown as UnknownRecord);
+      }
     }
 
-    safeCall(() => storage.setItem(state.config.taskStorageKey, JSON.stringify(snapshots)), undefined);
+    try {
+      storage.setItem(state.config.taskStorageKey, JSON.stringify(snapshots));
+      state.taskPersistLastAt = Date.now();
+    } catch (error: unknown) {
+      emitEvent("task:persist-error", { error, snapshots: snapshots.length } as unknown as UnknownRecord);
+    }
   }
 
   function persistTaskSnapshots(immediate = false): void {
-    if (!state.config.persistTasks) return;
+    if (state.destroying) return;
+    const hostWindow = state.hostWindow ?? initialHostWindow;
     if (immediate) {
       flushTaskSnapshots();
       return;
     }
     if (state.taskPersistTimer !== null) return;
-    state.taskPersistTimer = (state.hostWindow ?? initialHostWindow).setTimeout(flushTaskSnapshots, 160);
+    const interval = Math.max(100, Number(state.config.taskProgressPersistInterval) || DEFAULT_CONFIG.taskProgressPersistInterval);
+    const elapsed = Date.now() - state.taskPersistLastAt;
+    const delay = Math.max(0, interval - elapsed);
+    state.taskPersistTimer = hostWindow.setTimeout(flushTaskSnapshots, delay);
+  }
+
+  const TERMINAL_TASK_STATUSES = new Set<TaskStatus>(["success", "error", "cancelled"]);
+
+  function isTerminalTaskStatus(status: TaskStatus): boolean {
+    return TERMINAL_TASK_STATUSES.has(status);
+  }
+
+  function canTransitionTask(from: TaskStatus, to: TaskStatus): boolean {
+    if (from === to) return true;
+    if (isTerminalTaskStatus(from)) return false;
+    switch (from) {
+      case "queued":
+        return to === "running" || to === "paused" || to === "warning" || isTerminalTaskStatus(to);
+      case "running":
+        return to === "paused" || to === "warning" || isTerminalTaskStatus(to);
+      case "paused":
+        return to === "running" || to === "warning" || isTerminalTaskStatus(to);
+      case "warning":
+        return to === "running" || to === "paused" || isTerminalTaskStatus(to);
+      default:
+        return false;
+    }
+  }
+
+  function createAbortError(reason: unknown = "Cancelled"): Error {
+    if (reason instanceof Error) return reason;
+    return new DOMException(String(reason ?? "Cancelled"), "AbortError");
   }
 
   function createTaskController(descriptor: TaskDescriptor | string = {}): TaskController | null {
-    const options: TaskDescriptor = isPlainObject(descriptor) ? { ...descriptor } : { title: String(descriptor ?? "") };
+    const options: TaskDescriptor = isPlainObject(descriptor) ? { ...descriptor } as TaskDescriptor : { title: String(descriptor ?? "") };
     const id = String(options.id ?? `task-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     const existing = state.tasks.get(id);
     if (existing && !existing.dismissed) return existing;
@@ -4653,7 +5124,6 @@
       orphaned: Boolean(options.orphaned),
     };
     let dismissed = false;
-    let paused = taskState.status === "paused";
     const toastId = String(options.toastId ?? `task:${id}`);
     let toastController: ToastController | null = null;
 
@@ -4670,6 +5140,7 @@
     });
 
     toastController = showLoadingToast([{
+      lane: "task",
       id: toastId,
       title: taskState.title,
       description: taskState.description,
@@ -4684,10 +5155,8 @@
       onDismiss: ({ reason }: ToastDismissEvent) => {
         dismissed = true;
         state.tasks.delete(id);
-        persistTaskSnapshots();
-        if (hasEventListeners("task:dismiss")) {
-          emitEvent("task:dismiss", { task, reason } as unknown as UnknownRecord);
-        }
+        if (taskState.persist && !state.destroying) persistTaskSnapshots(true);
+        if (hasEventListeners("task:dismiss")) emitEvent("task:dismiss", { task, reason } as unknown as UnknownRecord);
       },
     }]);
     if (!toastController) return null;
@@ -4699,7 +5168,6 @@
     taskStatus.className = "rod-toast__task-status";
     taskActions.className = "rod-toast__task-actions";
     loadingCopy?.append(taskStatus, taskActions);
-
     let lastTaskActionsSignature = "";
 
     const renderTaskActions = (): void => {
@@ -4710,8 +5178,9 @@
       const descriptors: ToastActionDescriptor[] = [];
       if (options.pausable && (taskState.status === "running" || taskState.status === "queued")) descriptors.push({ id: "pause", label: "Pause", icon: "pause" });
       if (options.pausable && taskState.status === "paused") descriptors.push({ id: "resume", label: "Resume", icon: "play" });
-      if (options.cancellable && !["success", "error", "cancelled"].includes(taskState.status)) descriptors.push({ id: "cancel", label: "Cancel", icon: "square" });
+      if (options.cancellable && !isTerminalTaskStatus(taskState.status)) descriptors.push({ id: "cancel", label: "Cancel", icon: "square" });
       if (Array.isArray(options.actions)) descriptors.push(...options.actions.map((action) => ({ ...action, close: action.close === true })));
+
       normalizeActionDescriptors(descriptors).forEach((action) => {
         const button = node.ownerDocument.createElement("button");
         const label = node.ownerDocument.createElement("span");
@@ -4724,13 +5193,14 @@
         button.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
-          if (action.id === "pause") void task.pause();
-          else if (action.id === "resume") void task.resume();
-          else if (action.id === "cancel") void task.cancel("user");
-          else {
-            button.disabled = true;
-            button.dataset.busy = "true";
-            void Promise.resolve(action.handle?.({
+          if (button.disabled) return;
+          if (action.id === "pause") { void task.pause(); return; }
+          if (action.id === "resume") { void task.resume(); return; }
+          if (action.id === "cancel") { void task.cancel("user"); return; }
+          button.disabled = true;
+          button.dataset.busy = "true";
+          void Promise.resolve()
+            .then(() => action.handle?.({
               action: action.raw,
               controller: toastController!,
               event,
@@ -4743,13 +5213,18 @@
               setValidation: () => undefined,
               values: {},
               checked: {},
-            })).then(() => {
+            }))
+            .then(() => {
               if (action.close) task.dismiss("action");
-            }).finally(() => {
+            })
+            .catch((error: unknown) => {
+              emitEvent("action", { phase: "error", actionId: action.id, action: action.raw, error, controller: toastController, scope: taskState.scope } as unknown as UnknownRecord);
+              showSemanticToast("error", [error]);
+            })
+            .finally(() => {
               button.disabled = false;
               button.dataset.busy = "false";
             });
-          }
         });
         taskActions.append(button);
       });
@@ -4758,66 +5233,45 @@
 
     const apply = (next: Partial<TaskDescriptor> = {}, emit = true): TaskController => {
       if (dismissed) return task;
+      const previousStatus = taskState.status;
+      const requestedStatus = hasOwn(next, "status") ? normalizeTaskStatus(next.status) : previousStatus;
+      const statusChanged = requestedStatus !== previousStatus;
+      const transitionAllowed = !statusChanged || canTransitionTask(previousStatus, requestedStatus);
+
+      if (statusChanged && !transitionAllowed) {
+        emitEvent("task:transition-blocked", { task, from: previousStatus, to: requestedStatus } as unknown as UnknownRecord);
+        return task;
+      }
+
       if (hasOwn(next, "title")) taskState.title = String(next.title ?? "");
       if (hasOwn(next, "description")) taskState.description = String(next.description ?? "");
       if (hasOwn(next, "icon")) taskState.icon = normalizeTaskIcon(next.icon, "circle");
-      if (hasOwn(next, "status")) taskState.status = normalizeTaskStatus(next.status);
-      if (hasOwn(next, "progress")) taskState.progress = normalizeProgress(next.progress);
+      if (statusChanged && transitionAllowed) taskState.status = requestedStatus;
+      if (hasOwn(next, "progress") && !isTerminalTaskStatus(previousStatus)) taskState.progress = normalizeProgress(next.progress);
       if (hasOwn(next, "progressLabel")) taskState.progressLabel = next.progressLabel == null ? null : String(next.progressLabel);
       if (isUnknownRecord(next.metadata)) taskState.metadata = { ...taskState.metadata, ...next.metadata };
       taskState.updatedAt = Date.now();
-      paused = taskState.status === "paused";
 
       let semanticIcon: Exclude<TaskIcon, URL>;
       let semanticAnimation: LoadingAnimation;
-      const persistentImageIcon = getImageIconDescriptor(taskState.icon)
-        ? taskState.icon
-        : null;
-
+      const persistentImageIcon = getImageIconDescriptor(taskState.icon) ? taskState.icon : null;
       switch (taskState.status) {
-        case "queued":
-          semanticIcon = (persistentImageIcon ?? taskState.icon) || "clock";
-          semanticAnimation = "pulse";
-          break;
-        case "running":
-          semanticIcon = (persistentImageIcon ?? taskState.icon) || "loader-circle";
-          semanticAnimation = taskState.progress === null ? "spinner" : "progress";
-          break;
-        case "paused":
-          semanticIcon = persistentImageIcon ?? "pause";
-          semanticAnimation = "none";
-          break;
-        case "warning":
-          semanticIcon = persistentImageIcon ?? "triangle-alert";
-          semanticAnimation = "none";
-          break;
-        case "cancelled":
-          semanticIcon = persistentImageIcon ?? "square";
-          semanticAnimation = "none";
-          break;
-        case "success":
-          semanticIcon = persistentImageIcon ?? "check";
-          semanticAnimation = "none";
-          break;
-        case "error":
-          semanticIcon = persistentImageIcon ?? "circle-x";
-          semanticAnimation = "none";
-          break;
+        case "queued": semanticIcon = persistentImageIcon ?? (taskState.icon || "clock"); semanticAnimation = "pulse"; break;
+        case "running": semanticIcon = persistentImageIcon ?? (taskState.icon || "loader-circle"); semanticAnimation = taskState.progress === null ? "spinner" : "progress"; break;
+        case "paused": semanticIcon = persistentImageIcon ?? "pause"; semanticAnimation = "none"; break;
+        case "warning": semanticIcon = persistentImageIcon ?? "triangle-alert"; semanticAnimation = "none"; break;
+        case "cancelled": semanticIcon = persistentImageIcon ?? "square"; semanticAnimation = "none"; break;
+        case "success": semanticIcon = persistentImageIcon ?? "check"; semanticAnimation = "none"; break;
+        case "error": semanticIcon = persistentImageIcon ?? "circle-x"; semanticAnimation = "none"; break;
       }
 
       if (taskState.status === "success" || taskState.status === "error") {
-        const settle = taskState.status === "success"
-          ? toastController!.success.bind(toastController)
-          : toastController!.error.bind(toastController);
+        const settle = taskState.status === "success" ? toastController!.success.bind(toastController) : toastController!.error.bind(toastController);
         settle({
           title: taskState.title,
           description: taskState.description,
           icon: semanticIcon,
-          duration: Number.isFinite(Number(next.duration))
-            ? Number(next.duration)
-            : taskState.status === "success"
-              ? state.config.loadingSuccessDuration
-              : state.config.loadingErrorDuration,
+          duration: Number.isFinite(Number(next.duration)) ? Number(next.duration) : taskState.status === "success" ? state.config.loadingSuccessDuration : state.config.loadingErrorDuration,
         });
       } else {
         toastController!.update({
@@ -4827,15 +5281,16 @@
           animation: semanticAnimation,
           progress: taskState.progress,
           progressLabel: taskState.progressLabel,
-          duration: 0,
+          duration: taskState.status === "cancelled" ? state.config.loadingInfoDuration : 0,
         });
       }
+
       setTextValue(taskStatus, taskState.status);
       renderTaskActions();
-      persistTaskSnapshots();
-      if (emit && hasEventListeners("task:update")) {
-        emitEvent("task:update", { task, snapshot: task.snapshot() } as unknown as UnknownRecord);
+      if (taskState.persist) {
+        persistTaskSnapshots(statusChanged || isTerminalTaskStatus(taskState.status));
       }
+      if (emit && hasEventListeners("task:update")) emitEvent("task:update", { task, snapshot: task.snapshot() } as unknown as UnknownRecord);
       return task;
     };
 
@@ -4856,28 +5311,38 @@
         persist: taskState.persist,
       }),
       update: (next: Partial<TaskDescriptor> = {}) => apply(next),
-      start: (next: Partial<TaskDescriptor> = {}) => apply({ ...next, status: "running" }),
-      setProgress: (value: unknown, next: Partial<TaskDescriptor> = {}) => apply({ ...next, status: next.status ?? "running", progress: value }),
+      start: (next: Partial<TaskDescriptor> = {}) => {
+        if (isTerminalTaskStatus(taskState.status)) return task;
+        return apply({ ...next, status: "running" });
+      },
+      setProgress: (value: unknown, next: Partial<TaskDescriptor> = {}) => {
+        if (isTerminalTaskStatus(taskState.status)) return task;
+        const status = next.status ?? (taskState.status === "queued" ? "running" : taskState.status);
+        return apply({ ...next, status, progress: value });
+      },
       pause: async (): Promise<TaskController> => {
-        if (dismissed || paused) return task;
-        await options.pause?.({ task, signal: task.signal });
+        if (dismissed || isTerminalTaskStatus(taskState.status) || taskState.status === "paused") return task;
+        await Promise.resolve().then(() => options.pause?.({ task, signal: task.signal }));
         return apply({ status: "paused" });
       },
       resume: async (): Promise<TaskController> => {
-        if (dismissed || !paused) return task;
-        await options.resume?.({ task, signal: task.signal });
+        if (dismissed || taskState.status !== "paused") return task;
+        await Promise.resolve().then(() => options.resume?.({ task, signal: task.signal }));
         return apply({ status: "running" });
       },
       cancel: async (reason: unknown = "cancelled"): Promise<TaskController> => {
-        if (dismissed || ["success", "error", "cancelled"].includes(taskState.status)) return task;
+        if (dismissed || isTerminalTaskStatus(taskState.status)) return task;
         if (!abortController.signal.aborted) abortController.abort(reason);
-        await options.cancel?.({ task, reason });
-        apply({
-          status: "cancelled",
-          title: options.cancelledTitle ?? taskState.title,
-          description: options.cancelledDescription ?? "Task cancelled.",
-        });
-        emitEvent("task:cancel", { task, reason } as unknown as UnknownRecord);
+        try {
+          await Promise.resolve().then(() => options.cancel?.({ task, reason }));
+        } finally {
+          apply({
+            status: "cancelled",
+            title: options.cancelledTitle ?? taskState.title,
+            description: options.cancelledDescription ?? "Task cancelled.",
+          });
+          emitEvent("task:cancel", { task, reason } as unknown as UnknownRecord);
+        }
         return task;
       },
       success: (next: Partial<TaskDescriptor> = {}) => apply({ ...next, status: "success", progress: 1 }),
@@ -4892,6 +5357,7 @@
         return task;
       },
       run: async <T>(executor: (context: TaskExecutorContext) => Promise<T>): Promise<T> => {
+        if (isTerminalTaskStatus(taskState.status)) throw new Error(`Task ${id} is already ${taskState.status}.`);
         task.start();
         try {
           const result = await executor({
@@ -4900,12 +5366,14 @@
             progress: (value, next = {}) => task.setProgress(value, next),
             update: (next = {}) => task.update(next),
           });
+          if (task.signal.aborted || (task.status as TaskStatus) === "cancelled") throw createAbortError(task.signal.reason);
+          if (task.status === "error") throw new Error(`Task ${id} entered error state while executor was running.`);
           task.success();
           return result;
         } catch (error: unknown) {
-          if (task.signal.aborted) {
-            if (task.status !== "cancelled") await task.cancel(task.signal.reason ?? "aborted");
-          } else {
+          if (task.signal.aborted || (task.status as TaskStatus) === "cancelled") {
+            if ((task.status as TaskStatus) !== "cancelled") await task.cancel(task.signal.reason ?? "aborted");
+          } else if (!isTerminalTaskStatus(task.status)) {
             task.error(error);
           }
           throw error;
@@ -4915,10 +5383,8 @@
 
     state.tasks.set(id, task);
     apply(options, false);
-    persistTaskSnapshots();
-    if (hasEventListeners("task:create")) {
-      emitEvent("task:create", { task, snapshot: task.snapshot() } as unknown as UnknownRecord);
-    }
+    if (taskState.persist) persistTaskSnapshots(true);
+    if (hasEventListeners("task:create")) emitEvent("task:create", { task, snapshot: task.snapshot() } as unknown as UnknownRecord);
     return task;
   }
 
@@ -4942,11 +5408,7 @@
       description: descriptor.description ?? "Please wait…",
       icon: descriptor.icon ?? "loader-circle",
     });
-    const task = createTaskController({
-      ...descriptor,
-      ...loading,
-      status: "running",
-    });
+    const task = createTaskController({ ...descriptor, ...loading, status: "running" });
     if (!task) {
       return typeof input === "function"
         ? input({
@@ -4968,16 +5430,22 @@
             toast: getToastApi(),
           })
         : await input;
+      if (task.signal.aborted || (task.status as TaskStatus) === "cancelled") throw createAbortError(task.signal.reason);
+      if ((task.status as TaskStatus) === "error") throw new Error(`Task ${task.id} entered error state while promise was pending.`);
       task.success(resolvePhaseDescriptor(descriptor.success, result, {
         title: "Completed",
         description: "The operation completed successfully.",
       }));
       return result;
     } catch (error: unknown) {
-      task.error(error, resolvePhaseDescriptor(descriptor.error, error, {
-        title: "Failed",
-        description: toErrorMessage(error),
-      }));
+      if (task.signal.aborted || (task.status as TaskStatus) === "cancelled") {
+        if ((task.status as TaskStatus) !== "cancelled") await task.cancel(task.signal.reason ?? "cancelled");
+      } else if (!isTerminalTaskStatus(task.status)) {
+        task.error(error, resolvePhaseDescriptor(descriptor.error, error, {
+          title: "Failed",
+          description: toErrorMessage(error),
+        }));
+      }
       throw error;
     }
   }
@@ -5018,22 +5486,22 @@
       status: "running",
       cancellable: true,
       cancel: () => {
-        if (!externalAbortController.signal.aborted) {
-          externalAbortController.abort(new DOMException("Cancelled", "AbortError"));
-        }
+        if (!externalAbortController.signal.aborted) externalAbortController.abort(createAbortError("Cancelled"));
       },
     });
     if (!task) throw new Error("Could not create retry task.");
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      if (externalAbortController.signal.aborted || (task.status as TaskStatus) === "cancelled") throw createAbortError(externalAbortController.signal.reason);
       task.update({
         status: "running",
         title: descriptor.title ?? "Trying operation",
         description: `Attempt ${attempt} of ${maxAttempts}`,
-        icon: "refresh",
+        icon: descriptor.icon ?? "refresh",
         progress: null,
       });
       emitEvent("retry:attempt", { task, attempt, maxAttempts } as unknown as UnknownRecord);
+
       try {
         const result = await descriptor.run({
           attempt,
@@ -5042,14 +5510,15 @@
           task,
           progress: (value, next = {}) => task.setProgress(value, next),
         });
+        if (externalAbortController.signal.aborted || (task.status as TaskStatus) === "cancelled") throw createAbortError(externalAbortController.signal.reason);
         task.success(resolvePhaseDescriptor(descriptor.success, result, {
           title: "Completed",
           description: `Succeeded on attempt ${attempt}.`,
         }));
         return result;
       } catch (error: unknown) {
-        if (externalAbortController.signal.aborted) {
-          await task.cancel("cancelled");
+        if (externalAbortController.signal.aborted || (task.status as TaskStatus) === "cancelled") {
+          if ((task.status as TaskStatus) !== "cancelled") await task.cancel("cancelled");
           throw error;
         }
         if (attempt >= maxAttempts) {
@@ -5059,24 +5528,36 @@
           }));
           throw error;
         }
-        const configuredBackoff = Array.isArray(descriptor.backoff)
-          ? descriptor.backoff[Math.min(attempt - 1, descriptor.backoff.length - 1)]
-          : typeof descriptor.backoff === "function"
-            ? descriptor.backoff(attempt, error)
-            : Number(descriptor.backoff) || 1000 * 2 ** (attempt - 1);
-        const delay = Math.max(0, Number(configuredBackoff) || 0);
+
+        let configuredBackoff: number;
+        if (Array.isArray(descriptor.backoff)) {
+          configuredBackoff = descriptor.backoff.length
+            ? Number(descriptor.backoff[Math.min(attempt - 1, descriptor.backoff.length - 1)])
+            : 1000 * 2 ** (attempt - 1);
+        } else if (typeof descriptor.backoff === "function") {
+          configuredBackoff = Number(descriptor.backoff(attempt, error));
+        } else if (descriptor.backoff !== undefined) {
+          configuredBackoff = Number(descriptor.backoff);
+        } else {
+          configuredBackoff = 1000 * 2 ** (attempt - 1);
+        }
+        const delay = Math.max(0, Number.isFinite(configuredBackoff) ? configuredBackoff : 0);
+        if (delay <= 0) continue;
+
+        const seconds = Math.max(1, Math.ceil(delay / 1000));
         task.update({
           status: "paused",
           title: descriptor.retryTitle ?? "Retry scheduled",
-          description: `Attempt ${attempt} failed. Retrying in ${Math.ceil(delay / 1000)}s…`,
+          description: `Attempt ${attempt} failed. Retry in ${seconds}s or retry now.`,
           icon: "clock",
         });
         const decision = await showConfirmToast({
           title: descriptor.retryTitle ?? "Try again?",
           description: toErrorMessage(error),
           icon: "refresh",
-          duration: delay,
-          dismissValue: "retry",
+          duration: 0,
+          dismissValue: "cancel",
+          countdown: { seconds, autoAction: "retry" },
           details: toErrorDetails(error),
           rejectOnActionError: false,
           actions: [
@@ -5089,11 +5570,11 @@
               keepOpen: true,
               handle: ({ update }) => update({ details: toErrorDetails(error) }),
             },
-            { id: "retry", label: "Retry now", icon: "refresh", variant: "primary", value: "retry" },
+            { id: "retry", label: "Retry now · {seconds}s", icon: "refresh", variant: "primary", value: "retry" },
           ],
         });
-        if (decision === "cancel") {
-          externalAbortController.abort(new DOMException("Cancelled", "AbortError"));
+        if (decision !== "retry") {
+          externalAbortController.abort(createAbortError("Cancelled"));
           await task.cancel("cancelled");
           throw error;
         }
@@ -5103,16 +5584,29 @@
   }
 
   function createTaskGroup(descriptor: TaskGroupDescriptor | string = {}): TaskGroup {
-    const options: TaskGroupDescriptor = isPlainObject(descriptor)
-      ? { ...descriptor }
-      : { title: String(descriptor ?? "Group") };
+    const options: TaskGroupDescriptor = isPlainObject(descriptor) ? { ...descriptor } as TaskGroupDescriptor : { title: String(descriptor ?? "Group") };
     const id = String(options.id ?? `group-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     const existing = state.groups.get(id);
     if (existing) return existing;
     const children = new Map<string, TaskController>();
-    const weights = new Map<string, number>(Object.entries(options.weights ?? {}));
+    const weights = new Map<string, number>(Object.entries(options.weights ?? {}).map(([key, value]) => [key, Math.max(0, Number(value) || 0)]));
+    const metrics = new Map<string, { status: TaskStatus; progress: number | null; weight: number; contribution: number; unknown: boolean }>();
+    let totalWeight = 0;
+    let completedWeight = 0;
+    let unknownCount = 0;
+    let errorCount = 0;
+    let cancelledCount = 0;
+    let successCount = 0;
+    let finalized = false;
+
+    const parentTaskId = options.parentTaskId ?? `group:${id}`;
+    const staleParent = state.tasks.get(parentTaskId);
+    if (staleParent && (staleParent.dismissed || isTerminalTaskStatus(staleParent.status))) {
+      staleParent.dismiss("group-reused", true);
+    }
+
     const parent = createTaskController({
-      id: options.parentTaskId ?? `group:${id}`,
+      id: parentTaskId,
       title: options.title ?? "Task group",
       description: options.description ?? "Waiting for tasks…",
       icon: options.icon ?? "folder",
@@ -5123,12 +5617,92 @@
     });
     if (!parent) throw new Error("Could not create task group parent.");
 
-    const group: TaskGroup = {
+    let group!: TaskGroup;
+    const finishGroupRegistration = (): void => {
+      if (finalized) return;
+      finalized = true;
+      group.unsubscribe?.();
+      group.unsubscribe = undefined;
+      if (state.groups.get(id) === group) state.groups.delete(id);
+    };
+
+    const removeMetric = (metric: { status: TaskStatus; progress: number | null; weight: number; contribution: number; unknown: boolean }): void => {
+      totalWeight -= metric.weight;
+      completedWeight -= metric.contribution;
+      if (metric.unknown) unknownCount -= 1;
+      if (metric.status === "error") errorCount -= 1;
+      if (metric.status === "cancelled") cancelledCount -= 1;
+      if (metric.status === "success") successCount -= 1;
+    };
+    const addMetric = (metric: { status: TaskStatus; progress: number | null; weight: number; contribution: number; unknown: boolean }): void => {
+      totalWeight += metric.weight;
+      completedWeight += metric.contribution;
+      if (metric.unknown) unknownCount += 1;
+      if (metric.status === "error") errorCount += 1;
+      if (metric.status === "cancelled") cancelledCount += 1;
+      if (metric.status === "success") successCount += 1;
+    };
+    const createMetric = (key: string, task: TaskController) => {
+      const weight = weights.has(key) ? Number(weights.get(key)) : 1;
+      const status = task.status;
+      const progress = task.progress;
+      const unknown = status !== "success" && progress === null;
+      const contribution = status === "success" ? weight : progress === null ? 0 : weight * progress;
+      return { status, progress, weight, contribution, unknown };
+    };
+    const updateMetric = (key: string, task: TaskController): void => {
+      const old = metrics.get(key);
+      if (old) removeMetric(old);
+      const next = createMetric(key, task);
+      metrics.set(key, next);
+      addMetric(next);
+    };
+    const rebuildMetrics = (): void => {
+      metrics.clear();
+      totalWeight = completedWeight = unknownCount = errorCount = cancelledCount = successCount = 0;
+      for (const [key, task] of children) updateMetric(key, task);
+    };
+
+    const renderParent = (): void => {
+      if (finalized) return;
+      const count = children.size;
+      if (!count) {
+        parent.update({ status: "queued", progress: null });
+        return;
+      }
+      if (errorCount > 0) {
+        parent.error("One or more child tasks failed.", { title: options.errorTitle ?? "Task group failed" });
+        finishGroupRegistration();
+        return;
+      }
+      if (cancelledCount > 0) {
+        parent.update({ status: "cancelled", title: options.title ?? "Task group cancelled", description: "A child task was cancelled." });
+        finishGroupRegistration();
+        return;
+      }
+      if (successCount === count) {
+        parent.success({
+          title: options.successTitle ?? options.title ?? "All tasks completed",
+          description: options.successDescription ?? `${count} tasks completed.`,
+        });
+        finishGroupRegistration();
+        return;
+      }
+      parent.update({
+        status: "running",
+        title: options.title ?? "Task group",
+        description: `${successCount}/${count} tasks completed`,
+        progress: unknownCount > 0 || totalWeight <= 0 ? null : completedWeight / totalWeight,
+      });
+    };
+
+    group = {
       id,
       parent,
       children,
       weights,
       task(keyOrDescriptor: string | TaskDescriptor, maybeDescriptor: TaskDescriptor = {}) {
+        if (finalized) return null;
         const childOptions: TaskDescriptor = typeof keyOrDescriptor === "string"
           ? { ...maybeDescriptor, key: maybeDescriptor.key ?? keyOrDescriptor, title: maybeDescriptor.title ?? keyOrDescriptor }
           : { ...keyOrDescriptor };
@@ -5141,61 +5715,32 @@
           metadata: { ...(childOptions.metadata ?? {}), groupId: id, groupKey: key },
           persist: childOptions.persist ?? options.persist,
         });
-        if (child) children.set(key, child);
-        group.recompute();
+        if (child) {
+          children.set(key, child);
+          updateMetric(key, child);
+          renderParent();
+        }
         return child;
       },
       setWeights(nextWeights: Record<string, number> = {}) {
         Object.entries(nextWeights).forEach(([key, value]) => weights.set(String(key), Math.max(0, Number(value) || 0)));
-        group.recompute();
+        rebuildMetrics();
+        renderParent();
         return group;
       },
       recompute() {
-        const entries = [...children.entries()];
-        if (!entries.length) {
-          parent.update({ status: "queued", progress: null });
-          return group;
-        }
-        let totalWeight = 0;
-        let completedWeight = 0;
-        let hasUnknownProgress = false;
-        let hasError = false;
-        let allSuccess = true;
-        entries.forEach(([key, task]) => {
-          const weight = weights.has(key) ? Number(weights.get(key)) : 1;
-          totalWeight += weight;
-          if (task.status === "error") hasError = true;
-          if (task.status !== "success") allSuccess = false;
-          if (task.status === "success") completedWeight += weight;
-          else if (task.progress === null) hasUnknownProgress = true;
-          else completedWeight += weight * task.progress;
-        });
-        if (hasError) {
-          parent.error("One or more child tasks failed.", { title: options.errorTitle ?? "Task group failed" });
-        } else if (allSuccess) {
-          parent.success({
-            title: options.successTitle ?? options.title ?? "All tasks completed",
-            description: options.successDescription ?? `${entries.length} tasks completed.`,
-          });
-        } else {
-          parent.update({
-            status: "running",
-            title: options.title ?? "Task group",
-            description: `${entries.filter(([, task]) => task.status === "success").length}/${entries.length} tasks completed`,
-            progress: hasUnknownProgress || totalWeight <= 0 ? null : completedWeight / totalWeight,
-          });
-        }
+        rebuildMetrics();
+        renderParent();
         return group;
       },
       dismissAll(reason = "group-dismiss") {
         children.forEach((task) => task.dismiss(reason));
         parent.dismiss(reason);
-        group.unsubscribe?.();
-        state.groups.delete(id);
+        finishGroupRegistration();
       },
       complete(next = {}) {
-        parent.success(next);
-        group.unsubscribe?.();
+        if (!finalized) parent.success(next);
+        finishGroupRegistration();
         return group;
       },
     };
@@ -5203,7 +5748,12 @@
     group.unsubscribe = addEventListenerInternal("task:update", (event) => {
       const candidateTask = event.task;
       if (!isTaskController(candidateTask) || candidateTask === parent) return;
-      if (candidateTask.snapshot().metadata.groupId === id) group.recompute();
+      const snapshot = candidateTask.snapshot();
+      if (snapshot.metadata.groupId !== id) return;
+      const key = String(snapshot.metadata.groupKey ?? "");
+      if (!key || !children.has(key)) return;
+      updateMetric(key, candidateTask);
+      renderParent();
     });
     state.groups.set(id, group);
     emitEvent("group:create", { group } as unknown as UnknownRecord);
@@ -5215,12 +5765,12 @@
   }
 
   function restorePersistedTasks(): TaskController[] {
-    if (!state.config.persistTasks || state.restoredTasks) return [];
+    if (state.restoredTasks) return [];
     state.restoredTasks = true;
     const now = Date.now();
     const restored: TaskController[] = [];
     getPersistedTaskSnapshots().forEach((snapshot) => {
-      const terminal = snapshot.status === "success" || snapshot.status === "error" || snapshot.status === "cancelled";
+      const terminal = isTerminalTaskStatus(normalizeTaskStatus(snapshot.status));
       if (terminal && now - Number(snapshot.updatedAt || 0) > state.config.taskTerminalRetention) return;
       const wasActive = snapshot.status === "running" || snapshot.status === "queued";
       const task = createTaskController({
@@ -5243,11 +5793,10 @@
 
   function createScope(name: string, defaults: ToastOptions = {}): ScopeApi {
     const scopeName = String(name || "default");
-    const enrichDescriptor = <T extends ToastOptions | TaskDescriptor | TaskGroupDescriptor>(descriptor: T | string | undefined): T => ({
-      ...defaults,
-      ...(isPlainObject(descriptor) ? descriptor : { title: String(descriptor ?? "") }),
-      scope: scopeName,
-    } as T);
+    const enrichDescriptor = <T extends ToastOptions | TaskDescriptor | TaskGroupDescriptor>(descriptor: T | string | undefined): T => {
+      const source: object = isPlainObject(descriptor) ? descriptor : { title: String(descriptor ?? "") };
+      return { ...defaults, ...source, scope: scopeName } as unknown as T;
+    };
     const withOptions = (inputArgs: unknown[]): unknown[] => {
       const args = [...inputArgs];
       let trailing: ToastOptions = {};
@@ -5275,8 +5824,8 @@
       loading: (descriptor) => showLoadingToast([enrichDescriptor(descriptor)]),
       confirm: (descriptor) => showConfirmToast(enrichDescriptor(descriptor)),
       prompt: (descriptor) => showPromptToast(enrichDescriptor(descriptor)),
-      select: (descriptor) => showSelectToast(enrichDescriptor(descriptor)),
-      picker: <T extends PickerSource = PickerSource>(descriptor?: PickerOptions<T>) => showPickerToast({ ...defaults, ...(descriptor ?? {}), scope: scopeName } as PickerOptions<T>),
+      select: <T = unknown>(descriptor?: SelectOptions<T>) => showSelectToast<T>({ ...defaults, ...(descriptor ?? {}), scope: scopeName } as SelectOptions<T>),
+      picker: <T extends PickerSource = PickerSource>(descriptor?: PickerOptions<T>) => showPickerToast<T>({ ...defaults, ...(descriptor ?? {}), scope: scopeName } as PickerOptions<T>),
       undo: (descriptor) => showUndoToast(enrichDescriptor(descriptor)),
       task: (descriptor) => createTaskController(enrichDescriptor(descriptor)),
       promise: <T>(input: Promise<T> | ((context: TaskExecutorContext & { toast: ToasterApi }) => Promise<T>), descriptor?: PromiseDescriptor<T>) => showPromiseToast(input, enrichDescriptor(descriptor) as PromiseDescriptor<T>),
@@ -5285,9 +5834,7 @@
       dismissAll(immediate = false) {
         for (let index = state.toasts.length - 1; index >= 0; index -= 1) {
           const record = state.toasts[index];
-          if (record.options.scope === scopeName) {
-            record.dismiss(immediate, null, "scope-dismissAll");
-          }
+          if (record.options.scope === scopeName) record.dismiss(immediate, null, "scope-dismissAll");
         }
       },
       getTasks: () => [...state.tasks.values()].filter((task) => task.snapshot().scope === scopeName),
@@ -5328,7 +5875,7 @@
   toastApi.loading = (...args) => showLoadingToast(args);
   toastApi.confirm = (descriptor = {}) => showConfirmToast(descriptor);
   toastApi.prompt = (descriptor = {}) => showPromptToast(descriptor);
-  toastApi.select = (descriptor = {}) => showSelectToast(descriptor);
+  toastApi.select = <T = unknown>(descriptor: SelectOptions<T> = {}) => showSelectToast<T>(descriptor);
   toastApi.picker = <T extends PickerSource = PickerSource>(descriptor: PickerOptions<T> = {}) => showPickerToast(descriptor);
   toastApi.undo = (descriptor = {}) => showUndoToast(descriptor);
   toastApi.task = (descriptor = {}) => createTaskController(descriptor);
@@ -5354,6 +5901,9 @@
     const record = state.recordsById.get(String(id));
     if (!record || record.removed) return null;
     record.lastSeenAt = Date.now();
+    if (record.externalUpdate && inputArgs.length && isPlainObject(inputArgs[0])) {
+      return record.externalUpdate(inputArgs[0] as ToastOptions);
+    }
     if (record.options.loading) return record.updateLoading(inputArgs);
     const parsed = parseArguments(inputArgs, null);
     return record.update(parsed.args, parsed.options);
@@ -5482,7 +6032,9 @@
     state.config.persistAcrossSpaNavigation = Boolean(state.config.persistAcrossSpaNavigation);
     state.config.minimizeOnSpaNavigation = Boolean(state.config.minimizeOnSpaNavigation);
     state.config.useTopLayer = Boolean(state.config.useTopLayer);
+    state.config.idleHostTtl = Number.isFinite(Number(state.config.idleHostTtl)) ? Math.max(0, Number(state.config.idleHostTtl)) : DEFAULT_CONFIG.idleHostTtl;
     state.config.persistTasks = Boolean(state.config.persistTasks);
+    state.config.taskProgressPersistInterval = Math.max(100, Number(state.config.taskProgressPersistInterval) || DEFAULT_CONFIG.taskProgressPersistInterval);
     state.config.restoreTasksOnLoad = Boolean(state.config.restoreTasksOnLoad);
     state.config.taskStorage = state.config.taskStorage === "localStorage" ? "localStorage" : "sessionStorage";
     state.config.taskStorageKey = String(state.config.taskStorageKey || DEFAULT_CONFIG.taskStorageKey);
@@ -5543,11 +6095,14 @@
       destroyHost({ keepPersistence: state.config.persistAcrossSpaNavigation });
       ensureHost();
     }
-    while (state.toasts.length > state.config.maxToasts) {
-      state.toasts[0]?.dismiss(true, null, "limit");
+    while (getNotificationRecords().length > state.config.maxToasts) {
+      const notifications = getNotificationRecords();
+      const candidate = notifications.find((record) => record.options.duration > 0) ?? notifications[0];
+      if (!candidate) break;
+      candidate.dismiss(true, null, "limit");
     }
 
-    if (previousPersistTasks && !state.config.persistTasks && state.taskPersistTimer !== null) {
+    if (previousPersistTasks && !state.config.persistTasks && !hasPersistableTasks() && state.taskPersistTimer !== null) {
       (state.hostWindow ?? initialHostWindow).clearTimeout(state.taskPersistTimer);
       state.taskPersistTimer = null;
     }
@@ -5607,8 +6162,54 @@
     return promoteHostToTopLayer(true);
   };
   toastApi.isTopLayer = () => isHostInTopLayer();
+  toastApi.destroy = (reason = "destroy") => {
+    // Persist the last coherent task state before teardown. Dismiss callbacks are
+    // suppressed from rewriting storage while the runtime is being destroyed.
+    flushTaskSnapshots();
+    state.destroying = true;
+    const records = [...state.toasts];
+    for (const record of records) record.dismiss(true, null, reason);
+    for (const group of [...state.groups.values()]) group.unsubscribe?.();
+    state.groups.clear();
+    if (state.taskPersistTimer !== null) {
+      (state.hostWindow ?? initialHostWindow).clearTimeout(state.taskPersistTimer);
+      state.taskPersistTimer = null;
+    }
+    state.listeners.clear();
+    state.dialogStack.length = 0;
+    state.failedImageKeys.clear();
+    state.spaCleanup?.();
+    state.spaCleanup = null;
+    state.historyRestore?.();
+    state.historyRestore = null;
+    destroyHost();
+    state.api = null;
+    safeCall(() => {
+      if (typedInitialHostWindow[STATE_SYMBOL] === state) delete typedInitialHostWindow[STATE_SYMBOL];
+    }, undefined);
+  };
+  toastApi.noConflict = () => {
+    if (typedInitialHostWindow[TOAST_GLOBAL] === toastApi) {
+      if (previousRodToaster) typedInitialHostWindow[TOAST_GLOBAL] = previousRodToaster;
+      else safeCall(() => { delete typedInitialHostWindow[TOAST_GLOBAL]; }, undefined);
+    }
+    if (typedInitialHostWindow.toast === toastApi) {
+      if (previousToastGlobal) typedInitialHostWindow.toast = previousToastGlobal;
+      else safeCall(() => { delete typedInitialHostWindow.toast; }, undefined);
+    }
+    if (typedGlobalWindow[TOAST_GLOBAL] === toastApi) {
+      if (previousRodToaster) typedGlobalWindow[TOAST_GLOBAL] = previousRodToaster;
+      else safeCall(() => { delete typedGlobalWindow[TOAST_GLOBAL]; }, undefined);
+    }
+    if (typedGlobalWindow.toast === toastApi) {
+      if (previousToastGlobal) typedGlobalWindow.toast = previousToastGlobal;
+      else safeCall(() => { delete typedGlobalWindow.toast; }, undefined);
+    }
+    return toastApi;
+  };
   toastApi.repairHost = () => {
-    scheduleHostRepair();
+    const host = ensureHost();
+    if (host && state.toasts.length) promoteHostToTopLayer(false);
     return state.hostElement;
   };
 
