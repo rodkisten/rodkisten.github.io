@@ -1,4 +1,4 @@
-/* Auto-generated from toaster/toaster.ts. at 8/9/2026, 1:17:58 PM Do not edit directly. */
+/* Auto-generated from toaster/toaster.ts. at 8/9/2026, 3:35:30 PM Do not edit directly. */
 var RodToaster = (function() {
 
 //#region \0rolldown/runtime.js
@@ -22,7 +22,7 @@ var RodToaster = (function() {
 	var toaster_exports = /* @__PURE__ */ __exportAll({ default: () => toaster_default });
 	(function installRodToaster(globalWindow) {
 		"use strict";
-		const VERSION = "4.5.0";
+		const VERSION = "4.5.1";
 		const TOAST_GLOBAL = "RodToaster";
 		const INSPECTOR_GLOBAL = "RodObjectInspector";
 		const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -171,6 +171,7 @@ var RodToaster = (function() {
 			stackToolbar: true,
 			persistAcrossSpaNavigation: true,
 			minimizeOnSpaNavigation: true,
+			useTopLayer: true,
 			persistTasks: false,
 			restoreTasksOnLoad: true,
 			taskStorage: "sessionStorage",
@@ -509,7 +510,7 @@ var RodToaster = (function() {
 		function isValidToaster(value) {
 			if (typeof value !== "function") return false;
 			const candidate = value;
-			return typeof candidate.loading === "function" && typeof candidate.success === "function" && typeof candidate.error === "function" && typeof candidate.confirm === "function" && typeof candidate.picker === "function";
+			return typeof candidate.loading === "function" && typeof candidate.success === "function" && typeof candidate.error === "function" && typeof candidate.confirm === "function" && typeof candidate.picker === "function" && typeof candidate.bringToFront === "function";
 		}
 		if (isValidToaster(existingToaster)) {
 			typedGlobalWindow[TOAST_GLOBAL] = existingToaster;
@@ -564,6 +565,9 @@ var RodToaster = (function() {
 			spaCleanup: null,
 			hostRepairFrame: null,
 			historyRestore: null,
+			topLayerActive: false,
+			topLayerObserver: null,
+			topLayerCleanup: null,
 			taskPersistTimer: null
 		};
 		try {
@@ -597,7 +601,39 @@ var RodToaster = (function() {
 		function createStyles(documentRef, hostMode) {
 			const style = documentRef.createElement("style");
 			style.textContent = `
-      ${hostMode === "shadow" ? ":host{all:initial;contain:layout style;color-scheme:dark}" : `#${TOAST_HOST_ID}{all:initial!important;contain:layout style;color-scheme:dark}`}
+      ${hostMode === "shadow" ? `:host{
+          all:initial;
+          position:fixed!important;
+          inset:0!important;
+          width:0!important;
+          height:0!important;
+          margin:0!important;
+          padding:0!important;
+          border:0!important;
+          overflow:visible!important;
+          visibility:visible!important;
+          opacity:1!important;
+          z-index:${MAX_Z_INDEX}!important;
+          isolation:isolate!important;
+          pointer-events:none!important;
+          color-scheme:dark;
+        }` : `#${TOAST_HOST_ID}{
+          all:initial!important;
+          position:fixed!important;
+          inset:0!important;
+          width:0!important;
+          height:0!important;
+          margin:0!important;
+          padding:0!important;
+          border:0!important;
+          overflow:visible!important;
+          visibility:visible!important;
+          opacity:1!important;
+          z-index:${MAX_Z_INDEX}!important;
+          isolation:isolate!important;
+          pointer-events:none!important;
+          color-scheme:dark;
+        }`}
       ${hostMode === "shadow" ? "*,*::before,*::after{box-sizing:border-box}" : `#${TOAST_HOST_ID} *,#${TOAST_HOST_ID} *::before,#${TOAST_HOST_ID} *::after{box-sizing:border-box}`}
       ${hostMode === "shadow" ? "button,input,textarea,select{font:inherit}" : `#${TOAST_HOST_ID} button,#${TOAST_HOST_ID} input,#${TOAST_HOST_ID} textarea,#${TOAST_HOST_ID} select{font:inherit}`}
       .rod-toast-stack{
@@ -1065,6 +1101,129 @@ var RodToaster = (function() {
 			}
 			toggleExpandedToast(record);
 		}
+		function applyHostDominanceStyles(hostElement) {
+			const importantStyles = [
+				["all", "initial"],
+				["position", "fixed"],
+				["inset", "0"],
+				["top", "0"],
+				["right", "0"],
+				["bottom", "0"],
+				["left", "0"],
+				["width", "0"],
+				["height", "0"],
+				["min-width", "0"],
+				["min-height", "0"],
+				["max-width", "none"],
+				["max-height", "none"],
+				["margin", "0"],
+				["padding", "0"],
+				["border", "0"],
+				["outline", "0"],
+				["background", "transparent"],
+				["overflow", "visible"],
+				["visibility", "visible"],
+				["opacity", "1"],
+				["clip", "auto"],
+				["clip-path", "none"],
+				["filter", "none"],
+				["transform", "none"],
+				["perspective", "none"],
+				["mask", "none"],
+				["mix-blend-mode", "normal"],
+				["isolation", "isolate"],
+				["z-index", String(MAX_Z_INDEX)],
+				["pointer-events", "none"]
+			];
+			for (const [property, value] of importantStyles) if (hostElement.style.getPropertyValue(property) !== value || hostElement.style.getPropertyPriority(property) !== "important") hostElement.style.setProperty(property, value, "important");
+		}
+		function isHostInTopLayer(hostElement = state.hostElement) {
+			if (!hostElement?.isConnected) return false;
+			return safeCall(() => hostElement.matches(":popover-open"), false);
+		}
+		function disableHostTopLayer() {
+			const hostElement = state.hostElement;
+			state.topLayerCleanup?.();
+			state.topLayerCleanup = null;
+			state.topLayerObserver?.disconnect();
+			state.topLayerObserver = null;
+			if (hostElement) {
+				if (isHostInTopLayer(hostElement)) safeCall(() => hostElement.hidePopover?.(), void 0);
+				hostElement.removeAttribute("popover");
+				hostElement.dataset.rodToasterTopLayer = "z-index";
+				applyHostDominanceStyles(hostElement);
+			}
+			state.topLayerActive = false;
+		}
+		function promoteHostToTopLayer(reorder = false) {
+			const hostElement = state.hostElement;
+			if (!hostElement?.isConnected) {
+				state.topLayerActive = false;
+				return false;
+			}
+			applyHostDominanceStyles(hostElement);
+			if (!state.config.useTopLayer || typeof hostElement.showPopover !== "function") {
+				hostElement.dataset.rodToasterTopLayer = "z-index";
+				state.topLayerActive = false;
+				return false;
+			}
+			hostElement.setAttribute("popover", "manual");
+			const wasOpen = isHostInTopLayer(hostElement);
+			if (reorder && wasOpen) safeCall(() => hostElement.hidePopover?.(), void 0);
+			if (!isHostInTopLayer(hostElement)) safeCall(() => hostElement.showPopover?.(), void 0);
+			state.topLayerActive = isHostInTopLayer(hostElement);
+			hostElement.dataset.rodToasterTopLayer = state.topLayerActive ? "popover" : "z-index";
+			return state.topLayerActive;
+		}
+		function installTopLayerGuard(hostWindow, hostDocument) {
+			state.topLayerCleanup?.();
+			state.topLayerCleanup = null;
+			state.topLayerObserver?.disconnect();
+			state.topLayerObserver = null;
+			if (!state.config.useTopLayer || !state.hostElement) {
+				promoteHostToTopLayer(false);
+				return;
+			}
+			const promoteAfterExternalTopLayerChange = (event) => {
+				if (!state.toasts.length || event.target === state.hostElement) return;
+				const toggleEvent = event;
+				if (typeof toggleEvent.newState === "string" && toggleEvent.newState !== "open") return;
+				hostWindow.queueMicrotask(() => {
+					if (state.toasts.length) promoteHostToTopLayer(true);
+				});
+			};
+			hostDocument.addEventListener("toggle", promoteAfterExternalTopLayerChange, true);
+			hostDocument.addEventListener("fullscreenchange", promoteAfterExternalTopLayerChange, true);
+			hostDocument.addEventListener("webkitfullscreenchange", promoteAfterExternalTopLayerChange, true);
+			if (typeof hostWindow.MutationObserver === "function" && hostDocument.documentElement) {
+				const observer = new hostWindow.MutationObserver((mutations) => {
+					for (const mutation of mutations) {
+						const target = mutation.target;
+						if (isElementLike(target) && target !== state.hostElement && target.matches("dialog[open]")) {
+							hostWindow.queueMicrotask(() => {
+								if (state.toasts.length) promoteHostToTopLayer(true);
+							});
+							break;
+						}
+					}
+				});
+				observer.observe(hostDocument.documentElement, {
+					subtree: true,
+					attributes: true,
+					attributeFilter: ["open"]
+				});
+				state.topLayerObserver = observer;
+			}
+			state.topLayerCleanup = () => {
+				hostDocument.removeEventListener("toggle", promoteAfterExternalTopLayerChange, true);
+				hostDocument.removeEventListener("fullscreenchange", promoteAfterExternalTopLayerChange, true);
+				hostDocument.removeEventListener("webkitfullscreenchange", promoteAfterExternalTopLayerChange, true);
+				state.topLayerObserver?.disconnect();
+				state.topLayerObserver = null;
+				state.topLayerCleanup = null;
+			};
+			promoteHostToTopLayer(false);
+		}
 		function removeHostInteractionListeners() {
 			if (state.hostDocument && state.outsidePointerDownHandler) state.hostDocument.removeEventListener("pointerdown", state.outsidePointerDownHandler, true);
 			state.outsidePointerDownHandler = null;
@@ -1075,7 +1234,10 @@ var RodToaster = (function() {
 			const requestFrame = hostWindow.requestAnimationFrame?.bind(hostWindow) ?? ((callback) => hostWindow.setTimeout(() => callback(performance.now()), 0));
 			state.hostRepairFrame = requestFrame(() => {
 				state.hostRepairFrame = null;
-				if (state.toasts.length) ensureHost();
+				if (state.toasts.length) {
+					ensureHost();
+					promoteHostToTopLayer(false);
+				}
 			});
 		}
 		function installSpaPersistence(hostWindow, hostDocument) {
@@ -1153,6 +1315,11 @@ var RodToaster = (function() {
 		}
 		function destroyHost(options = {}) {
 			removeHostInteractionListeners();
+			state.topLayerCleanup?.();
+			state.topLayerCleanup = null;
+			state.topLayerObserver?.disconnect();
+			state.topLayerObserver = null;
+			state.topLayerActive = false;
 			state.inspectorRuntime?.clearHighlight?.();
 			state.themeCleanup?.();
 			state.themeCleanup = null;
@@ -1175,20 +1342,27 @@ var RodToaster = (function() {
 			state.managerMinimized = false;
 		}
 		function ensureHost() {
-			if (state.hostElement?.isConnected && state.hostWindow && state.hostDocument && state.container && state.list) return {
-				window: state.hostWindow,
-				document: state.hostDocument,
-				container: state.container,
-				list: state.list
-			};
+			if (state.hostElement?.isConnected && state.hostWindow && state.hostDocument && state.container && state.list) {
+				applyHostDominanceStyles(state.hostElement);
+				promoteHostToTopLayer(false);
+				return {
+					window: state.hostWindow,
+					document: state.hostDocument,
+					container: state.container,
+					list: state.list
+				};
+			}
 			const hostWindow = getHighestAccessibleWindow(globalWindow);
 			const hostDocument = safeCall(() => hostWindow.document, null);
 			if (!hostDocument) return null;
 			const parent = hostDocument.documentElement ?? hostDocument.body;
 			if (!parent) return null;
 			if (state.hostElement && !state.hostElement.isConnected && state.hostDocument === hostDocument && state.container && state.list) {
+				applyHostDominanceStyles(state.hostElement);
 				parent.appendChild(state.hostElement);
+				installTopLayerGuard(hostWindow, hostDocument);
 				installSpaPersistence(hostWindow, hostDocument);
+				promoteHostToTopLayer(true);
 				syncStackLayout();
 				return {
 					window: state.hostWindow ?? hostWindow,
@@ -1202,15 +1376,9 @@ var RodToaster = (function() {
 			const hostElement = hostDocument.createElement("div");
 			hostElement.id = TOAST_HOST_ID;
 			hostElement.setAttribute("aria-live", "polite");
-			for (const [property, value] of [
-				["all", "initial"],
-				["position", "fixed"],
-				["inset", "0"],
-				["width", "0"],
-				["height", "0"],
-				["z-index", String(MAX_Z_INDEX)],
-				["pointer-events", "none"]
-			]) hostElement.style.setProperty(property, value, "important");
+			hostElement.setAttribute("aria-atomic", "false");
+			if (state.config.useTopLayer && typeof hostElement.showPopover === "function") hostElement.setAttribute("popover", "manual");
+			applyHostDominanceStyles(hostElement);
 			let shadowRoot = null;
 			let renderRoot = hostElement;
 			let hostMode = "light-dom";
@@ -1311,6 +1479,8 @@ var RodToaster = (function() {
 			state.stackCountNode = toolbarLabel;
 			installThemeObserver();
 			syncTheme();
+			installTopLayerGuard(hostWindow, hostDocument);
+			promoteHostToTopLayer(true);
 			installSpaPersistence(hostWindow, hostDocument);
 			for (let index = state.toasts.length - 1; index >= 0; index -= 1) {
 				const record = state.toasts[index];
@@ -1894,6 +2064,7 @@ var RodToaster = (function() {
 				applyToastPalette(node, nextOptions.type);
 				if (node.getAttribute("role") !== nextOptions.role) node.setAttribute("role", nextOptions.role);
 				renderArgs(nextArgs, nextOptions);
+				promoteHostToTopLayer(false);
 				resetTimer(nextOptions.duration);
 				if (shouldEmitUpdate && previous) emitEvent("update", {
 					record,
@@ -2026,6 +2197,7 @@ var RodToaster = (function() {
 			host.list.prepend(node);
 			state.toasts.push(record);
 			state.recordsByNode.set(node, record);
+			promoteHostToTopLayer(true);
 			if (options.loading && options.loadingState === "loading") state.activeLoadingCount += 1;
 			if (hasEventListeners("create")) emitEvent("create", {
 				record,
@@ -4214,6 +4386,7 @@ var RodToaster = (function() {
 			const previousTheme = state.config.theme;
 			const previousSize = state.config.size;
 			const previousPersistTasks = state.config.persistTasks;
+			const previousUseTopLayer = state.config.useTopLayer;
 			const previousHostConfig = {
 				useShadowRoot: state.config.useShadowRoot,
 				shadowRootMode: state.config.shadowRootMode,
@@ -4242,6 +4415,7 @@ var RodToaster = (function() {
 			state.config.stackToolbar = Boolean(state.config.stackToolbar);
 			state.config.persistAcrossSpaNavigation = Boolean(state.config.persistAcrossSpaNavigation);
 			state.config.minimizeOnSpaNavigation = Boolean(state.config.minimizeOnSpaNavigation);
+			state.config.useTopLayer = Boolean(state.config.useTopLayer);
 			state.config.persistTasks = Boolean(state.config.persistTasks);
 			state.config.restoreTasksOnLoad = Boolean(state.config.restoreTasksOnLoad);
 			state.config.taskStorage = state.config.taskStorage === "localStorage" ? "localStorage" : "sessionStorage";
@@ -4270,6 +4444,12 @@ var RodToaster = (function() {
 			if (state.config.objectInspectorSrc !== null && typeof state.config.objectInspectorSrc !== "string") state.config.objectInspectorSrc = DEFAULT_CONFIG.objectInspectorSrc;
 			if (!state.config.persistAcrossSpaNavigation) state.spaCleanup?.();
 			else if (state.hostWindow && state.hostDocument) installSpaPersistence(state.hostWindow, state.hostDocument);
+			if (previousUseTopLayer !== state.config.useTopLayer && state.hostWindow && state.hostDocument && state.hostElement) {
+				if (state.config.useTopLayer) {
+					installTopLayerGuard(state.hostWindow, state.hostDocument);
+					promoteHostToTopLayer(true);
+				} else disableHostTopLayer();
+			}
 			if ((previousHostConfig.useShadowRoot !== state.config.useShadowRoot || previousHostConfig.shadowRootMode !== state.config.shadowRootMode || previousHostConfig.fallbackToLightDom !== state.config.fallbackToLightDom) && state.hostElement) {
 				destroyHost({ keepPersistence: state.config.persistAcrossSpaNavigation });
 				ensureHost();
@@ -4333,6 +4513,11 @@ var RodToaster = (function() {
 			resolvedTheme: state.resolvedTheme
 		});
 		toastApi.getHostMode = () => state.hostMode;
+		toastApi.bringToFront = () => {
+			ensureHost();
+			return promoteHostToTopLayer(true);
+		};
+		toastApi.isTopLayer = () => isHostInTopLayer();
 		toastApi.repairHost = () => {
 			scheduleHostRepair();
 			return state.hostElement;
