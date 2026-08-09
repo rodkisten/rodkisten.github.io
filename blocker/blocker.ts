@@ -1,5 +1,5 @@
 /**
- * Blocker v2.1.0
+ * Blocker v2.2.0
  * Ultra-performance TypeScript browser runtime for DOM, fetch and executable-resource rules.
  *
  * Design goals:
@@ -331,6 +331,112 @@ interface DebugAPI {
   readonly config: BlockerConfig;
 }
 
+
+type EasyListTarget = 'easylist' | 'ublock';
+type EasyListConversionQuality = 'exact' | 'equivalent' | 'lossy' | 'unsupported';
+type EasyListUnsupportedMode = 'comment' | 'drop' | 'throw';
+type EasyListRemovalMode = 'preserve' | 'hide';
+
+interface EasyListWarning {
+  severity: 'info' | 'warning' | 'error';
+  code: string;
+  message: string;
+  ruleId?: string;
+  line?: number;
+  source?: string;
+}
+
+interface EasyListConversion {
+  ruleId: string;
+  ruleName: string;
+  ruleType: RuleType;
+  quality: EasyListConversionQuality;
+  filters: string[];
+  warnings: EasyListWarning[];
+}
+
+interface EasyListExportStats {
+  rules: number;
+  filters: number;
+  exact: number;
+  equivalent: number;
+  lossy: number;
+  unsupported: number;
+}
+
+interface EasyListExportOptions {
+  target?: EasyListTarget;
+  comments?: boolean;
+  unsupported?: EasyListUnsupportedMode;
+  removal?: EasyListRemovalMode;
+  includeDisabled?: boolean;
+  rules?: readonly Rule[];
+  title?: string;
+}
+
+interface EasyListExportResult {
+  target: EasyListTarget;
+  text: string;
+  conversions: EasyListConversion[];
+  warnings: EasyListWarning[];
+  stats: EasyListExportStats;
+}
+
+interface EasyListImportOptions {
+  target?: EasyListTarget | 'auto';
+  cosmeticAction?: 'hide' | 'remove' | 'preserve';
+  idPrefix?: string;
+  register?: boolean;
+  replace?: boolean;
+  run?: boolean;
+}
+
+interface EasyListImportStats {
+  lines: number;
+  parsed: number;
+  rules: number;
+  cosmetic: number;
+  network: number;
+  ignored: number;
+  unsupported: number;
+}
+
+interface EasyListImportResult {
+  rules: Rule[];
+  registeredRules: NormalizedRule[];
+  warnings: EasyListWarning[];
+  unsupportedLines: Array<{ line: number; text: string; reason: string }>;
+  stats: EasyListImportStats;
+}
+
+interface EasyListSelectorCompileResult {
+  selectors: string[];
+  quality: EasyListConversionQuality;
+  warnings: EasyListWarning[];
+}
+
+interface EasyListRuleCompileOptions {
+  target?: EasyListTarget;
+  unsupported?: EasyListUnsupportedMode;
+  removal?: EasyListRemovalMode;
+}
+
+interface EasyListValidationResult {
+  valid: boolean;
+  warnings: EasyListWarning[];
+  unsupportedLines: Array<{ line: number; text: string; reason: string }>;
+  stats: EasyListImportStats;
+}
+
+interface EasyListAPI {
+  export(options?: EasyListExportOptions): EasyListExportResult;
+  parse(text: string, options?: EasyListImportOptions): EasyListImportResult;
+  import(text: string, options?: EasyListImportOptions): EasyListImportResult;
+  compileRule(rule: Rule, options?: EasyListRuleCompileOptions): EasyListConversion;
+  compileSelector(target: SelectorTarget, options?: EasyListRuleCompileOptions): EasyListSelectorCompileResult;
+  validate(text: string, options?: EasyListImportOptions): EasyListValidationResult;
+}
+
 interface BlockerAPI {
   readonly __isBlockerRuntime: true;
   readonly name: string;
@@ -382,6 +488,7 @@ interface BlockerAPI {
   installScriptInterceptors(): boolean;
   uninstallScriptInterceptors(): boolean;
   readonly debug: DebugAPI;
+  readonly easyList: EasyListAPI;
   readonly ready: boolean;
   readonly rules: NormalizedRule[];
   readonly domRules: NormalizedDomRule[];
@@ -644,7 +751,7 @@ class SelectQuery {
 
   const SCRIPT = Object.freeze({
     name: 'Blocker',
-    version: '2.1.0',
+    version: '2.2.0',
     globalName: 'Blocker' as const,
     queueName: 'BlockerQueue' as const,
   });
@@ -2714,6 +2821,2145 @@ class SelectQuery {
     return { ...CONFIG };
   }
 
+
+  const EASYLIST_QUALITY_RANK: Record<EasyListConversionQuality, number> = {
+    exact: 0,
+    equivalent: 1,
+    lossy: 2,
+    unsupported: 3,
+  };
+
+  const EASYLIST_PASSIVE_RESOURCE_OPTIONS = new Set([
+    'image',
+    'media',
+    'font',
+    'stylesheet',
+    'object',
+    'subdocument',
+    'document',
+    'ping',
+    'websocket',
+  ]);
+
+  function mergeEasyListQuality(
+    current: EasyListConversionQuality,
+    next: EasyListConversionQuality,
+  ): EasyListConversionQuality {
+    return EASYLIST_QUALITY_RANK[next] > EASYLIST_QUALITY_RANK[current] ? next : current;
+  }
+
+  function easyListWarning(
+    code: string,
+    message: string,
+    details: Partial<EasyListWarning> = {},
+  ): EasyListWarning {
+    return {
+      severity: details.severity || 'warning',
+      code,
+      message,
+      ...details,
+    };
+  }
+
+  function escapeEasyListCssString(value: unknown): string {
+    return String(value)
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"')
+      .replace(/\n/g, '\\A ');
+  }
+
+  function escapeEasyListRegexSource(value: string): string {
+    return value.replace(/\//g, '\\/');
+  }
+
+  function serializeEasyListTextMatcher(
+    matcher: TextMatcher,
+    ruleId?: string,
+  ): { value: string | null; quality: EasyListConversionQuality; warnings: EasyListWarning[] } {
+    if (typeof matcher === 'string') {
+      return {
+        value: `"${escapeEasyListCssString(matcher)}"`,
+        quality: 'equivalent',
+        warnings: [],
+      };
+    }
+
+    if (matcher instanceof RegExp) {
+      const supportedFlags = matcher.flags.replace(/[gyd]/g, '');
+      const warnings: EasyListWarning[] = [];
+      let quality: EasyListConversionQuality = 'equivalent';
+
+      if (supportedFlags !== matcher.flags) {
+        quality = 'lossy';
+        warnings.push(easyListWarning(
+          'text-regexp-flags',
+          `Stateful RegExp flags "${matcher.flags}" cannot be preserved in a cosmetic filter.`,
+          { ruleId },
+        ));
+      }
+
+      return {
+        value: `/${escapeEasyListRegexSource(matcher.source)}/${supportedFlags}`,
+        quality,
+        warnings,
+      };
+    }
+
+    return {
+      value: null,
+      quality: 'unsupported',
+      warnings: [
+        easyListWarning(
+          'selector-function-text',
+          'Function-based text matchers cannot be serialized to EasyList.',
+          { ruleId },
+        ),
+      ],
+    };
+  }
+
+  function staticHostValues(
+    matcher: HostMatcher | undefined,
+    ruleId?: string,
+  ): { hosts: string[] | null; quality: EasyListConversionQuality; warnings: EasyListWarning[] } {
+    if (matcher == null || matcher === '*') {
+      return { hosts: [], quality: 'exact', warnings: [] };
+    }
+
+    if (typeof matcher === 'string') {
+      if (matcher === '*.*') {
+        return {
+          hosts: [],
+          quality: 'lossy',
+          warnings: [
+            easyListWarning(
+              'host-star-dot-star',
+              '"*.*" is treated as a global host during EasyList conversion.',
+              { ruleId },
+            ),
+          ],
+        };
+      }
+
+      const normalized = matcher.startsWith('*.') ? matcher.slice(2) : matcher;
+      return {
+        hosts: [normalized],
+        quality: matcher.startsWith('*.') ? 'equivalent' : 'exact',
+        warnings: [],
+      };
+    }
+
+    if (Array.isArray(matcher)) {
+      const hosts: string[] = [];
+      const warnings: EasyListWarning[] = [];
+      let quality: EasyListConversionQuality = 'exact';
+
+      for (const entry of matcher) {
+        const result = staticHostValues(entry, ruleId);
+        quality = mergeEasyListQuality(quality, result.quality);
+        warnings.push(...result.warnings);
+
+        if (result.hosts == null) {
+          return { hosts: null, quality: 'unsupported', warnings };
+        }
+
+        for (const host of result.hosts) {
+          if (!hosts.includes(host)) hosts.push(host);
+        }
+      }
+
+      return { hosts, quality, warnings };
+    }
+
+    return {
+      hosts: null,
+      quality: 'unsupported',
+      warnings: [
+        easyListWarning(
+          'dynamic-host-matcher',
+          'RegExp/function host matchers cannot be represented as static EasyList domains.',
+          { ruleId },
+        ),
+      ],
+    };
+  }
+
+  function applySelectorSuffix(selectors: string[], suffix: string): string[] {
+    if (!selectors.length) return [suffix];
+
+    const output = new Array<string>(selectors.length);
+    for (let index = 0; index < selectors.length; index += 1) {
+      output[index] = `${selectors[index]}${suffix}`;
+    }
+    return output;
+  }
+
+  function applySelectorDescendant(selectors: string[], selector: string, combinator = ' '): string[] {
+    if (!selectors.length) return [selector];
+
+    const output = new Array<string>(selectors.length);
+    for (let index = 0; index < selectors.length; index += 1) {
+      output[index] = selectors[index]
+        ? `${selectors[index]}${combinator}${selector}`
+        : selector;
+    }
+    return output;
+  }
+
+  function selectorTargetToEasyList(
+    target: SelectorTarget,
+    options: EasyListRuleCompileOptions = {},
+    ruleId?: string,
+  ): EasyListSelectorCompileResult {
+    const targetMode = options.target || 'ublock';
+
+    if (typeof target === 'string') {
+      return { selectors: [target], quality: 'exact', warnings: [] };
+    }
+
+    if (Array.isArray(target)) {
+      const selectors: string[] = [];
+      const warnings: EasyListWarning[] = [];
+      let quality: EasyListConversionQuality = 'exact';
+
+      for (const entry of target) {
+        const result = selectorTargetToEasyList(entry, options, ruleId);
+        quality = mergeEasyListQuality(quality, result.quality);
+        warnings.push(...result.warnings);
+        selectors.push(...result.selectors);
+      }
+
+      return {
+        selectors: Array.from(new Set(selectors)),
+        quality,
+        warnings,
+      };
+    }
+
+    if (!(target instanceof SelectQuery)) {
+      if (target && typeof target === 'object' && 'selector' in target && typeof target.selector === 'string') {
+        return { selectors: [target.selector], quality: 'exact', warnings: [] };
+      }
+
+      if (target && typeof target === 'object' && 'xpath' in target && typeof target.xpath === 'string') {
+        if (targetMode === 'ublock') {
+          return {
+            selectors: [`:xpath(${target.xpath})`],
+            quality: 'equivalent',
+            warnings: [],
+          };
+        }
+
+        return {
+          selectors: [],
+          quality: 'unsupported',
+          warnings: [
+            easyListWarning(
+              'xpath-easylist',
+              'XPath selectors require the uBlock target.',
+              { ruleId },
+            ),
+          ],
+        };
+      }
+
+      return {
+        selectors: [],
+        quality: 'unsupported',
+        warnings: [
+          easyListWarning(
+            'dynamic-selector-target',
+            'Function/custom selector targets cannot be serialized to EasyList.',
+            { ruleId },
+          ),
+        ],
+      };
+    }
+
+    let selectors: string[] = [''];
+    let quality: EasyListConversionQuality = 'exact';
+    const warnings: EasyListWarning[] = [];
+
+    const mark = (
+      nextQuality: EasyListConversionQuality,
+      warning?: EasyListWarning,
+    ): void => {
+      quality = mergeEasyListQuality(quality, nextQuality);
+      if (warning) warnings.push(warning);
+    };
+
+    for (const step of target.steps) {
+      switch (step.type) {
+        case SELECT_STEPS.CSS:
+          selectors = applySelectorDescendant(selectors, String(step.selector || ''));
+          break;
+
+        case SELECT_STEPS.XPATH:
+          if (targetMode !== 'ublock') {
+            mark(
+              'unsupported',
+              easyListWarning('xpath-easylist', 'XPath selectors require the uBlock target.', { ruleId }),
+            );
+            selectors = [];
+          } else {
+            selectors = applySelectorSuffix(selectors, `:xpath(${String(step.expression || '')})`);
+            mark('equivalent');
+          }
+          break;
+
+        case SELECT_STEPS.TEXT: {
+          if (targetMode !== 'ublock') {
+            mark(
+              'unsupported',
+              easyListWarning('text-easylist', 'Text matching requires procedural uBlock syntax.', { ruleId }),
+            );
+            selectors = [];
+            break;
+          }
+
+          const text = serializeEasyListTextMatcher(step.expected as TextMatcher, ruleId);
+          mark(text.quality);
+          warnings.push(...text.warnings);
+
+          if (!text.value) {
+            selectors = [];
+            break;
+          }
+
+          const sourceSelector = String(
+            (step.options as TextMatchOptions | undefined)?.selector ||
+            ':is(button,a,[role="button"],label,summary,p,span,div)',
+          );
+          selectors = applySelectorDescendant(selectors, sourceSelector);
+          selectors = applySelectorSuffix(selectors, `:has-text(${text.value})`);
+          mark('equivalent');
+          break;
+        }
+
+        case SELECT_STEPS.ROLE: {
+          const roleSelector = `[role="${escapeEasyListCssString(step.roleName)}"]`;
+          selectors = selectors.map((selector) => selector ? `${selector}${roleSelector}` : roleSelector);
+
+          const name = (step.options as { name?: TextMatcher } | undefined)?.name;
+          if (name != null) {
+            if (targetMode !== 'ublock') {
+              mark(
+                'unsupported',
+                easyListWarning('role-name-easylist', 'Accessible-name matching requires uBlock procedural syntax.', { ruleId }),
+              );
+              selectors = [];
+              break;
+            }
+
+            const text = serializeEasyListTextMatcher(name, ruleId);
+            mark(mergeEasyListQuality(text.quality, 'lossy'));
+            warnings.push(...text.warnings);
+            warnings.push(easyListWarning(
+              'role-name-semantics',
+              'role({name}) also considers aria-label in Blocker; :has-text() only sees rendered text.',
+              { ruleId },
+            ));
+            if (!text.value) {
+              selectors = [];
+              break;
+            }
+            selectors = applySelectorSuffix(selectors, `:has-text(${text.value})`);
+          }
+          break;
+        }
+
+        case SELECT_STEPS.TEST_ID: {
+          const attribute = String(step.attribute || 'data-testid');
+          const value = escapeEasyListCssString(step.value);
+          selectors = applySelectorSuffix(selectors, `[${attribute}="${value}"]`);
+          break;
+        }
+
+        case SELECT_STEPS.TAG: {
+          const tag = String(step.tagName || '*').toLowerCase();
+          selectors = selectors.map((selector) => selector ? `${selector}:is(${tag})` : tag);
+          break;
+        }
+
+        case SELECT_STEPS.CUSTOM_SOURCE:
+        case SELECT_STEPS.FILTER_CUSTOM:
+          mark(
+            'unsupported',
+            easyListWarning('custom-selector-code', 'Custom selector callbacks cannot be exported.', { ruleId }),
+          );
+          selectors = [];
+          break;
+
+        case SELECT_STEPS.WITHIN:
+          mark(
+            'unsupported',
+            easyListWarning('within-selector', 'within() has runtime scoping semantics that cannot be safely flattened.', { ruleId }),
+          );
+          selectors = [];
+          break;
+
+        case SELECT_STEPS.FILTER_TEXT: {
+          if (targetMode !== 'ublock') {
+            mark(
+              'unsupported',
+              easyListWarning('text-easylist', 'hasText() requires the uBlock target.', { ruleId }),
+            );
+            selectors = [];
+            break;
+          }
+
+          const text = serializeEasyListTextMatcher(step.expected as TextMatcher, ruleId);
+          mark(text.quality);
+          warnings.push(...text.warnings);
+          if (!text.value) {
+            selectors = [];
+            break;
+          }
+          selectors = applySelectorSuffix(selectors, `:has-text(${text.value})`);
+          break;
+        }
+
+        case SELECT_STEPS.FILTER_ATTRIBUTE: {
+          const expected = step.expected;
+          if (
+            typeof expected === 'function' ||
+            expected instanceof RegExp ||
+            Array.isArray(expected)
+          ) {
+            mark(
+              'unsupported',
+              easyListWarning(
+                'attribute-dynamic-match',
+                `attribute("${String(step.name)}") uses a matcher that cannot be represented as CSS.`,
+                { ruleId },
+              ),
+            );
+            selectors = [];
+            break;
+          }
+
+          if (expected == null) {
+            mark('equivalent');
+            break;
+          }
+
+          selectors = applySelectorSuffix(
+            selectors,
+            `[${String(step.name)}="${escapeEasyListCssString(expected)}"]`,
+          );
+          break;
+        }
+
+        case SELECT_STEPS.FILTER_ATTRIBUTE_EXISTS:
+          selectors = applySelectorSuffix(selectors, `[${String(step.name)}]`);
+          break;
+
+        case SELECT_STEPS.FILTER_PROPERTY:
+          mark(
+            'unsupported',
+            easyListWarning('property-selector', 'JavaScript property filters cannot be exported to EasyList.', { ruleId }),
+          );
+          selectors = [];
+          break;
+
+        case SELECT_STEPS.FILTER_VISIBLE:
+          mark(
+            'lossy',
+            easyListWarning(
+              'visible-selector',
+              'visible() is omitted because cosmetic filters are persistent and do not share Blocker visibility timing semantics.',
+              { ruleId, severity: 'info' },
+            ),
+          );
+          break;
+
+        case SELECT_STEPS.FILTER_HIDDEN:
+          mark(
+            'unsupported',
+            easyListWarning('hidden-selector', 'hidden() cannot be represented without broadening the match.', { ruleId }),
+          );
+          selectors = [];
+          break;
+
+        case SELECT_STEPS.FILTER_ENABLED:
+          selectors = applySelectorSuffix(selectors, ':not(:disabled):not([aria-disabled="true"])');
+          break;
+
+        case SELECT_STEPS.FILTER_DISABLED:
+          selectors = applySelectorSuffix(selectors, ':is(:disabled,[aria-disabled="true"])');
+          break;
+
+        case SELECT_STEPS.FILTER_IN_VIEWPORT:
+          mark(
+            'unsupported',
+            easyListWarning('viewport-selector', 'inViewport() is runtime geometry and has no EasyList equivalent.', { ruleId }),
+          );
+          selectors = [];
+          break;
+
+        case SELECT_STEPS.FILTER_HAS: {
+          const nested = selectorTargetToEasyList(step.target as SelectorTarget, options, ruleId);
+          mark(nested.quality);
+          warnings.push(...nested.warnings);
+
+          if (!nested.selectors.length) {
+            selectors = [];
+            break;
+          }
+
+          selectors = applySelectorSuffix(selectors, `:has(${nested.selectors.join(',')})`);
+          break;
+        }
+
+        case SELECT_STEPS.FILTER_NOT: {
+          const nested = selectorTargetToEasyList(step.target as SelectorTarget, options, ruleId);
+          mark(nested.quality);
+          warnings.push(...nested.warnings);
+
+          if (!nested.selectors.length) {
+            selectors = [];
+            break;
+          }
+
+          selectors = applySelectorSuffix(selectors, `:not(${nested.selectors.join(',')})`);
+          break;
+        }
+
+        case SELECT_STEPS.CLOSEST:
+          if (targetMode !== 'ublock') {
+            mark(
+              'unsupported',
+              easyListWarning('closest-easylist', 'closest() requires uBlock :upward().', { ruleId }),
+            );
+            selectors = [];
+          } else {
+            selectors = applySelectorSuffix(selectors, `:upward(${String(step.selector)})`);
+            mark('equivalent');
+          }
+          break;
+
+        case SELECT_STEPS.PARENT:
+          if (targetMode !== 'ublock') {
+            mark(
+              'unsupported',
+              easyListWarning('parent-easylist', 'parent() requires uBlock :upward().', { ruleId }),
+            );
+            selectors = [];
+          } else {
+            const parentSelector = step.selector ? String(step.selector) : '1';
+            selectors = applySelectorSuffix(selectors, `:upward(${parentSelector})`);
+            mark('equivalent');
+          }
+          break;
+
+        case SELECT_STEPS.CHILDREN:
+          selectors = applySelectorDescendant(selectors, String(step.selector || '*'), ' > ');
+          break;
+
+        case SELECT_STEPS.DESCENDANTS:
+          selectors = applySelectorDescendant(selectors, String(step.selector || '*'));
+          break;
+
+        case SELECT_STEPS.NEXT:
+          selectors = applySelectorDescendant(selectors, String(step.selector || '*'), ' + ');
+          break;
+
+        case SELECT_STEPS.PREVIOUS:
+          mark(
+            'unsupported',
+            easyListWarning('previous-selector', 'previous() cannot be represented as a forward CSS selection.', { ruleId }),
+          );
+          selectors = [];
+          break;
+
+        case SELECT_STEPS.SHADOW:
+          mark(
+            'unsupported',
+            easyListWarning('shadow-selector', 'Open Shadow DOM traversal is runtime-specific and is not exported.', { ruleId }),
+          );
+          selectors = [];
+          break;
+
+        case SELECT_STEPS.UNIQUE:
+          break;
+
+        case SELECT_STEPS.FIRST:
+        case SELECT_STEPS.LAST:
+        case SELECT_STEPS.AT:
+        case SELECT_STEPS.LIMIT:
+          mark(
+            'unsupported',
+            easyListWarning(
+              'positional-result-selector',
+              `${step.type} operates on the result set, not CSS structural position, so it cannot be safely exported.`,
+              { ruleId },
+            ),
+          );
+          selectors = [];
+          break;
+
+        case SELECT_STEPS.FALLBACK: {
+          const queries = Array.isArray(step.queries) ? step.queries as SelectorTarget[] : [];
+          const fallbackSelectors: string[] = [];
+
+          for (const fallbackQuery of queries) {
+            const fallback = selectorTargetToEasyList(fallbackQuery, options, ruleId);
+            warnings.push(...fallback.warnings);
+            quality = mergeEasyListQuality(quality, fallback.quality);
+            fallbackSelectors.push(...fallback.selectors);
+          }
+
+          if (fallbackSelectors.length) {
+            selectors.push(...fallbackSelectors);
+            selectors = Array.from(new Set(selectors.filter(Boolean)));
+            mark(
+              'lossy',
+              easyListWarning(
+                'fallback-selector',
+                'fallback() priority cannot be represented statically; all serializable alternatives are emitted.',
+                { ruleId },
+              ),
+            );
+          }
+          break;
+        }
+
+        default:
+          mark(
+            'unsupported',
+            easyListWarning('unknown-selector-step', `Unknown selector step "${String(step.type)}".`, { ruleId }),
+          );
+          selectors = [];
+          break;
+      }
+
+      if (!selectors.length && quality === 'unsupported') break;
+    }
+
+    return {
+      selectors: Array.from(new Set(selectors.filter(Boolean))),
+      quality,
+      warnings,
+    };
+  }
+
+  function cosmeticDomainPrefix(
+    host: HostMatcher | undefined,
+    ruleId: string,
+  ): {
+    prefix: string | null;
+    quality: EasyListConversionQuality;
+    warnings: EasyListWarning[];
+  } {
+    const result = staticHostValues(host, ruleId);
+    if (result.hosts == null) {
+      return { prefix: null, quality: 'unsupported', warnings: result.warnings };
+    }
+
+    return {
+      prefix: result.hosts.length ? result.hosts.join(',') : '',
+      quality: result.quality,
+      warnings: result.warnings,
+    };
+  }
+
+  function compileDomRuleToEasyList(
+    rule: DomRule,
+    options: EasyListRuleCompileOptions,
+    ruleId: string,
+    ruleName: string,
+  ): EasyListConversion {
+    const targetMode = options.target || 'ublock';
+    const removal = options.removal || 'preserve';
+    const host = cosmeticDomainPrefix(rule.host, ruleId);
+    const filters: string[] = [];
+    const warnings = [...host.warnings];
+    let quality = host.quality;
+
+    if (host.prefix == null) {
+      quality = 'unsupported';
+    }
+
+    if (rule.pathname != null || rule.match || rule.when || rule.before || rule.run || rule.after) {
+      quality = mergeEasyListQuality(quality, 'unsupported');
+      warnings.push(easyListWarning(
+        'dom-runtime-conditions',
+        'DOM rule pathname/match/when/hooks cannot be represented by cosmetic filters.',
+        { ruleId },
+      ));
+    }
+
+    for (const action of rule.actions || []) {
+      if (action.action !== ACTIONS.HIDE && action.action !== ACTIONS.REMOVE) {
+        quality = mergeEasyListQuality(quality, 'unsupported');
+        warnings.push(easyListWarning(
+          'dom-action-unsupported',
+          `DOM action "${action.action}" cannot be represented by EasyList.`,
+          { ruleId },
+        ));
+        continue;
+      }
+
+      for (const target of action.targets || []) {
+        const compiled = selectorTargetToEasyList(target, options, ruleId);
+        quality = mergeEasyListQuality(quality, compiled.quality);
+        warnings.push(...compiled.warnings);
+
+        for (const selector of compiled.selectors) {
+          if (host.prefix == null) continue;
+
+          let finalSelector = selector;
+
+          if (action.action === ACTIONS.REMOVE) {
+            if (targetMode === 'ublock' && removal === 'preserve') {
+              finalSelector += ':remove()';
+              quality = mergeEasyListQuality(quality, 'equivalent');
+            } else {
+              quality = mergeEasyListQuality(quality, 'lossy');
+              warnings.push(easyListWarning(
+                'remove-becomes-hide',
+                'remove() is exported as cosmetic hiding for this target/profile.',
+                { ruleId, severity: 'info' },
+              ));
+            }
+          }
+
+          filters.push(`${host.prefix}##${finalSelector}`);
+        }
+      }
+    }
+
+    if (!filters.length && quality !== 'unsupported') {
+      quality = 'unsupported';
+      warnings.push(easyListWarning(
+        'dom-no-exportable-actions',
+        'The DOM rule has no exportable cosmetic actions.',
+        { ruleId },
+      ));
+    }
+
+    return {
+      ruleId,
+      ruleName,
+      ruleType: RULE_TYPES.DOM,
+      quality,
+      filters: Array.from(new Set(filters)),
+      warnings,
+    };
+  }
+
+  function regexpToEasyListNetworkPattern(
+    expression: RegExp,
+    ruleId: string,
+  ): {
+    pattern: string;
+    quality: EasyListConversionQuality;
+    warnings: EasyListWarning[];
+  } {
+    const warnings: EasyListWarning[] = [];
+    let quality: EasyListConversionQuality = 'equivalent';
+
+    if (expression.flags.replace(/[i]/g, '')) {
+      quality = 'lossy';
+      warnings.push(easyListWarning(
+        'network-regexp-flags',
+        `RegExp flags "${expression.flags}" are not fully representable in static network syntax.`,
+        { ruleId },
+      ));
+    }
+
+    return {
+      pattern: `/${escapeEasyListRegexSource(expression.source)}/`,
+      quality,
+      warnings,
+    };
+  }
+
+  function scalarNetworkValue(
+    value: unknown,
+    ruleId: string,
+    label: string,
+  ): {
+    values: string[] | null;
+    regexValues: RegExp[];
+    quality: EasyListConversionQuality;
+    warnings: EasyListWarning[];
+  } {
+    if (value == null) {
+      return { values: [], regexValues: [], quality: 'exact', warnings: [] };
+    }
+
+    if (Array.isArray(value)) {
+      const values: string[] = [];
+      const regexValues: RegExp[] = [];
+      const warnings: EasyListWarning[] = [];
+      let quality: EasyListConversionQuality = 'exact';
+
+      for (const entry of value) {
+        const nested = scalarNetworkValue(entry, ruleId, label);
+        quality = mergeEasyListQuality(quality, nested.quality);
+        warnings.push(...nested.warnings);
+
+        if (nested.values == null) {
+          return { values: null, regexValues, quality: 'unsupported', warnings };
+        }
+
+        values.push(...nested.values);
+        regexValues.push(...nested.regexValues);
+      }
+
+      return { values, regexValues, quality, warnings };
+    }
+
+    if (value instanceof RegExp) {
+      return {
+        values: [],
+        regexValues: [value],
+        quality: 'equivalent',
+        warnings: [],
+      };
+    }
+
+    if (typeof value === 'function') {
+      return {
+        values: null,
+        regexValues: [],
+        quality: 'unsupported',
+        warnings: [
+          easyListWarning(
+            'network-dynamic-match',
+            `Function matcher for ${label} cannot be exported.`,
+            { ruleId },
+          ),
+        ],
+      };
+    }
+
+    return {
+      values: [String(value)],
+      regexValues: [],
+      quality: 'exact',
+      warnings: [],
+    };
+  }
+
+  function appendNetworkOptions(
+    filter: string,
+    options: readonly string[],
+  ): string {
+    const clean = options.filter(Boolean);
+    if (!clean.length) return filter;
+    return `${filter}$${clean.join(',')}`;
+  }
+
+  function fetchMatchToEasyListPatterns(
+    match: FetchMatch | undefined,
+    targetMode: EasyListTarget,
+    ruleId: string,
+  ): {
+    patterns: string[];
+    options: string[];
+    quality: EasyListConversionQuality;
+    warnings: EasyListWarning[];
+  } {
+    if (match == null) {
+      return {
+        patterns: ['*'],
+        options: [],
+        quality: 'lossy',
+        warnings: [
+          easyListWarning(
+            'network-match-all',
+            'A match-all fetch rule is exported as a global network filter.',
+            { ruleId, severity: 'info' },
+          ),
+        ],
+      };
+    }
+
+    if (typeof match === 'string') {
+      return { patterns: [match], options: [], quality: 'equivalent', warnings: [] };
+    }
+
+    if (match instanceof RegExp) {
+      const converted = regexpToEasyListNetworkPattern(match, ruleId);
+      return {
+        patterns: [converted.pattern],
+        options: [],
+        quality: converted.quality,
+        warnings: converted.warnings,
+      };
+    }
+
+    if (typeof match === 'function') {
+      return {
+        patterns: [],
+        options: [],
+        quality: 'unsupported',
+        warnings: [easyListWarning('fetch-function-match', 'Function fetch matchers cannot be exported.', { ruleId })],
+      };
+    }
+
+    if (Array.isArray(match)) {
+      const patterns: string[] = [];
+      const warnings: EasyListWarning[] = [];
+      let quality: EasyListConversionQuality = 'exact';
+      let commonOptions: string[] | null = null;
+
+      for (const entry of match) {
+        const nested = fetchMatchToEasyListPatterns(entry, targetMode, ruleId);
+        patterns.push(...nested.patterns);
+        warnings.push(...nested.warnings);
+        quality = mergeEasyListQuality(quality, nested.quality);
+
+        const normalizedOptions = [...nested.options].sort();
+        if (commonOptions == null) {
+          commonOptions = normalizedOptions;
+        } else if (
+          normalizedOptions.length !== commonOptions.length ||
+          normalizedOptions.some((option, index) => option !== commonOptions![index])
+        ) {
+          warnings.push(easyListWarning(
+            'fetch-array-option-mismatch',
+            'OR-ed fetch match alternatives require different static filter options and cannot be safely merged.',
+            { ruleId },
+          ));
+          return { patterns: [], options: [], quality: 'unsupported', warnings };
+        }
+      }
+
+      return {
+        patterns: Array.from(new Set(patterns)),
+        options: commonOptions || [],
+        quality,
+        warnings,
+      };
+    }
+
+    const objectMatch = match as FetchMatchObject;
+    const warnings: EasyListWarning[] = [];
+    let quality: EasyListConversionQuality = 'exact';
+
+    if (objectMatch.test) {
+      quality = 'unsupported';
+      warnings.push(easyListWarning(
+        'fetch-test-callback',
+        'Fetch match.test() cannot be serialized.',
+        { ruleId },
+      ));
+    }
+
+    const hosts = staticHostValues(objectMatch.hostname, ruleId);
+    warnings.push(...hosts.warnings);
+    quality = mergeEasyListQuality(quality, hosts.quality);
+
+    if (hosts.hosts == null) {
+      return { patterns: [], options: [], quality: 'unsupported', warnings };
+    }
+
+    const hostValues = scalarNetworkValue(objectMatch.host, ruleId, 'host');
+    const paths = scalarNetworkValue(objectMatch.pathname, ruleId, 'pathname');
+    const searches = scalarNetworkValue(objectMatch.search, ruleId, 'search');
+    const methods = scalarNetworkValue(objectMatch.method, ruleId, 'method');
+
+    for (const result of [hostValues, paths, searches, methods]) {
+      warnings.push(...result.warnings);
+      quality = mergeEasyListQuality(quality, result.quality);
+    }
+
+    if (
+      hostValues.values == null ||
+      paths.values == null ||
+      searches.values == null ||
+      methods.values == null
+    ) {
+      return { patterns: [], options: [], quality: 'unsupported', warnings };
+    }
+
+    if (
+      hostValues.regexValues.length ||
+      paths.regexValues.length ||
+      searches.regexValues.length
+    ) {
+      quality = mergeEasyListQuality(quality, 'unsupported');
+      warnings.push(easyListWarning(
+        'network-field-regexp',
+        'RegExp host/path/search fields combined inside an object matcher are not exported automatically.',
+        { ruleId },
+      ));
+      return { patterns: [], options: [], quality, warnings };
+    }
+
+    const domains = hosts.hosts.length
+      ? hosts.hosts
+      : hostValues.values.length
+        ? hostValues.values
+        : [''];
+
+    const pathValues = paths.values.length ? paths.values : [''];
+    const searchValues = searches.values.length ? searches.values : [''];
+    const patterns: string[] = [];
+
+    for (const domain of domains) {
+      for (const pathname of pathValues) {
+        for (const search of searchValues) {
+          if (domain) {
+            let pattern = `||${domain}`;
+            if (pathname) pattern += pathname.startsWith('/') ? pathname : `/${pathname}`;
+            else pattern += '^';
+            if (search) pattern += search.startsWith('?') ? search : `?${search}`;
+            patterns.push(pattern);
+          } else if (pathname || search) {
+            patterns.push(`${pathname}${search}`);
+            quality = mergeEasyListQuality(quality, 'lossy');
+          } else {
+            patterns.push('*');
+            quality = mergeEasyListQuality(quality, 'lossy');
+          }
+        }
+      }
+    }
+
+    if (paths.values.length || searches.values.length) {
+      quality = mergeEasyListQuality(quality, 'lossy');
+      warnings.push(easyListWarning(
+        'network-path-exactness',
+        'Blocker object pathname/search fields use exact matching; EasyList URL patterns are generally substring/prefix based.',
+        { ruleId, severity: 'info' },
+      ));
+    }
+
+    const optionList: string[] = [];
+    if (methods.values.length) {
+      if (targetMode === 'ublock') {
+        for (const method of methods.values) optionList.push(`method=${method.toLowerCase()}`);
+      } else {
+        quality = mergeEasyListQuality(quality, 'lossy');
+        warnings.push(easyListWarning(
+          'method-easylist',
+          'HTTP method constraints are omitted for the EasyList target.',
+          { ruleId },
+        ));
+      }
+    }
+
+    return {
+      patterns: Array.from(new Set(patterns)),
+      options: optionList,
+      quality,
+      warnings,
+    };
+  }
+
+  function compileFetchRuleToEasyList(
+    rule: FetchRule,
+    options: EasyListRuleCompileOptions,
+    ruleId: string,
+    ruleName: string,
+  ): EasyListConversion {
+    const targetMode = options.target || 'ublock';
+    const match = fetchMatchToEasyListPatterns(rule.match, targetMode, ruleId);
+    const warnings = [...match.warnings];
+    let quality = match.quality;
+
+    if (
+      rule.action !== FETCH_ACTIONS.BLOCK &&
+      rule.action !== FETCH_ACTIONS.ALLOW &&
+      rule.action != null
+    ) {
+      quality = 'unsupported';
+      warnings.push(easyListWarning(
+        'fetch-action-unsupported',
+        `Fetch action "${rule.action}" cannot be represented by a static filter.`,
+        { ruleId },
+      ));
+    }
+
+    const allow = rule.action === FETCH_ACTIONS.ALLOW;
+    const filters = match.patterns.map((pattern) =>
+      `${allow ? '@@' : ''}${appendNetworkOptions(pattern, match.options)}`,
+    );
+
+    return {
+      ruleId,
+      ruleName,
+      ruleType: RULE_TYPES.FETCH,
+      quality,
+      filters: quality === 'unsupported' ? [] : filters,
+      warnings,
+    };
+  }
+
+  function scriptKindOptions(
+    matcher: ValueMatcher<ScriptKind, ScriptContext> | undefined,
+    targetMode: EasyListTarget,
+    ruleId: string,
+  ): {
+    groups: string[][];
+    quality: EasyListConversionQuality;
+    warnings: EasyListWarning[];
+  } {
+    if (matcher == null) {
+      return {
+        groups: [['script']],
+        quality: 'lossy',
+        warnings: [
+          easyListWarning(
+            'script-kind-unspecified',
+            'A script rule without kind is narrowed to network script resources during export.',
+            { ruleId, severity: 'info' },
+          ),
+        ],
+      };
+    }
+
+    const values = Array.isArray(matcher) ? matcher : [matcher];
+    const groups: string[][] = [];
+    const warnings: EasyListWarning[] = [];
+    let quality: EasyListConversionQuality = 'exact';
+
+    for (const entry of values) {
+      if (typeof entry === 'function' || entry instanceof RegExp || Array.isArray(entry)) {
+        quality = 'unsupported';
+        warnings.push(easyListWarning(
+          'script-kind-dynamic',
+          'Dynamic/RegExp script kind matchers cannot be exported.',
+          { ruleId },
+        ));
+        continue;
+      }
+
+      switch (entry) {
+        case SCRIPT_KINDS.ELEMENT:
+        case SCRIPT_KINDS.PRELOAD:
+        case SCRIPT_KINDS.MODULE_PRELOAD:
+          groups.push(['script']);
+          break;
+
+        case SCRIPT_KINDS.XHR:
+          groups.push([targetMode === 'ublock' ? 'xhr' : 'xmlhttprequest']);
+          break;
+
+        case SCRIPT_KINDS.WORKER:
+        case SCRIPT_KINDS.SHARED_WORKER:
+        case SCRIPT_KINDS.SERVICE_WORKER:
+          if (targetMode === 'ublock') {
+            groups.push(['worker']);
+            quality = mergeEasyListQuality(quality, 'equivalent');
+          } else {
+            groups.push(['script']);
+            quality = mergeEasyListQuality(quality, 'lossy');
+            warnings.push(easyListWarning(
+              'worker-easylist',
+              'Worker kinds are approximated as script for the EasyList target.',
+              { ruleId },
+            ));
+          }
+          break;
+
+        default:
+          quality = 'unsupported';
+          warnings.push(easyListWarning(
+            'dynamic-code-script-kind',
+            `Script kind "${String(entry)}" is runtime-only and has no static network equivalent.`,
+            { ruleId },
+          ));
+          break;
+      }
+    }
+
+    return {
+      groups: groups.length ? groups : [],
+      quality,
+      warnings,
+    };
+  }
+
+  function scriptMatchToEasyListPatterns(
+    match: ScriptMatch | undefined,
+    rule: ScriptRule,
+    targetMode: EasyListTarget,
+    ruleId: string,
+  ): {
+    patterns: string[];
+    optionGroups: string[][];
+    domainOptions: string[];
+    quality: EasyListConversionQuality;
+    warnings: EasyListWarning[];
+  } {
+    const warnings: EasyListWarning[] = [];
+    let quality: EasyListConversionQuality = 'exact';
+
+    const kindSource = rule.kind ??
+      (match && typeof match === 'object' && !Array.isArray(match) && !(match instanceof RegExp)
+        ? (match as ScriptMatchObject).kind
+        : undefined);
+    const kinds = scriptKindOptions(kindSource, targetMode, ruleId);
+    warnings.push(...kinds.warnings);
+    quality = mergeEasyListQuality(quality, kinds.quality);
+
+    const pageHosts = staticHostValues(rule.host, ruleId);
+    warnings.push(...pageHosts.warnings);
+    quality = mergeEasyListQuality(quality, pageHosts.quality);
+    if (pageHosts.hosts == null) {
+      return {
+        patterns: [],
+        optionGroups: [],
+        domainOptions: [],
+        quality: 'unsupported',
+        warnings,
+      };
+    }
+
+    const domainOptions = pageHosts.hosts.length
+      ? [`domain=${pageHosts.hosts.join('|')}`]
+      : [];
+
+    if (match == null) {
+      return {
+        patterns: ['*'],
+        optionGroups: kinds.groups,
+        domainOptions,
+        quality: mergeEasyListQuality(quality, 'lossy'),
+        warnings,
+      };
+    }
+
+    if (typeof match === 'string') {
+      return { patterns: [match], optionGroups: kinds.groups, domainOptions, quality, warnings };
+    }
+
+    if (match instanceof RegExp) {
+      const converted = regexpToEasyListNetworkPattern(match, ruleId);
+      warnings.push(...converted.warnings);
+      quality = mergeEasyListQuality(quality, converted.quality);
+      return {
+        patterns: [converted.pattern],
+        optionGroups: kinds.groups,
+        domainOptions,
+        quality,
+        warnings,
+      };
+    }
+
+    if (typeof match === 'function' || Array.isArray(match)) {
+      quality = 'unsupported';
+      warnings.push(easyListWarning(
+        'script-complex-match',
+        'Function/array top-level script matches are not exported automatically.',
+        { ruleId },
+      ));
+      return { patterns: [], optionGroups: [], domainOptions, quality, warnings };
+    }
+
+    const objectMatch = match as ScriptMatchObject;
+
+    if (
+      objectMatch.inline != null ||
+      objectMatch.code != null ||
+      objectMatch.type != null ||
+      objectMatch.test
+    ) {
+      quality = 'unsupported';
+      warnings.push(easyListWarning(
+        'script-runtime-match-fields',
+        'inline/code/type/test script match fields require runtime inspection and cannot be exported.',
+        { ruleId },
+      ));
+    }
+
+    const host = staticHostValues(objectMatch.hostname, ruleId);
+    warnings.push(...host.warnings);
+    quality = mergeEasyListQuality(quality, host.quality);
+    if (host.hosts == null) {
+      return { patterns: [], optionGroups: [], domainOptions, quality: 'unsupported', warnings };
+    }
+
+    const src = scalarNetworkValue(objectMatch.src ?? objectMatch.url, ruleId, 'script src/url');
+    const paths = scalarNetworkValue(objectMatch.pathname, ruleId, 'script pathname');
+    const methods = scalarNetworkValue(objectMatch.method, ruleId, 'script method');
+
+    for (const result of [src, paths, methods]) {
+      warnings.push(...result.warnings);
+      quality = mergeEasyListQuality(quality, result.quality);
+    }
+
+    if (src.values == null || paths.values == null || methods.values == null) {
+      return { patterns: [], optionGroups: [], domainOptions, quality: 'unsupported', warnings };
+    }
+
+    if (src.regexValues.length) {
+      if (host.hosts.length || paths.values.length) {
+        quality = 'unsupported';
+        warnings.push(easyListWarning(
+          'script-combined-regexp',
+          'RegExp src/url combined with hostname/path fields is not exported automatically.',
+          { ruleId },
+        ));
+        return { patterns: [], optionGroups: [], domainOptions, quality, warnings };
+      }
+
+      const patterns: string[] = [];
+      for (const expression of src.regexValues) {
+        const converted = regexpToEasyListNetworkPattern(expression, ruleId);
+        patterns.push(converted.pattern);
+        warnings.push(...converted.warnings);
+        quality = mergeEasyListQuality(quality, converted.quality);
+      }
+
+      return { patterns, optionGroups: kinds.groups, domainOptions, quality, warnings };
+    }
+
+    const domains = host.hosts.length ? host.hosts : [''];
+    const urls = src.values.length ? src.values : [''];
+    const pathValues = paths.values.length ? paths.values : [''];
+    const patterns: string[] = [];
+
+    for (const domain of domains) {
+      for (const url of urls) {
+        for (const pathname of pathValues) {
+          if (url) {
+            patterns.push(url);
+          } else if (domain) {
+            let pattern = `||${domain}`;
+            if (pathname) pattern += pathname.startsWith('/') ? pathname : `/${pathname}`;
+            else pattern += '^';
+            patterns.push(pattern);
+          } else if (pathname) {
+            patterns.push(pathname);
+            quality = mergeEasyListQuality(quality, 'lossy');
+          } else {
+            patterns.push('*');
+            quality = mergeEasyListQuality(quality, 'lossy');
+          }
+        }
+      }
+    }
+
+    if (methods.values.length) {
+      if (targetMode === 'ublock') {
+        for (const group of kinds.groups) {
+          for (const method of methods.values) group.push(`method=${method.toLowerCase()}`);
+        }
+      } else {
+        quality = mergeEasyListQuality(quality, 'lossy');
+        warnings.push(easyListWarning(
+          'script-method-easylist',
+          'Script method constraints are omitted for the EasyList target.',
+          { ruleId },
+        ));
+      }
+    }
+
+    return {
+      patterns: Array.from(new Set(patterns)),
+      optionGroups: kinds.groups,
+      domainOptions,
+      quality,
+      warnings,
+    };
+  }
+
+  function compileScriptRuleToEasyList(
+    rule: ScriptRule,
+    options: EasyListRuleCompileOptions,
+    ruleId: string,
+    ruleName: string,
+  ): EasyListConversion {
+    const targetMode = options.target || 'ublock';
+    const compiled = scriptMatchToEasyListPatterns(rule.match, rule, targetMode, ruleId);
+    const warnings = [...compiled.warnings];
+    let quality = compiled.quality;
+
+    if (
+      rule.action !== SCRIPT_ACTIONS.BLOCK &&
+      rule.action !== SCRIPT_ACTIONS.ALLOW &&
+      rule.action != null
+    ) {
+      quality = 'unsupported';
+      warnings.push(easyListWarning(
+        'script-action-unsupported',
+        `Script action "${rule.action}" cannot be represented by static filter syntax.`,
+        { ruleId },
+      ));
+    }
+
+    const allow = rule.action === SCRIPT_ACTIONS.ALLOW;
+    const filters: string[] = [];
+
+    if (quality !== 'unsupported') {
+      for (const pattern of compiled.patterns) {
+        const groups = compiled.optionGroups.length ? compiled.optionGroups : [[]];
+        for (const optionGroup of groups) {
+          filters.push(
+            `${allow ? '@@' : ''}${appendNetworkOptions(
+              pattern,
+              [...optionGroup, ...compiled.domainOptions],
+            )}`,
+          );
+        }
+      }
+    }
+
+    return {
+      ruleId,
+      ruleName,
+      ruleType: RULE_TYPES.SCRIPT,
+      quality,
+      filters: Array.from(new Set(filters)),
+      warnings,
+    };
+  }
+
+  function compileRuleToEasyList(
+    rule: Rule,
+    options: EasyListRuleCompileOptions = {},
+  ): EasyListConversion {
+    const type = (rule as Rule).type || RULE_TYPES.DOM;
+    const ruleId = rule.id || 'unregistered-rule';
+    const ruleName = rule.name || ruleId;
+
+    if (type === RULE_TYPES.FETCH) {
+      return compileFetchRuleToEasyList(rule as FetchRule, options, ruleId, ruleName);
+    }
+
+    if (type === RULE_TYPES.SCRIPT) {
+      return compileScriptRuleToEasyList(rule as ScriptRule, options, ruleId, ruleName);
+    }
+
+    return compileDomRuleToEasyList(rule as DomRule, options, ruleId, ruleName);
+  }
+
+  function exportEasyList(options: EasyListExportOptions = {}): EasyListExportResult {
+    const targetMode = options.target || 'ublock';
+    const unsupportedMode = options.unsupported || 'comment';
+    const sourceRules = options.rules
+      ? [...options.rules]
+      : getRules({ enabled: options.includeDisabled ? undefined : true });
+
+    const conversions: EasyListConversion[] = [];
+    const warnings: EasyListWarning[] = [];
+    const output: string[] = [];
+
+    if (options.comments !== false) {
+      output.push(
+        `! ${options.title || `${SCRIPT.name} ${SCRIPT.version}`}`,
+        `! Generated by Blocker.easyList.export()`,
+        `! Target: ${targetMode}`,
+        `! Generated: ${new Date().toISOString()}`,
+        '',
+      );
+    }
+
+    const stats: EasyListExportStats = {
+      rules: sourceRules.length,
+      filters: 0,
+      exact: 0,
+      equivalent: 0,
+      lossy: 0,
+      unsupported: 0,
+    };
+
+    for (const rule of sourceRules) {
+      const conversion = compileRuleToEasyList(rule, {
+        target: targetMode,
+        unsupported: unsupportedMode,
+        removal: options.removal || 'preserve',
+      });
+
+      conversions.push(conversion);
+      warnings.push(...conversion.warnings);
+      stats[conversion.quality] += 1;
+
+      if (conversion.quality === 'unsupported' || !conversion.filters.length) {
+        if (unsupportedMode === 'throw') {
+          throw new TypeError(
+            `Rule "${conversion.ruleId}" cannot be exported to ${targetMode}.`,
+          );
+        }
+
+        if (unsupportedMode === 'comment' && options.comments !== false) {
+          output.push(
+            `! BLOCKER-UNSUPPORTED [${conversion.ruleId}] ${conversion.ruleName}`,
+            ...conversion.warnings.map((warning) => `!   ${warning.code}: ${warning.message}`),
+            '',
+          );
+        }
+
+        continue;
+      }
+
+      if (options.comments !== false) {
+        output.push(
+          `! [${conversion.quality.toUpperCase()}] ${conversion.ruleId} · ${conversion.ruleName}`,
+        );
+      }
+
+      output.push(...conversion.filters, '');
+      stats.filters += conversion.filters.length;
+    }
+
+    while (output.length && output[output.length - 1] === '') output.pop();
+
+    return {
+      target: targetMode,
+      text: output.join('\n'),
+      conversions,
+      warnings,
+      stats,
+    };
+  }
+
+  function hashEasyListLine(value: string): string {
+    let hash = 0x811c9dc5;
+
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 0x01000193);
+    }
+
+    return (hash >>> 0).toString(36);
+  }
+
+  function splitEasyListOptions(line: string): { pattern: string; options: string[] } {
+    let escaped = false;
+    let regex = false;
+
+    for (let index = 0; index < line.length; index += 1) {
+      const character = line[index];
+
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+
+      if (character === '\\') {
+        escaped = true;
+        continue;
+      }
+
+      if (character === '/' && index === 0) {
+        regex = true;
+        continue;
+      }
+
+      if (regex && character === '/' && index > 0) {
+        regex = false;
+        continue;
+      }
+
+      if (!regex && character === '$') {
+        return {
+          pattern: line.slice(0, index),
+          options: line.slice(index + 1).split(',').map((entry) => entry.trim()).filter(Boolean),
+        };
+      }
+    }
+
+    return { pattern: line, options: [] };
+  }
+
+  function easyListPatternToRegExp(pattern: string): RegExp {
+    if (pattern.startsWith('/') && pattern.lastIndexOf('/') > 0) {
+      const end = pattern.lastIndexOf('/');
+      const source = pattern.slice(1, end);
+      return new RegExp(source, 'i');
+    }
+
+    let source = '';
+    let index = 0;
+    let anchorStart = false;
+    let anchorEnd = false;
+
+    if (pattern.startsWith('||')) {
+      source += '^(?:[^:/?#]+:)?(?://)?(?:[^/?#]*\\.)?';
+      index = 2;
+    } else if (pattern.startsWith('|')) {
+      source += '^';
+      index = 1;
+      anchorStart = true;
+    }
+
+    let endIndex = pattern.length;
+    if (endIndex > index && pattern.endsWith('|') && !pattern.endsWith('\\|')) {
+      anchorEnd = true;
+      endIndex -= 1;
+    }
+
+    for (; index < endIndex; index += 1) {
+      const character = pattern[index];
+
+      if (character === '*') {
+        source += '.*';
+      } else if (character === '^') {
+        source += '(?:[^A-Za-z0-9_.%-]|$)';
+      } else {
+        source += character.replace(/[.*+?${}()|[\]\\]/g, '\\$&');
+      }
+    }
+
+    if (anchorEnd) source += '$';
+    if (!anchorStart && !source.startsWith('^')) source = source || '.*';
+
+    return new RegExp(source, 'i');
+  }
+
+  function parseEasyListMatcher(value: string): TextMatcher {
+    const trimmed = value.trim();
+
+    if (trimmed.startsWith('/') && trimmed.lastIndexOf('/') > 0) {
+      const end = trimmed.lastIndexOf('/');
+      const source = trimmed.slice(1, end);
+      const flags = trimmed.slice(end + 1).replace(/[^imsu]/g, '');
+      try {
+        return new RegExp(source, flags);
+      } catch {
+        return source;
+      }
+    }
+
+    if (
+      (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'"))
+    ) {
+      return trimmed.slice(1, -1).replace(/\\(["'\\])/g, '$1');
+    }
+
+    return trimmed;
+  }
+
+  function findClosingPseudoParen(
+    selector: string,
+    openIndex: number,
+  ): number {
+    let depth = 1;
+    let quote = '';
+    let regex = false;
+    let escaped = false;
+
+    for (let index = openIndex + 1; index < selector.length; index += 1) {
+      const character = selector[index];
+
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+
+      if (character === '\\') {
+        escaped = true;
+        continue;
+      }
+
+      if (quote) {
+        if (character === quote) quote = '';
+        continue;
+      }
+
+      if (character === '"' || character === "'") {
+        quote = character;
+        continue;
+      }
+
+      if (character === '/' && selector[index - 1] !== '\\') {
+        regex = !regex;
+        continue;
+      }
+
+      if (regex) continue;
+
+      if (character === '(') depth += 1;
+      else if (character === ')') {
+        depth -= 1;
+        if (depth === 0) return index;
+      }
+    }
+
+    return -1;
+  }
+
+  function parseProceduralCosmeticSelector(
+    rawSelector: string,
+    line: number,
+    warnings: EasyListWarning[],
+  ): {
+    query: SelectQuery | string | null;
+    remove: boolean;
+  } {
+    let selector = rawSelector.trim();
+    let remove = false;
+
+    if (selector.endsWith(':remove()')) {
+      remove = true;
+      selector = selector.slice(0, -':remove()'.length);
+    }
+
+    const tokenExpression = /:(has-text|upward|xpath)\(/g;
+    tokenExpression.lastIndex = 0;
+    const first = tokenExpression.exec(selector);
+
+    if (!first) {
+      return { query: selector, remove };
+    }
+
+    let query = select(first.index > 0 ? selector.slice(0, first.index) : undefined);
+    let cursor = first.index;
+    tokenExpression.lastIndex = first.index;
+
+    while (cursor < selector.length) {
+      tokenExpression.lastIndex = cursor;
+      const match = tokenExpression.exec(selector);
+
+      if (!match || match.index !== cursor) {
+        const trailing = selector.slice(cursor).trim();
+        if (trailing) {
+          warnings.push(easyListWarning(
+            'cosmetic-procedural-trailing',
+            `Unsupported trailing selector syntax "${trailing}".`,
+            { line, source: rawSelector },
+          ));
+          return { query: null, remove };
+        }
+        break;
+      }
+
+      const openIndex = match.index + match[0].length - 1;
+      const closeIndex = findClosingPseudoParen(selector, openIndex);
+
+      if (closeIndex < 0) {
+        warnings.push(easyListWarning(
+          'cosmetic-unclosed-pseudo',
+          `Unclosed :${match[1]}() pseudo.`,
+          { line, source: rawSelector },
+        ));
+        return { query: null, remove };
+      }
+
+      const argument = selector.slice(openIndex + 1, closeIndex).trim();
+
+      if (match[1] === 'has-text') {
+        query = query.hasText(parseEasyListMatcher(argument));
+      } else if (match[1] === 'upward') {
+        if (/^\d+$/.test(argument)) {
+          const amount = Number(argument);
+          if (amount !== 1) {
+            warnings.push(easyListWarning(
+              'upward-distance',
+              `:upward(${amount}) is approximated by ${amount} parent() steps.`,
+              { line, source: rawSelector, severity: 'info' },
+            ));
+          }
+          for (let step = 0; step < Math.max(0, amount); step += 1) query = query.parent();
+        } else {
+          query = query.closest(argument);
+        }
+      } else if (match[1] === 'xpath') {
+        query = query.xpath(argument);
+      }
+
+      cursor = closeIndex + 1;
+    }
+
+    return { query, remove };
+  }
+
+  function parseEasyListDomains(
+    raw: string,
+    line: number,
+    warnings: EasyListWarning[],
+  ): HostMatcher | undefined {
+    if (!raw) return undefined;
+
+    const hosts: string[] = [];
+
+    for (const entry of raw.split(',')) {
+      const host = entry.trim();
+      if (!host) continue;
+
+      if (host.startsWith('~')) {
+        warnings.push(easyListWarning(
+          'negative-cosmetic-domain',
+          `Excluded cosmetic domain "${host}" is not representable by a Blocker host matcher.`,
+          { line, source: raw },
+        ));
+        continue;
+      }
+
+      hosts.push(host);
+    }
+
+    if (!hosts.length) return undefined;
+    return hosts.length === 1 ? hosts[0] : hosts;
+  }
+
+  function parseCosmeticEasyListLine(
+    lineText: string,
+    lineNumber: number,
+    options: EasyListImportOptions,
+    warnings: EasyListWarning[],
+  ): Rule[] | null {
+    const exceptionIndex = lineText.indexOf('#@#');
+    if (exceptionIndex >= 0) {
+      warnings.push(easyListWarning(
+        'cosmetic-exception',
+        'Cosmetic exception filters (#@#) are not representable because Blocker has no cosmetic allow-rule layer.',
+        { line: lineNumber, source: lineText },
+      ));
+      return null;
+    }
+
+    let separator = '##';
+    let index = lineText.indexOf(separator);
+
+    if (index < 0) {
+      separator = '#?#';
+      index = lineText.indexOf(separator);
+    }
+
+    if (index < 0) return null;
+
+    const rawDomains = lineText.slice(0, index);
+    const rawSelector = lineText.slice(index + separator.length);
+    const parsed = parseProceduralCosmeticSelector(rawSelector, lineNumber, warnings);
+
+    if (!parsed.query) return null;
+
+    const host = parseEasyListDomains(rawDomains, lineNumber, warnings);
+    const actionMode = options.cosmeticAction || 'preserve';
+    const shouldRemove = actionMode === 'remove' || (actionMode === 'preserve' && parsed.remove);
+    const idPrefix = options.idPrefix || 'easylist';
+
+    return [{
+      id: `${idPrefix}-cosmetic-${lineNumber}-${hashEasyListLine(lineText)}`,
+      name: `Imported cosmetic filter ${lineNumber}`,
+      type: RULE_TYPES.DOM,
+      host,
+      actions: [
+        shouldRemove
+          ? remove(parsed.query)
+          : hide(parsed.query),
+      ],
+    }];
+  }
+
+  function parseNetworkDomainOption(
+    option: string,
+  ): { include: string[]; exclude: string[] } {
+    const value = option.slice('domain='.length);
+    const include: string[] = [];
+    const exclude: string[] = [];
+
+    for (const part of value.split('|')) {
+      const domain = part.trim();
+      if (!domain) continue;
+      if (domain.startsWith('~')) exclude.push(domain.slice(1));
+      else include.push(domain);
+    }
+
+    return { include, exclude };
+  }
+
+  function pageHostAllowed(hostname: string, include: readonly string[], exclude: readonly string[]): boolean {
+    const matches = (domain: string): boolean =>
+      hostname === domain || hostname.endsWith(`.${domain}`);
+
+    for (const domain of exclude) if (matches(domain)) return false;
+    if (!include.length) return true;
+    for (const domain of include) if (matches(domain)) return true;
+    return false;
+  }
+
+  function parseNetworkEasyListLine(
+    lineText: string,
+    lineNumber: number,
+    options: EasyListImportOptions,
+    warnings: EasyListWarning[],
+  ): Rule[] | null {
+    const allow = lineText.startsWith('@@');
+    const raw = allow ? lineText.slice(2) : lineText;
+    const split = splitEasyListOptions(raw);
+    const pattern = split.pattern.trim();
+
+    if (!pattern) return null;
+
+    let matcher: RegExp;
+    try {
+      matcher = easyListPatternToRegExp(pattern);
+    } catch (error) {
+      warnings.push(easyListWarning(
+        'network-pattern-invalid',
+        `Could not parse network pattern: ${error instanceof Error ? error.message : String(error)}`,
+        { line: lineNumber, source: lineText },
+      ));
+      return null;
+    }
+
+    const optionSet = new Set(split.options.map((entry) => entry.toLowerCase()));
+    const idPrefix = options.idPrefix || 'easylist';
+    const domainOption = split.options.find((entry) => entry.toLowerCase().startsWith('domain='));
+    const pageDomains = domainOption
+      ? parseNetworkDomainOption(domainOption)
+      : { include: [] as string[], exclude: [] as string[] };
+
+    const methodOption = split.options.find((entry) => entry.toLowerCase().startsWith('method='));
+    const method = methodOption ? methodOption.slice('method='.length).toUpperCase() : '';
+
+    for (const option of optionSet) {
+      const base = option.startsWith('~') ? option.slice(1) : option;
+
+      if (
+        option.startsWith('~') &&
+        (
+          base === 'script' ||
+          base === 'xhr' ||
+          base === 'xmlhttprequest' ||
+          base === 'worker' ||
+          EASYLIST_PASSIVE_RESOURCE_OPTIONS.has(base)
+        )
+      ) {
+        warnings.push(easyListWarning(
+          'negative-resource-option',
+          `Negated resource option "${option}" cannot be safely reproduced by Blocker's interceptor surfaces.`,
+          { line: lineNumber, source: lineText },
+        ));
+        return null;
+      }
+
+      if (
+        base.startsWith('redirect=') ||
+        base.startsWith('redirect-rule=') ||
+        base.startsWith('removeparam=') ||
+        base === 'badfilter'
+      ) {
+        warnings.push(easyListWarning(
+          'behavioral-network-option',
+          `Behavioral option "${option}" changes filter semantics and is not imported as a plain block/allow rule.`,
+          { line: lineNumber, source: lineText },
+        ));
+        return null;
+      }
+
+      if (
+        EASYLIST_PASSIVE_RESOURCE_OPTIONS.has(base) ||
+        base === 'third-party' ||
+        base === '1p' ||
+        base === '3p' ||
+        base === 'important'
+      ) {
+        warnings.push(easyListWarning(
+          'network-option-partial',
+          `Network option "${option}" is not fully reproduced by the browser runtime.`,
+          { line: lineNumber, source: lineText, severity: 'info' },
+        ));
+      }
+    }
+
+    const script = optionSet.has('script');
+    const xhr = optionSet.has('xhr') || optionSet.has('xmlhttprequest');
+    const worker = optionSet.has('worker');
+    const explicitPassive = Array.from(optionSet).some((entry) =>
+      EASYLIST_PASSIVE_RESOURCE_OPTIONS.has(entry.replace(/^~/, '')),
+    );
+
+    if (explicitPassive && !script && !xhr && !worker) {
+      warnings.push(easyListWarning(
+        'passive-resource-not-intercepted',
+        'This filter targets a passive browser subresource that Blocker does not currently intercept.',
+        { line: lineNumber, source: lineText },
+      ));
+      return null;
+    }
+
+    const testPage = (hostname: string): boolean =>
+      pageHostAllowed(hostname, pageDomains.include, pageDomains.exclude);
+    const testUrl = (url: string): boolean => {
+      matcher.lastIndex = 0;
+      return matcher.test(url);
+    };
+
+    const rules: Rule[] = [];
+    const baseId = `${idPrefix}-network-${lineNumber}-${hashEasyListLine(lineText)}`;
+
+    const createFetchRule = (suffix: string): FetchRule => ({
+      id: `${baseId}-${suffix}`,
+      name: `Imported network filter ${lineNumber}`,
+      type: RULE_TYPES.FETCH,
+      action: allow ? FETCH_ACTIONS.ALLOW : FETCH_ACTIONS.BLOCK,
+      match: (context) =>
+        testPage(context.page.hostname) &&
+        (!method || context.method === method) &&
+        testUrl(context.href),
+    });
+
+    const createScriptRule = (
+      suffix: string,
+      kinds: readonly ScriptKind[],
+    ): ScriptRule => ({
+      id: `${baseId}-${suffix}`,
+      name: `Imported executable-resource filter ${lineNumber}`,
+      type: RULE_TYPES.SCRIPT,
+      host: pageDomains.include.length
+        ? (pageDomains.include.length === 1 ? pageDomains.include[0] : pageDomains.include)
+        : undefined,
+      kind: kinds,
+      action: allow ? SCRIPT_ACTIONS.ALLOW : SCRIPT_ACTIONS.BLOCK,
+      match: (context) =>
+        testPage(context.page.hostname) &&
+        (!method || !context.method || context.method === method) &&
+        testUrl(context.url),
+    });
+
+    if (script) {
+      rules.push(createScriptRule('script', [
+        SCRIPT_KINDS.ELEMENT,
+        SCRIPT_KINDS.PRELOAD,
+        SCRIPT_KINDS.MODULE_PRELOAD,
+      ]));
+      return rules;
+    }
+
+    if (xhr) {
+      rules.push(
+        createFetchRule('fetch'),
+        createScriptRule('xhr', [SCRIPT_KINDS.XHR]),
+      );
+      return rules;
+    }
+
+    if (worker) {
+      rules.push(createScriptRule('worker', [
+        SCRIPT_KINDS.WORKER,
+        SCRIPT_KINDS.SHARED_WORKER,
+        SCRIPT_KINDS.SERVICE_WORKER,
+      ]));
+      return rules;
+    }
+
+    // Generic network filters cover the surfaces Blocker can intercept:
+    // fetch, XHR and executable resources. Passive img/media/css requests are
+    // intentionally not claimed as covered.
+    rules.push(
+      createFetchRule('fetch'),
+      createScriptRule('executable', [
+        SCRIPT_KINDS.ELEMENT,
+        SCRIPT_KINDS.PRELOAD,
+        SCRIPT_KINDS.MODULE_PRELOAD,
+        SCRIPT_KINDS.XHR,
+        SCRIPT_KINDS.WORKER,
+        SCRIPT_KINDS.SHARED_WORKER,
+        SCRIPT_KINDS.SERVICE_WORKER,
+      ]),
+    );
+
+    warnings.push(easyListWarning(
+      'generic-network-runtime-scope',
+      'Generic imported network filter covers fetch/XHR/executable resources, not every passive browser request.',
+      { line: lineNumber, source: lineText, severity: 'info' },
+    ));
+
+    return rules;
+  }
+
+  function parseEasyList(
+    text: string,
+    options: EasyListImportOptions = {},
+  ): EasyListImportResult {
+    const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
+    const rules: Rule[] = [];
+    const warnings: EasyListWarning[] = [];
+    const unsupportedLines: Array<{ line: number; text: string; reason: string }> = [];
+    const stats: EasyListImportStats = {
+      lines: lines.length,
+      parsed: 0,
+      rules: 0,
+      cosmetic: 0,
+      network: 0,
+      ignored: 0,
+      unsupported: 0,
+    };
+
+    for (let index = 0; index < lines.length; index += 1) {
+      const lineNumber = index + 1;
+      const lineText = lines[index].trim();
+
+      if (
+        !lineText ||
+        lineText.startsWith('!') ||
+        lineText.startsWith('[')
+      ) {
+        stats.ignored += 1;
+        continue;
+      }
+
+      const warningStart = warnings.length;
+      let parsedRules: Rule[] | null = null;
+      let kind: 'cosmetic' | 'network' = 'network';
+
+      if (
+        lineText.includes('##') ||
+        lineText.includes('#@#') ||
+        lineText.includes('#?#')
+      ) {
+        kind = 'cosmetic';
+        parsedRules = parseCosmeticEasyListLine(lineText, lineNumber, options, warnings);
+      } else {
+        parsedRules = parseNetworkEasyListLine(lineText, lineNumber, options, warnings);
+      }
+
+      if (!parsedRules?.length) {
+        const reason = warnings.slice(warningStart).map((warning) => warning.message).join(' ') ||
+          'Unsupported or unrecognized filter.';
+        unsupportedLines.push({ line: lineNumber, text: lineText, reason });
+        stats.unsupported += 1;
+        continue;
+      }
+
+      rules.push(...parsedRules);
+      stats.parsed += 1;
+      stats.rules += parsedRules.length;
+      stats[kind] += 1;
+    }
+
+    const registeredRules = options.register
+      ? addRules(rules, {
+          replace: options.replace,
+          run: options.run,
+        })
+      : [];
+
+    return {
+      rules,
+      registeredRules,
+      warnings,
+      unsupportedLines,
+      stats,
+    };
+  }
+
+  function validateEasyList(
+    text: string,
+    options: EasyListImportOptions = {},
+  ): EasyListValidationResult {
+    const result = parseEasyList(text, { ...options, register: false });
+    return {
+      valid: result.unsupportedLines.length === 0,
+      warnings: result.warnings,
+      unsupportedLines: result.unsupportedLines,
+      stats: result.stats,
+    };
+  }
+
+  const easyList: EasyListAPI = Object.freeze({
+    export: exportEasyList,
+    parse: parseEasyList,
+    import(text: string, options: EasyListImportOptions = {}): EasyListImportResult {
+      return parseEasyList(text, { ...options, register: options.register ?? true });
+    },
+    compileRule: compileRuleToEasyList,
+    compileSelector: selectorTargetToEasyList,
+    validate: validateEasyList,
+  });
+
+
   function processQueue(): void {
     const queue = globalWindow.BlockerQueue;
     if (!Array.isArray(queue)) return;
@@ -2781,6 +5027,7 @@ class SelectQuery {
     installScriptInterceptors,
     uninstallScriptInterceptors,
     debug,
+    easyList,
     get ready() { return INTERNAL.initialized; },
     get rules() { return getRules(); },
     get domRules() { return [...INTERNAL.domRules]; },
@@ -3085,6 +5332,77 @@ class SelectQuery {
    *   mutationFullScanThreshold: 120,
    *   interceptWebAssembly: false,
    * });
+   *
+   * 22. Export current Blocker rules to uBlock-compatible syntax
+   *
+   * const ublock = Blocker.easyList.export({
+   *   target: 'ublock',
+   *   comments: true,
+   *   unsupported: 'comment',
+   *   removal: 'preserve',
+   * });
+   *
+   * console.log(ublock.text);
+   * console.table(ublock.conversions);
+   *
+   * 23. Export portable EasyList syntax
+   *
+   * const easylist = Blocker.easyList.export({
+   *   target: 'easylist',
+   *   removal: 'hide',
+   * });
+   *
+   * 24. Parse without registering
+   *
+   * const parsed = Blocker.easyList.parse(`
+   *   ||doubleclick.net^$script
+   *   ||analytics.example.com^$xhr
+   *   youtube.com##ytd-ad-slot-renderer
+   *   x.com##article:has-text(/promoted|patrocinado/i):remove()
+   * `);
+   *
+   * console.log(parsed.rules);
+   * console.table(parsed.warnings);
+   *
+   * 25. Import + immediately register supported filters
+   *
+   * Blocker.easyList.import(`
+   *   ||googletagmanager.com^$script
+   *   example.com##.advertisement
+   * `, {
+   *   register: true,
+   *   cosmeticAction: 'preserve',
+   * });
+   *
+   * 26. Compile a selector
+   *
+   * const selectorConversion = Blocker.easyList.compileSelector(
+   *   Blocker.select('span')
+   *     .hasText(/promoted|patrocinado/i)
+   *     .closest('article'),
+   *   { target: 'ublock' },
+   * );
+   *
+   * // → span:has-text(/promoted|patrocinado/i):upward(article)
+   *
+   * 27. Compile one rule
+   *
+   * const ruleConversion = Blocker.easyList.compileRule({
+   *   id: 'remove-promoted',
+   *   host: ['x.com', 'twitter.com'],
+   *   actions: [
+   *     Blocker.remove(
+   *       Blocker.select('article').hasText(/promoted|patrocinado/i),
+   *     ),
+   *   ],
+   * }, { target: 'ublock' });
+   *
+   * 28. Validate a downloaded list before registering
+   *
+   * const validation = Blocker.easyList.validate(listText);
+   * if (!validation.valid) {
+   *   console.table(validation.unsupportedLines);
+   * }
    *
    * Browser limitation:
    * JavaScript cannot universally hook the native dynamic import() operator.
