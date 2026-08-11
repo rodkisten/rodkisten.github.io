@@ -1,4 +1,4 @@
-/* Auto-generated from toaster/toaster.ts. at 8/10/2026, 6:18:18 PM Do not edit directly. */
+/* Auto-generated from toaster/toaster.ts. at 8/11/2026, 12:36:11 PM Do not edit directly. */
 var RodToaster = (function() {
 
 //#region \0rolldown/runtime.js
@@ -22,7 +22,7 @@ var RodToaster = (function() {
 	var toaster_exports = /* @__PURE__ */ __exportAll({ default: () => toaster_default });
 	(function installRodToaster(globalWindow) {
 		"use strict";
-		const VERSION = "4.6.0";
+		const VERSION = "4.7.0";
 		const TOAST_GLOBAL = "RodToaster";
 		const INSPECTOR_GLOBAL = "RodObjectInspector";
 		const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -166,8 +166,9 @@ var RodToaster = (function() {
 			size: "compact",
 			stacked: true,
 			stackVisible: 3,
-			stackMaxHeight: 660,
-			stackViewportRatio: .62,
+			stackMaxHeight: 520,
+			stackViewportRatio: .48,
+			stackAutoCollapseThreshold: 6,
 			stackToolbar: true,
 			persistAcrossSpaNavigation: true,
 			minimizeOnSpaNavigation: true,
@@ -529,7 +530,7 @@ var RodToaster = (function() {
 		function isValidToaster(value) {
 			if (typeof value !== "function") return false;
 			const candidate = value;
-			return typeof candidate.loading === "function" && typeof candidate.success === "function" && typeof candidate.error === "function" && typeof candidate.confirm === "function" && typeof candidate.picker === "function" && typeof candidate.bringToFront === "function" && typeof candidate.destroy === "function";
+			return typeof candidate.loading === "function" && typeof candidate.success === "function" && typeof candidate.error === "function" && typeof candidate.confirm === "function" && typeof candidate.picker === "function" && typeof candidate.multiLoading === "function" && typeof candidate.bringToFront === "function" && typeof candidate.destroy === "function";
 		}
 		if (isValidToaster(existingToaster)) {
 			typedGlobalWindow[TOAST_GLOBAL] = existingToaster;
@@ -733,7 +734,7 @@ var RodToaster = (function() {
       .rod-toast-stack__list::before{z-index:-1}.rod-toast-stack__list::after{z-index:-2}
       .rod-toast-stack[data-expanded="false"][data-stack-depth="2"] .rod-toast-stack__list::before,.rod-toast-stack[data-expanded="false"][data-stack-depth="3"] .rod-toast-stack__list::before{opacity:.94;transform:translateY(12px) scaleX(.95)}
       .rod-toast-stack[data-expanded="false"][data-stack-depth="3"] .rod-toast-stack__list::after{opacity:.76;transform:translateY(22px) scaleX(.89)}
-      .rod-toast-stack[data-expanded="true"] .rod-toast-stack__list{max-height:min(var(--rod-toast-stack-max-height),var(--rod-toast-stack-max-viewport));overflow-x:hidden;overflow-y:auto;padding:2px;pointer-events:auto;-webkit-overflow-scrolling:touch}
+      .rod-toast-stack[data-expanded="true"] .rod-toast-stack__list{max-height:min(var(--rod-toast-stack-max-height),var(--rod-toast-stack-max-viewport),50dvh);overflow-x:hidden;overflow-y:auto;padding:2px 4px 8px 2px;pointer-events:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-gutter:stable}
       .rod-toast-stack[data-expanded="false"] .rod-toast{display:none}.rod-toast-stack[data-expanded="false"] .rod-toast[data-stack-index="0"]{display:grid;cursor:grab}
       .rod-toast{--rod-toast-bg:var(--rod-surface);--rod-toast-border:var(--rod-border);--rod-toast-text:var(--rod-text);--rod-toast-accent:rgba(244,244,245,.76);position:relative;z-index:1;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:15px;width:100%;min-width:0;max-width:100%;min-height:78px;max-height:min(72dvh,760px);overflow:auto;padding:17px 14px 17px 18px;border:1px solid var(--rod-toast-border);border-radius:var(--rod-toaster-border-radius,22px);background:var(--rod-toast-bg);color:var(--rod-toast-text);box-shadow:var(--rod-shadow);opacity:0;transform:translate3d(0,-14px,0) scale(.975);transform-origin:top center;transition:opacity 180ms,transform 260ms var(--rod-ease-spring),border-color 140ms,background-color 140ms;pointer-events:auto;touch-action:none;user-select:text;overscroll-behavior:contain;scrollbar-width:thin;contain:layout paint style}
       .rod-toast-stack[data-position^="bottom"] .rod-toast{transform:translate3d(0,14px,0) scale(.975);transform-origin:bottom center}.rod-toast::before{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(118deg,rgba(255,255,255,.035),transparent 34%,transparent 74%,rgba(255,255,255,.012));pointer-events:none}.rod-toast[data-visible="true"]{opacity:1;transform:translate3d(0,0,0) scale(1)}.rod-toast:hover{border-color:var(--rod-border-strong)}
@@ -748,14 +749,14 @@ var RodToaster = (function() {
       .rod-toast[data-loading="true"][data-loading-icon="false"]{grid-template-columns:minmax(0,1fr) auto}.rod-toast[data-loading="true"][data-loading-icon="false"] .rod-toast__icon{display:none}.rod-toast[data-loading="true"][data-loading-content-empty="true"]{grid-template-columns:auto auto;justify-content:center;width:fit-content;min-width:0;max-width:min(100%,280px);margin-inline:auto}.rod-toast[data-loading="true"][data-loading-content-empty="true"] .rod-toast__content{display:none}
       .rod-toast__progress{display:grid;gap:7px;width:100%;margin-top:8px}.rod-toast__progress-meta{display:flex;justify-content:flex-end;min-height:14px;color:var(--rod-muted-soft);font:650 10px/1 system-ui,sans-serif}.rod-toast__progress-track{position:relative;width:100%;height:4px;overflow:hidden;border-radius:999px;background:var(--rod-overlay)}.rod-toast__progress-bar{position:absolute;inset:0 auto 0 0;width:var(--rod-loading-progress,0%);border-radius:inherit;background:linear-gradient(90deg,color-mix(in srgb,var(--rod-toast-accent) 84%,transparent),var(--rod-toast-accent));transition:width 420ms var(--rod-ease-soft)}.rod-toast:not([data-loading-animation="progress"]) .rod-toast__progress{display:none}.rod-toast[data-loading-indeterminate="true"] .rod-toast__progress-bar{width:38%;animation:rod-toast-progress-indeterminate 1.1s cubic-bezier(.4,0,.2,1) infinite}.rod-toast[data-loading-state="loading"] [data-loading-spinner="true"]{animation:rod-toast-spinner 850ms linear infinite}.rod-toast[data-loading-state="loading"] .rod-toast__icon[data-rod-icon-kind="image"][data-loading-spinner="true"]{animation:none}.rod-toast[data-loading-state="loading"] .rod-toast__icon[data-rod-icon-kind="image"][data-loading-spinner="true"]::after{content:"";position:absolute;z-index:2;right:-4px;bottom:-4px;width:12px;height:12px;border:2px solid var(--rod-surface);border-top-color:var(--rod-toast-accent);border-radius:999px;background:var(--rod-surface);box-shadow:0 1px 4px rgba(0,0,0,.28);animation:rod-toast-spinner 700ms linear infinite}.rod-toast[data-loading-state="loading"] [data-loading-pulse="true"]{animation:rod-toast-pulse 1.35s cubic-bezier(.4,0,.6,1) infinite}
       .rod-toast[data-confirm="true"],.rod-toast[data-rich="true"],.rod-toast[data-interactive="true"]{min-width:min(470px,calc(100vw - 28px));max-width:min(620px,calc(100vw - 28px));padding-block:19px;touch-action:pan-y}.rod-toast[data-confirm="true"] .rod-toast__content,.rod-toast[data-rich="true"] .rod-toast__content,.rod-toast[data-interactive="true"] .rod-toast__content{display:block;width:100%}.rod-toast[data-confirm="true"] .rod-toast__minimize,.rod-toast[data-rich="true"] .rod-toast__minimize,.rod-toast[data-interactive="true"] .rod-toast__minimize,.rod-toast[data-confirm="true"] .rod-toast__expand,.rod-toast[data-rich="true"] .rod-toast__expand,.rod-toast[data-interactive="true"] .rod-toast__expand{display:none!important}
-      .rod-toast__confirm,.rod-toast__rich,.rod-toast__interactive{display:grid;gap:17px;width:100%;min-width:0}.rod-toast__interactive-body{min-width:0;min-height:0}.rod-toast__confirm-actions{display:flex;flex-wrap:nowrap;justify-content:flex-end;gap:9px;width:100%;overflow-x:auto;scrollbar-width:none}.rod-toast__confirm-actions::-webkit-scrollbar{display:none}.rod-toast__confirm-actions .rod-toast__confirm-button{flex:1 1 0;min-width:0}.rod-toast__action-bar,.rod-toast__task-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:9px;width:100%}.rod-toast__confirm-button,.rod-toast__action-button,.rod-toast__task-button{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:0 15px;border:1px solid var(--rod-border);border-radius:12px;outline:0;background:var(--rod-overlay);color:var(--rod-text);font:650 12px/1 system-ui,sans-serif;cursor:pointer;transition:transform 160ms var(--rod-ease-spring),background-color 140ms,border-color 140ms,color 140ms}.rod-toast__confirm-button:hover:not(:disabled),.rod-toast__action-button:hover:not(:disabled),.rod-toast__task-button:hover:not(:disabled){border-color:var(--rod-border-strong);background:var(--rod-hover);transform:translateY(-2px)}.rod-toast__confirm-button:disabled,.rod-toast__action-button:disabled,.rod-toast__task-button:disabled{opacity:.5;cursor:wait}.rod-toast__confirm-button[data-variant="primary"],.rod-toast__action-button[data-variant="primary"]{border-color:var(--rod-text-strong);background:var(--rod-text-strong);color:var(--rod-surface)}.rod-toast__confirm-button[data-variant="danger"],.rod-toast__action-button[data-variant="danger"]{border-color:rgba(248,113,113,.3);background:rgba(127,29,29,.22);color:rgba(252,165,165,.98)}.rod-toast__confirm-button[data-variant="ghost"],.rod-toast__action-button[data-variant="ghost"]{border-color:transparent;background:transparent;color:var(--rod-muted)}
+      .rod-toast__confirm,.rod-toast__rich,.rod-toast__interactive{display:grid;gap:17px;width:100%;min-width:0}.rod-toast__interactive-body{min-width:0;min-height:0}.rod-toast__confirm-actions,.rod-toast__action-bar,.rod-toast__task-actions{display:flex;flex-flow:row wrap;align-items:stretch;justify-content:flex-end;gap:9px;width:100%;container-type:inline-size}.rod-toast__confirm-actions::-webkit-scrollbar{display:none}.rod-toast__confirm-button,.rod-toast__action-button,.rod-toast__task-button{appearance:none;display:inline-flex;flex:1 1 max-content;align-items:center;justify-content:center;gap:7px;min-width:min(100%,108px);max-width:100%;min-height:40px;padding:0 15px;border:1px solid var(--rod-border);border-radius:12px;outline:0;background:var(--rod-overlay);color:var(--rod-text);font:650 12px/1.2 system-ui,sans-serif;cursor:pointer;white-space:normal;text-wrap:balance;transition:transform 160ms var(--rod-ease-spring),background-color 140ms,border-color 140ms,color 140ms}.rod-toast__confirm-button span,.rod-toast__action-button span,.rod-toast__task-button span{min-width:0;overflow-wrap:anywhere}.rod-toast__confirm-button:hover:not(:disabled),.rod-toast__action-button:hover:not(:disabled),.rod-toast__task-button:hover:not(:disabled){border-color:var(--rod-border-strong);background:var(--rod-hover);transform:translateY(-2px)}.rod-toast__confirm-button:disabled,.rod-toast__action-button:disabled,.rod-toast__task-button:disabled{opacity:.5;cursor:wait}.rod-toast__confirm-button[data-variant="primary"],.rod-toast__action-button[data-variant="primary"]{border-color:var(--rod-text-strong);background:var(--rod-text-strong);color:var(--rod-surface)}.rod-toast__confirm-button[data-variant="danger"],.rod-toast__action-button[data-variant="danger"]{border-color:rgba(248,113,113,.3);background:rgba(127,29,29,.22);color:rgba(252,165,165,.98)}.rod-toast__confirm-button[data-variant="ghost"],.rod-toast__action-button[data-variant="ghost"]{border-color:transparent;background:transparent;color:var(--rod-muted)}@container(max-width:340px){.rod-toast__confirm-button,.rod-toast__action-button,.rod-toast__task-button{flex-basis:calc(50% - 5px)}}
       .rod-toast__details{overflow:hidden;border:1px solid var(--rod-border);border-radius:12px;background:var(--rod-overlay)}.rod-toast__details summary{display:flex;align-items:center;min-height:36px;padding:0 11px;color:var(--rod-muted);font:600 11px/1 system-ui,sans-serif;cursor:pointer}.rod-toast__details-body{max-height:280px;overflow:auto;padding:10px;border-top:1px solid var(--rod-border);font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
       .rod-toast__field{display:grid;gap:6px;min-width:0}.rod-toast__field-label{color:var(--rod-muted);font:600 10px/1.2 system-ui,sans-serif}.rod-toast__input,.rod-toast__select,.rod-toast__textarea{appearance:none;width:100%;min-width:0;min-height:40px;padding:9px 11px;border:1px solid var(--rod-border);border-radius:12px;outline:0;background:var(--rod-overlay);color:var(--rod-text-strong);font:16px/1.45 system-ui,sans-serif}.rod-toast__textarea{min-height:96px;resize:vertical}.rod-toast__input:focus,.rod-toast__select:focus,.rod-toast__textarea:focus{border-color:var(--rod-border-strong);box-shadow:0 0 0 4px color-mix(in srgb,var(--rod-focus) 18%,transparent)}
       .rod-toast__checkboxes{display:grid;gap:7px}.rod-toast__checkbox{display:flex;align-items:flex-start;gap:8px;color:var(--rod-muted);font:11px/1.45 system-ui,sans-serif;cursor:pointer}.rod-toast__checkbox input{width:15px;height:15px;margin:1px 0 0;accent-color:var(--rod-text-strong)}
       .rod-toast__validation{display:none;padding:8px 10px;border:1px solid rgba(248,113,113,.24);border-radius:10px;background:rgba(127,29,29,.16);color:rgba(252,165,165,.96);font:500 11px/1.45 system-ui,sans-serif}.rod-toast__validation[data-visible="true"]{display:block}.rod-toast__countdown{display:none;gap:5px;color:var(--rod-muted);font:500 10px/1.2 system-ui,sans-serif}.rod-toast__countdown[data-visible="true"]{display:grid}.rod-toast__countdown-track{position:relative;height:3px;overflow:hidden;border-radius:999px;background:var(--rod-overlay)}.rod-toast__countdown-bar{position:absolute;inset:0 auto 0 0;width:var(--rod-countdown-progress,100%);border-radius:inherit;background:var(--rod-text);transition:width 250ms linear}.rod-toast__task-status{color:var(--rod-muted-soft);font:650 9px/1 system-ui,sans-serif;letter-spacing:.04em;text-transform:uppercase}
       .rod-toast[data-completing="true"]{align-self:center;justify-self:center;grid-template-columns:1fr;gap:0;width:54px;min-width:54px;max-width:54px;height:54px;min-height:54px;max-height:54px;padding:0;overflow:hidden;border-radius:999px;background:var(--rod-surface);box-shadow:var(--rod-shadow-raised);cursor:default}.rod-toast[data-completing="true"] .rod-toast__content,.rod-toast[data-completing="true"] .rod-toast__actions{position:absolute;opacity:0;pointer-events:none}.rod-toast[data-completing="true"] .rod-toast__icon{justify-self:center;width:54px;min-width:54px;height:54px;margin:0}.rod-toast[data-completing="true"] .rod-icon-check-path{stroke-dasharray:24;stroke-dashoffset:24;animation:rod-toast-check-draw 280ms 100ms ease-out forwards}.rod-toast[data-success-exit="true"]{opacity:0;transform:translate3d(0,-18px,0) scale(.86)}
       @keyframes rod-toast-spinner{to{transform:rotate(360deg)}}@keyframes rod-toast-pulse{0%,100%{opacity:.55;transform:scale(.92)}50%{opacity:1;transform:scale(1.08)}}@keyframes rod-toast-progress-indeterminate{0%{left:-42%}50%{left:42%}100%{left:104%}}@keyframes rod-toast-check-draw{to{stroke-dashoffset:0}}@keyframes rod-toast-icon-enter{0%{opacity:0;transform:scale(.72) rotate(-9deg)}62%{opacity:1;transform:scale(1.08) rotate(1deg)}100%{opacity:1;transform:scale(1)}}@keyframes rod-toast-toolbar-enter{from{opacity:0;transform:translateY(-8px) scale(.98)}to{opacity:1;transform:none}}@keyframes rod-toast-manager-enter{0%{opacity:0;transform:translateY(-10px) scale(.72)}70%{opacity:1;transform:translateY(1px) scale(1.06)}100%{opacity:1;transform:none}}
-      @media(max-width:560px){.rod-toast-stack{--rod-toast-width:calc(100vw - 16px)}.rod-toast-stack[data-position^="top"]{top:max(env(safe-area-inset-top,0px),8px);right:8px;left:8px}.rod-toast-stack[data-position^="bottom"]{right:8px;bottom:max(env(safe-area-inset-bottom,0px),8px);left:8px}.rod-toast[data-confirm="true"],.rod-toast[data-rich="true"],.rod-toast[data-interactive="true"]{min-width:0;max-width:none}.rod-toast__action-bar,.rod-toast__task-actions{display:grid;grid-template-columns:1fr}.rod-toast__action-button,.rod-toast__task-button{width:100%}.rod-toast__confirm-actions{display:flex;flex-wrap:nowrap}.rod-toast__confirm-button{width:auto;min-width:0;flex:1 1 0}}
+      @media(max-width:560px){.rod-toast-stack{--rod-toast-width:calc(100vw - 16px)}.rod-toast-stack[data-position^="top"]{top:max(env(safe-area-inset-top,0px),8px);right:8px;left:8px}.rod-toast-stack[data-position^="bottom"]{right:8px;bottom:max(env(safe-area-inset-bottom,0px),8px);left:8px}.rod-toast[data-confirm="true"],.rod-toast[data-rich="true"],.rod-toast[data-interactive="true"]{min-width:0;max-width:none}.rod-toast__confirm-actions,.rod-toast__action-bar,.rod-toast__task-actions{gap:6px}.rod-toast__confirm-button,.rod-toast__action-button,.rod-toast__task-button{min-width:min(100%,96px);min-height:36px;padding-inline:10px;font-size:10px}}
      
       .rod-toast-stack[data-size="compact"]{--rod-toast-width:min(420px,calc(100vw - 16px));--rod-toaster-font-size:11px;--rod-toaster-line-height:1;gap:4px}
       .rod-toast-stack[data-size="compact"] .rod-toast{min-height:48px;max-height:min(64dvh,620px);gap:9px;padding:8px 6px 8px 10px;border-radius:12px}
@@ -784,6 +785,26 @@ var RodToaster = (function() {
       .rod-toast-stack[data-size="large"] .rod-toast__confirm-button,.rod-toast-stack[data-size="large"] .rod-toast__action-button,.rod-toast-stack[data-size="large"] .rod-toast__task-button{min-height:46px;padding:0 18px;font-size:13px}
       @media(max-width:560px){.rod-toast-stack[data-size="compact"],.rod-toast-stack[data-size="comfortable"],.rod-toast-stack[data-size="large"]{--rod-toast-width:calc(100vw - 16px)}.rod-toast-stack[data-size="large"] .rod-toast{min-height:78px;gap:14px;padding:17px 12px 17px 16px}.rod-toast-stack[data-size="large"] .rod-toast[data-confirm="true"],.rod-toast-stack[data-size="large"] .rod-toast[data-rich="true"],.rod-toast-stack[data-size="large"] .rod-toast[data-interactive="true"]{min-width:0;max-width:none}}
 
+
+      /* Multi loading manager */
+      .rod-toast[data-multi-loading="true"]{width:min(620px,calc(100vw - 20px));max-width:min(620px,calc(100vw - 20px));max-height:none;overflow:hidden;padding:0;grid-template-columns:1fr;gap:0;touch-action:pan-y}
+      .rod-toast[data-multi-loading="true"]>.rod-toast__icon,.rod-toast[data-multi-loading="true"]>.rod-toast__actions{display:none!important}
+      .rod-toast[data-multi-loading="true"]>.rod-toast__content{display:block;width:100%;min-width:0;overflow:hidden}
+      .rod-multi-loading{display:grid;grid-template-rows:auto minmax(0,1fr);width:100%;min-width:0;max-height:var(--rod-multi-max-height,min(50dvh,520px));overflow:hidden}
+      .rod-multi-loading__header{position:relative;z-index:2;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:13px 13px 11px 15px;border-bottom:1px solid var(--rod-border);background:var(--rod-surface)}
+      .rod-multi-loading__heading{display:grid;gap:4px;min-width:0}.rod-multi-loading__title{overflow:hidden;color:var(--rod-text-strong);font:700 13px/1.2 system-ui,sans-serif;text-overflow:ellipsis;white-space:nowrap}.rod-multi-loading__summary{overflow:hidden;color:var(--rod-muted);font:600 10px/1.2 system-ui,sans-serif;text-overflow:ellipsis;white-space:nowrap}
+      .rod-multi-loading__header-actions{display:flex;align-items:center;gap:5px}.rod-multi-loading__header-button{appearance:none;display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:31px;padding:0 9px;border:1px solid var(--rod-border);border-radius:9px;background:var(--rod-overlay);color:var(--rod-muted);font:650 10px/1 system-ui,sans-serif;cursor:pointer;touch-action:manipulation}.rod-multi-loading__header-button:hover{border-color:var(--rod-border-strong);color:var(--rod-text-strong);background:var(--rod-hover)}
+      .rod-multi-loading__list{display:flex;flex-direction:column;gap:0;min-height:0;max-height:var(--rod-multi-list-height,min(42dvh,440px));overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:var(--rod-border-strong) transparent;scrollbar-gutter:stable}
+      .rod-multi-loading__empty{display:grid;place-items:center;min-height:90px;padding:24px;color:var(--rod-muted);font:500 11px/1.4 system-ui,sans-serif;text-align:center}
+      .rod-multi-loading__item{--rod-multi-accent:var(--rod-toast-accent);position:relative;display:grid;grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:10px;min-height:58px;padding:9px 10px 9px 12px;border-bottom:1px solid var(--rod-border);background:transparent;opacity:1;transform:translate3d(0,0,0);transform-origin:center;transition:opacity 260ms ease,transform 340ms var(--rod-ease-spring),max-height 360ms var(--rod-ease-spring),min-height 360ms var(--rod-ease-spring),padding 360ms var(--rod-ease-spring),margin 360ms var(--rod-ease-spring),background-color 220ms,border-color 220ms}
+      .rod-multi-loading__item:last-child{border-bottom:0}.rod-multi-loading__item[data-status="error"]{background:color-mix(in srgb,rgba(251,113,133,.12) 60%,transparent)}.rod-multi-loading__item[data-status="cancelled"]{opacity:.62}
+      .rod-multi-loading__lead{position:relative;display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--rod-border);border-radius:10px;background:var(--rod-overlay);color:var(--rod-muted);transition:width 340ms var(--rod-ease-spring),height 340ms var(--rod-ease-spring),border-radius 340ms var(--rod-ease-spring),background-color 220ms,color 220ms,transform 340ms var(--rod-ease-spring)}.rod-multi-loading__lead svg{width:15px;height:15px}.rod-multi-loading__lead[data-spin="true"] svg{animation:rod-toast-spinner 850ms linear infinite}.rod-multi-loading__lead .rod-toast__icon-image{width:100%;height:100%;border-radius:inherit;object-fit:cover}
+      .rod-multi-loading__copy{display:grid;gap:3px;min-width:0;transition:opacity 180ms,width 320ms var(--rod-ease-spring),transform 320ms var(--rod-ease-spring)}.rod-multi-loading__item-title{overflow:hidden;color:var(--rod-text-strong);font:650 12px/1.25 system-ui,sans-serif;text-overflow:ellipsis;white-space:nowrap}.rod-multi-loading__item-description{overflow:hidden;color:var(--rod-muted);font:500 10px/1.3 system-ui,sans-serif;text-overflow:ellipsis;white-space:nowrap}.rod-multi-loading__progress{display:flex;align-items:center;gap:7px;margin-top:2px}.rod-multi-loading__track{position:relative;flex:1;height:3px;overflow:hidden;border-radius:999px;background:var(--rod-overlay)}.rod-multi-loading__bar{position:absolute;inset:0 auto 0 0;width:var(--rod-multi-progress,0%);border-radius:inherit;background:var(--rod-toast-accent);transition:width 360ms var(--rod-ease-soft)}.rod-multi-loading__progress-label{min-width:30px;color:var(--rod-muted-soft);font:650 9px/1 ui-monospace,monospace;text-align:right}
+      .rod-multi-loading__actions{display:flex;align-items:center;justify-content:flex-end;gap:4px}.rod-multi-loading__button{appearance:none;display:grid;place-items:center;width:31px;height:31px;padding:0;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--rod-muted);cursor:pointer;touch-action:manipulation;transition:transform 160ms var(--rod-ease-spring),background-color 140ms,border-color 140ms,color 140ms}.rod-multi-loading__button:hover,.rod-multi-loading__button:focus-visible{border-color:var(--rod-border);background:var(--rod-hover);color:var(--rod-text-strong);transform:scale(1.04)}.rod-multi-loading__button[data-action="retry"]{width:auto;display:inline-flex;gap:5px;padding-inline:8px;color:rgba(253,186,116,.98);font:650 9px/1 system-ui,sans-serif}.rod-multi-loading__button[data-action="retry"] svg{width:13px;height:13px}.rod-multi-loading__button:disabled{opacity:.4;cursor:wait}
+      .rod-multi-loading__item[data-status="success"] .rod-multi-loading__lead{border-color:rgba(74,222,128,.36);background:rgba(34,197,94,.16);color:rgb(74,222,128)}.rod-multi-loading__item[data-status="error"] .rod-multi-loading__lead{border-color:rgba(251,113,133,.34);background:rgba(190,18,60,.14);color:rgb(251,113,133)}
+      .rod-multi-loading__item[data-success-morph="true"]{align-self:center;width:42px;min-width:42px;max-width:42px;min-height:42px;max-height:42px;margin-block:5px;padding:5px;border:1px solid rgba(74,222,128,.25);border-radius:999px;background:rgba(34,197,94,.12);grid-template-columns:30px 0 0;gap:0;overflow:hidden}.rod-multi-loading__item[data-success-morph="true"] .rod-multi-loading__lead{width:30px;height:30px;border-radius:999px;transform:scale(1.02)}.rod-multi-loading__item[data-success-morph="true"] .rod-multi-loading__copy,.rod-multi-loading__item[data-success-morph="true"] .rod-multi-loading__actions{width:0;opacity:0;overflow:hidden;pointer-events:none;transform:scale(.9)}
+      .rod-multi-loading__item[data-removing="true"]{min-height:0!important;max-height:0!important;margin:0!important;padding-block:0!important;border-width:0;opacity:0;transform:translate3d(0,-7px,0) scale(.92);overflow:hidden}
+      @media(max-width:560px){.rod-toast[data-multi-loading="true"]{width:calc(100vw - 12px);max-width:calc(100vw - 12px);border-radius:16px}.rod-multi-loading{max-height:min(50dvh,430px)}.rod-multi-loading__header{padding:11px 9px 9px 12px}.rod-multi-loading__header-button span{display:none}.rod-multi-loading__header-button{width:31px;padding:0}.rod-multi-loading__list{max-height:min(41dvh,350px)}.rod-multi-loading__item{grid-template-columns:28px minmax(0,1fr) auto;gap:8px;min-height:54px;padding:8px}.rod-multi-loading__lead{width:28px;height:28px}.rod-multi-loading__item-title{font-size:11px}.rod-multi-loading__item-description{font-size:9.5px}.rod-multi-loading__button{width:29px;height:29px}.rod-multi-loading__button[data-action="retry"] span{display:none}.rod-multi-loading__button[data-action="retry"]{width:29px;padding:0}}
       /* Media picker */
       .rod-toast-stack .rod-toast[data-interactive-kind="picker"]{width:min(760px,calc(100vw - 20px));min-width:min(620px,calc(100vw - 20px));max-width:min(760px,calc(100vw - 20px));height:min(760px,calc(100dvh - max(env(safe-area-inset-top,0px),12px) - max(env(safe-area-inset-bottom,0px),12px) - 24px));max-height:min(860px,calc(100dvh - max(env(safe-area-inset-top,0px),12px) - max(env(safe-area-inset-bottom,0px),12px) - 24px));grid-template-columns:minmax(0,1fr) auto;align-items:stretch;padding:14px 10px 12px 14px;overflow:hidden;touch-action:pan-y}
       .rod-toast[data-interactive-kind="picker"]>.rod-toast__icon{display:none}.rod-toast[data-interactive-kind="picker"]>.rod-toast__content{min-height:0;overflow:hidden}.rod-toast[data-interactive-kind="picker"]>.rod-toast__actions{align-self:start}
@@ -2370,6 +2391,9 @@ var RodToaster = (function() {
 			state.toasts.push(record);
 			state.recordsByNode.set(node, record);
 			if (options.id) state.recordsById.set(options.id, record);
+			if (options.lane !== "interaction") {
+				if (getStackRecords().length >= Math.max(2, Number(state.config.stackAutoCollapseThreshold) || 6)) state.stackExpanded = false;
+			}
 			promoteHostToTopLayer(true);
 			if (options.loading && options.loadingState === "loading") state.activeLoadingCount += 1;
 			if (hasEventListeners("create")) emitEvent("create", {
@@ -2438,6 +2462,498 @@ var RodToaster = (function() {
 					dedupe: descriptor.dedupe ?? false
 				}
 			});
+		}
+		function showMultiLoadingToast(descriptor = {}) {
+			const options = isPlainObject(descriptor) ? { ...descriptor } : {};
+			const created = createToastRecord([], {
+				...options,
+				lane: "task",
+				title: "",
+				description: "",
+				icon: false,
+				loading: false,
+				duration: 0,
+				dedupe: false,
+				closeButton: false,
+				swipeToDismiss: false,
+				pauseOnInteraction: false,
+				role: options.role ?? "status",
+				metadata: {
+					...options.metadata ?? {},
+					multiLoading: true
+				}
+			});
+			if (!created) return null;
+			const { controller: toastController, record } = created;
+			const node = toastController.element;
+			const content = node.querySelector(".rod-toast__content");
+			if (!content) {
+				toastController.dismiss("unavailable", true);
+				return null;
+			}
+			const documentRef = node.ownerDocument;
+			const hostWindow = state.hostWindow ?? initialHostWindow;
+			const root = documentRef.createElement("div");
+			const header = documentRef.createElement("div");
+			const heading = documentRef.createElement("div");
+			const titleNode = documentRef.createElement("div");
+			const summaryNode = documentRef.createElement("div");
+			const headerActions = documentRef.createElement("div");
+			const clearButton = documentRef.createElement("button");
+			const cancelAllButton = documentRef.createElement("button");
+			const list = documentRef.createElement("div");
+			const empty = documentRef.createElement("div");
+			const items = /* @__PURE__ */ new Map();
+			let nextId = 1;
+			let dismissed = false;
+			node.dataset.multiLoading = "true";
+			root.className = "rod-multi-loading";
+			header.className = "rod-multi-loading__header";
+			heading.className = "rod-multi-loading__heading";
+			titleNode.className = "rod-multi-loading__title";
+			summaryNode.className = "rod-multi-loading__summary";
+			headerActions.className = "rod-multi-loading__header-actions";
+			list.className = "rod-multi-loading__list";
+			empty.className = "rod-multi-loading__empty";
+			empty.textContent = String(options.emptyLabel ?? "No active operations.");
+			titleNode.textContent = String(options.title ?? "Processing items");
+			heading.append(titleNode, summaryNode);
+			const configureHeaderButton = (button, icon, label, action) => {
+				button.type = "button";
+				button.className = "rod-multi-loading__header-button";
+				button.dataset.action = action;
+				button.append(createSvgIcon(documentRef, icon, 13));
+				const span = documentRef.createElement("span");
+				span.textContent = label;
+				button.append(span);
+			};
+			configureHeaderButton(clearButton, "check", "Clear done", "clear");
+			configureHeaderButton(cancelAllButton, "x-circle", String(options.cancelAllLabel ?? "Cancel all"), "cancel-all");
+			headerActions.append(clearButton, cancelAllButton);
+			header.append(heading, headerActions);
+			root.append(header, list);
+			content.replaceChildren(root);
+			const viewportRatio = clamp(Number(options.viewportRatio) || .5, .2, .5);
+			const rawMaxHeight = options.maxHeight;
+			const maxHeight = typeof rawMaxHeight === "number" ? `${Math.max(160, rawMaxHeight)}px` : typeof rawMaxHeight === "string" && rawMaxHeight.trim() ? rawMaxHeight : `min(${Math.round(viewportRatio * 100)}dvh,520px)`;
+			root.style.setProperty("--rod-multi-max-height", maxHeight);
+			root.style.setProperty("--rod-multi-list-height", `min(${Math.max(16, Math.round(viewportRatio * 100) - 8)}dvh,440px)`);
+			const successDuration = Math.max(400, Number(options.successDuration) || 2200);
+			const successMorphDelay = Math.max(0, Number(options.successMorphDelay) || 220);
+			const successFadeDuration = Math.max(180, Number(options.successFadeDuration) || 420);
+			const cancelledDuration = Math.max(120, Number(options.cancelledDuration) || 650);
+			const globalCancellable = options.cancellable !== false;
+			const snapshot = (item) => ({
+				id: item.id,
+				title: item.title,
+				description: item.description,
+				status: item.status,
+				progress: item.progress,
+				progressLabel: item.progressLabel,
+				metadata: { ...item.metadata },
+				error: item.error
+			});
+			const counts = () => {
+				let active = 0;
+				let success = 0;
+				let error = 0;
+				let cancelled = 0;
+				for (const item of items.values()) {
+					if (item.removing) continue;
+					if (item.status === "success") success += 1;
+					else if (item.status === "error") error += 1;
+					else if (item.status === "cancelled") cancelled += 1;
+					else active += 1;
+				}
+				return {
+					active,
+					success,
+					error,
+					cancelled,
+					total: items.size
+				};
+			};
+			const syncSummary = () => {
+				const current = counts();
+				if (options.showSummary === false) summaryNode.hidden = true;
+				else {
+					summaryNode.hidden = false;
+					const parts = [];
+					if (current.active) parts.push(`${current.active} active`);
+					if (current.error) parts.push(`${current.error} failed`);
+					if (current.success) parts.push(`${current.success} done`);
+					if (current.cancelled) parts.push(`${current.cancelled} cancelled`);
+					summaryNode.textContent = parts.length ? parts.join(" · ") : "All operations completed";
+				}
+				clearButton.disabled = current.success === 0 && current.cancelled === 0;
+				cancelAllButton.disabled = current.active === 0;
+				list.dataset.empty = String(items.size === 0);
+				if (!items.size) {
+					if (!empty.isConnected) list.append(empty);
+				} else empty.remove();
+				if (options.autoDismiss !== false && current.total > 0 && current.active === 0 && current.error === 0) hostWindow.setTimeout(() => {
+					if (!dismissed && counts().active === 0 && counts().error === 0) toastController.dismiss("multi-complete");
+				}, successDuration + successFadeDuration + 120);
+			};
+			const setLead = (item, icon, spin = false) => {
+				item.lead.dataset.spin = "false";
+				item.lead.replaceChildren();
+				const imageDescriptor = getImageIconDescriptor(icon);
+				if (imageDescriptor) item.lead.append(createImageIcon(documentRef, imageDescriptor));
+				else {
+					const name = typeof icon === "string" && hasOwn(SVG_ICONS, icon) ? icon : "circle";
+					item.lead.append(createSvgIcon(documentRef, name, 15));
+				}
+				item.lead.dataset.spin = String(spin && !imageDescriptor);
+			};
+			const renderItem = (item) => {
+				item.node.dataset.status = item.status;
+				item.titleNode.textContent = item.title;
+				item.descriptionNode.textContent = item.description;
+				item.descriptionNode.hidden = !item.description;
+				const percent = item.progress === null ? 0 : Math.round(item.progress * 100);
+				item.node.style.setProperty("--rod-multi-progress", `${percent}%`);
+				item.progressLabelNode.textContent = item.progressLabel ?? (item.progress === null ? "" : `${percent}%`);
+				item.progressNode.hidden = item.progress === null || item.status === "success" || item.status === "error" || item.status === "cancelled";
+				item.retryButton.hidden = item.status !== "error" || typeof item.descriptor.retry !== "function";
+				item.cancelButton.hidden = !globalCancellable || item.descriptor.cancellable === false || item.status === "success" || item.status === "cancelled";
+				if (item.status === "success") setLead(item, "check", false);
+				else if (item.status === "error") setLead(item, "circle-x", false);
+				else if (item.status === "cancelled") setLead(item, "x", false);
+				else {
+					const persistentIcon = item.descriptor.icon ?? "loader-circle";
+					setLead(item, persistentIcon, item.status === "loading" && !getImageIconDescriptor(persistentIcon));
+				}
+				syncSummary();
+			};
+			const removeItem = (item, immediate = false) => {
+				if (item.removing) return;
+				item.removing = true;
+				if (item.successTimer !== null) hostWindow.clearTimeout(item.successTimer);
+				if (immediate) {
+					item.node.remove();
+					items.delete(item.id);
+					syncSummary();
+					return;
+				}
+				item.node.dataset.removing = "true";
+				hostWindow.setTimeout(() => {
+					item.node.remove();
+					items.delete(item.id);
+					syncSummary();
+				}, successFadeDuration + 40);
+			};
+			const completeSuccess = (item) => {
+				if (item.successTimer !== null) hostWindow.clearTimeout(item.successTimer);
+				item.successTimer = hostWindow.setTimeout(() => {
+					if (!item.node.isConnected || item.status !== "success") return;
+					item.node.dataset.successMorph = "true";
+					item.successTimer = hostWindow.setTimeout(() => removeItem(item, false), successDuration);
+				}, successMorphDelay);
+			};
+			let api;
+			const makeItem = (source = {}) => {
+				const id = String(source.id ?? `item-${nextId++}`);
+				const existing = items.get(id);
+				if (existing) return existing;
+				const itemNode = documentRef.createElement("div");
+				const lead = documentRef.createElement("div");
+				const copy = documentRef.createElement("div");
+				const itemTitle = documentRef.createElement("div");
+				const description = documentRef.createElement("div");
+				const progress = documentRef.createElement("div");
+				const track = documentRef.createElement("div");
+				const bar = documentRef.createElement("div");
+				const progressLabel = documentRef.createElement("span");
+				const actions = documentRef.createElement("div");
+				const retry = documentRef.createElement("button");
+				const cancel = documentRef.createElement("button");
+				itemNode.className = "rod-multi-loading__item";
+				itemNode.dataset.multiItemId = id;
+				lead.className = "rod-multi-loading__lead";
+				copy.className = "rod-multi-loading__copy";
+				itemTitle.className = "rod-multi-loading__item-title";
+				description.className = "rod-multi-loading__item-description";
+				progress.className = "rod-multi-loading__progress";
+				track.className = "rod-multi-loading__track";
+				bar.className = "rod-multi-loading__bar";
+				progressLabel.className = "rod-multi-loading__progress-label";
+				actions.className = "rod-multi-loading__actions";
+				retry.className = "rod-multi-loading__button";
+				cancel.className = "rod-multi-loading__button";
+				retry.dataset.action = "retry";
+				cancel.dataset.action = "cancel";
+				retry.type = cancel.type = "button";
+				retry.append(createSvgIcon(documentRef, "refresh", 13));
+				const retryLabel = documentRef.createElement("span");
+				retryLabel.textContent = "Retry";
+				retry.append(retryLabel);
+				cancel.append(createSvgIcon(documentRef, "x", 14));
+				cancel.setAttribute("aria-label", `Cancel ${id}`);
+				cancel.title = "Cancel";
+				track.append(bar);
+				progress.append(track, progressLabel);
+				copy.append(itemTitle, description, progress);
+				actions.append(retry, cancel);
+				itemNode.append(lead, copy, actions);
+				const item = {
+					descriptor: { ...source },
+					id,
+					title: String(source.title ?? `Item ${items.size + 1}`),
+					description: String(source.description ?? ""),
+					status: source.status ?? "queued",
+					progress: normalizeProgress(source.progress),
+					progressLabel: source.progressLabel == null ? null : String(source.progressLabel),
+					metadata: isUnknownRecord(source.metadata) ? { ...source.metadata } : {},
+					error: source.error ?? null,
+					abortController: new AbortController(),
+					node: itemNode,
+					lead,
+					copy,
+					titleNode: itemTitle,
+					descriptionNode: description,
+					progressNode: progress,
+					progressLabelNode: progressLabel,
+					actionsNode: actions,
+					retryButton: retry,
+					cancelButton: cancel,
+					successTimer: null,
+					removing: false,
+					running: false
+				};
+				retry.addEventListener("click", (event) => {
+					event.preventDefault();
+					event.stopPropagation();
+					api.retry(id);
+				});
+				cancel.addEventListener("click", (event) => {
+					event.preventDefault();
+					event.stopPropagation();
+					api.cancel(id, "user");
+				});
+				items.set(id, item);
+				list.append(itemNode);
+				renderItem(item);
+				return item;
+			};
+			const patchItem = (item, next = {}) => {
+				item.descriptor = {
+					...item.descriptor,
+					...next
+				};
+				if (hasOwn(next, "title")) item.title = String(next.title ?? "");
+				if (hasOwn(next, "description")) item.description = String(next.description ?? "");
+				if (hasOwn(next, "status") && next.status) item.status = next.status;
+				if (hasOwn(next, "progress")) item.progress = normalizeProgress(next.progress);
+				if (hasOwn(next, "progressLabel")) item.progressLabel = next.progressLabel == null ? null : String(next.progressLabel);
+				if (hasOwn(next, "error")) item.error = next.error;
+				if (isUnknownRecord(next.metadata)) item.metadata = {
+					...item.metadata,
+					...next.metadata
+				};
+				renderItem(item);
+			};
+			api = {
+				get id() {
+					return toastController.id;
+				},
+				get element() {
+					return node;
+				},
+				get size() {
+					return items.size;
+				},
+				get activeCount() {
+					return counts().active;
+				},
+				get errorCount() {
+					return counts().error;
+				},
+				get successCount() {
+					return counts().success;
+				},
+				add(source = {}) {
+					makeItem(source);
+					syncSummary();
+					return api;
+				},
+				update(id, next = {}) {
+					const item = items.get(String(id));
+					if (!item || item.removing) return api;
+					patchItem(item, next);
+					return api;
+				},
+				progress(id, value, next = {}) {
+					const item = items.get(String(id));
+					if (!item || item.removing || item.status === "success" || item.status === "cancelled") return api;
+					patchItem(item, {
+						...next,
+						status: "loading",
+						progress: value
+					});
+					return api;
+				},
+				success(id, next = {}) {
+					const item = items.get(String(id));
+					if (!item || item.removing || item.status === "cancelled") return api;
+					patchItem(item, {
+						...next,
+						status: "success",
+						progress: 1,
+						error: null
+					});
+					safeCall(() => options.onItemSuccess?.(snapshot(item)), void 0);
+					completeSuccess(item);
+					return api;
+				},
+				error(id, error, next = {}) {
+					const item = items.get(String(id));
+					if (!item || item.removing || item.status === "cancelled") return api;
+					patchItem(item, {
+						...next,
+						status: "error",
+						error,
+						description: next.description ?? toErrorMessage(error)
+					});
+					safeCall(() => options.onItemError?.(snapshot(item)), void 0);
+					return api;
+				},
+				async retry(id) {
+					const item = items.get(String(id));
+					if (!item || item.removing || typeof item.descriptor.retry !== "function" || item.running) return api;
+					item.running = true;
+					item.retryButton.disabled = true;
+					item.abortController = new AbortController();
+					patchItem(item, {
+						status: "loading",
+						error: null,
+						progress: null,
+						description: item.descriptor.description ?? "Retrying…"
+					});
+					try {
+						await Promise.resolve().then(() => item.descriptor.retry?.({
+							id: item.id,
+							signal: item.abortController.signal,
+							controller: api,
+							progress: (value, next = {}) => api.progress(item.id, value, next),
+							update: (next = {}) => api.update(item.id, next)
+						}));
+						if (item.abortController.signal.aborted || item.status === "cancelled") throw createAbortError(item.abortController.signal.reason);
+						api.success(item.id, { description: item.descriptor.description ?? "Completed" });
+						return api;
+					} catch (error) {
+						if (!item.abortController.signal.aborted && item.status !== "cancelled") api.error(item.id, error);
+						return api;
+					} finally {
+						item.running = false;
+						item.retryButton.disabled = false;
+					}
+				},
+				async cancel(id, reason = "cancelled") {
+					const item = items.get(String(id));
+					if (!item || item.removing || item.status === "success" || item.status === "cancelled") return api;
+					if (!item.abortController.signal.aborted) item.abortController.abort(reason);
+					try {
+						if (typeof item.descriptor.cancel === "function") await Promise.resolve().then(() => item.descriptor.cancel?.({
+							id: item.id,
+							signal: item.abortController.signal,
+							controller: api,
+							reason,
+							progress: (value, next = {}) => api.progress(item.id, value, next),
+							update: (next = {}) => api.update(item.id, next)
+						}));
+					} finally {
+						patchItem(item, {
+							status: "cancelled",
+							description: "Cancelled"
+						});
+						safeCall(() => options.onItemCancel?.(snapshot(item)), void 0);
+						hostWindow.setTimeout(() => removeItem(item, false), cancelledDuration);
+					}
+					return api;
+				},
+				async cancelAll(reason = "cancel-all") {
+					await Promise.allSettled([...items.values()].map((item) => api.cancel(item.id, reason)));
+					return api;
+				},
+				remove(id, immediate = false) {
+					const item = items.get(String(id));
+					if (item) removeItem(item, immediate);
+					return api;
+				},
+				clearCompleted(immediate = false) {
+					for (const item of [...items.values()]) if (item.status === "success" || item.status === "cancelled") removeItem(item, immediate);
+					return api;
+				},
+				get(id) {
+					const item = items.get(String(id));
+					return item ? snapshot(item) : null;
+				},
+				getItems() {
+					return [...items.values()].map(snapshot);
+				},
+				async run(id, executor) {
+					const key = String(id);
+					let item = items.get(key);
+					if (!item) item = makeItem({
+						id: key,
+						status: "queued"
+					});
+					if (item.running) throw new Error(`Multi loading item ${key} is already running.`);
+					item.descriptor.retry = (context) => executor(context);
+					item.running = true;
+					item.abortController = new AbortController();
+					patchItem(item, {
+						status: "loading",
+						error: null
+					});
+					try {
+						const result = await executor({
+							id: item.id,
+							signal: item.abortController.signal,
+							controller: api,
+							progress: (value, next = {}) => api.progress(item.id, value, next),
+							update: (next = {}) => api.update(item.id, next)
+						});
+						if (item.abortController.signal.aborted || item.status === "cancelled") throw createAbortError(item.abortController.signal.reason);
+						api.success(item.id);
+						return result;
+					} catch (error) {
+						if (item.abortController.signal.aborted || item.status === "cancelled") {
+							if (item.status !== "cancelled") await api.cancel(item.id, item.abortController.signal.reason ?? "aborted");
+						} else api.error(item.id, error);
+						throw error;
+					} finally {
+						item.running = false;
+					}
+				},
+				dismiss(reason = "programmatic", immediate = false) {
+					dismissed = true;
+					for (const item of items.values()) {
+						if (!item.abortController.signal.aborted && item.status !== "success" && item.status !== "cancelled") item.abortController.abort(reason);
+						if (item.successTimer !== null) hostWindow.clearTimeout(item.successTimer);
+					}
+					toastController.dismiss(reason, immediate);
+				}
+			};
+			clearButton.addEventListener("click", (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				api.clearCompleted(false);
+			});
+			cancelAllButton.addEventListener("click", (event) => {
+				event.preventDefault();
+				event.stopPropagation();
+				api.cancelAll("user-all");
+			});
+			for (const item of options.items ?? []) api.add(item);
+			syncSummary();
+			record.externalUpdate = (next) => {
+				if (hasOwn(next, "title")) titleNode.textContent = String(next.title ?? "");
+				return toastController;
+			};
+			syncStackLayout();
+			return api;
 		}
 		function normalizeActionDescriptors(actions, fallbackActions = []) {
 			return (Array.isArray(actions) && actions.length ? actions : fallbackActions).filter((action) => isUnknownRecord(action)).map((action, index) => {
@@ -4714,6 +5230,7 @@ var RodToaster = (function() {
 				success: (...args) => semantic("success", args),
 				warning: (...args) => semantic("warning", args),
 				loading: (descriptor) => showLoadingToast([enrichDescriptor(descriptor)]),
+				multiLoading: (descriptor) => showMultiLoadingToast(enrichDescriptor(descriptor)),
 				confirm: (descriptor) => showConfirmToast(enrichDescriptor(descriptor)),
 				prompt: (descriptor) => showPromptToast(enrichDescriptor(descriptor)),
 				select: (descriptor) => showSelectToast({
@@ -4769,6 +5286,7 @@ var RodToaster = (function() {
 			icon: options.icon ?? "circle-x"
 		}, "error");
 		toastApi.loading = (...args) => showLoadingToast(args);
+		toastApi.multiLoading = (descriptor = {}) => showMultiLoadingToast(descriptor);
 		toastApi.confirm = (descriptor = {}) => showConfirmToast(descriptor);
 		toastApi.prompt = (descriptor = {}) => showPromptToast(descriptor);
 		toastApi.select = (descriptor = {}) => showSelectToast(descriptor);
@@ -4901,7 +5419,8 @@ var RodToaster = (function() {
 			state.config.previewItems = Math.max(0, Number(state.config.previewItems) || 0);
 			state.config.stackVisible = Math.min(3, Math.max(1, Number(state.config.stackVisible) || DEFAULT_CONFIG.stackVisible));
 			state.config.stackMaxHeight = Math.max(180, Number(state.config.stackMaxHeight) || DEFAULT_CONFIG.stackMaxHeight);
-			state.config.stackViewportRatio = clamp(Number(state.config.stackViewportRatio) || DEFAULT_CONFIG.stackViewportRatio, .2, .8);
+			state.config.stackViewportRatio = clamp(Number(state.config.stackViewportRatio) || DEFAULT_CONFIG.stackViewportRatio, .2, .5);
+			state.config.stackAutoCollapseThreshold = Math.max(2, Number(state.config.stackAutoCollapseThreshold) || DEFAULT_CONFIG.stackAutoCollapseThreshold);
 			state.config.swipeThreshold = Math.max(24, Number(state.config.swipeThreshold) || DEFAULT_CONFIG.swipeThreshold);
 			state.config.swipeVelocity = Math.max(.05, Number(state.config.swipeVelocity) || DEFAULT_CONFIG.swipeVelocity);
 			state.config.objectInspectorLoadTimeout = Math.max(1e3, Number(state.config.objectInspectorLoadTimeout) || DEFAULT_CONFIG.objectInspectorLoadTimeout);
