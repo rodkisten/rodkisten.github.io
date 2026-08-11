@@ -1446,6 +1446,8 @@
             </div>
             <p class="section-description">
               A superfície pública da versão carregada, agrupada por intenção.
+              O playground usa <code>window.RodToaster</code> como runtime canônico
+              e não confia no alias genérico <code>window.toast</code>.
             </p>
           </header>
 
@@ -1493,7 +1495,7 @@
         <footer class="footer">
           <div>
             <strong>Rod Toaster</strong><br>
-            v4.7: interaction lane, task state machine, media picker e um runtime quente de alta performance.
+            v4.7: interaction lane, multi loading, task state machine, media picker e runtime quente de alta performance.
           </div>
           <div>
             Pressione <span class="kbd">Esc</span> para fechar dialogs ou recolher a pilha.
@@ -1513,6 +1515,37 @@
 
       const sleep = (ms) =>
         new Promise((resolve) => setTimeout(resolve, ms));
+
+      /**
+       * Playground-safe facade.
+       *
+       * window.toast is a generic alias and can be replaced by another library.
+       * All demos resolve window.RodToaster again at call time.
+       */
+      const toast = new Proxy(
+        function playgroundToastFacade(...args) {
+          const api = getToast();
+          if (!api) {
+            throw new Error("RodToaster runtime is unavailable.");
+          }
+          return Reflect.apply(api, api, args);
+        },
+        {
+          get(_target, property) {
+            const api = getToast();
+            if (!api) return undefined;
+            const value = api[property];
+            return typeof value === "function" ? value.bind(api) : value;
+          },
+          apply(_target, _thisArg, args) {
+            const api = getToast();
+            if (!api) {
+              throw new Error("RodToaster runtime is unavailable.");
+            }
+            return Reflect.apply(api, api, args);
+          },
+        },
+      );
 
 
       const DEMO_ICON_SVG = `
@@ -2779,6 +2812,7 @@ toast.resolve("upload:post:123", "success", {
         {
           id: "multi-loading-batch",
           section: "multi-loading",
+          requires: "multiLoading",
           title: "Multi loading de envios",
           description:
             "Um único toaster acompanha o lote inteiro. Cada linha tem progresso e X próprio; sucessos viram uma bolinha verde e desaparecem suavemente.",
@@ -2852,6 +2886,7 @@ await Promise.allSettled(
         {
           id: "multi-loading-retry",
           section: "multi-loading",
+          requires: "multiLoading",
           title: "Erro, retry e cancelamento granular",
           description:
             "Itens com erro permanecem visíveis e ganham Retry. O X cancela apenas aquela operação; Cancel all aborta somente itens ainda ativos.",
@@ -3813,7 +3848,46 @@ toast.toggleTheme();`,
       const statusLabel = runtimeStatus.querySelector("[data-status-label]");
 
       function getToast() {
-        return window.toast || window.RodToaster || null;
+        const canonical = window.RodToaster;
+        if (
+          typeof canonical === "function" &&
+          typeof canonical.success === "function" &&
+          typeof canonical.error === "function"
+        ) {
+          return canonical;
+        }
+
+        const alias = window.toast;
+        if (
+          typeof alias === "function" &&
+          typeof alias.success === "function" &&
+          typeof alias.error === "function"
+        ) {
+          return alias;
+        }
+
+        return null;
+      }
+
+      function runtimeDiagnostic(api) {
+        if (!api) {
+          return {
+            version: null,
+            source: "none",
+            multiLoading: false,
+          };
+        }
+
+        return {
+          version: api.version || null,
+          source:
+            api === window.RodToaster
+              ? "RodToaster"
+              : api === window.toast
+                ? "toast"
+                : "unknown",
+          multiLoading: typeof api.multiLoading === "function",
+        };
       }
 
       function escapeHtml(value) {
@@ -4001,11 +4075,26 @@ toast.toggleTheme();`,
           demo.requires &&
           typeof api[demo.requires] !== "function"
         ) {
+          const diagnostic = runtimeDiagnostic(api);
+          const missingMethod = `toast.${demo.requires}()`;
+
+          console.error(
+            `[Playground] Runtime incompatível: ${missingMethod} não existe.`,
+            diagnostic,
+          );
+
           api.warning?.({
-            title: `API ${demo.requires} indisponível`,
+            title: "Runtime do Toaster desatualizado",
             description:
-              `A versão carregada é ${api.version || "desconhecida"}. Atualize para o Rod Toaster 4.7.0 ou superior.`,
+              `${missingMethod} não existe na API carregada ` +
+              `(v${diagnostic.version || "?"}, global ${diagnostic.source}). ` +
+              "Publique/carregue o toaster.js v4.7.0 antes de executar esta demo.",
+            icon: "triangle-alert",
+            duration: 9000,
+            details: diagnostic,
           });
+
+          updateRuntimeStatus();
           return;
         }
 
@@ -4057,16 +4146,18 @@ toast.toggleTheme();`,
         const api = getToast();
 
         if (api) {
-          const hasV46 =
+          const hasV47 =
             typeof api.picker === "function" &&
             typeof api.multiLoading === "function" &&
             typeof api.destroy === "function" &&
             typeof api.noConflict === "function" &&
             typeof api.bringToFront === "function";
-          runtimeStatus.dataset.state = hasV46 ? "ready" : "error";
-          statusLabel.textContent = hasV46
+          const diagnostic = runtimeDiagnostic(api);
+
+          runtimeStatus.dataset.state = hasV47 ? "ready" : "error";
+          statusLabel.textContent = hasV47
             ? `API pronta · v${api.version || "?"} · runtime v4.7`
-            : `API antiga · v${api.version || "?"} · atualize para 4.6`;
+            : `API incompatível · v${api.version || "?"} · falta multiLoading`;
 
           document.querySelectorAll("[data-version]").forEach((node) => {
             node.textContent = api.version || "?";
@@ -4074,10 +4165,14 @@ toast.toggleTheme();`,
 
           document.querySelectorAll("[data-run]").forEach((button) => {
             const demo = demos.find((item) => item.id === button.dataset.run);
-            button.disabled = Boolean(
+            const missing =
               demo?.requires &&
-              typeof api[demo.requires] !== "function"
-            );
+              typeof api[demo.requires] !== "function";
+
+            button.disabled = Boolean(missing);
+            button.title = missing
+              ? `A API carregada v${diagnostic.version || "?"} não possui toast.${demo.requires}().`
+              : "";
           });
 
           return;
