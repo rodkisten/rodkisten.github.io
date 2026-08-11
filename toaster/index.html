@@ -8,7 +8,7 @@
   <title>Rod Toaster · Playground e documentação</title>
   <meta
     name="description"
-    content="Landing page interativa do Rod Toaster v4.6.0: mensagens, image icons, loading, confirmações, picker de imagens e vídeos, tarefas, grupos, retry, undo, scopes, eventos, temas e persistência."
+    content="Landing page interativa do Rod Toaster v4.7.0: mensagens, image icons, loading, multi loading, confirmações, picker de imagens e vídeos, tarefas, grupos, retry, undo, scopes, eventos, temas e persistência."
   >
 
   <style>
@@ -1239,7 +1239,7 @@
     }
   </style>
 
-  <script src="https://rod.migos.club/userscripts/toaster.js?v=4.6.0"></script>
+  <script src="https://rod.migos.club/userscripts/toaster.js?v=4.7.0"></script>
 </head>
 
 <body>
@@ -1295,7 +1295,7 @@
   <main id="top" class="shell">
     <section class="hero">
       <div class="hero-copy">
-        <span class="eyebrow">v4.6 · runtime de operações</span>
+        <span class="eyebrow">v4.7 · runtime de operações</span>
         <h1>
           Feedback visual que
           <span class="hero-gradient">trabalha com você.</span>
@@ -1303,7 +1303,7 @@
         <p class="hero-description">
           Mensagens, image icons, dialogs com ownership de foco, picker mobile de
           imagens e vídeos, tasks com state machine real, retries, persistência segura
-          e grupos ponderados. A v4.6 separa interação, tarefas e notificações em lanes
+          e grupos ponderados. A v4.7 separa interação, tarefas e notificações em lanes
           próprias e corta trabalho dos hot paths para aguentar operações intensas.
         </p>
 
@@ -1381,7 +1381,7 @@
 
           <div class="code-shell">
             <pre><code>&lt;script
-  src="https://rod.migos.club/userscripts/toaster.js?v=4.6.0"
+  src="https://rod.migos.club/userscripts/toaster.js?v=4.7.0"
 &gt;&lt;/script&gt;
 
 &lt;script&gt;
@@ -1465,6 +1465,7 @@
                   <tr><td><code>ToastOptions.icon</code></td><td>SVG | URL | Image descriptor | Node</td><td>Ícone vetorial ou imagem real forçada para uma caixa quadrada 1:1, com cover/contain e fallback semântico.</td></tr>
                   <tr><td><code>toast.message()</code></td><td>Controller</td><td>Toast rico com título, detalhes e ações assíncronas.</td></tr>
                   <tr><td><code>toast.loading()</code></td><td>Loading controller</td><td>Spinner, pulse, progresso e transição para estado terminal.</td></tr>
+                  <tr><td><code>toast.multiLoading()</code></td><td>MultiLoadingController</td><td>Lote compacto com itens independentes, progresso, morph de sucesso, retry, cancel individual/todos e scroll interno limitado a 50dvh.</td></tr>
                   <tr><td><code>toast.confirm()</code></td><td>Promise&lt;T&gt;</td><td>Confirmação na interaction lane. Apenas o dialog do topo recebe foco, Enter e Escape; dismissible:false bloqueia dismiss implícito.</td></tr>
                   <tr><td><code>toast.prompt()</code></td><td>Promise&lt;string|null&gt;</td><td>Entrada de texto simples ou multiline com validação.</td></tr>
                   <tr><td><code>toast.select&lt;T&gt;()</code></td><td>Promise&lt;T|T[]|null&gt;</td><td>Seleção textual sem stringificar number/object; tokens internos preservam o valor original.</td></tr>
@@ -1492,7 +1493,7 @@
         <footer class="footer">
           <div>
             <strong>Rod Toaster</strong><br>
-            v4.6: interaction lane, task state machine, media picker e um runtime quente de alta performance.
+            v4.7: interaction lane, task state machine, media picker e um runtime quente de alta performance.
           </div>
           <div>
             Pressione <span class="kbd">Esc</span> para fechar dialogs ou recolher a pilha.
@@ -1507,7 +1508,7 @@
       "use strict";
 
       const INSTALL_CODE =
-        '<script src="https://rod.migos.club/userscripts/toaster.js?v=4.6.0"><' +
+        '<script src="https://rod.migos.club/userscripts/toaster.js?v=4.7.0"><' +
         '/script>';
 
       const sleep = (ms) =>
@@ -1594,6 +1595,13 @@
             "Loading, Promise, retry e progresso imperativo sem trocar de toast.",
         },
         {
+          id: "multi-loading",
+          title: "Multi loading",
+          kicker: "Lotes sem poluir a tela",
+          description:
+            "Vários envios dentro de um único toaster, com progresso independente, retry, cancel individual e scroll interno até metade da viewport.",
+        },
+        {
           id: "tasks",
           title: "Tarefas e gerenciador",
           kicker: "Download manager",
@@ -1602,7 +1610,7 @@
         },
         {
           id: "runtime",
-          title: "Runtime v4.6",
+          title: "Runtime v4.7",
           kicker: "Invariantes & performance",
           description:
             "Dialog stack isolada, state machine terminal, lifecycle seguro, persistência throttled e host ocioso reutilizável.",
@@ -2076,6 +2084,33 @@ toast.warning({
               description: JSON.stringify(result),
               icon: "info",
               details: result,
+            });
+          },
+        },
+        {
+          id: "horizontal-actions",
+          section: "interaction",
+          title: "Actions horizontais responsivas",
+          description:
+            "Confirm, rich message e tasks tentam manter os botões na mesma linha. O flex quebra apenas quando o conteúdo realmente não cabe.",
+          tags: "actions buttons horizontal flex wrap responsive css",
+          code: `await toast.confirm({
+  title: "Escolha uma ação",
+  actions: [
+    { id: "later", label: "Depois", value: "later" },
+    { id: "details", label: "Ver detalhes", value: "details" },
+    { id: "send", label: "Enviar agora", variant: "primary", value: "send" },
+  ],
+});`,
+          async run() {
+            await toast.confirm({
+              title: "Actions horizontais",
+              description: "A quebra acontece somente se a largura ou o texto exigir.",
+              actions: [
+                { id: "later", label: "Depois", icon: "clock", value: "later" },
+                { id: "details", label: "Ver detalhes", icon: "eye", value: "details" },
+                { id: "send", label: "Enviar agora", icon: "send", variant: "primary", value: "send" },
+              ],
             });
           },
         },
@@ -2742,6 +2777,148 @@ toast.resolve("upload:post:123", "success", {
           },
         },
         {
+          id: "multi-loading-batch",
+          section: "multi-loading",
+          title: "Multi loading de envios",
+          description:
+            "Um único toaster acompanha o lote inteiro. Cada linha tem progresso e X próprio; sucessos viram uma bolinha verde e desaparecem suavemente.",
+          tags: "multi loading batch upload progress success morph cancel scroll",
+          code: `const batch = toast.multiLoading({
+  title: "Enviando mídias",
+  viewportRatio: 0.5,
+  successDuration: 1800,
+  cancellable: true,
+});
+
+files.forEach((file) => {
+  batch.add({
+    id: file.id,
+    title: file.name,
+    description: "Na fila",
+    icon: file.thumbnail,
+  });
+});
+
+await Promise.allSettled(
+  files.map((file) =>
+    batch.run(file.id, async ({ progress, signal }) => {
+      await upload(file, { signal, onProgress: progress });
+    }),
+  ),
+);`,
+          async run() {
+            const batch = toast.multiLoading({
+              id: `landing:multi:${Date.now()}`,
+              title: "Enviando 10 mídias",
+              viewportRatio: 0.5,
+              successDuration: 1500,
+              successMorphDelay: 180,
+              cancellable: true,
+              autoDismiss: false,
+            });
+
+            const files = Array.from({ length: 10 }, (_, index) => ({
+              id: `media-${index + 1}`,
+              name: `instagram-${String(index + 1).padStart(2, "0")}.${index % 4 === 0 ? "mp4" : "jpg"}`,
+              icon: DEMO_MEDIA[index % DEMO_MEDIA.length]?.src,
+              delay: 75 + (index % 4) * 25,
+            }));
+
+            files.forEach((file) => {
+              batch.add({
+                id: file.id,
+                title: file.name,
+                description: "Aguardando…",
+                icon: { src: file.icon, fit: "cover" },
+              });
+            });
+
+            await Promise.allSettled(
+              files.map((file, fileIndex) =>
+                batch.run(file.id, async ({ progress, signal }) => {
+                  for (let value = 0; value <= 100; value += 10) {
+                    if (signal.aborted) throw signal.reason;
+                    progress(value, {
+                      description: value < 100 ? `Enviando · ${value}%` : "Finalizando…",
+                    });
+                    await sleep(file.delay);
+                  }
+                  if (fileIndex === 4) throw new Error("HTTP 503 · falha simulada");
+                }),
+              ),
+            );
+          },
+        },
+        {
+          id: "multi-loading-retry",
+          section: "multi-loading",
+          title: "Erro, retry e cancelamento granular",
+          description:
+            "Itens com erro permanecem visíveis e ganham Retry. O X cancela apenas aquela operação; Cancel all aborta somente itens ainda ativos.",
+          tags: "multi loading error retry cancel all abort signal",
+          code: `const batch = toast.multiLoading({
+  title: "Sincronizando posts",
+  cancelAllLabel: "Cancelar todos",
+});
+
+batch.add({
+  id: "post-42",
+  title: "Post 42",
+  retry: async ({ progress, signal }) => {
+    return sendPost({ signal, onProgress: progress });
+  },
+});
+
+batch.error("post-42", new Error("HTTP 503"));
+
+// O botão Retry chama o handler acima.
+await batch.retry("post-42");
+await batch.cancel("post-43");
+await batch.cancelAll();`,
+          async run() {
+            let retryAttempt = 0;
+            const batch = toast.multiLoading({
+              title: "Sincronizando posts",
+              cancelAllLabel: "Cancelar todos",
+              autoDismiss: false,
+              items: [
+                {
+                  id: "post-42",
+                  title: "Post 42",
+                  description: "Falhou ao enviar",
+                  icon: "send",
+                  retry: async ({ progress, signal }) => {
+                    retryAttempt += 1;
+                    for (let value = 0; value <= 100; value += 20) {
+                      if (signal.aborted) throw signal.reason;
+                      progress(value, { description: `Retry ${retryAttempt} · ${value}%` });
+                      await sleep(180);
+                    }
+                  },
+                },
+                {
+                  id: "post-43",
+                  title: "Post 43",
+                  description: "Processando…",
+                  icon: "send",
+                  status: "loading",
+                  progress: 0.38,
+                },
+                {
+                  id: "post-44",
+                  title: "Post 44",
+                  description: "Processando…",
+                  icon: "send",
+                  status: "loading",
+                  progress: 0.62,
+                },
+              ],
+            });
+
+            batch.error("post-42", new Error("HTTP 503 · toque em Retry"));
+          },
+        },
+        {
           id: "task",
           section: "tasks",
           title: "Task com pause, resume e cancel",
@@ -3283,7 +3460,7 @@ toast.repairHost();`,
           title: "Dialog stack com ownership",
           description:
             "Confirm, prompt, select e picker vivem numa lane de interação separada. Só o dialog do topo recebe teclado e foco.",
-          tags: "v4.6 dialog stack focus keyboard dismissible interaction lane",
+          tags: "v4.7 dialog stack focus keyboard dismissible interaction lane",
           code: `const first = toast.confirm({
   id: "first-dialog",
   title: "Primeira decisão",
@@ -3331,7 +3508,7 @@ const second = toast.confirm({
           title: "Task state machine terminal",
           description:
             "success, error e cancelled são terminais. Updates tardios e executors que ignoram AbortSignal não ressuscitam uma tarefa.",
-          tags: "v4.6 task state machine terminal cancelled success race abort",
+          tags: "v4.7 task state machine terminal cancelled success race abort",
           code: `const job = toast.task({
   id: "download:123",
   title: "Download",
@@ -3346,7 +3523,7 @@ console.log(job.status); // "cancelled"`,
           async run() {
             const task = toast.task({
               id: `terminal:${Date.now()}`,
-              title: "State machine v4.6",
+              title: "State machine v4.7",
               description: "A tarefa será concluída e receberá updates tardios.",
             });
 
@@ -3369,7 +3546,7 @@ console.log(job.status); // "cancelled"`,
           title: "select<T>() preserva valores",
           description:
             "A option usa tokens internos. Números e objetos não são mais convertidos para string pelo elemento <select>.",
-          tags: "v4.6 select generic typed number object token",
+          tags: "v4.7 select generic typed number object token",
           code: `const channel = await toast.select<number>({
   title: "Escolha um canal",
   value: 42,
@@ -3405,7 +3582,7 @@ console.log(typeof channel); // "number"`,
           title: "Retry sem dead zone",
           description:
             "backoff: 0 significa tentar imediatamente. Delays reais usam countdown vivo e podem ser antecipados pelo usuário.",
-          tags: "v4.6 retry backoff zero countdown immediate",
+          tags: "v4.7 retry backoff zero countdown immediate",
           code: `await toast.retry({
   title: "Worker",
   maxAttempts: 3,
@@ -3446,7 +3623,7 @@ console.log(typeof channel); // "number"`,
           title: "Persistência segura e throttled",
           description:
             "Metadata circular/BigInt é sanitizada; progresso é persistido em lote, enquanto mudanças de status são flush imediato.",
-          tags: "v4.6 persistence performance throttle circular bigint storage",
+          tags: "v4.7 persistence performance throttle circular bigint storage",
           code: `toast.configure({
   persistTasks: false,
   taskProgressPersistInterval: 900,
@@ -3491,7 +3668,7 @@ const task = toast.task({
           title: "Lifecycle e host quente",
           description:
             "O stylesheet permanece parseado entre bursts. destroy/noConflict dão teardown real para upgrades e repairHost independe da política SPA.",
-          tags: "v4.6 destroy noConflict repairHost idleHostTtl hot host performance upgrade",
+          tags: "v4.7 destroy noConflict repairHost idleHostTtl hot host performance upgrade",
           code: `toast.configure({
   idleHostTtl: 0, // mantém host/CSS prontos
   useTopLayer: true,
@@ -3827,7 +4004,7 @@ toast.toggleTheme();`,
           api.warning?.({
             title: `API ${demo.requires} indisponível`,
             description:
-              `A versão carregada é ${api.version || "desconhecida"}. Atualize para o Rod Toaster 4.6.0 ou superior.`,
+              `A versão carregada é ${api.version || "desconhecida"}. Atualize para o Rod Toaster 4.7.0 ou superior.`,
           });
           return;
         }
@@ -3882,12 +4059,13 @@ toast.toggleTheme();`,
         if (api) {
           const hasV46 =
             typeof api.picker === "function" &&
+            typeof api.multiLoading === "function" &&
             typeof api.destroy === "function" &&
             typeof api.noConflict === "function" &&
             typeof api.bringToFront === "function";
           runtimeStatus.dataset.state = hasV46 ? "ready" : "error";
           statusLabel.textContent = hasV46
-            ? `API pronta · v${api.version || "?"} · runtime v4.6`
+            ? `API pronta · v${api.version || "?"} · runtime v4.7`
             : `API antiga · v${api.version || "?"} · atualize para 4.6`;
 
           document.querySelectorAll("[data-version]").forEach((node) => {
@@ -3988,7 +4166,7 @@ toast.toggleTheme();`,
 
         if (typeof api.picker === "function") {
           const selected = await api.picker({
-            title: "v4.6 · Media Picker mobile",
+            title: "v4.7 · Media Picker mobile",
             description: "Selecione algumas mídias para concluir a demo.",
             items: DEMO_MEDIA,
             columns: 2,
