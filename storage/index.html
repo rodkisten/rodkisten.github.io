@@ -1,1 +1,456 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="color-scheme" content="dark light" />
+  <title>RodStorage · Storage infrastructure for userscripts</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090b10;
+      --panel: #10131a;
+      --panel-2: #151925;
+      --text: #f5f7fb;
+      --muted: #9ba6ba;
+      --line: rgba(255,255,255,.09);
+      --accent: #8ef0c6;
+      --accent-2: #9db7ff;
+      --danger: #ff9a9a;
+      --shadow: 0 24px 80px rgba(0,0,0,.35);
+      --radius: 22px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; background: var(--bg); }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(142,240,198,.12), transparent 34rem),
+        radial-gradient(circle at 100% 12%, rgba(157,183,255,.12), transparent 32rem),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.55;
+    }
+    a { color: inherit; text-decoration: none; }
+    button, input, select { font: inherit; }
+    .shell { width: min(1180px, calc(100% - 28px)); margin: 0 auto; }
+    .nav {
+      position: sticky; top: 0; z-index: 20;
+      backdrop-filter: blur(18px) saturate(130%);
+      background: rgba(9,11,16,.76);
+      border-bottom: 1px solid var(--line);
+    }
+    .nav-inner { height: 64px; display:flex; align-items:center; justify-content:space-between; gap:20px; }
+    .brand { display:flex; align-items:center; gap:10px; font-weight:800; letter-spacing:-.03em; }
+    .mark { width:30px; height:30px; border-radius:10px; display:grid; place-items:center; background:linear-gradient(135deg,var(--accent),var(--accent-2)); color:#07100d; font-weight:900; box-shadow:0 8px 30px rgba(142,240,198,.22); }
+    .nav-links { display:flex; gap:14px; color:var(--muted); font-size:.92rem; overflow:auto; }
+    .nav-links a:hover { color:var(--text); }
+    .hero { padding: 88px 0 58px; display:grid; grid-template-columns:1.08fr .92fr; gap:42px; align-items:center; }
+    .eyebrow { display:inline-flex; gap:8px; align-items:center; border:1px solid var(--line); background:rgba(255,255,255,.03); padding:7px 10px; border-radius:999px; color:var(--muted); font-size:.84rem; }
+    h1 { margin:18px 0 18px; font-size:clamp(3rem,8vw,6.6rem); line-height:.9; letter-spacing:-.07em; max-width:850px; }
+    h1 span { color:var(--accent); }
+    .lede { margin:0; color:var(--muted); font-size:clamp(1.06rem,2vw,1.28rem); max-width:760px; }
+    .hero-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:26px; }
+    .button { border:1px solid var(--line); border-radius:14px; padding:11px 15px; background:var(--panel-2); color:var(--text); cursor:pointer; }
+    .button.primary { background:var(--accent); color:#07100d; border-color:transparent; font-weight:800; }
+    .hero-card, .card, .code-card, .playground { border:1px solid var(--line); background:rgba(16,19,26,.88); border-radius:var(--radius); box-shadow:var(--shadow); }
+    .hero-card { padding:18px; transform:rotate(1.2deg); }
+    .window-bar { display:flex; align-items:center; gap:7px; padding-bottom:14px; color:var(--muted); font-size:.8rem; }
+    .dot { width:9px; height:9px; border-radius:50%; background:#394151; }
+    pre { margin:0; overflow:auto; tab-size:2; }
+    code { font-family:var(--mono); font-size:.88rem; }
+    .hero-card pre, .code-card pre { padding:18px; border-radius:16px; background:#080a0f; border:1px solid rgba(255,255,255,.06); }
+    .k { color:#9db7ff; } .s { color:#8ef0c6; } .n { color:#ffc77d; } .c { color:#6e7a90; }
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:24px 0 74px; }
+    .stat { padding:18px; border:1px solid var(--line); border-radius:18px; background:rgba(255,255,255,.025); }
+    .stat b { display:block; font-size:1.25rem; margin-bottom:3px; }
+    .stat span { color:var(--muted); font-size:.9rem; }
+    section { scroll-margin-top:84px; margin:78px 0; }
+    .section-head { display:grid; grid-template-columns:.8fr 1.2fr; gap:40px; margin-bottom:24px; }
+    h2 { margin:0; font-size:clamp(2rem,4vw,3.7rem); letter-spacing:-.055em; line-height:1; }
+    .section-head p { margin:0; color:var(--muted); font-size:1.06rem; }
+    .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+    .card { padding:20px; box-shadow:none; }
+    .card h3 { margin:0 0 8px; font-size:1.05rem; }
+    .card p { margin:0; color:var(--muted); font-size:.94rem; }
+    .chip { display:inline-flex; padding:5px 8px; border-radius:999px; background:rgba(142,240,198,.1); color:var(--accent); font:700 .75rem var(--mono); margin-bottom:12px; }
+    .docs { display:grid; grid-template-columns:250px minmax(0,1fr); gap:22px; align-items:start; }
+    .toc { position:sticky; top:82px; border:1px solid var(--line); border-radius:18px; padding:10px; background:rgba(16,19,26,.82); }
+    .toc a { display:block; padding:9px 10px; border-radius:10px; color:var(--muted); font-size:.9rem; }
+    .toc a:hover { background:rgba(255,255,255,.05); color:var(--text); }
+    .doc-stack { display:grid; gap:18px; }
+    .code-card { padding:18px; box-shadow:none; }
+    .code-card h3 { margin:0 0 6px; font-size:1.3rem; }
+    .code-card > p { color:var(--muted); margin:0 0 16px; }
+    .split { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .callout { padding:16px 18px; border-radius:16px; background:rgba(157,183,255,.08); border:1px solid rgba(157,183,255,.18); color:#cbd6ff; margin-top:14px; }
+    .playground { padding:20px; }
+    .play-top { display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+    .status { display:inline-flex; align-items:center; gap:8px; color:var(--muted); font-size:.9rem; }
+    .status i { width:9px; height:9px; border-radius:50%; background:#555; }
+    .status.ready i { background:var(--accent); box-shadow:0 0 20px rgba(142,240,198,.5); }
+    .controls { display:grid; grid-template-columns:1fr 1fr auto; gap:10px; margin-top:16px; }
+    .input { width:100%; padding:12px 13px; border-radius:12px; border:1px solid var(--line); background:#090b10; color:var(--text); outline:none; }
+    .output { margin-top:12px; min-height:140px; padding:14px; border-radius:14px; background:#080a0f; border:1px solid var(--line); font: .86rem/1.5 var(--mono); white-space:pre-wrap; overflow-wrap:anywhere; color:#d6deed; }
+    footer { margin-top:90px; padding:30px 0 60px; border-top:1px solid var(--line); color:var(--muted); }
+    @media (max-width: 900px) {
+      .hero, .section-head, .docs { grid-template-columns:1fr; }
+      .hero { padding-top:58px; }
+      .hero-card { transform:none; }
+      .stats { grid-template-columns:1fr 1fr; }
+      .grid { grid-template-columns:1fr 1fr; }
+      .toc { position:static; display:flex; overflow:auto; }
+      .toc a { white-space:nowrap; }
+    }
+    @media (max-width: 620px) {
+      .nav-links { display:none; }
+      .grid, .split, .controls { grid-template-columns:1fr; }
+      .stats { grid-template-columns:1fr 1fr; }
+      h1 { font-size:clamp(3rem,17vw,5rem); }
+      .shell { width:min(100% - 20px, 1180px); }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="shell nav-inner">
+      <a class="brand" href="#top"><span class="mark">R</span> RodStorage</a>
+      <div class="nav-links"><a href="#features">Features</a><a href="#api">API</a><a href="#stores">Stores</a><a href="#migrations">Migrations</a><a href="#diagnostics">Diagnostics</a><a href="#playground">Playground</a></div>
+    </div>
+  </nav>
 
+  <main class="shell" id="top">
+    <header class="hero">
+      <div>
+        <span class="eyebrow">Single-file IIFE · window.RodStorage · TypeScript</span>
+        <h1>One storage layer.<br><span>Zero archaeology.</span></h1>
+        <p class="lede">IndexedDB first, automatic fallbacks, typed schemas, versioned migrations, TTL, reactive stores, cross-tab sync, locks, transforms, import/export and diagnostics behind one async API.</p>
+        <div class="hero-actions"><a class="button primary" href="#quickstart">Start using it</a><a class="button" href="#api">Browse API</a></div>
+      </div>
+      <div class="hero-card">
+        <div class="window-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span style="margin-left:6px">userscript.ts</span></div>
+<pre><code><span class="k">const</span> storage = RodStorage.create({
+  namespace: <span class="s">"instagram-tools"</span>,
+  version: <span class="n">4</span>,
+  backend: <span class="s">"auto"</span>,
+  sync: <span class="k">true</span>,
+  cache: { enabled: <span class="k">true</span>, maxEntries: <span class="n">500</span> },
+});
+
+<span class="k">await</span> storage.ready();
+
+<span class="k">const</span> settings = storage.store(<span class="s">"settings"</span>, {
+  default: { debug: <span class="k">false</span>, theme: <span class="s">"auto"</span> },
+});
+
+<span class="k">await</span> settings.patch({ debug: <span class="k">true</span> });</code></pre>
+      </div>
+    </header>
+
+    <div class="stats">
+      <div class="stat"><b>4 backends</b><span>IndexedDB, GM, localStorage, memory</span></div>
+      <div class="stat"><b>Always async</b><span>Swap persistence without rewriting callers</span></div>
+      <div class="stat"><b>Schema aware</b><span>Typed keys, migrations and defaults</span></div>
+      <div class="stat"><b>Reactive</b><span>Stores + BroadcastChannel synchronization</span></div>
+    </div>
+
+    <section id="features">
+      <div class="section-head"><h2>Built as infrastructure.</h2><p>RodStorage is intentionally more than a wrapper around JSON.stringify. Its public surface stays stable while storage details, browser capabilities and userscript environments change underneath it.</p></div>
+      <div class="grid">
+        <article class="card"><span class="chip">BACKENDS</span><h3>IndexedDB first</h3><p>Automatic fallback to GM storage, localStorage and memory. You can also pin a preferred backend and explicit fallback order.</p></article>
+        <article class="card"><span class="chip">SCHEMA</span><h3>Versioned migrations</h3><p>Sequential migration steps with namespace snapshot rollback when a migration throws.</p></article>
+        <article class="card"><span class="chip">DATA</span><h3>Structured serializer</h3><p>Dates, Maps, Sets, RegExp, BigInt, ArrayBuffer, typed arrays, URL, Error, NaN and infinities survive round trips.</p></article>
+        <article class="card"><span class="chip">LIFECYCLE</span><h3>TTL + cleanup</h3><p>Expiry lives beside each record, with lazy expiration on read and explicit or interval-based cleanup.</p></article>
+        <article class="card"><span class="chip">CONCURRENCY</span><h3>Atomic updates + locks</h3><p>Per-key updates and named locks use Web Locks when present with an in-process fallback.</p></article>
+        <article class="card"><span class="chip">UI</span><h3>Reactive stores</h3><p>get, set, patch, update, reset, subscribe and select make persistent settings usable directly by menus and controls.</p></article>
+        <article class="card"><span class="chip">SYNC</span><h3>Cross-tab events</h3><p>BroadcastChannel invalidates caches and forwards storage events across tabs and same-origin contexts.</p></article>
+        <article class="card"><span class="chip">PIPELINE</span><h3>Transforms</h3><p>Attach global or per-store read/write transforms for compression, encryption, normalization or custom encodings.</p></article>
+        <article class="card"><span class="chip">OPS</span><h3>Diagnostics</h3><p>Inspect backend, schema version, cache hits, estimated bytes, quota, migrations and run a live write/read/delete healthcheck.</p></article>
+      </div>
+    </section>
+
+    <section id="api">
+      <div class="section-head"><h2>API reference.</h2><p>The entire public API is promise-friendly, even when the chosen backend is synchronous. This keeps application code independent from persistence mechanics.</p></div>
+      <div class="docs">
+        <aside class="toc">
+          <a href="#quickstart">Quick start</a><a href="#typed-schema">Typed schema</a><a href="#backends">Backends</a><a href="#crud">CRUD</a><a href="#stores">Stores</a><a href="#ttl">TTL</a><a href="#migrations">Migrations</a><a href="#transforms">Transforms</a><a href="#sync">Sync</a><a href="#locks">Locks</a><a href="#namespaces">Namespaces</a><a href="#backup">Import/export</a><a href="#diagnostics">Diagnostics</a><a href="#errors">Errors</a><a href="#single-file">Single-file IIFE</a><a href="#userscript">Userscript</a>
+        </aside>
+        <div class="doc-stack">
+          <article class="code-card" id="quickstart"><h3>Quick start</h3><p>Create one instance per logical namespace, await readiness once, and use it everywhere.</p><pre><code>const storage = RodStorage.create({
+  namespace: "aio-downloader",
+  version: 1,
+  backend: "auto",
+  sync: true,
+  cache: { enabled: true, maxEntries: 500 },
+});
+
+await storage.ready();
+await storage.set("settings", { debug: true });
+const settings = await storage.get("settings");</code></pre></article>
+
+          <article class="code-card" id="typed-schema"><h3>Typed schema</h3><p>Pass your storage shape as the generic parameter. Keys and values remain coupled through TypeScript.</p><pre><code>interface AppStorage {
+  settings: {
+    debug: boolean;
+    theme: "auto" | "light" | "dark";
+  };
+  history: Array&lt;{ id: string; url: string; createdAt: number }&gt;;
+  metadata: Map&lt;string, { caption: string }&gt;;
+}
+
+const storage = RodStorage.create&lt;AppStorage&gt;({
+  namespace: "media-tools",
+});
+
+await storage.set("settings", { debug: false, theme: "auto" });
+// storage.set("settings", { banana: true }) // TypeScript error</code></pre></article>
+
+          <article class="code-card" id="backends"><h3>Backend selection</h3><p><code>auto</code> tries IndexedDB → GM → localStorage → memory. You can choose a backend or control the fallback chain.</p><div class="split"><pre><code>const storage = RodStorage.create({
+  namespace: "app",
+  backend: "indexeddb",
+});</code></pre><pre><code>const storage = RodStorage.create({
+  namespace: "app",
+  backend: {
+    preferred: "gm",
+    fallbacks: ["indexeddb", "localstorage", "memory"],
+  },
+});</code></pre></div><div class="callout">GM supports both modern <code>GM.*</code> methods and legacy <code>GM_*</code> functions when available globally.</div></article>
+
+          <article class="code-card" id="crud"><h3>CRUD + atomic update</h3><p>The simple API is enough for most keys. <code>update</code>/<code>atomic</code> serialize modifications per key.</p><pre><code>await storage.set("settings", { debug: false, theme: "auto" });
+const value = await storage.get("settings");
+const exists = await storage.has("settings");
+const keys = await storage.keys();
+
+await storage.update("settings", current => ({
+  ...current!,
+  debug: !current!.debug,
+}));
+
+await storage.delete("settings");
+await storage.clear();</code></pre></article>
+
+          <article class="code-card" id="stores"><h3>Reactive stores</h3><p>Stores wrap one key with defaults, validation, TTL, transforms and subscriptions.</p><pre><code>const settings = storage.store("settings", {
+  default: { debug: false, theme: "auto" },
+  validate(value): value is AppStorage["settings"] {
+    return !!value && typeof value === "object" && "debug" in value;
+  },
+});
+
+await settings.get();
+await settings.set({ debug: true, theme: "dark" });
+await settings.patch({ theme: "light" });
+await settings.update(v => ({ ...v, debug: !v.debug }));
+await settings.reset();
+
+const stop = settings.subscribe(value => render(value), true);
+
+const stopDebug = settings.select(
+  value => value.debug,
+  debug => updateDebugBadge(debug),
+  { immediate: true },
+);</code></pre></article>
+
+          <article class="code-card" id="ttl"><h3>TTL and cleanup</h3><p>TTL can be milliseconds or a compact duration. Expired values disappear on read and can be garbage-collected proactively.</p><pre><code>await storage.set("metadata", cache, { ttl: "24h" });
+await storage.set("temporary", value, { ttl: 15_000 });
+
+const removed = await storage.cleanup();
+
+const storage = RodStorage.create({
+  namespace: "cache",
+  cleanupIntervalMs: 5 * 60_000,
+});</code></pre></article>
+
+          <article class="code-card" id="migrations"><h3>Sequential migrations</h3><p>Version N runs after N−1. A failed migration restores a namespace snapshot and preserves the previous schema version.</p><pre><code>const storage = RodStorage.create&lt;AppStorage&gt;({
+  namespace: "app",
+  version: 4,
+  migrations: {
+    2: async ctx => {
+      const old = await ctx.get("settings");
+      if (old) await ctx.set("settings", { ...old, theme: "auto" });
+    },
+    3: async ctx => {
+      const history = await ctx.get("history");
+      if (history) await ctx.set("history", history.slice(-2000));
+    },
+    4: async ctx => {
+      // final v4 shape
+    },
+  },
+});</code></pre></article>
+
+          <article class="code-card" id="transforms"><h3>Transform pipeline</h3><p>Transforms run after serialization on write and in reverse order before deserialization on read.</p><pre><code>const xorTransform = {
+  name: "demo-xor",
+  write(value) {
+    return encrypt(JSON.stringify(value));
+  },
+  read(value) {
+    return JSON.parse(decrypt(String(value)));
+  },
+};
+
+const storage = RodStorage.create({
+  namespace: "private-data",
+  transforms: [xorTransform],
+});
+
+const auth = storage.store("auth", {
+  transforms: [anotherTransform],
+});
+
+// Built-ins
+const secure = RodStorage.create({
+  namespace: "secure-cache",
+  transforms: [
+    RodStorage.transforms.compression("gzip"),
+    RodStorage.transforms.encryption({ key: "your-passphrase" }),
+  ],
+});</code></pre><div class="callout">Built-in compression uses CompressionStream. Encryption uses PBKDF2 + AES-GCM via Web Crypto. Key management remains application-specific.</div></article>
+
+          <article class="code-card" id="sync"><h3>Subscriptions + cross-tab sync</h3><p>Listen to one key or every change. Remote BroadcastChannel messages are marked with <code>source: "external"</code>.</p><pre><code>const stopSettings = storage.subscribe("settings", event => {
+  console.log(event.operation, event.value, event.source);
+});
+
+const stopAll = storage.subscribe("*", event => {
+  console.log(event.key, event.operation);
+});
+
+stopSettings();
+stopAll();</code></pre></article>
+
+          <article class="code-card" id="locks"><h3>Transactions, atomic updates and locks</h3><p>Use named locks for multi-step workflows. <code>transaction</code> snapshots the namespace and rolls it back if the callback throws.</p><pre><code>await storage.atomic("counter", value => (value ?? 0) + 1);
+
+await storage.lock("media-delivery", async () => {
+  await deliverMedia();
+  await storage.set("lastDelivery", Date.now());
+});
+
+await storage.transaction(async () => {
+  await storage.set("foo", foo);
+  await storage.set("bar", bar);
+  // throw -> namespace snapshot is restored
+});</code></pre></article>
+
+          <article class="code-card" id="namespaces"><h3>Child namespaces</h3><p>Build isolated storage trees without inventing key prefixes in application code.</p><pre><code>const root = RodStorage.create({ namespace: "rod-devtools" });
+const consoleStorage = root.namespace("console");
+const networkStorage = root.namespace("network");
+
+await consoleStorage.set("settings", consoleSettings);
+await networkStorage.set("history", requests);</code></pre></article>
+
+          <article class="code-card" id="backup"><h3>Import / export</h3><p>Exports contain a format marker, namespace, schema version and decoded records. Imports support merge, overwrite and skip-existing strategies.</p><pre><code>const backup = await storage.export();
+const json = JSON.stringify(backup, null, 2);
+
+await storage.import(backup, { strategy: "merge" });
+await storage.import(backup, { strategy: "overwrite" });
+await storage.import(backup, { strategy: "skip-existing" });</code></pre></article>
+
+          <article class="code-card" id="diagnostics"><h3>Diagnostics + healthcheck</h3><p>Useful for settings panels and debug toasts.</p><pre><code>const diagnostics = await storage.diagnostics();
+// {
+//   backend: "indexeddb",
+//   namespace: "app",
+//   schemaVersion: 4,
+//   entries: 382,
+//   estimatedBytes: 1829384,
+//   cache: { enabled: true, size: 72, hits: 342, misses: 27 },
+//   migrations: { applied: [1,2,3,4] },
+//   quota: { usage, quota }
+// }
+
+const health = await storage.healthcheck();
+// write → read → compare → delete</code></pre></article>
+
+          <article class="code-card" id="errors"><h3>Typed errors</h3><p>Use the exported error classes for precise handling and UI feedback.</p><pre><code>const {
+  StorageError,
+  StorageUnavailableError,
+  StorageQuotaError,
+  StorageSerializationError,
+  StorageMigrationError,
+  StorageValidationError,
+  StorageTransactionError,
+} = RodStorage.errors;
+
+try {
+  await storage.set("history", hugePayload);
+} catch (error) {
+  if (error instanceof StorageQuotaError) {
+    showQuotaWarning();
+  }
+}</code></pre></article>
+
+          <article class="code-card" id="single-file"><h3>Single-file TypeScript IIFE</h3><p><code>rod-storage.ts</code> is self-contained: no imports, no package runtime and no bundler requirement. Compile it directly with TypeScript.</p><pre><code>tsc rod-storage.ts \
+  --target ES2022 \
+  --lib ES2022,DOM \
+  --strict \
+  --module none \
+  --outFile rod-storage.js</code></pre><div class="callout">The generated <code>rod-storage.js</code> immediately publishes <code>window.RodStorage</code>. You can still run it through Rolldown/esbuild if your repository already has a build pipeline, but it is not required.</div></article>
+
+          <article class="code-card" id="userscript"><h3>Userscript integration</h3><p>The source is already a single TypeScript IIFE with no runtime imports. Compile that one file to JavaScript, host it, and load the generated IIFE with <code>@require</code>. It publishes itself on <code>globalThis/window</code>.</p><pre><code>// ==UserScript==
+// @name         My Userscript
+// @match        https://*/*
+// @require      https://example.com/rod-storage.js
+// @grant        GM.getValue
+// @grant        GM.setValue
+// @grant        GM.deleteValue
+// @grant        GM.listValues
+// ==/UserScript==
+
+(async () => {
+  const storage = RodStorage.create({
+    namespace: "my-userscript",
+    backend: "auto",
+  });
+
+  await storage.ready();
+})();</code></pre></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="playground">
+      <div class="section-head"><h2>Live playground.</h2><p>Compile <code>rod-storage.ts</code> beside this landing as <code>rod-storage.js</code>. The playground then exercises the exact generated IIFE through <code>window.RodStorage</code>.</p></div>
+      <div class="playground">
+        <div class="play-top"><div><strong>Memory-backed sandbox</strong><div style="color:var(--muted);font-size:.9rem">No page data is touched.</div></div><div id="status" class="status"><i></i><span>Loading bundle…</span></div></div>
+        <div class="controls"><input class="input" id="key" value="demo" aria-label="Key" /><input class="input" id="value" value='{"hello":"RodStorage"}' aria-label="JSON value" /><button class="button primary" id="save">Set</button></div>
+        <div class="hero-actions"><button class="button" id="get">Get</button><button class="button" id="diag">Diagnostics</button><button class="button" id="health">Healthcheck</button><button class="button" id="clear">Clear</button></div>
+        <div class="output" id="output">Waiting for RodStorage…</div>
+      </div>
+    </section>
+  </main>
+
+  <footer><div class="shell">RodStorage v1.0.0 · TypeScript · browser-first · userscript-friendly.</div></footer>
+
+  <script src="../rod-storage.js"></script>
+  <script>
+    const output = document.querySelector('#output');
+    const status = document.querySelector('#status');
+    const pretty = value => JSON.stringify(value, (_, v) => typeof v === 'bigint' ? `${v}n` : v, 2);
+    let storage;
+    if (window.RodStorage) {
+      status.classList.add('ready');
+      status.querySelector('span').textContent = `Ready · ${RodStorage.version}`;
+      storage = RodStorage.create({ namespace: 'landing-playground', backend: 'memory', sync: false });
+      storage.ready().then(() => { output.textContent = 'RodStorage ready. Try Set, Get, Diagnostics or Healthcheck.'; });
+    } else {
+      status.querySelector('span').textContent = 'IIFE not compiled yet';
+      output.textContent = 'Compile rod-storage.ts to rod-storage.js and serve this folder to enable the playground.';
+    }
+    async function run(fn) {
+      if (!storage) return;
+      try { output.textContent = pretty(await fn()); }
+      catch (error) { output.textContent = `${error?.name || 'Error'}: ${error?.message || error}`; }
+    }
+    document.querySelector('#save').onclick = () => run(async () => {
+      const key = document.querySelector('#key').value;
+      const value = JSON.parse(document.querySelector('#value').value);
+      return storage.set(key, value);
+    });
+    document.querySelector('#get').onclick = () => run(() => storage.get(document.querySelector('#key').value));
+    document.querySelector('#diag').onclick = () => run(() => storage.diagnostics());
+    document.querySelector('#health').onclick = () => run(() => storage.healthcheck());
+    document.querySelector('#clear').onclick = () => run(async () => { await storage.clear(); return { cleared: true }; });
+  </script>
+</body>
+</html>
