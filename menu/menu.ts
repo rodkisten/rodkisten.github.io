@@ -2,7 +2,7 @@
 // @outfile dist/menu.js
 
 /**
- * RodMenu v2.1.0
+ * RodMenu v2.2.0
  * Browser-first declarative menu + form surface engine with adaptive Rod ecosystem integrations.
  *
  * Compile:
@@ -51,13 +51,13 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
 (function installRodMenu(rootWindow: Window & typeof globalThis): void {
   "use strict";
 
-  const VERSION = "2.1.0" as const;
+  const VERSION = "2.2.0" as const;
   const GLOBAL_NAME = "RodMenu" as const;
   const ROOT_ATTR = "data-rod-menu-host";
   const ACTIVE_ATTR = "data-rod-menu-active";
   const ID_PREFIX = "rod-menu";
   const DEFAULT_Z_INDEX = 2147482500;
-  const STYLE_VERSION = "v2.1";
+  const STYLE_VERSION = "v2.2";
 
   type Awaitable<T> = T | Promise<T>;
   type AnyRecord = Record<string, unknown>;
@@ -456,6 +456,11 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     onChange?: (context: RodMenuContext<TValues>) => void;
     onClose?: (result: RodMenuResult<TValues>) => void;
     onError?: (error: unknown, context: RodMenuContext<TValues>) => void;
+    gestures?: Partial<RodMenuGestureConfig>;
+    theme?: Readonly<Record<string, string | number>>;
+    css?: string;
+    components?: Readonly<Record<string, RodMenuComponentRenderer>>;
+    fieldTypes?: Readonly<Record<string, RodMenuFieldRenderer>>;
   }
 
   interface RodMenuResult<TValues extends AnyRecord = AnyRecord> {
@@ -491,6 +496,7 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     persist(): Promise<void>;
     hydrate(): Promise<void>;
     clearPersisted(): Promise<void>;
+    component(name: string, props?: AnyRecord): HTMLElement | null;
   }
 
   interface RodMenuHandle<TValues extends AnyRecord = AnyRecord> {
@@ -515,6 +521,45 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     destroy(): void;
   }
 
+
+
+  interface RodMenuGestureConfig {
+    preventPullToRefresh: boolean;
+    dragFromContent: boolean;
+    dismissThresholdPx: number;
+    dismissThresholdRatio: number;
+    velocityThresholdPxMs: number;
+    activationDistancePx: number;
+  }
+
+  interface RodMenuComponentRenderContext<TValues extends AnyRecord = AnyRecord> {
+    readonly name: string;
+    readonly document: Document;
+    readonly window: Window & typeof globalThis;
+    readonly schema: RodMenuSchema<TValues>;
+    readonly context: RodMenuContext<TValues>;
+    readonly props: Readonly<AnyRecord>;
+    readonly defaultRender: () => HTMLElement;
+    create(tag: string, className?: string): HTMLElement;
+    render(name: string, props?: AnyRecord): HTMLElement | null;
+  }
+
+  type RodMenuComponentRenderer = (context: RodMenuComponentRenderContext<any>) => HTMLElement | null | undefined;
+
+  interface RodMenuFieldRenderContext<TValues extends AnyRecord = AnyRecord> {
+    readonly type: string;
+    readonly field: BaseField & AnyRecord;
+    readonly value: unknown;
+    readonly document: Document;
+    readonly window: Window & typeof globalThis;
+    readonly context: RodMenuContext<TValues>;
+    create(tag: string, className?: string): HTMLElement;
+    commit(value: unknown): void;
+    defaultRender(): HTMLElement;
+  }
+
+  type RodMenuFieldRenderer = (context: RodMenuFieldRenderContext<any>) => HTMLElement | null | undefined;
+
   interface RodMenuDependencyUrls {
     elements: readonly string[];
     toaster: readonly string[];
@@ -530,6 +575,13 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     dependencyTimeoutMs: number;
     dependencyUrls: RodMenuDependencyUrls;
     toasterErrors: boolean;
+    gestures: RodMenuGestureConfig;
+    defaultSchema: Partial<RodMenuSchema<any>>;
+    theme: Readonly<Record<string, string | number>>;
+    css: string;
+    components: Readonly<Record<string, RodMenuComponentRenderer>>;
+    fieldTypes: Readonly<Record<string, RodMenuFieldRenderer>>;
+    refreshActiveOnConfigure: boolean;
     mount?: (doc: Document) => HTMLElement;
     onError?: (error: unknown) => void;
   }
@@ -552,6 +604,15 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     ],
   };
 
+  const defaultGestureConfig: RodMenuGestureConfig = {
+    preventPullToRefresh: true,
+    dragFromContent: true,
+    dismissThresholdPx: 140,
+    dismissThresholdRatio: 0.22,
+    velocityThresholdPxMs: 0.65,
+    activationDistancePx: 5,
+  };
+
   const defaultConfig: RodMenuConfig = {
     shadowRoot: true,
     defaultPresentation: "bottom-sheet",
@@ -560,12 +621,42 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     dependencyTimeoutMs: 8_000,
     dependencyUrls: defaultDependencyUrls,
     toasterErrors: true,
+    gestures: defaultGestureConfig,
+    defaultSchema: {},
+    theme: {},
+    css: "",
+    components: {},
+    fieldTypes: {},
+    refreshActiveOnConfigure: true,
   };
 
-  let globalConfig: RodMenuConfig = { ...defaultConfig };
+  let globalConfig: RodMenuConfig = {
+    ...defaultConfig,
+    dependencyUrls: { ...defaultDependencyUrls },
+    gestures: { ...defaultGestureConfig },
+    defaultSchema: {},
+    theme: {},
+    components: {},
+    fieldTypes: {},
+  };
   let counter = 0;
   const activeHandles = new Map<string, RodMenuHandle>();
-  const docState = new WeakMap<Document, { count: number; overflow: string; paddingRight: string }>();
+  const registeredComponents = new Map<string, RodMenuComponentRenderer>();
+  const registeredFieldTypes = new Map<string, RodMenuFieldRenderer>();
+  const docState = new WeakMap<Document, {
+    count: number;
+    overflow: string;
+    paddingRight: string;
+    overscrollBehavior: string;
+    bodyPosition: string;
+    bodyTop: string;
+    bodyLeft: string;
+    bodyRight: string;
+    bodyWidth: string;
+    bodyOverflow: string;
+    scrollX: number;
+    scrollY: number;
+  }>();
 
 
   type LooseGlobal = Record<string, unknown> & { document?: Document };
@@ -1306,6 +1397,8 @@ button {
   pointer-events: none;
   font-family: var(--rm-font);
   color: var(--rm-text);
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: auto;
 }
 .rm-root[data-open="true"] {
   pointer-events: auto;
@@ -1318,6 +1411,8 @@ button {
   -webkit-backdrop-filter: blur(10px) saturate(130%);
   opacity: 0;
   transition: opacity 240ms var(--rm-ease);
+  touch-action: none;
+  overscroll-behavior: none;
 }
 .rm-root[data-open="true"] .rm-backdrop {
   opacity: 1;
@@ -1335,6 +1430,7 @@ button {
   transform: translate3d(0, 30px, 0) scale(.985);
   transition: transform 280ms var(--rm-ease), opacity 220ms ease;
   will-change: transform, opacity;
+  overscroll-behavior: contain;
 }
 .rm-root[data-open="true"] .rm-shell {
   opacity: 1;
@@ -1501,6 +1597,8 @@ button {
   -webkit-overflow-scrolling: touch;
   padding: 0 16px 8px;
   scrollbar-width: thin;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
 }
 .rm-section {
   margin: 0 0 14px;
@@ -2343,11 +2441,12 @@ button {
     }
   }
 
-  function appendStyle(root: ShadowRoot | HTMLElement): void {
-    const doc = root instanceof ShadowRoot ? root.ownerDocument : root.ownerDocument;
+  function appendStyle(root: ShadowRoot | HTMLElement, instanceCss = ""): void {
+    const doc = root.ownerDocument;
     const style = createElement(doc, "style");
     style.dataset.rodMenuStyle = STYLE_VERSION;
-    style.textContent = compileStylesheet(css);
+    const extra = [globalConfig.css, instanceCss].filter(Boolean).join("\n\n");
+    style.textContent = compileStylesheet(extra ? `${css}\n\n${extra}` : css);
     root.append(style);
   }
 
@@ -2361,19 +2460,48 @@ button {
   }
 
   function lockDocumentScroll(doc: Document): void {
+    const win = getOwnerWindow(doc);
+    const body = doc.body;
     const state = docState.get(doc) ?? {
       count: 0,
       overflow: doc.documentElement.style.overflow,
       paddingRight: doc.documentElement.style.paddingRight,
+      overscrollBehavior: doc.documentElement.style.overscrollBehavior,
+      bodyPosition: body?.style.position || "",
+      bodyTop: body?.style.top || "",
+      bodyLeft: body?.style.left || "",
+      bodyRight: body?.style.right || "",
+      bodyWidth: body?.style.width || "",
+      bodyOverflow: body?.style.overflow || "",
+      scrollX: win.scrollX,
+      scrollY: win.scrollY,
     };
 
     if (state.count === 0) {
-      const win = getOwnerWindow(doc);
       const scrollbar = Math.max(0, win.innerWidth - doc.documentElement.clientWidth);
       state.overflow = doc.documentElement.style.overflow;
       state.paddingRight = doc.documentElement.style.paddingRight;
+      state.overscrollBehavior = doc.documentElement.style.overscrollBehavior;
+      state.scrollX = win.scrollX;
+      state.scrollY = win.scrollY;
       doc.documentElement.style.overflow = "hidden";
+      doc.documentElement.style.overscrollBehavior = "none";
       if (scrollbar > 0) doc.documentElement.style.paddingRight = `${scrollbar}px`;
+
+      if (body) {
+        state.bodyPosition = body.style.position;
+        state.bodyTop = body.style.top;
+        state.bodyLeft = body.style.left;
+        state.bodyRight = body.style.right;
+        state.bodyWidth = body.style.width;
+        state.bodyOverflow = body.style.overflow;
+        body.style.position = "fixed";
+        body.style.top = `${-state.scrollY}px`;
+        body.style.left = `${-state.scrollX}px`;
+        body.style.right = "0";
+        body.style.width = "100%";
+        body.style.overflow = "hidden";
+      }
     }
 
     state.count += 1;
@@ -2385,9 +2513,21 @@ button {
     if (!state) return;
     state.count = Math.max(0, state.count - 1);
     if (state.count === 0) {
+      const win = getOwnerWindow(doc);
+      const body = doc.body;
       doc.documentElement.style.overflow = state.overflow;
       doc.documentElement.style.paddingRight = state.paddingRight;
+      doc.documentElement.style.overscrollBehavior = state.overscrollBehavior;
+      if (body) {
+        body.style.position = state.bodyPosition;
+        body.style.top = state.bodyTop;
+        body.style.left = state.bodyLeft;
+        body.style.right = state.bodyRight;
+        body.style.width = state.bodyWidth;
+        body.style.overflow = state.bodyOverflow;
+      }
       docState.delete(doc);
+      try { win.scrollTo(state.scrollX, state.scrollY); } catch {}
     }
   }
 
@@ -2446,12 +2586,13 @@ button {
     private resolveResult!: (result: RodMenuResult<TValues>) => void;
     private previousFocus: Element | null = null;
     private listeners: Array<() => void> = [];
+    private renderListeners: Array<() => void> = [];
     private fieldNodes = new Map<string, HTMLElement>();
     private inputNodes = new Map<string, HTMLElement>();
     private customNodes = new Map<string, HTMLElement>();
 
     constructor(schema: RodMenuSchema<TValues>) {
-      this.schemaValue = { ...schema };
+      this.schemaValue = { ...globalConfig.defaultSchema, ...schema } as RodMenuSchema<TValues>;
       this.id = schema.id || nextId();
       this.doc = resolveDocument();
       this.win = getOwnerWindow(this.doc);
@@ -2467,7 +2608,7 @@ button {
 
       const useShadow = globalConfig.shadowRoot && typeof this.host.attachShadow === "function";
       this.root = useShadow ? this.host.attachShadow({ mode: "open" }) : this.host;
-      appendStyle(this.root);
+      appendStyle(this.root, this.schemaValue.css || "");
 
       this.result = new Promise<RodMenuResult<TValues>>((resolve) => {
         this.resolveResult = resolve;
@@ -2500,6 +2641,7 @@ button {
         persist() { return controller.storeHandle.persist(); },
         hydrate() { return controller.storeHandle.hydrate(); },
         clearPersisted() { return controller.storeHandle.clearPersisted(); },
+        component(name: string, props: AnyRecord = {}) { return controller.renderNamedComponent(name, props); },
       };
 
       this.persistenceManager = createPersistenceManager(
@@ -2613,12 +2755,15 @@ button {
     }
 
     private render(): void {
+      for (const off of this.renderListeners.splice(0)) {
+        try { off(); } catch {}
+      }
       this.fieldNodes.clear();
       this.inputNodes.clear();
       this.customNodes.clear();
       this.root.querySelector?.(".rm-root")?.remove();
 
-      const root = createElement(this.doc, "div");
+      const root = this.renderComponent("root", () => createElement(this.doc, "div"));
       root.className = `rm-root ${this.schemaValue.className || ""}`.trim();
       root.dataset.open = "false";
       root.dataset.loading = String(this.loading);
@@ -2626,27 +2771,34 @@ button {
       root.dataset.side = this.schemaValue.drawerSide || "right";
       root.style.setProperty("--rm-z", String(this.schemaValue.zIndex ?? globalConfig.zIndex));
       root.style.setProperty("--rm-width", getSizeWidth(this.schemaValue.size));
+      const theme = { ...globalConfig.theme, ...(this.schemaValue.theme || {}) };
+      for (const [name, value] of Object.entries(theme)) {
+        const variable = name.startsWith("--") ? name : `--rm-${name}`;
+        root.style.setProperty(variable, String(value));
+      }
 
-      const backdrop = createElement(this.doc, "div");
-      backdrop.className = "rm-backdrop";
+      const backdrop = this.renderComponent("backdrop", () => createElement(this.doc, "div"));
+      backdrop.classList.add("rm-backdrop");
       if (this.schemaValue.closeOnBackdrop !== false && this.schemaValue.dismissible !== false) {
         backdrop.addEventListener("pointerdown", (event) => {
           if (event.target === backdrop) this.finish("dismiss", undefined, "backdrop");
         });
       }
 
-      const shell = createElement(this.doc, "section");
-      shell.className = "rm-shell";
+      const shell = this.renderComponent("shell", () => createElement(this.doc, "section"));
+      shell.classList.add("rm-shell");
       shell.setAttribute("role", "dialog");
       shell.setAttribute("aria-modal", "true");
       shell.setAttribute("aria-label", this.schemaValue.title || "Menu");
 
       if (this.schemaValue.showHandle !== false && root.dataset.presentation === "bottom-sheet") {
-        const wrap = createElement(this.doc, "div");
-        wrap.className = "rm-handle-wrap";
-        wrap.innerHTML = '<div class="rm-handle" aria-hidden="true"></div>';
+        const wrap = this.renderComponent("handle", () => {
+          const node = createElement(this.doc, "div");
+          node.innerHTML = '<div class="rm-handle" aria-hidden="true"></div>';
+          return node;
+        });
+        wrap.classList.add("rm-handle-wrap");
         shell.append(wrap);
-        if (this.schemaValue.draggable !== false || this.schemaValue.swipeToDismiss !== false) this.bindSwipe(wrap, shell);
       }
 
       shell.append(this.renderHeader());
@@ -2656,8 +2808,8 @@ button {
       globalError.dataset.show = "false";
       shell.append(globalError);
 
-      const body = createElement(this.doc, "div");
-      body.className = "rm-body";
+      const body = this.renderComponent("body", () => createElement(this.doc, "div"));
+      body.classList.add("rm-body");
 
       if (this.schemaValue.fields?.length) {
         body.append(this.renderSection({ fields: this.schemaValue.fields }));
@@ -2676,10 +2828,27 @@ button {
 
       root.append(backdrop, shell);
       this.root.append(root);
+      if (root.dataset.presentation === "bottom-sheet") this.bindBottomSheetGestures(root, shell);
       this.refreshDynamicState();
     }
 
+    private renderHeader(): HTMLElement {
+      return this.renderComponent("header", () => this.renderHeaderDefault());
+    }
+
     private renderTabs(): HTMLElement {
+      return this.renderComponent("tabs", () => this.renderTabsDefault(), { activeTab: this.activeTabId });
+    }
+
+    private renderSection(section: RodMenuSection): HTMLElement {
+      return this.renderComponent("section", () => this.renderSectionDefault(section), { section });
+    }
+
+    private renderActions(): HTMLElement {
+      return this.renderComponent("actions", () => this.renderActionsDefault(), { actions: this.schemaValue.actions || [] });
+    }
+
+    private renderTabsDefault(): HTMLElement {
       const wrapper = createElement(this.doc, "div");
       wrapper.className = "rm-tabs-wrap";
 
@@ -2768,7 +2937,7 @@ button {
       shell.style.setProperty("--rm-popover-shift", align === "start" ? "0%" : align === "end" ? "-100%" : "-50%");
     }
 
-    private renderHeader(): HTMLElement {
+    private renderHeaderDefault(): HTMLElement {
       const header = createElement(this.doc, "header");
       header.className = "rm-header";
       const heading = createElement(this.doc, "div");
@@ -2809,18 +2978,20 @@ button {
       header.append(heading);
 
       if (this.schemaValue.dismissible !== false) {
-        const close = createElement(this.doc, "button");
-        close.type = "button";
-        close.className = "rm-close";
-        close.setAttribute("aria-label", "Fechar");
-        close.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg>';
+        const close = this.renderComponent("closeButton", () => createElement(this.doc, "button"));
+        close.setAttribute("type", "button");
+        close.classList.add("rm-close");
+        close.setAttribute("aria-label", close.getAttribute("aria-label") || "Fechar");
+        if (!close.childNodes.length) {
+          close.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg>';
+        }
         close.addEventListener("click", () => this.finish("dismiss", undefined, "api"));
         header.append(close);
       }
       return header;
     }
 
-    private renderSection(section: RodMenuSection): HTMLElement {
+    private renderSectionDefault(section: RodMenuSection): HTMLElement {
       const wrapper = createElement(this.doc, "section");
       wrapper.className = "rm-section";
       if (section.id) wrapper.dataset.section = section.id;
@@ -2880,6 +3051,32 @@ button {
     }
 
     private renderField(field: RodMenuField): HTMLElement {
+      const renderType = () => {
+        const registered = this.resolveFieldTypeRenderer(field.type);
+        if (registered) {
+          const rendered = registered({
+            type: field.type,
+            field: field as BaseField & AnyRecord,
+            value: this.valuesValue[field.name],
+            document: this.doc,
+            window: this.win,
+            context: this.context,
+            create: (tag, className) => {
+              const node = createElement(this.doc, tag);
+              if (className) node.className = className;
+              return node;
+            },
+            commit: (value) => this.commitField(field, value),
+            defaultRender: () => this.renderFieldDefault(field),
+          });
+          if (rendered) return rendered;
+        }
+        return this.renderFieldDefault(field);
+      };
+      return this.renderComponent("field", renderType, { field, value: this.valuesValue[field.name] });
+    }
+
+    private renderFieldDefault(field: RodMenuField): HTMLElement {
       const row = createElement(this.doc, "div");
       row.className = `rm-field ${field.className || ""}`.trim();
       row.dataset.field = field.name;
@@ -3546,12 +3743,15 @@ button {
       throw new Error(`Unsupported RodMenu field type: ${(field as BaseField).type}`);
     }
 
-    private renderActions(): HTMLElement {
+    private renderActionsDefault(): HTMLElement {
       const footer = createElement(this.doc, "footer");
       footer.className = "rm-actions";
       for (const action of this.schemaValue.actions || []) {
-        const button = createElement(this.doc, "button");
-        button.type = action.role === "submit" ? "submit" : "button";
+        const button = this.renderComponent("action", () => {
+          const node = createElement(this.doc, "button");
+          return node;
+        }, { action });
+        button.setAttribute("type", action.role === "submit" ? "submit" : "button");
         button.className = "rm-action";
         button.dataset.action = action.id;
         button.dataset.variant = action.variant || (action.role === "destructive" ? "danger" : action.role === "cancel" ? "secondary" : "primary");
@@ -3835,8 +4035,16 @@ button {
       });
     }
 
+    private refreshStyles(): void {
+      const style = this.root.querySelector<HTMLStyleElement>(`style[data-rod-menu-style="${STYLE_VERSION}"]`);
+      if (!style) return;
+      const extra = [globalConfig.css, this.schemaValue.css || ""].filter(Boolean).join("\n\n");
+      style.textContent = compileStylesheet(extra ? `${css}\n\n${extra}` : css);
+    }
+
     private update(patch: Partial<RodMenuSchema<TValues>>): void {
       this.schemaValue = { ...this.schemaValue, ...patch };
+      this.refreshStyles();
       this.render();
       requestAnimationFrame(() => { this.getRootElement().dataset.open = "true"; });
     }
@@ -3936,47 +4144,250 @@ button {
       });
     }
 
-    private bindSwipe(handle: HTMLElement, shell: HTMLElement): void {
-      let startY = 0;
-      let currentY = 0;
-      let dragging = false;
-      let pointerId = -1;
+    private getGestureConfig(): RodMenuGestureConfig {
+      return { ...globalConfig.gestures, ...(this.schemaValue.gestures || {}) };
+    }
 
-      const down = (event: PointerEvent) => {
-        if (event.button !== 0) return;
-        dragging = true;
-        pointerId = event.pointerId;
-        startY = event.clientY;
+    private findScrollableAncestor(target: EventTarget | null, boundary: HTMLElement): HTMLElement | null {
+      let node = target instanceof this.win.Element ? target : null;
+      while (node && node !== boundary) {
+        if (node instanceof this.win.HTMLElement) {
+          const style = this.win.getComputedStyle(node);
+          const overflowY = style.overflowY;
+          if ((overflowY === "auto" || overflowY === "scroll") && node.scrollHeight > node.clientHeight + 1) return node;
+        }
+        node = node.parentElement;
+      }
+      const body = boundary.querySelector<HTMLElement>(".rm-body");
+      return body && body.scrollHeight > body.clientHeight + 1 ? body : null;
+    }
+
+    private bindBottomSheetGestures(root: HTMLElement, shell: HTMLElement): void {
+      const config = this.getGestureConfig();
+      if (!config.preventPullToRefresh && this.schemaValue.draggable === false && this.schemaValue.swipeToDismiss === false) return;
+
+      let tracking = false;
+      let dragging = false;
+      let startedOnHandle = false;
+      let startX = 0;
+      let startY = 0;
+      let lastY = 0;
+      let startTime = 0;
+      let currentY = 0;
+      let scrollable: HTMLElement | null = null;
+      let directionLocked = false;
+      let verticalGesture = false;
+
+      const reset = () => {
+        tracking = false;
+        dragging = false;
+        startedOnHandle = false;
         currentY = 0;
+        scrollable = null;
+        directionLocked = false;
+        verticalGesture = false;
+        shell.style.transition = "";
+      };
+
+      const touchStart = (event: TouchEvent) => {
+        if (event.touches.length !== 1) return;
+        const touch = event.touches[0];
+        tracking = true;
+        dragging = false;
+        startX = touch.clientX;
+        startY = touch.clientY;
+        lastY = touch.clientY;
+        startTime = performance.now();
+        currentY = 0;
+        directionLocked = false;
+        verticalGesture = false;
+        const target = event.composedPath()[0] as EventTarget | undefined;
+        const element = target instanceof this.win.Element ? target : null;
+        startedOnHandle = !!element?.closest?.(".rm-handle-wrap");
+        scrollable = this.findScrollableAncestor(target || event.target, shell);
+      };
+
+      const touchMove = (event: TouchEvent) => {
+        if (!tracking || event.touches.length !== 1) return;
+        const touch = event.touches[0];
+        const dx = touch.clientX - startX;
+        const dy = touch.clientY - startY;
+        lastY = touch.clientY;
+
+        if (!directionLocked && Math.max(Math.abs(dx), Math.abs(dy)) >= config.activationDistancePx) {
+          directionLocked = true;
+          verticalGesture = Math.abs(dy) >= Math.abs(dx);
+        }
+        if (!directionLocked || !verticalGesture) return;
+
+        const contentAtTop = !scrollable || scrollable.scrollTop <= 0;
+        const canDrag = this.schemaValue.draggable !== false && (startedOnHandle || config.dragFromContent);
+        const pullingDown = dy > 0;
+
+        if (pullingDown && contentAtTop) {
+          if (event.cancelable && config.preventPullToRefresh) event.preventDefault();
+          event.stopPropagation();
+          if (canDrag) {
+            if (!dragging) {
+              dragging = true;
+              shell.style.transition = "none";
+            }
+            currentY = Math.max(0, dy);
+            shell.style.setProperty("--rm-drag-y", `${currentY}px`);
+          }
+          return;
+        }
+
+        if (dragging) {
+          if (event.cancelable) event.preventDefault();
+          currentY = Math.max(0, dy);
+          shell.style.setProperty("--rm-drag-y", `${currentY}px`);
+          return;
+        }
+
+        // A root-level downward overscroll must never leak to Safari's pull-to-refresh.
+        if (pullingDown && !scrollable && config.preventPullToRefresh && event.cancelable) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      };
+
+      const finishGesture = () => {
+        if (!tracking) return;
+        const elapsed = Math.max(1, performance.now() - startTime);
+        const velocity = Math.max(0, (lastY - startY) / elapsed);
+        const threshold = Math.min(config.dismissThresholdPx, shell.getBoundingClientRect().height * config.dismissThresholdRatio);
+        const shouldDismiss = dragging
+          && this.schemaValue.swipeToDismiss !== false
+          && this.schemaValue.dismissible !== false
+          && (currentY >= threshold || (currentY > config.activationDistancePx * 2 && velocity >= config.velocityThresholdPxMs));
+
+        shell.style.transition = "";
+        if (shouldDismiss) {
+          this.finish("dismiss", undefined, "swipe");
+        } else {
+          shell.style.removeProperty("--rm-drag-y");
+        }
+        reset();
+      };
+
+      let pointerDragging = false;
+      let pointerId = -1;
+      let pointerStartY = 0;
+      let pointerCurrentY = 0;
+      let pointerStartTime = 0;
+      const handle = shell.querySelector<HTMLElement>(".rm-handle-wrap");
+
+      const pointerDown = (event: PointerEvent) => {
+        if (!handle || event.pointerType === "touch" || event.button !== 0 || this.schemaValue.draggable === false) return;
+        pointerDragging = true;
+        pointerId = event.pointerId;
+        pointerStartY = event.clientY;
+        pointerCurrentY = 0;
+        pointerStartTime = performance.now();
         handle.setPointerCapture?.(pointerId);
         shell.style.transition = "none";
+        event.preventDefault();
       };
-      const move = (event: PointerEvent) => {
-        if (!dragging || event.pointerId !== pointerId) return;
-        currentY = Math.max(0, event.clientY - startY);
-        shell.style.setProperty("--rm-drag-y", `${currentY}px`);
+      const pointerMove = (event: PointerEvent) => {
+        if (!pointerDragging || event.pointerId !== pointerId) return;
+        pointerCurrentY = Math.max(0, event.clientY - pointerStartY);
+        shell.style.setProperty("--rm-drag-y", `${pointerCurrentY}px`);
+        event.preventDefault();
       };
-      const up = (event: PointerEvent) => {
-        if (!dragging || event.pointerId !== pointerId) return;
-        dragging = false;
+      const pointerUp = (event: PointerEvent) => {
+        if (!pointerDragging || event.pointerId !== pointerId) return;
+        const elapsed = Math.max(1, performance.now() - pointerStartTime);
+        const velocity = pointerCurrentY / elapsed;
+        const threshold = Math.min(config.dismissThresholdPx, shell.getBoundingClientRect().height * config.dismissThresholdRatio);
+        pointerDragging = false;
         shell.style.transition = "";
-        if (currentY > Math.min(140, shell.getBoundingClientRect().height * .22) && this.schemaValue.swipeToDismiss !== false && this.schemaValue.dismissible !== false) {
+        if (this.schemaValue.swipeToDismiss !== false && this.schemaValue.dismissible !== false && (pointerCurrentY >= threshold || velocity >= config.velocityThresholdPxMs)) {
           this.finish("dismiss", undefined, "swipe");
         } else {
           shell.style.removeProperty("--rm-drag-y");
         }
       };
 
-      handle.addEventListener("pointerdown", down);
-      handle.addEventListener("pointermove", move);
-      handle.addEventListener("pointerup", up);
-      handle.addEventListener("pointercancel", up);
-      this.listeners.push(() => {
-        handle.removeEventListener("pointerdown", down);
-        handle.removeEventListener("pointermove", move);
-        handle.removeEventListener("pointerup", up);
-        handle.removeEventListener("pointercancel", up);
+      const rootTouchMove = (event: TouchEvent) => {
+        if (!config.preventPullToRefresh || !event.cancelable) return;
+        const path = event.composedPath();
+        if (!path.includes(shell)) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      };
+
+      shell.addEventListener("touchstart", touchStart, { passive: true });
+      shell.addEventListener("touchmove", touchMove, { passive: false });
+      shell.addEventListener("touchend", finishGesture, { passive: true });
+      shell.addEventListener("touchcancel", finishGesture, { passive: true });
+      root.addEventListener("touchmove", rootTouchMove, { passive: false, capture: true });
+      handle?.addEventListener("pointerdown", pointerDown);
+      handle?.addEventListener("pointermove", pointerMove);
+      handle?.addEventListener("pointerup", pointerUp);
+      handle?.addEventListener("pointercancel", pointerUp);
+
+      this.renderListeners.push(() => {
+        shell.removeEventListener("touchstart", touchStart);
+        shell.removeEventListener("touchmove", touchMove);
+        shell.removeEventListener("touchend", finishGesture);
+        shell.removeEventListener("touchcancel", finishGesture);
+        root.removeEventListener("touchmove", rootTouchMove, true);
+        handle?.removeEventListener("pointerdown", pointerDown);
+        handle?.removeEventListener("pointermove", pointerMove);
+        handle?.removeEventListener("pointerup", pointerUp);
+        handle?.removeEventListener("pointercancel", pointerUp);
       });
+    }
+
+    private resolveComponentRenderer(name: string): RodMenuComponentRenderer | undefined {
+      return this.schemaValue.components?.[name] || registeredComponents.get(name) || globalConfig.components[name];
+    }
+
+    private resolveFieldTypeRenderer(type: string): RodMenuFieldRenderer | undefined {
+      return this.schemaValue.fieldTypes?.[type] || registeredFieldTypes.get(type) || globalConfig.fieldTypes[type];
+    }
+
+    private renderNamedComponent(name: string, props: AnyRecord = {}): HTMLElement | null {
+      const renderer = this.resolveComponentRenderer(name);
+      if (!renderer) return null;
+      return renderer({
+        name,
+        document: this.doc,
+        window: this.win,
+        schema: this.schemaValue,
+        context: this.context,
+        props,
+        defaultRender: () => createElement(this.doc, "div"),
+        create: (tag, className) => {
+          const node = createElement(this.doc, tag);
+          if (className) node.className = className;
+          return node;
+        },
+        render: (nestedName, nestedProps = {}) => this.renderNamedComponent(nestedName, nestedProps),
+      }) || null;
+    }
+
+    private renderComponent(name: string, defaultRender: () => HTMLElement, props: AnyRecord = {}): HTMLElement {
+      const renderer = this.resolveComponentRenderer(name);
+      if (!renderer) return defaultRender();
+      const renderNested = (nestedName: string, nestedProps: AnyRecord = {}): HTMLElement | null => this.renderNamedComponent(nestedName, nestedProps);
+      return renderer({
+        name,
+        document: this.doc,
+        window: this.win,
+        schema: this.schemaValue,
+        context: this.context,
+        props,
+        defaultRender,
+        create: (tag, className) => {
+          const node = createElement(this.doc, tag);
+          if (className) node.className = className;
+          return node;
+        },
+        render: renderNested,
+      }) || defaultRender();
     }
 
     private finish(action: string | "dismiss", data: unknown, reason: RodMenuResult["reason"]): void {
@@ -4003,6 +4414,9 @@ button {
     private destroy(resolveIfNeeded = true): void {
       if (this.destroyed) return;
       this.destroyed = true;
+      for (const off of this.renderListeners.splice(0)) {
+        try { off(); } catch {}
+      }
       for (const off of this.listeners.splice(0)) {
         try { off(); } catch {}
       }
@@ -4104,7 +4518,17 @@ button {
     form<TValues extends AnyRecord = AnyRecord>(schema: Omit<RodMenuSchema<TValues>, "actions"> & { actions?: readonly RodMenuAction[] }): Promise<RodMenuResult<TValues>>;
     confirm(options: { title: string; description?: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean; presentation?: Presentation }): Promise<boolean>;
     actions<T extends string = string>(options: { title?: string; description?: string; presentation?: Presentation; anchor?: RodMenuSchema["anchor"]; items: readonly { label: string; value: T; variant?: ActionVariant; icon?: string; badge?: string | number; shortcut?: string }[] }): Promise<T | null>;
-    configure(config: Partial<RodMenuConfig>): void;
+    configure(config: Partial<RodMenuConfig>): RodMenuPublicApi;
+    getConfig(): Readonly<RodMenuConfig>;
+    resetConfig(): RodMenuPublicApi;
+    refreshAll(): void;
+    registerComponent(name: string, renderer: RodMenuComponentRenderer): RodMenuPublicApi;
+    unregisterComponent(name: string): boolean;
+    getComponent(name: string): RodMenuComponentRenderer | undefined;
+    registerFieldType(type: string, renderer: RodMenuFieldRenderer): RodMenuPublicApi;
+    unregisterFieldType(type: string): boolean;
+    hasFieldType(type: string): boolean;
+    field(type: string, config: Omit<BaseField, "type"> & AnyRecord): RodMenuField;
     loadDependencies(): Promise<RodMenuRuntimeStatus>;
     get(id: string): RodMenuHandle | undefined;
     closeAll(reason?: RodMenuResult["reason"]): void;
@@ -4305,7 +4729,7 @@ button {
 
   const api: RodMenuPublicApi = {
     version: VERSION,
-    get config() { return Object.freeze({ ...globalConfig, dependencyUrls: { ...globalConfig.dependencyUrls } }); },
+    get config() { return api.getConfig(); },
     get runtime() {
       return Object.freeze({
         elements: { ...runtimeStatus.elements },
@@ -4354,15 +4778,94 @@ button {
       }).result;
       return result.action === "dismiss" || result.action === "cancel" ? null : result.action as T;
     },
-    configure(config: Partial<RodMenuConfig>): void {
+    configure(config: Partial<RodMenuConfig>): RodMenuPublicApi {
       globalConfig = {
         ...globalConfig,
         ...config,
         dependencyUrls: config.dependencyUrls
           ? { ...globalConfig.dependencyUrls, ...config.dependencyUrls }
           : globalConfig.dependencyUrls,
+        gestures: config.gestures
+          ? { ...globalConfig.gestures, ...config.gestures }
+          : globalConfig.gestures,
+        defaultSchema: config.defaultSchema
+          ? { ...globalConfig.defaultSchema, ...config.defaultSchema }
+          : globalConfig.defaultSchema,
+        theme: config.theme
+          ? { ...globalConfig.theme, ...config.theme }
+          : globalConfig.theme,
+        components: config.components
+          ? { ...globalConfig.components, ...config.components }
+          : globalConfig.components,
+        fieldTypes: config.fieldTypes
+          ? { ...globalConfig.fieldTypes, ...config.fieldTypes }
+          : globalConfig.fieldTypes,
       };
       if (config.autoLoadDependencies === true) void loadDependencies();
+      if (globalConfig.refreshActiveOnConfigure) api.refreshAll();
+      return api;
+    },
+    getConfig(): Readonly<RodMenuConfig> {
+      return Object.freeze({
+        ...globalConfig,
+        dependencyUrls: Object.freeze({ ...globalConfig.dependencyUrls }),
+        gestures: Object.freeze({ ...globalConfig.gestures }),
+        defaultSchema: Object.freeze({ ...globalConfig.defaultSchema }),
+        theme: Object.freeze({ ...globalConfig.theme }),
+        components: Object.freeze({ ...globalConfig.components }),
+        fieldTypes: Object.freeze({ ...globalConfig.fieldTypes }),
+      });
+    },
+    resetConfig(): RodMenuPublicApi {
+      globalConfig = {
+        ...defaultConfig,
+        dependencyUrls: { ...defaultDependencyUrls },
+        gestures: { ...defaultGestureConfig },
+        defaultSchema: {},
+        theme: {},
+        components: {},
+        fieldTypes: {},
+      };
+      registeredComponents.clear();
+      registeredFieldTypes.clear();
+      api.refreshAll();
+      return api;
+    },
+    refreshAll(): void {
+      for (const handle of Array.from(activeHandles.values())) {
+        try { handle.update({}); } catch (error) { try { globalConfig.onError?.(error); } catch {} }
+      }
+    },
+    registerComponent(name: string, renderer: RodMenuComponentRenderer): RodMenuPublicApi {
+      if (!name || typeof renderer !== "function") throw new TypeError("registerComponent(name, renderer) requires a name and renderer function.");
+      registeredComponents.set(name, renderer);
+      if (globalConfig.refreshActiveOnConfigure) api.refreshAll();
+      return api;
+    },
+    unregisterComponent(name: string): boolean {
+      const deleted = registeredComponents.delete(name);
+      if (deleted && globalConfig.refreshActiveOnConfigure) api.refreshAll();
+      return deleted;
+    },
+    getComponent(name: string): RodMenuComponentRenderer | undefined {
+      return registeredComponents.get(name) || globalConfig.components[name];
+    },
+    registerFieldType(type: string, renderer: RodMenuFieldRenderer): RodMenuPublicApi {
+      if (!type || typeof renderer !== "function") throw new TypeError("registerFieldType(type, renderer) requires a type and renderer function.");
+      registeredFieldTypes.set(type, renderer);
+      if (globalConfig.refreshActiveOnConfigure) api.refreshAll();
+      return api;
+    },
+    unregisterFieldType(type: string): boolean {
+      const deleted = registeredFieldTypes.delete(type);
+      if (deleted && globalConfig.refreshActiveOnConfigure) api.refreshAll();
+      return deleted;
+    },
+    hasFieldType(type: string): boolean {
+      return registeredFieldTypes.has(type) || typeof globalConfig.fieldTypes[type] === "function";
+    },
+    field(type: string, config: Omit<BaseField, "type"> & AnyRecord): RodMenuField {
+      return { ...config, type } as unknown as RodMenuField;
     },
     loadDependencies,
     get(id: string): RodMenuHandle | undefined {
