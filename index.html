@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -7,11 +7,11 @@
   <title>Rod Kisten — Software Engineer, Creative Developer & Open Source Tools</title>
   <meta
     name="description"
-    content="Portfólio de Rod Kisten: ferramentas web, bibliotecas TypeScript, DevTools mobile-first, userscripts, runtime reativo, UI systems, media automation e experimentos open source."
+    content="Portfolio of Rod Kisten: TypeScript libraries, mobile-first DevTools, userscripts, reactive runtimes, UI systems, media automation and open-source experiments."
   />
   <meta
     name="keywords"
-    content="Rod Kisten, rodkisten, software engineer, frontend engineer, TypeScript, JavaScript, React, Next.js, open source, RodToaster, RodMenu, RodStorage, RodElements, Object Inspector, Broto, Cipó, Fábrica, Rod DevTools, Caipora, userscripts, web development"
+    content="Rod Kisten, rodkisten, software engineer, frontend engineer, TypeScript, JavaScript, React, Next.js, open source, RodToaster, RodMenu, RodStorage, RodElements, Object Inspector, Broto, Cipo, Fabrica, Rod DevTools, Caipora, userscripts, web development"
   />
   <meta name="author" content="Rod Kisten" />
   <meta name="creator" content="Rod Kisten" />
@@ -29,7 +29,7 @@
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
-  <meta property="og:locale" content="pt_BR" />
+  <meta property="og:locale" content="en_US" />
   <meta property="og:site_name" content="Rod Kisten" />
   <meta property="og:title" content="Rod Kisten — Software Engineer, Tools & Experiments" />
   <meta
@@ -84,14 +84,14 @@
         "@id": "https://rod.migos.club/#website",
         "url": "https://rod.migos.club/",
         "name": "Rod Kisten — Software, Tools & Experiments",
-        "inLanguage": "pt-BR",
+        "inLanguage": "en",
         "author": { "@id": "https://rod.migos.club/#person" }
       },
       {
         "@type": "CollectionPage",
         "@id": "https://rod.migos.club/#projects",
         "url": "https://rod.migos.club/#projects",
-        "name": "Projetos de Rod Kisten",
+        "name": "Projects by Rod Kisten",
         "isPartOf": { "@id": "https://rod.migos.club/#website" },
         "about": { "@id": "https://rod.migos.club/#person" }
       }
@@ -1722,24 +1722,153 @@
       }
     }
 
+  
+    /* ============================================================
+       V3 — CREATIVE MOTION SYSTEM
+       Smooth, blurred, tilted reveals + layered hero choreography
+       ============================================================ */
+
+    .portrait-image {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: cover;
+      object-position: center;
+      border-radius: inherit;
+      transform: translateZ(0) scale(1.001);
+    }
+
+    .portrait-placeholder::after {
+      content: none !important;
+    }
+
+    .hero-line {
+      display: block;
+      width: fit-content;
+      transform-origin: 12% 75%;
+      will-change: transform, opacity, filter;
+    }
+
+    .hero-line--two {
+      position: relative;
+      z-index: 1;
+    }
+
+    .topbar__inner,
+    .eyebrow,
+    .hero-line,
+    .hero__lede,
+    .hero__actions,
+    .portrait-wrap,
+    .marquee {
+      will-change: transform, opacity, filter;
+    }
+
+    /*
+     * Revealable elements start normal in CSS.
+     * JS applies the initial state only once they are observed,
+     * so disabled JS never creates invisible content.
+     */
+    .project-card,
+    .principle,
+    .social-card,
+    .seo-wall,
+    .section-head {
+      backface-visibility: hidden;
+      transform-origin: 50% 65%;
+    }
+
+    /* Remove old CSS-driven project animation to avoid conflicts with WAAPI. */
+    @supports (animation-timeline: scroll()) {
+      .project-card {
+        animation: none !important;
+      }
+    }
+
+    /* Titles keep a subtle native scroll-driven stretch where available. */
+    @supports (animation-timeline: view()) {
+      .section-title {
+        animation: v3TitleReveal linear both;
+        animation-timeline: view();
+        animation-range: entry 5% cover 38%;
+      }
+    }
+
+    @keyframes v3TitleReveal {
+      from {
+        opacity: .38;
+        transform: translate3d(-18px, 26px, 0) scaleX(.9) rotate(-1deg);
+        filter: blur(4px);
+      }
+      to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scaleX(1) rotate(0);
+        filter: blur(0);
+      }
+    }
+
+    /* A gentler shine cycle, less arcade-flashy. */
+    .hero h1 .shiny-word::after {
+      opacity: .7;
+      animation-duration: 6.8s;
+      animation-timing-function: cubic-bezier(.16,1,.3,1);
+    }
+
+    .portrait-frame::before {
+      opacity: .62;
+      animation-duration: 7.6s;
+    }
+
+    @media (max-width: 720px) {
+      .hero-line {
+        max-width: 100%;
+      }
+
+      .hero-line--two {
+        margin-block: .02em;
+      }
+
+      .portrait-image {
+        object-position: center top;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .hero-line,
+      .topbar__inner,
+      .eyebrow,
+      .hero__lede,
+      .hero__actions,
+      .portrait-wrap,
+      .project-card,
+      .principle,
+      .social-card,
+      .seo-wall,
+      .section-head {
+        opacity: 1 !important;
+        transform: none !important;
+        filter: none !important;
+      }
+    }
+
   </style>
 </head>
 
 <body>
-  <a class="skip-link" href="#main">Pular para o conteúdo</a>
+  <a class="skip-link" href="#main">Skip to content</a>
   <div class="noise" aria-hidden="true"></div>
   <div class="cursor-blob" aria-hidden="true"></div>
 
-  <header class="topbar page-shell" aria-label="Navegação principal">
+  <header class="topbar page-shell" aria-label="Main navigation">
     <div class="topbar__inner">
-      <a class="brand" href="#top" aria-label="Rod Kisten, início">
+      <a class="brand" href="#top" aria-label="Rod Kisten, home">
         <span class="brand__dot" aria-hidden="true"></span>
         <span>ROD/KISTEN</span>
       </a>
 
-      <nav class="nav" aria-label="Seções do site">
-        <a href="#projects">Projetos</a>
-        <a href="#principles">Princípios</a>
+      <nav class="nav" aria-label="Site sections">
+        <a href="#projects">Projects</a>
+        <a href="#principles">Principles</a>
         <a href="#socials">Links</a>
         <a href="https://github.com/rodkisten" rel="me noopener noreferrer">GitHub ↗</a>
       </nav>
@@ -1752,49 +1881,45 @@
         <div class="eyebrow">Software engineer · creative tooling · open source</div>
 
         <h1 id="hero-title">
-          I build
-          <span class="shiny-word">weirdly useful</span>
-          software.
+          <span class="hero-line hero-line--one">I build</span>
+          <span class="hero-line hero-line--two"><span class="shiny-word">weirdly useful</span></span>
+          <span class="hero-line hero-line--three">software.</span>
         </h1>
 
         <p class="hero__lede">
-          Interfaces que parecem brinquedos, runtimes que trabalham como infraestrutura,
-          DevTools para lugares onde DevTools quase não existem e pequenas bibliotecas
-          obcecadas por performance, ergonomia e detalhes.
+          Interfaces that feel playful, runtimes that behave like infrastructure, DevTools for places where DevTools barely exist, and small libraries obsessed with performance, ergonomics and detail.
         </p>
 
         <div class="hero__actions">
-          <a class="btn btn--primary magnetic" href="#projects">Explorar projetos ↓</a>
+          <a class="btn btn--primary magnetic" href="#projects">Explore projects ↓</a>
           <a class="btn btn--pink magnetic" href="https://github.com/rodkisten" rel="me noopener noreferrer">
             GitHub ↗
           </a>
         </div>
       </div>
 
-      <aside class="portrait-wrap" aria-label="Foto de Rod Kisten">
+      <aside class="portrait-wrap" aria-label="Portrait of Rod Kisten">
         <div class="portrait-orbit" aria-hidden="true"></div>
-        <div class="portrait-sticker">foto aqui ✦</div>
+        <div class="portrait-sticker">photo here ✦</div>
 
         <div class="portrait-frame" data-tilt>
           <div class="portrait-placeholder">
-
-
-
-              <img src="./rod.jpeg" alt="Retrato de Rod Kisten" loading="eager" fetchpriority="high">
-
-            
-            
-            
-            <svg viewBox="0 0 180 180" aria-hidden="true">
-              <circle cx="90" cy="64" r="38" fill="none" stroke="currentColor" stroke-width="8"/>
-              <path d="M28 160c8-38 31-57 62-57s54 19 62 57" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/>
-            </svg>
+            <img
+              class="portrait-image"
+              src="./rod.jpeg"
+              alt="Portrait of Rod Kisten"
+              width="960"
+              height="1200"
+              loading="eager"
+              fetchpriority="high"
+              decoding="async"
+            />
           </div>
         </div>
       </aside>
     </section>
 
-    <section class="marquee" aria-label="Tecnologias e áreas">
+    <section class="marquee" aria-label="Technologies and areas">
       <div class="marquee__track" aria-hidden="true">
         <span class="marquee__item">TypeScript</span>
         <span class="marquee__item">Browser APIs</span>
@@ -1834,9 +1959,7 @@
           </div>
           <h3>Rod Toaster</h3>
           <p>
-            Um sistema de toast que foi ficando perigosamente completo: rich content,
-            ações, confirms, multi-loading, progresso acumulado, retries, cancelamento,
-            expansão scrollable, picker e lifecycle refinado para interfaces móveis.
+            A toast system that became dangerously capable: rich content, actions, confirms, multi-loading, aggregate progress, retries, cancellation, scrollable expansion, media picking and a refined lifecycle for mobile interfaces.
           </p>
           <div class="chips">
             <span class="chip">TypeScript</span>
@@ -1853,8 +1976,7 @@
           </div>
           <h3>Rod Menu</h3>
           <p>
-            Menu composável com campos tipados, gestos, persistência opcional,
-            transformação de dados, components override e renderers customizáveis.
+            A composable menu system with typed fields, gestures, optional persistence, data transformations, component overrides and custom renderers.
           </p>
           <div class="chips">
             <span class="chip">Gestures</span>
@@ -1870,8 +1992,7 @@
           </div>
           <h3>Object Inspector</h3>
           <p>
-            Inspector navegável para objetos, arrays, erros, DOM nodes e estruturas
-            complexas. Base visual para debug, logs e ferramentas internas.
+            A navigable inspector for objects, arrays, errors, DOM nodes and complex structures. A visual foundation for debugging, logs and internal tooling.
           </p>
           <div class="chips">
             <span class="chip">Inspection</span>
@@ -1887,8 +2008,7 @@
           </div>
           <h3>RodStorage</h3>
           <p>
-            Camada central de storage com IndexedDB e localStorage, parsing,
-            versionamento, migrations, serialização e uma API consistente para userscripts.
+            A central storage layer over IndexedDB and localStorage with parsing, versioning, migrations, serialization and a consistent API for userscripts.
           </p>
           <div class="chips">
             <span class="chip">IndexedDB</span>
@@ -1904,9 +2024,7 @@
           </div>
           <h3>RodElements</h3>
           <p>
-            Tiny DOM factory browser-first com HTML/SVG, parser estilo Emmet,
-            children recursivos, listeners, refs, data, style, cross-realm safety
-            e integração opcional com o runtime de CSS do Cipó.
+            A tiny browser-first DOM factory with HTML/SVG creation, an Emmet-like parser, recursive children, listeners, refs, data, styling, cross-realm safety and optional integration with the Cipo CSS runtime.
           </p>
           <div class="chips">
             <span class="chip">DOM</span>
@@ -1923,8 +2041,7 @@
           </div>
           <h3>Broto</h3>
           <p>
-            Runtime reativo com owner scopes, lifecycle, dependency tracking
-            e primitives para construir uma camada declarativa sem carregar um framework inteiro.
+            A reactive runtime with owner scopes, lifecycle management, dependency tracking and primitives for building declarative layers without shipping an entire framework.
           </p>
           <div class="chips">
             <span class="chip">Signals</span>
@@ -1938,10 +2055,9 @@
             <span class="project-index">007</span>
             <span class="project-type">CSS runtime</span>
           </div>
-          <h3>Cipó</h3>
+          <h3>Cipo</h3>
           <p>
-            CSS-in-JS/browser runtime focado em composição, tagged templates,
-            escopo previsível e integração com a família de ferramentas Rod.
+            A browser-oriented CSS runtime focused on composition, tagged templates, predictable scoping and integration across the Rod tool family.
           </p>
           <div class="chips">
             <span class="chip">CSS</span>
@@ -1955,10 +2071,9 @@
             <span class="project-index">008</span>
             <span class="project-type">render pipeline</span>
           </div>
-          <h3>Fábrica</h3>
+          <h3>Fabrica</h3>
           <p>
-            Camada de componentes e renderização: context providers, artifacts,
-            directives, DOM-special attributes e um pipeline extensível de RenderValue.
+            A component and rendering layer with context providers, artifacts, directives, DOM-special attributes and an extensible RenderValue pipeline.
           </p>
           <div class="chips">
             <span class="chip">Components</span>
@@ -1974,10 +2089,7 @@
           </div>
           <h3>Rod DevTools / Caipora</h3>
           <p>
-            Uma caixa de ferramentas de desenvolvimento para mobile Safari:
-            Console, Elements, Network, Sources, Settings, inspector, highlighter,
-            ingestão de logs, fetch/XHR interception, Eruda integration e experimentos
-            de React Fiber inspection. DevTools onde normalmente só existe sofrimento.
+            A developer toolbox for mobile Safari: Console, Elements, Network, Sources, Settings, inspector, highlighter, log ingestion, fetch/XHR interception, Eruda integration and React Fiber inspection experiments. DevTools for places where debugging is usually pure friction.
           </p>
           <div class="chips">
             <span class="chip">iOS Safari</span>
@@ -1995,8 +2107,7 @@
           </div>
           <h3>Alerta Storage</h3>
           <p>
-            Inspector estilo Chrome para Web Storage, cookies, IndexedDB,
-            Cache Storage, OPFS, quota e service workers, pensado para tela pequena.
+            A Chrome-inspired inspector for Web Storage, cookies, IndexedDB, Cache Storage, OPFS, quota and service workers, designed for small screens.
           </p>
           <div class="chips">
             <span class="chip">IndexedDB</span>
@@ -2012,8 +2123,7 @@
           </div>
           <h3>Rod Blocker</h3>
           <p>
-            Engine de regras para bloquear, esconder, remover e substituir conteúdo,
-            interceptar rede, selecionar elementos e exportar regras no estilo EasyList.
+            A rule engine to block, hide, remove and replace content, intercept network traffic, pick elements and export EasyList-style rules.
           </p>
           <div class="chips">
             <span class="chip">Userscript</span>
@@ -2029,9 +2139,7 @@
           </div>
           <h3>All-in-One Media Downloader</h3>
           <p>
-            Userscript/browser toolkit para descobrir vídeos, fotos, HLS, carrosséis,
-            selecionar mídia e encaminhar conteúdo para pipelines de download e Telegram.
-            Integra browser APIs, Scriptable e um relay server-side.
+            A userscript and browser toolkit for discovering videos, photos, HLS streams and carousels, selecting media and forwarding content into download and Telegram pipelines. It bridges browser APIs, Scriptable and a server-side relay.
           </p>
           <div class="chips">
             <span class="chip">Instagram</span>
@@ -2048,8 +2156,7 @@
           </div>
           <h3>Telegram Relay</h3>
           <p>
-            Worker com deduplicação, delivery claims, D1, batch delivery,
-            media identity, canais múltiplos, force resend e enriquecimento social.
+            A worker with deduplication, delivery claims, D1 persistence, batch delivery, media identity, multi-channel routing, forced resend and social metadata enrichment.
           </p>
           <div class="chips">
             <span class="chip">Cloudflare Workers</span>
@@ -2082,8 +2189,7 @@
           </div>
           <h3>React Fiber Panel</h3>
           <p>
-            Experimento de React DevTools para ambientes hostis: caça Fiber no DOM,
-            hook global, owners, props, state e relações entre componentes.
+            A React DevTools experiment for hostile environments: it hunts Fiber through the DOM, global hooks, owners, props, state and component relationships.
           </p>
           <div class="chips">
             <span class="chip">React</span>
@@ -2099,9 +2205,7 @@
           </div>
           <h3>Instagram Feed Tools</h3>
           <p>
-            Userscripts para suggested feed, navegação infinita em posts/reels,
-            interceptação de fetch, observação de DOM e experiências de interface
-            que tentam reconstruir partes úteis do app nativo dentro da web.
+            Userscripts for suggested feeds, infinite post and reel navigation, fetch interception, DOM observation and interface experiments that rebuild useful parts of native-app behavior on the web.
           </p>
           <div class="chips">
             <span class="chip">Instagram</span>
@@ -2117,8 +2221,7 @@
           </div>
           <h3>Politika / Colinha</h3>
           <p>
-            Produto experimental em TypeScript no espaço de informação política
-            e ferramentas de consulta, com foco em experiência web e organização de dados.
+            An experimental TypeScript product for political information and research tools, focused on web experience and structured public data.
           </p>
           <div class="chips">
             <span class="chip">TypeScript</span>
@@ -2134,8 +2237,7 @@
           </div>
           <h3>Build / IIFE Tooling</h3>
           <p>
-            Pipelines Rolldown, GitHub Actions e convenções browser-first para transformar
-            utilitários TypeScript em artefatos IIFE versionados e publicáveis no Pages.
+            Rolldown pipelines, GitHub Actions and browser-first conventions for turning TypeScript utilities into versioned, publishable IIFE artifacts.
           </p>
           <div class="chips">
             <span class="chip">Rolldown</span>
@@ -2161,8 +2263,7 @@
             <div>
               <h3>Browser-first</h3>
               <p>
-                Ferramentas pequenas devem conseguir viver perto da plataforma.
-                Menos ceremony, menos dependência acidental, mais APIs nativas.
+                Small tools should stay close to the platform: less ceremony, fewer accidental dependencies and more native browser APIs.
               </p>
             </div>
           </article>
@@ -2172,8 +2273,7 @@
             <div>
               <h3>Mobile is not a reduced desktop</h3>
               <p>
-                Gestos, viewport, foco, scroll, safe areas, performance térmica e
-                ergonomia de polegar mudam o problema inteiro.
+                Gestures, viewport behavior, focus, scrolling, safe areas, thermal performance and thumb ergonomics change the entire problem.
               </p>
             </div>
           </article>
@@ -2183,8 +2283,7 @@
             <div>
               <h3>Debugging deserves interface design</h3>
               <p>
-                Ferramentas internas também merecem hierarquia, feedback,
-                transições legíveis e estados de erro impossíveis de ignorar.
+                Internal tools deserve hierarchy, feedback, readable transitions and error states that are impossible to ignore.
               </p>
             </div>
           </article>
@@ -2194,8 +2293,7 @@
             <div>
               <h3>Performance is part of the interaction</h3>
               <p>
-                Uma interface não parece rápida apenas porque tem poucos milissegundos.
-                Ela precisa reagir imediatamente e movimentar só o que realmente importa.
+                An interface does not feel fast just because it saves a few milliseconds. It needs to react immediately and move only what actually matters.
               </p>
             </div>
           </article>
@@ -2219,20 +2317,20 @@
           <span class="social-card__arrow" aria-hidden="true">↗</span>
         </a>
 
-        <!-- Troque pelos seus links reais -->
-        <a class="social-card magnetic" href="#" aria-label="Instagram — substitua pelo seu URL">
+        <!-- Replace these placeholders with your real profile URLs -->
+        <a class="social-card magnetic" href="#" aria-label="Instagram — replace with your profile URL">
           <span class="social-card__label">Photos / life / visual scraps</span>
           <strong class="social-card__name">Instagram</strong>
           <span class="social-card__arrow" aria-hidden="true">↗</span>
         </a>
 
-        <a class="social-card magnetic" href="#" aria-label="LinkedIn — substitua pelo seu URL">
+        <a class="social-card magnetic" href="#" aria-label="LinkedIn — replace with your profile URL">
           <span class="social-card__label">Work / career / network</span>
           <strong class="social-card__name">LinkedIn</strong>
           <span class="social-card__arrow" aria-hidden="true">↗</span>
         </a>
 
-        <a class="social-card magnetic" href="#" aria-label="X / Twitter — substitua pelo seu URL">
+        <a class="social-card magnetic" href="#" aria-label="X / Twitter — replace with your profile URL">
           <span class="social-card__label">Thoughts / code / chaos</span>
           <strong class="social-card__name">X / Twitter</strong>
           <span class="social-card__arrow" aria-hidden="true">↗</span>
@@ -2242,11 +2340,7 @@
       <div class="seo-wall">
         <h2>Software engineer building tools for the browser.</h2>
         <p>
-          Rod Kisten é software engineer com foco em engenharia frontend, TypeScript,
-          JavaScript, React, sistemas de interface, performance web, browser APIs,
-          ferramentas de desenvolvedor e open source. Este portfólio reúne bibliotecas,
-          runtimes, DevTools mobile-first, userscripts, automações de mídia e experimentos
-          de produto construídos para web moderna.
+          Rod Kisten is a software engineer focused on frontend engineering, TypeScript, JavaScript, React, interface systems, web performance, browser APIs, developer tools and open source. This portfolio brings together libraries, runtimes, mobile-first DevTools, userscripts, media automation and product experiments built for the modern web.
         </p>
       </div>
     </section>
@@ -2290,50 +2384,235 @@
         }
       };
 
-      /* -----------------------------------------------------------
-       * 1. Entrance choreography — Web Animations API baseline.
-       * ----------------------------------------------------------- */
-      const intro = [
-        [".eyebrow", 18, 40],
-        [".hero h1", 42, 100],
-        [".hero__lede", 28, 190],
-        [".hero__actions", 24, 270],
-        [".portrait-wrap", 38, 170]
+      const smooth = "cubic-bezier(.16,1,.3,1)";
+      const softSnap = "cubic-bezier(.22,1.18,.32,1)";
+
+      /* =========================================================
+       * 1. HERO ENTRANCE
+       * One visual story, several independent composited layers.
+       * ========================================================= */
+
+      const topbar = $(".topbar__inner");
+      animateSafe(
+        topbar,
+        [
+          {
+            opacity: 0,
+            transform: "translate3d(0,-24px,0) scale(.985)",
+            filter: "blur(8px)"
+          },
+          {
+            opacity: 1,
+            transform: "translate3d(0,0,0) scale(1)",
+            filter: "blur(0)"
+          }
+        ],
+        {
+          duration: 820,
+          delay: 30,
+          easing: smooth,
+          fill: "both"
+        }
+      );
+
+      const eyebrow = $(".eyebrow");
+      animateSafe(
+        eyebrow,
+        [
+          {
+            opacity: 0,
+            transform: "translate3d(-24px,18px,0) rotate(-2deg) scaleX(.84)",
+            filter: "blur(7px)"
+          },
+          {
+            opacity: 1,
+            transform: "translate3d(0,0,0) rotate(0) scaleX(1)",
+            filter: "blur(0)"
+          }
+        ],
+        {
+          duration: 760,
+          delay: 130,
+          easing: softSnap,
+          fill: "both"
+        }
+      );
+
+      const heroLines = $$(".hero-line");
+      const lineStates = [
+        {
+          from: "translate3d(-34px,46px,0) rotate(-2.4deg) scale(.96)",
+          delay: 190
+        },
+        {
+          from: "translate3d(28px,54px,0) rotate(2.6deg) scale(.93)",
+          delay: 270
+        },
+        {
+          from: "translate3d(-12px,62px,0) rotate(-1.3deg) scale(.95)",
+          delay: 355
+        }
       ];
 
-      for (const [selector, distance, delay] of intro) {
-        const element = $(selector);
-        if (!element) continue;
+      heroLines.forEach((line, index) => {
+        const state = lineStates[index] || lineStates[0];
 
         animateSafe(
-          element,
+          line,
           [
             {
               opacity: 0,
-              transform: `translate3d(0, ${distance}px, 0) scale(.975)`
+              transform: state.from,
+              filter: "blur(12px)"
+            },
+            {
+              opacity: .72,
+              offset: .68,
+              transform: "translate3d(2px,-3px,0) rotate(.2deg) scale(1.008)",
+              filter: "blur(1.8px)"
             },
             {
               opacity: 1,
-              transform: "translate3d(0, 0, 0) scale(1)"
+              transform: "translate3d(0,0,0) rotate(0) scale(1)",
+              filter: "blur(0)"
             }
           ],
           {
-            duration: 760,
-            delay,
-            easing: "cubic-bezier(.16,1,.3,1)",
+            duration: 920,
+            delay: state.delay,
+            easing: smooth,
             fill: "both"
           }
         );
-      }
+      });
 
-      /* -----------------------------------------------------------
-       * 2. Reliable reveal system.
-       *    This runs regardless of CSS scroll-timeline support.
-       * ----------------------------------------------------------- */
-      const revealSelector =
-        ".project-card, .principle, .social-card, .seo-wall";
+      const shinyWord = $(".shiny-word");
+      animateSafe(
+        shinyWord,
+        [
+          { transform: "scale(.92) rotate(-1deg)" },
+          { transform: "scale(1.025) rotate(.35deg)", offset: .66 },
+          { transform: "scale(1) rotate(0)" }
+        ],
+        {
+          duration: 720,
+          delay: 520,
+          easing: softSnap,
+          fill: "both"
+        }
+      );
 
-      const revealTargets = $$(revealSelector);
+      const lede = $(".hero__lede");
+      animateSafe(
+        lede,
+        [
+          {
+            opacity: 0,
+            transform: "translate3d(0,28px,0)",
+            filter: "blur(9px)"
+          },
+          {
+            opacity: 1,
+            transform: "translate3d(0,0,0)",
+            filter: "blur(0)"
+          }
+        ],
+        {
+          duration: 820,
+          delay: 500,
+          easing: smooth,
+          fill: "both"
+        }
+      );
+
+      const actions = $(".hero__actions");
+      animateSafe(
+        actions,
+        [
+          {
+            opacity: 0,
+            transform: "translate3d(0,24px,0) rotate(.8deg)",
+            filter: "blur(7px)"
+          },
+          {
+            opacity: 1,
+            transform: "translate3d(0,0,0) rotate(0)",
+            filter: "blur(0)"
+          }
+        ],
+        {
+          duration: 760,
+          delay: 620,
+          easing: smooth,
+          fill: "both"
+        }
+      );
+
+      const portrait = $(".portrait-wrap");
+      animateSafe(
+        portrait,
+        [
+          {
+            opacity: 0,
+            transform: "translate3d(34px,54px,0) rotate(6deg) scale(.91)",
+            filter: "blur(14px)"
+          },
+          {
+            opacity: .88,
+            offset: .74,
+            transform: "translate3d(-3px,-4px,0) rotate(-1deg) scale(1.012)",
+            filter: "blur(1px)"
+          },
+          {
+            opacity: 1,
+            transform: "translate3d(0,0,0) rotate(0) scale(1)",
+            filter: "blur(0)"
+          }
+        ],
+        {
+          duration: 1120,
+          delay: 300,
+          easing: smooth,
+          fill: "both"
+        }
+      );
+
+      const marquee = $(".marquee");
+      animateSafe(
+        marquee,
+        [
+          {
+            opacity: 0,
+            transform: "translate3d(0,18px,0) scaleY(.72)",
+            filter: "blur(5px)"
+          },
+          {
+            opacity: 1,
+            transform: "translate3d(0,0,0) scaleY(1)",
+            filter: "blur(0)"
+          }
+        ],
+        {
+          duration: 760,
+          delay: 880,
+          easing: smooth,
+          fill: "both"
+        }
+      );
+
+      /* =========================================================
+       * 2. FADE + TILT + BLUR REVEALS
+       * Restores the stronger character of the original version.
+       * ========================================================= */
+
+      const revealTargets = [
+        ...$$(".section-head"),
+        ...$$(".project-card"),
+        ...$$(".principle"),
+        ...$$(".social-card"),
+        ...$$(".seo-wall")
+      ];
+
       const revealObserver = new IntersectionObserver(
         (entries, observer) => {
           for (const entry of entries) {
@@ -2342,7 +2621,11 @@
             observer.unobserve(entry.target);
 
             const index = revealTargets.indexOf(entry.target);
-            const rotate = index % 2 === 0 ? -0.7 : 0.7;
+            const direction = index % 2 === 0 ? 1 : -1;
+            const isCard = entry.target.matches(".project-card");
+            const distance = isCard ? 64 : 42;
+            const tilt = direction * (isCard ? 2.2 : 1.25);
+            const blur = isCard ? 11 : 8;
 
             animateSafe(
               entry.target,
@@ -2350,72 +2633,51 @@
                 {
                   opacity: 0,
                   transform:
-                    `translate3d(0, 42px, 0) rotate(${rotate}deg) scale(.965)`
+                    `translate3d(${direction * 12}px,${distance}px,0) ` +
+                    `rotate(${tilt}deg) scale(.94)`,
+                  filter: `blur(${blur}px)`
+                },
+                {
+                  opacity: .76,
+                  offset: .72,
+                  transform:
+                    `translate3d(${direction * -2}px,-3px,0) ` +
+                    `rotate(${tilt * -.08}deg) scale(1.006)`,
+                  filter: "blur(1.2px)"
                 },
                 {
                   opacity: 1,
-                  transform: "translate3d(0, 0, 0) rotate(0deg) scale(1)"
+                  transform: "translate3d(0,0,0) rotate(0) scale(1)",
+                  filter: "blur(0)"
                 }
               ],
               {
-                duration: 680,
-                delay: Math.min((index % 3) * 55, 110),
-                easing: "cubic-bezier(.16,1,.3,1)",
+                duration: isCard ? 820 : 740,
+                delay: Math.min((index % 3) * 65, 130),
+                easing: smooth,
                 fill: "both"
               }
             );
           }
         },
         {
-          threshold: 0.07,
-          rootMargin: "0px 0px -5% 0px"
+          threshold: 0.08,
+          rootMargin: "0px 0px -4% 0px"
         }
       );
 
       revealTargets.forEach((element) => revealObserver.observe(element));
 
-      /* -----------------------------------------------------------
-       * 3. Native ViewTimeline enhancement.
-       *    No unsupported scrollOffsets / CSS.percent / CSS.px.
-       * ----------------------------------------------------------- */
-      if ("ViewTimeline" in window) {
-        try {
-          $$(".section-title").forEach((title) => {
-            const timeline = new ViewTimeline({
-              subject: title,
-              axis: "block"
-            });
+      /* =========================================================
+       * 3. NATIVE SCROLL-TIMELINE ENHANCEMENTS
+       * Progressive enhancement only. No fragile scrollOffsets.
+       * ========================================================= */
 
-            animateSafe(
-              title,
-              [
-                {
-                  letterSpacing: "-.085em",
-                  transform: "translate3d(-18px, 24px, 0) scaleX(.92)"
-                },
-                {
-                  letterSpacing: "-.065em",
-                  transform: "translate3d(0, 0, 0) scaleX(1)"
-                }
-              ],
-              {
-                timeline,
-                fill: "both"
-              }
-            );
-          });
-        } catch (error) {
-          console.info("[RodLanding] ViewTimeline unavailable in this engine.");
-        }
-      }
-
-      /* -----------------------------------------------------------
-       * 4. ScrollTimeline enhancement for the hero ornament.
-       *    Constructor uses only stable fields.
-       * ----------------------------------------------------------- */
       if ("ScrollTimeline" in window) {
         try {
-          const source = document.scrollingElement || document.documentElement;
+          const source =
+            document.scrollingElement || document.documentElement;
+
           const timeline = new ScrollTimeline({
             source,
             axis: "block"
@@ -2427,7 +2689,7 @@
               orbit,
               [
                 { transform: "rotate(0deg) scale(1)" },
-                { transform: "rotate(220deg) scale(.82)" }
+                { transform: "rotate(250deg) scale(.84)" }
               ],
               {
                 timeline,
@@ -2440,104 +2702,129 @@
         }
       }
 
-      /* -----------------------------------------------------------
-       * 5. Hero parallax fallback.
-       *    RAF-throttled, transform-only, passive listener.
-       * ----------------------------------------------------------- */
-      const heroTitle = $(".hero h1");
+      if ("ViewTimeline" in window) {
+        try {
+          $$(".section-number").forEach((badge) => {
+            const timeline = new ViewTimeline({
+              subject: badge,
+              axis: "block"
+            });
+
+            animateSafe(
+              badge,
+              [
+                {
+                  transform: "translate3d(18px,24px,0) rotate(8deg) scale(.92)",
+                  opacity: .35
+                },
+                {
+                  transform: "translate3d(0,0,0) rotate(3deg) scale(1)",
+                  opacity: 1
+                }
+              ],
+              {
+                timeline,
+                fill: "both"
+              }
+            );
+          });
+        } catch (error) {
+          console.info("[RodLanding] ViewTimeline enhancement skipped.");
+        }
+      }
+
+      /* =========================================================
+       * 4. SUBTLE HERO SCROLL RESPONSE
+       * RAF throttled, touch-safe, transform/opacity only.
+       * ========================================================= */
+
       const heroCopy = $(".hero__copy");
+      const heroTitle = $(".hero h1");
       let scrollRAF = 0;
 
       const paintScroll = () => {
         scrollRAF = 0;
 
-        const y = Math.min(window.scrollY, window.innerHeight * 1.35);
+        const y = Math.min(window.scrollY, window.innerHeight * 1.2);
         const progress = y / Math.max(window.innerHeight, 1);
-
-        if (heroTitle) {
-          heroTitle.style.setProperty(
-            "--hero-shift",
-            `${Math.min(progress * -34, 0)}px`
-          );
-        }
 
         if (heroCopy) {
           heroCopy.style.opacity = String(
-            Math.max(0.56, 1 - progress * 0.32)
+            Math.max(.7, 1 - progress * .24)
           );
+        }
+
+        if (heroTitle) {
+          heroTitle.style.transform =
+            `translate3d(0,${Math.max(-28, progress * -28)}px,0)`;
         }
       };
 
       window.addEventListener(
         "scroll",
         () => {
-          if (!scrollRAF) scrollRAF = requestAnimationFrame(paintScroll);
+          if (!scrollRAF) {
+            scrollRAF = requestAnimationFrame(paintScroll);
+          }
         },
         { passive: true }
       );
 
-      /* Only apply the transform variable to the title when native
-         scroll-driven transform is not managing it. */
-      if (!("ViewTimeline" in window)) {
-        const style = document.createElement("style");
-        style.textContent = `
-          .hero h1 {
-            transform: translate3d(0, var(--hero-shift, 0px), 0);
-          }
-        `;
-        document.head.appendChild(style);
-      }
+      /* =========================================================
+       * 5. PORTRAIT TILT
+       * Fine pointer only, avoiding unnecessary work on iPhone.
+       * ========================================================= */
 
-      /* -----------------------------------------------------------
-       * 6. Portrait tilt. Pointer-fine only.
-       * ----------------------------------------------------------- */
-      const tilt = $("[data-tilt]");
+      const tiltElement = $("[data-tilt]");
 
-      if (tilt && matchMedia("(pointer: fine)").matches) {
-        let tiltRAF = 0;
+      if (
+        tiltElement &&
+        window.matchMedia("(pointer: fine)").matches
+      ) {
+        let raf = 0;
         let rx = 0;
         let ry = 0;
 
-        const paintTilt = () => {
-          tiltRAF = 0;
-          tilt.style.transform =
+        const paint = () => {
+          raf = 0;
+          tiltElement.style.transform =
             `rotateX(${ry}deg) rotateY(${rx}deg) rotateZ(3deg)`;
         };
 
-        tilt.addEventListener(
+        tiltElement.addEventListener(
           "pointermove",
           (event) => {
-            const rect = tilt.getBoundingClientRect();
+            const rect = tiltElement.getBoundingClientRect();
 
             rx =
-              ((event.clientX - rect.left) / rect.width - 0.5) * 8;
+              ((event.clientX - rect.left) / rect.width - .5) * 8;
 
             ry =
-              -((event.clientY - rect.top) / rect.height - 0.5) * 8;
+              -((event.clientY - rect.top) / rect.height - .5) * 8;
 
-            if (!tiltRAF) tiltRAF = requestAnimationFrame(paintTilt);
+            if (!raf) raf = requestAnimationFrame(paint);
           },
           { passive: true }
         );
 
-        tilt.addEventListener(
+        tiltElement.addEventListener(
           "pointerleave",
           () => {
             rx = 0;
             ry = 0;
 
             animateSafe(
-              tilt,
+              tiltElement,
               [
-                { transform: tilt.style.transform },
+                { transform: tiltElement.style.transform },
                 {
                   transform:
                     "rotateX(0deg) rotateY(0deg) rotateZ(3deg)"
                 }
               ],
               {
-                duration: 520,
-                easing: "cubic-bezier(.16,1,.3,1)",
+                duration: 560,
+                easing: smooth,
                 fill: "forwards"
               }
             );
@@ -2546,10 +2833,12 @@
         );
       }
 
-      /* -----------------------------------------------------------
-       * 7. Magnetic controls. Desktop only.
-       * ----------------------------------------------------------- */
-      if (matchMedia("(pointer: fine)").matches) {
+      /* =========================================================
+       * 6. MAGNETIC CONTROLS
+       * Desktop only.
+       * ========================================================= */
+
+      if (window.matchMedia("(pointer: fine)").matches) {
         $$(".magnetic").forEach((element) => {
           let raf = 0;
           let x = 0;
@@ -2558,7 +2847,7 @@
           const paint = () => {
             raf = 0;
             element.style.transform =
-              `translate3d(${x}px, ${y}px, 0)`;
+              `translate3d(${x}px,${y}px,0)`;
           };
 
           element.addEventListener(
@@ -2567,10 +2856,10 @@
               const rect = element.getBoundingClientRect();
 
               x =
-                (event.clientX - rect.left - rect.width / 2) * 0.1;
+                (event.clientX - rect.left - rect.width / 2) * .1;
 
               y =
-                (event.clientY - rect.top - rect.height / 2) * 0.1;
+                (event.clientY - rect.top - rect.height / 2) * .1;
 
               if (!raf) raf = requestAnimationFrame(paint);
             },
@@ -2582,6 +2871,7 @@
             () => {
               x = 0;
               y = 0;
+
               if (!raf) raf = requestAnimationFrame(paint);
             },
             { passive: true }
@@ -2589,12 +2879,17 @@
         });
       }
 
-      /* -----------------------------------------------------------
-       * 8. Pointer follower. No layout reads.
-       * ----------------------------------------------------------- */
+      /* =========================================================
+       * 7. POINTER FOLLOWER
+       * Desktop only, no layout reads.
+       * ========================================================= */
+
       const cursor = $(".cursor-blob");
 
-      if (cursor && matchMedia("(pointer: fine)").matches) {
+      if (
+        cursor &&
+        window.matchMedia("(pointer: fine)").matches
+      ) {
         let currentX = -100;
         let currentY = -100;
         let targetX = -100;
@@ -2602,16 +2897,16 @@
         let running = false;
 
         const loop = () => {
-          currentX += (targetX - currentX) * 0.2;
-          currentY += (targetY - currentY) * 0.2;
+          currentX += (targetX - currentX) * .2;
+          currentY += (targetY - currentY) * .2;
 
           cursor.style.transform =
-            `translate3d(${currentX - 13}px, ${currentY - 13}px, 0)`;
+            `translate3d(${currentX - 13}px,${currentY - 13}px,0)`;
 
           if (
             Math.abs(targetX - currentX) +
               Math.abs(targetY - currentY) >
-            0.3
+            .3
           ) {
             requestAnimationFrame(loop);
           } else {
