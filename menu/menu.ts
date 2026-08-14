@@ -2,7 +2,7 @@
 // @outfile dist/menu.js
 
 /**
- * RodMenu v2.0.0
+ * RodMenu v2.1.0
  * Browser-first declarative menu + form surface engine with adaptive Rod ecosystem integrations.
  *
  * Compile:
@@ -37,19 +37,27 @@
 declare const unsafeWindow: (Window & typeof globalThis) | undefined;
 declare const GM_addElement: ((tag: string, attributes?: Record<string, unknown>) => Element) | undefined;
 declare const GM_xmlhttpRequest: ((options: Record<string, unknown>) => void) | undefined;
-declare const GM: { xmlHttpRequest?: (options: Record<string, unknown>) => Promise<unknown> } | undefined;
+declare const GM: {
+  xmlHttpRequest?: (options: Record<string, unknown>) => Promise<unknown>;
+  getValue?: (key: string, fallback?: unknown) => Promise<unknown>;
+  setValue?: (key: string, value: unknown) => Promise<void>;
+  deleteValue?: (key: string) => Promise<void>;
+} | undefined;
+declare const GM_getValue: ((key: string, fallback?: unknown) => unknown) | undefined;
+declare const GM_setValue: ((key: string, value: unknown) => void) | undefined;
+declare const GM_deleteValue: ((key: string) => void) | undefined;
 declare const require: ((...args: unknown[]) => unknown) | undefined;
 
 (function installRodMenu(rootWindow: Window & typeof globalThis): void {
   "use strict";
 
-  const VERSION = "2.0.0" as const;
+  const VERSION = "2.1.0" as const;
   const GLOBAL_NAME = "RodMenu" as const;
   const ROOT_ATTR = "data-rod-menu-host";
   const ACTIVE_ATTR = "data-rod-menu-active";
   const ID_PREFIX = "rod-menu";
   const DEFAULT_Z_INDEX = 2147482500;
-  const STYLE_VERSION = "v2";
+  const STYLE_VERSION = "v2.1";
 
   type Awaitable<T> = T | Promise<T>;
   type AnyRecord = Record<string, unknown>;
@@ -60,6 +68,97 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
   type ActionVariant = "primary" | "secondary" | "ghost" | "danger" | "success";
   type ActionRole = "submit" | "cancel" | "destructive" | "secondary" | "custom";
   type ErrorMode = "inline" | "toaster" | "both" | "silent";
+  type PersistTrigger = "change" | "submit" | "close";
+  type BuiltinStorageName = "local" | "session" | "gm";
+  type AnchorAlign = "start" | "center" | "end";
+  type MediaKind = "video" | "photo" | "audio" | "unknown";
+  type ProviderState = "idle" | "loading" | "success" | "error" | "skipped";
+
+  interface RodMenuStorageAdapter {
+    getItem(key: string): Awaitable<string | null>;
+    setItem(key: string, value: string): Awaitable<void>;
+    removeItem(key: string): Awaitable<void>;
+  }
+
+  interface RodMenuPersistenceTransform<TValues extends AnyRecord = AnyRecord, TStored = unknown> {
+    toStorage?: (values: Readonly<TValues>) => Awaitable<TStored>;
+    fromStorage?: (stored: TStored) => Awaitable<Partial<TValues> | null | undefined>;
+    serialize?: (stored: TStored) => Awaitable<string>;
+    deserialize?: (raw: string) => Awaitable<TStored>;
+  }
+
+  interface RodMenuPersistenceConfig<TValues extends AnyRecord = AnyRecord, TStored = unknown> {
+    key?: string;
+    storage?: BuiltinStorageName | RodMenuStorageAdapter;
+    debounceMs?: number;
+    hydrate?: boolean;
+    persistOn?: PersistTrigger | readonly PersistTrigger[];
+    version?: string | number;
+    transform?: RodMenuPersistenceTransform<TValues, TStored>;
+    merge?: "persisted-over-initial" | "initial-over-persisted" | ((initial: TValues, persisted: Partial<TValues>) => TValues);
+  }
+
+  interface RodMenuStoreConfig<TValues extends AnyRecord = AnyRecord> {
+    persist?: boolean | RodMenuPersistenceConfig<TValues, any>;
+  }
+
+  interface RodMenuStoreHandle<TValues extends AnyRecord = AnyRecord> {
+    readonly backend: "broto" | "fallback";
+    readonly persistence: "disabled" | "idle" | "hydrating" | "ready" | "saving" | "error";
+    readonly ready: Promise<void>;
+    snapshot(): TValues;
+    persist(): Promise<void>;
+    hydrate(): Promise<void>;
+    clearPersisted(): Promise<void>;
+  }
+
+  interface RodMenuTrailingAction {
+    id?: string;
+    label: string;
+    icon?: string;
+    title?: string;
+    variant?: ActionVariant;
+    disabled?: boolean;
+    disabledWhen?: (values: Readonly<AnyRecord>, context: RodMenuContext<any>) => boolean;
+    handler: (context: RodMenuContext<any>) => Awaitable<unknown>;
+  }
+
+  interface RodMenuMediaItem {
+    id: string;
+    title?: string;
+    description?: string;
+    url?: string;
+    thumbnail?: string;
+    type?: MediaKind;
+    quality?: string;
+    width?: number | null;
+    height?: number | null;
+    duration?: number | null;
+    size?: number | null;
+    provider?: string;
+    source?: string;
+    disabled?: boolean;
+    metadata?: AnyRecord;
+  }
+
+  interface RodMenuProviderItem {
+    id: string;
+    label: string;
+    state: ProviderState;
+    durationMs?: number;
+    description?: string;
+    error?: string;
+  }
+
+  interface RodMenuRequestEntry {
+    id?: string;
+    method?: string;
+    url: string;
+    status?: number;
+    durationMs?: number;
+    time?: string;
+    detail?: unknown;
+  }
 
   interface OptionItem {
     label: string;
@@ -90,6 +189,7 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     validate?: (value: FieldValue, values: Readonly<AnyRecord>, context: RodMenuContext<any>) => Awaitable<string | null | undefined>;
     transform?: (value: FieldValue, context: RodMenuContext<any>) => FieldValue;
     onChange?: (value: FieldValue, context: RodMenuContext<any>) => void;
+    trailingAction?: RodMenuTrailingAction;
   }
 
   interface TextLikeField extends BaseField {
@@ -211,6 +311,48 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     write?: (container: HTMLElement, value: FieldValue, context: RodMenuContext<any>) => void;
   }
 
+  interface MediaPreviewField extends BaseField {
+    type: "media-preview";
+    item: RodMenuMediaItem | ((context: RodMenuContext<any>) => RodMenuMediaItem);
+    compact?: boolean;
+    showSource?: boolean;
+  }
+
+  interface MediaPickerField extends BaseField {
+    type: "media-picker";
+    items: readonly RodMenuMediaItem[] | ((context: RodMenuContext<any>) => readonly RodMenuMediaItem[]);
+    selectAll?: boolean;
+    minSelected?: number;
+    maxSelected?: number;
+    columns?: 1 | 2 | 3;
+  }
+
+  interface ProviderStatusField extends BaseField {
+    type: "provider-status";
+    providers: readonly RodMenuProviderItem[] | ((context: RodMenuContext<any>) => readonly RodMenuProviderItem[]);
+  }
+
+  interface RequestLogField extends BaseField {
+    type: "request-log";
+    entries: readonly RodMenuRequestEntry[] | ((context: RodMenuContext<any>) => readonly RodMenuRequestEntry[]);
+    maxHeight?: number;
+    onSelect?: (entry: RodMenuRequestEntry, context: RodMenuContext<any>) => void;
+  }
+
+  interface DebugJsonField extends BaseField {
+    type: "debug-json";
+    data: unknown | ((context: RodMenuContext<any>) => unknown);
+    pretty?: boolean;
+    maxHeight?: number;
+  }
+
+  interface ChannelPickerField extends BaseField {
+    type: "channel-picker";
+    options: readonly OptionItem[];
+    multiple?: boolean;
+    searchable?: boolean;
+  }
+
   type RodMenuField =
     | TextLikeField
     | NumberField
@@ -230,7 +372,13 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     | ButtonField
     | HtmlField
     | DividerField
-    | CustomField;
+    | CustomField
+    | MediaPreviewField
+    | MediaPickerField
+    | ProviderStatusField
+    | RequestLogField
+    | DebugJsonField
+    | ChannelPickerField;
 
   interface RodMenuSection {
     id?: string;
@@ -248,6 +396,9 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     variant?: ActionVariant;
     role?: ActionRole;
     icon?: string;
+    badge?: string | number | ((context: RodMenuContext<any>) => string | number | null | undefined);
+    shortcut?: string;
+    ariaLabel?: string;
     close?: boolean;
     validate?: boolean;
     disabled?: boolean;
@@ -255,6 +406,16 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     disabledWhen?: (values: Readonly<AnyRecord>, context: RodMenuContext<any>) => boolean;
     visibleWhen?: (values: Readonly<AnyRecord>, context: RodMenuContext<any>) => boolean;
     handler?: (context: RodMenuContext<any>) => Awaitable<unknown>;
+  }
+
+  interface RodMenuTab {
+    id: string;
+    label: string;
+    icon?: string;
+    badge?: string | number;
+    fields?: readonly RodMenuField[];
+    sections?: readonly RodMenuSection[];
+    visibleWhen?: (values: Readonly<AnyRecord>, context: RodMenuContext<any>) => boolean;
   }
 
   interface RodMenuSchema<TValues extends AnyRecord = AnyRecord> {
@@ -265,11 +426,17 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     icon?: string;
     presentation?: Presentation;
     drawerSide?: DrawerSide;
+    anchor?: Element | DOMRect | (() => Element | DOMRect | null | undefined);
+    anchorAlign?: AnchorAlign;
+    anchorOffset?: number;
     size?: SurfaceSize;
     fields?: readonly RodMenuField[];
     sections?: readonly RodMenuSection[];
+    tabs?: readonly RodMenuTab[];
+    initialTab?: string;
     actions?: readonly RodMenuAction[];
     initialValues?: Partial<TValues>;
+    store?: RodMenuStoreConfig<TValues>;
     dismissible?: boolean;
     closeOnBackdrop?: boolean;
     closeOnEscape?: boolean;
@@ -285,6 +452,7 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     errorMode?: ErrorMode;
     validate?: (values: Readonly<TValues>, context: RodMenuContext<TValues>) => Awaitable<Record<string, string> | string | null | undefined>;
     onOpen?: (context: RodMenuContext<TValues>) => void;
+    onHydrate?: (context: RodMenuContext<TValues>) => void;
     onChange?: (context: RodMenuContext<TValues>) => void;
     onClose?: (result: RodMenuResult<TValues>) => void;
     onError?: (error: unknown, context: RodMenuContext<TValues>) => void;
@@ -302,6 +470,8 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     readonly values: TValues;
     readonly errors: Readonly<Record<string, string>>;
     readonly schema: RodMenuSchema<TValues>;
+    readonly store: RodMenuStoreHandle<TValues>;
+    readonly activeTab: string | null;
     readonly host: HTMLElement;
     readonly root: ShadowRoot | HTMLElement;
     readonly surface: RodMenuHandle<TValues>;
@@ -317,11 +487,17 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     setFieldError(name: string, error: string | null): void;
     clearErrors(): void;
     update(patch: Partial<RodMenuSchema<TValues>>): void;
+    setActiveTab(tabId: string): void;
+    persist(): Promise<void>;
+    hydrate(): Promise<void>;
+    clearPersisted(): Promise<void>;
   }
 
   interface RodMenuHandle<TValues extends AnyRecord = AnyRecord> {
     readonly id: string;
     readonly result: Promise<RodMenuResult<TValues>>;
+    readonly ready: Promise<void>;
+    readonly store: RodMenuStoreHandle<TValues>;
     readonly element: HTMLElement;
     readonly context: RodMenuContext<TValues>;
     close(data?: unknown): void;
@@ -332,6 +508,10 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     getValue<T = unknown>(name: string): T;
     validate(): Promise<boolean>;
     setLoading(loading: boolean): void;
+    setActiveTab(tabId: string): void;
+    persist(): Promise<void>;
+    hydrate(): Promise<void>;
+    clearPersisted(): Promise<void>;
     destroy(): void;
   }
 
@@ -817,6 +997,12 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     patch(values: Partial<T>): void;
   }
 
+  interface PersistenceManager<T extends AnyRecord> {
+    readonly handle: RodMenuStoreHandle<T>;
+    start(): void;
+    trigger(trigger: PersistTrigger): void;
+  }
+
   function setBrotoLeaf(store: unknown, name: string, value: unknown): boolean {
     if (!store || typeof store !== "object") return false;
     const leaf = (store as Record<string, unknown>)[name] as BrotoLeafLike | undefined;
@@ -861,6 +1047,212 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
         if (brotoStore) run(() => {
           for (const [name, value] of Object.entries(values)) setBrotoLeaf(brotoStore, name, value);
         });
+      },
+    };
+  }
+
+  function getStorageAdapter(storage: BuiltinStorageName | RodMenuStorageAdapter | undefined, win: Window): RodMenuStorageAdapter | null {
+    if (storage && typeof storage === "object") return storage;
+    const kind = storage || "local";
+
+    if (kind === "local" || kind === "session") {
+      const nativeStorage = (() => {
+        try { return kind === "local" ? win.localStorage : win.sessionStorage; } catch { return null; }
+      })();
+      if (!nativeStorage) return null;
+      return {
+        getItem(key) {
+          try { return nativeStorage.getItem(key); } catch { return null; }
+        },
+        setItem(key, value) {
+          try { nativeStorage.setItem(key, value); } catch {}
+        },
+        removeItem(key) {
+          try { nativeStorage.removeItem(key); } catch {}
+        },
+      };
+    }
+
+    if (kind === "gm") {
+      const legacyGet = typeof GM_getValue === "function" ? GM_getValue : readGlobal<((key: string, fallback?: unknown) => unknown)>(["GM_getValue"]);
+      const legacySet = typeof GM_setValue === "function" ? GM_setValue : readGlobal<((key: string, value: unknown) => void)>(["GM_setValue"]);
+      const legacyDelete = typeof GM_deleteValue === "function" ? GM_deleteValue : readGlobal<((key: string) => void)>(["GM_deleteValue"]);
+      const gmApi = typeof GM !== "undefined" ? GM : readGlobal<typeof GM>(["GM"]);
+
+      if ((!legacyGet || !legacySet) && (!gmApi?.getValue || !gmApi?.setValue)) return null;
+      return {
+        async getItem(key) {
+          try {
+            const value = gmApi?.getValue ? await gmApi.getValue(key, null) : legacyGet?.(key, null);
+            return value == null ? null : String(value);
+          } catch { return null; }
+        },
+        async setItem(key, value) {
+          try {
+            if (gmApi?.setValue) await gmApi.setValue(key, value);
+            else legacySet?.(key, value);
+          } catch {}
+        },
+        async removeItem(key) {
+          try {
+            if (gmApi?.deleteValue) await gmApi.deleteValue(key);
+            else legacyDelete?.(key);
+          } catch {}
+        },
+      };
+    }
+
+    return null;
+  }
+
+  function createPersistenceManager<T extends AnyRecord>(
+    store: ReactiveStoreAdapter<T>,
+    storeConfig: RodMenuStoreConfig<T> | undefined,
+    id: string,
+    win: Window,
+    onHydrated: (values: T) => void,
+    onError: (error: unknown) => void,
+  ): PersistenceManager<T> {
+    const raw = storeConfig?.persist;
+    const config: RodMenuPersistenceConfig<T, any> | null = raw === true
+      ? { key: `rod-menu:${id}`, storage: "local", hydrate: true, debounceMs: 120, persistOn: "change" }
+      : raw && typeof raw === "object"
+        ? raw
+        : null;
+
+    let persistenceState: RodMenuStoreHandle<T>["persistence"] = config ? "idle" : "disabled";
+    let timer = 0;
+    let chain = Promise.resolve();
+    let started = false;
+    let resolveReady!: () => void;
+    const ready = new Promise<void>((resolve) => { resolveReady = resolve; });
+    const key = config?.key || `rod-menu:${id}`;
+    const adapter = config ? getStorageAdapter(config.storage, win) : null;
+    const persistOn = new Set<PersistTrigger>(Array.isArray(config?.persistOn) ? config!.persistOn : [config?.persistOn || "change"]);
+
+    const parseStored = async (rawValue: string): Promise<Partial<T> | null> => {
+      if (!config) return null;
+      const transform = config.transform;
+      let stored: unknown;
+      if (transform?.deserialize) {
+        stored = await transform.deserialize(rawValue);
+      } else {
+        const parsed = JSON.parse(rawValue) as unknown;
+        if (parsed && typeof parsed === "object" && "__rodMenu" in (parsed as AnyRecord)) {
+          const envelope = parsed as { version?: unknown; data?: unknown };
+          if (config.version != null && envelope.version !== config.version) return null;
+          stored = envelope.data;
+        } else {
+          stored = parsed;
+        }
+      }
+      if (transform?.fromStorage) return await transform.fromStorage(stored as any) ?? null;
+      return stored && typeof stored === "object" ? stored as Partial<T> : null;
+    };
+
+    const serializeSnapshot = async (): Promise<string> => {
+      if (!config) return "";
+      const transform = config.transform;
+      const snapshot = store.snapshot();
+      const stored = transform?.toStorage ? await transform.toStorage(snapshot) : snapshot;
+      if (transform?.serialize) return await transform.serialize(stored);
+      return JSON.stringify({ __rodMenu: 1, version: config.version ?? 1, data: stored });
+    };
+
+    const hydrate = async (): Promise<void> => {
+      if (!config || !adapter || config.hydrate === false) return;
+      persistenceState = "hydrating";
+      try {
+        const storedRaw = await adapter.getItem(key);
+        if (storedRaw == null) {
+          persistenceState = "ready";
+          return;
+        }
+        const persisted = await parseStored(storedRaw);
+        if (!persisted) {
+          persistenceState = "ready";
+          return;
+        }
+        const initial = store.snapshot();
+        let next: T;
+        if (typeof config.merge === "function") next = config.merge(initial, persisted);
+        else if (config.merge === "initial-over-persisted") next = { ...persisted, ...initial } as T;
+        else next = { ...initial, ...persisted } as T;
+        store.replace(next);
+        onHydrated(store.snapshot());
+        persistenceState = "ready";
+      } catch (error) {
+        persistenceState = "error";
+        onError(error);
+      }
+    };
+
+    const persist = async (): Promise<void> => {
+      if (!config || !adapter) return;
+      if (timer) {
+        win.clearTimeout(timer);
+        timer = 0;
+      }
+      persistenceState = "saving";
+      try {
+        const serialized = await serializeSnapshot();
+        await adapter.setItem(key, serialized);
+        persistenceState = "ready";
+      } catch (error) {
+        persistenceState = "error";
+        onError(error);
+      }
+    };
+
+    const enqueuePersist = (): Promise<void> => {
+      chain = chain.then(persist, persist);
+      return chain;
+    };
+
+    const schedule = () => {
+      if (!config || !adapter) return;
+      const delay = Math.max(0, config.debounceMs ?? 120);
+      if (timer) win.clearTimeout(timer);
+      if (delay === 0) {
+        void enqueuePersist();
+        return;
+      }
+      timer = win.setTimeout(() => {
+        timer = 0;
+        void enqueuePersist();
+      }, delay);
+    };
+
+    const handle: RodMenuStoreHandle<T> = {
+      get backend() { return store.backend; },
+      get persistence() { return persistenceState; },
+      ready,
+      snapshot: () => store.snapshot(),
+      persist: enqueuePersist,
+      hydrate,
+      async clearPersisted() {
+        if (!adapter) return;
+        if (timer) {
+          win.clearTimeout(timer);
+          timer = 0;
+        }
+        try { await adapter.removeItem(key); persistenceState = "ready"; }
+        catch (error) { persistenceState = "error"; onError(error); }
+      },
+    };
+
+    return {
+      handle,
+      start() {
+        if (started) return;
+        started = true;
+        void hydrate().finally(resolveReady);
+        if (!config || !adapter || config.hydrate === false) resolveReady();
+      },
+      trigger(trigger) {
+        if (!persistOn.has(trigger)) return;
+        if (trigger === "change") schedule();
+        else void enqueuePersist();
       },
     };
   }
@@ -1010,15 +1402,23 @@ button {
   transform: translate3d(0,0,0);
 }
 .rm-root[data-presentation="popover"] .rm-shell {
-  left: 50%;
-  top: 50%;
+  left: var(--rm-popover-left, 50%);
+  top: var(--rm-popover-top, 50%);
   width: min(calc(100vw - 24px), var(--rm-width, 520px));
-  max-height: 80dvh;
+  max-height: min(80dvh, calc(var(--rm-vvh, 100vh) - 16px));
   border-radius: 22px;
-  transform: translate3d(-50%, calc(-50% + 18px), 0) scale(.96);
+  transform-origin: var(--rm-popover-align, 50%) 0%;
+  transform: translate3d(var(--rm-popover-shift, -50%), 10px, 0) scale(.96);
+}
+.rm-root[data-presentation="popover"][data-popover-above="true"] .rm-shell {
+  transform-origin: var(--rm-popover-align, 50%) 100%;
+  transform: translate3d(var(--rm-popover-shift, -50%), calc(-100% - 10px), 0) scale(.96);
 }
 .rm-root[data-presentation="popover"][data-open="true"] .rm-shell {
-  transform: translate3d(-50%,-50%,0) scale(1);
+  transform: translate3d(var(--rm-popover-shift, -50%), 0, 0) scale(1);
+}
+.rm-root[data-presentation="popover"][data-popover-above="true"][data-open="true"] .rm-shell {
+  transform: translate3d(var(--rm-popover-shift, -50%), -100%, 0) scale(1);
 }
 .rm-handle-wrap {
   display: flex;
@@ -1467,6 +1867,381 @@ button {
     animation-duration:.001ms !important;
   }
 }
+
+.rm-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: stretch;
+}
+.rm-trailing-action,
+.rm-mini-button {
+  border: 1px solid var(--rm-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, Canvas 86%, transparent);
+  color: var(--rm-text);
+  min-height: 40px;
+  padding: 8px 11px;
+  font: 650 12px/1 var(--rm-font);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.rm-trailing-action:disabled,
+.rm-mini-button:disabled {
+  opacity: .48;
+  cursor: default;
+}
+.rm-trailing-action[data-loading="true"] {
+  opacity: .7;
+}
+.rm-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--rm-accent) 18%, transparent);
+  color: var(--rm-accent-strong);
+  font: 750 10px/1 var(--rm-font);
+  white-space: nowrap;
+}
+.rm-shortcut {
+  margin-left: auto;
+  border: 1px solid var(--rm-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, Canvas 82%, transparent);
+  color: var(--rm-muted);
+  padding: 3px 5px;
+  font: 600 9px/1 var(--rm-font);
+}
+.rm-action-icon,
+.rm-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.rm-tabs-wrap {
+  display: grid;
+  gap: 10px;
+}
+.rm-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+  scrollbar-width: none;
+  background: linear-gradient(var(--rm-panel) 72%, transparent);
+}
+.rm-tabs::-webkit-scrollbar {
+  display: none;
+}
+.rm-tab {
+  border: 1px solid var(--rm-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, Canvas 86%, transparent);
+  color: var(--rm-muted);
+  min-height: 36px;
+  padding: 7px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+  font: 650 12px/1 var(--rm-font);
+}
+.rm-tab[data-active="true"] {
+  background: color-mix(in srgb, var(--rm-accent) 16%, Canvas 84%);
+  color: var(--rm-text);
+  border-color: color-mix(in srgb, var(--rm-accent) 45%, var(--rm-border));
+}
+.rm-tab-panel {
+  min-width: 0;
+}
+.rm-media-preview {
+  display: grid;
+  grid-template-columns: minmax(90px, 34%) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid var(--rm-border);
+  border-radius: 16px;
+  background: color-mix(in srgb, Canvas 88%, transparent);
+}
+.rm-media-preview[data-compact="true"] {
+  grid-template-columns: 84px minmax(0, 1fr);
+}
+.rm-media-thumb,
+.rm-media-placeholder {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 112px;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: color-mix(in srgb, CanvasText 8%, Canvas 92%);
+}
+.rm-media-placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--rm-muted);
+  font: 800 11px/1 var(--rm-font);
+  letter-spacing: .08em;
+}
+.rm-media-copy {
+  min-width: 0;
+  padding: 11px 11px 11px 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+}
+.rm-media-copy strong,
+.rm-media-item-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 700 13px/1.2 var(--rm-font);
+}
+.rm-media-copy p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  color: var(--rm-muted);
+  font: 430 12px/1.35 var(--rm-font);
+}
+.rm-media-copy small,
+.rm-media-item-copy small {
+  color: var(--rm-muted);
+  font: 500 10px/1.3 var(--rm-font);
+}
+.rm-media-open {
+  color: var(--rm-accent-strong);
+  text-decoration: none;
+  font: 650 11px/1.2 var(--rm-font);
+}
+.rm-media-picker {
+  display: grid;
+  gap: 9px;
+}
+.rm-picker-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--rm-muted);
+  font: 600 11px/1.2 var(--rm-font);
+}
+.rm-media-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--rm-media-columns, 2), minmax(0, 1fr));
+  gap: 8px;
+}
+.rm-media-item {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--rm-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, Canvas 88%, transparent);
+  color: var(--rm-text);
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.rm-media-item[data-selected="true"] {
+  border-color: var(--rm-accent);
+  box-shadow: inset 0 0 0 1px var(--rm-accent);
+}
+.rm-media-item img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  background: color-mix(in srgb, CanvasText 7%, Canvas 93%);
+}
+.rm-media-item-copy {
+  min-width: 0;
+  padding: 8px 9px 9px;
+  display: grid;
+  gap: 3px;
+}
+.rm-media-check {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--rm-accent);
+  color: white;
+  opacity: 0;
+  transform: scale(.8);
+  transition: opacity 140ms ease, transform 140ms ease;
+  font: 800 12px/1 var(--rm-font);
+}
+.rm-media-item[data-selected="true"] .rm-media-check {
+  opacity: 1;
+  transform: scale(1);
+}
+.rm-provider-list,
+.rm-request-log,
+.rm-channel-picker,
+.rm-debug-json {
+  display: grid;
+  gap: 7px;
+}
+.rm-provider {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid var(--rm-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, Canvas 88%, transparent);
+}
+.rm-provider-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--rm-muted);
+}
+.rm-provider[data-state="success"] .rm-provider-dot {
+  background: var(--rm-success);
+}
+.rm-provider[data-state="error"] .rm-provider-dot {
+  background: var(--rm-danger);
+}
+.rm-provider[data-state="loading"] .rm-provider-dot {
+  background: var(--rm-accent);
+  animation: rmPulse 1s ease-in-out infinite;
+}
+.rm-provider-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.rm-provider-copy strong {
+  font: 650 12px/1.2 var(--rm-font);
+}
+.rm-provider-copy small,
+.rm-provider-duration {
+  color: var(--rm-muted);
+  font: 500 10px/1.2 var(--rm-font);
+}
+.rm-request-log {
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.rm-request-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--rm-border);
+  background: transparent;
+  color: inherit;
+  padding: 8px 2px;
+  text-align: left;
+}
+.rm-request-method {
+  color: var(--rm-accent-strong);
+  font: 800 10px/1 var(--rm-font);
+}
+.rm-request-url {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 11px/1.3 var(--rm-font);
+}
+.rm-request-status {
+  color: var(--rm-muted);
+  font: 600 10px/1 var(--rm-font);
+}
+.rm-debug-json pre {
+  margin: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--rm-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, CanvasText 6%, Canvas 94%);
+  padding: 10px;
+  color: var(--rm-text);
+  font: 500 10px/1.45 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.rm-channel-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 7px;
+}
+.rm-channel-option {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--rm-border);
+  border-radius: 13px;
+  background: color-mix(in srgb, Canvas 88%, transparent);
+  color: var(--rm-text);
+  padding: 9px 10px;
+  text-align: left;
+  cursor: pointer;
+}
+.rm-channel-option[data-selected="true"] {
+  border-color: var(--rm-accent);
+  background: color-mix(in srgb, var(--rm-accent) 12%, Canvas 88%);
+}
+.rm-channel-option > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.rm-channel-option strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 650 12px/1.2 var(--rm-font);
+}
+.rm-channel-option small {
+  color: var(--rm-muted);
+  font: 500 10px/1.2 var(--rm-font);
+}
+.rm-history-list {
+  display: grid;
+  gap: 7px;
+}
+.rm-history-item {
+  min-width: 0;
+  border: 1px solid var(--rm-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, Canvas 88%, transparent);
+  padding: 10px 11px;
+  color: var(--rm-text);
+  font: 500 12px/1.35 var(--rm-font);
+  overflow-wrap: anywhere;
+}
+@keyframes rmPulse {
+  0%, 100% { opacity: .45; transform: scale(.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
 @media (min-width: 760px) {
   .rm-root[data-presentation="bottom-sheet"] .rm-shell {
     left: 50%;
@@ -1626,10 +2401,24 @@ button {
     }
   }
 
-  function normalizePresentation(value: Presentation | undefined, win: Window): Exclude<Presentation, "auto"> {
+  function matchesShortcut(event: KeyboardEvent, shortcut: string): boolean {
+    const parts = shortcut.toLowerCase().split("+").map((part) => part.trim()).filter(Boolean);
+    if (!parts.length) return false;
+    const key = parts[parts.length - 1];
+    const wantsMod = parts.includes("mod") || parts.includes("meta") || parts.includes("cmd") || parts.includes("ctrl");
+    const modOk = !wantsMod || (parts.includes("ctrl") ? event.ctrlKey : parts.includes("meta") || parts.includes("cmd") ? event.metaKey : (event.metaKey || event.ctrlKey));
+    if (!modOk) return false;
+    if (parts.includes("shift") !== event.shiftKey) return false;
+    if (parts.includes("alt") !== event.altKey) return false;
+    const normalizedKey = event.key.toLowerCase() === " " ? "space" : event.key.toLowerCase();
+    return normalizedKey === key || event.code.toLowerCase() === key;
+  }
+
+  function normalizePresentation(value: Presentation | undefined, win: Window, hasAnchor = false): Exclude<Presentation, "auto"> {
     const selected = value ?? globalConfig.defaultPresentation;
     if (selected !== "auto") return selected;
-    return win.matchMedia?.("(max-width: 720px)").matches ? "bottom-sheet" : "modal";
+    if (win.matchMedia?.("(max-width: 720px)").matches) return "bottom-sheet";
+    return hasAnchor ? "popover" : "modal";
   }
 
   class SurfaceController<TValues extends AnyRecord = AnyRecord> {
@@ -1645,7 +2434,10 @@ button {
     private schemaValue: RodMenuSchema<TValues>;
     private valuesValue: TValues;
     private stateStore: ReactiveStoreAdapter<TValues>;
+    private persistenceManager!: PersistenceManager<TValues>;
+    private storeHandle!: RodMenuStoreHandle<TValues>;
     private initialValues: TValues;
+    private activeTabId: string | null = null;
     private errorsValue: Record<string, string> = {};
     private actionLoading = new Set<string>();
     private loading = false;
@@ -1667,6 +2459,7 @@ button {
       this.stateStore = createReactiveStore(this.valuesValue);
       this.valuesValue = this.stateStore.snapshot();
       this.initialValues = this.cloneValues(this.valuesValue);
+      this.activeTabId = schema.initialTab || schema.tabs?.[0]?.id || null;
 
       this.host = createElement(this.doc, "div");
       this.host.setAttribute(ROOT_ATTR, this.id);
@@ -1686,6 +2479,8 @@ button {
         get values() { return controller.valuesValue; },
         get errors() { return controller.errorsValue; },
         get schema() { return controller.schemaValue; },
+        get store() { return controller.storeHandle; },
+        get activeTab() { return controller.activeTabId; },
         get host() { return controller.host; },
         get root() { return controller.root; },
         get surface() { return controller.handle; },
@@ -1701,11 +2496,36 @@ button {
         setFieldError(name: string, error: string | null) { controller.setFieldError(name, error); },
         clearErrors() { controller.clearErrors(); },
         update(patch: Partial<RodMenuSchema<TValues>>) { controller.update(patch); },
+        setActiveTab(tabId: string) { controller.setActiveTab(tabId); },
+        persist() { return controller.storeHandle.persist(); },
+        hydrate() { return controller.storeHandle.hydrate(); },
+        clearPersisted() { return controller.storeHandle.clearPersisted(); },
       };
+
+      this.persistenceManager = createPersistenceManager(
+        this.stateStore,
+        this.schemaValue.store,
+        this.id,
+        this.win,
+        (values) => {
+          this.valuesValue = values;
+          if (!this.destroyed) {
+            this.render();
+            requestAnimationFrame(() => {
+              if (!this.destroyed) this.getRootElement().dataset.open = "true";
+            });
+          }
+          try { this.schemaValue.onHydrate?.(this.context); } catch (error) { this.reportError(error); }
+        },
+        (error) => this.reportError(error),
+      );
+      this.storeHandle = this.persistenceManager.handle;
 
       this.handle = {
         id: this.id,
         result: this.result,
+        ready: this.storeHandle.ready,
+        store: this.storeHandle,
         element: this.host,
         context: this.context,
         close: (data?: unknown) => this.finish("dismiss", data, "api"),
@@ -1716,17 +2536,22 @@ button {
         getValue: <T = unknown>(name: string) => this.valuesValue[name] as T,
         validate: () => this.validate(),
         setLoading: (loading) => this.setLoading(loading),
+        setActiveTab: (tabId) => this.setActiveTab(tabId),
+        persist: () => this.storeHandle.persist(),
+        hydrate: () => this.storeHandle.hydrate(),
+        clearPersisted: () => this.storeHandle.clearPersisted(),
         destroy: () => this.destroy(),
       };
 
       this.mount();
+      this.persistenceManager.start();
     }
 
     private buildInitialValues(schema: RodMenuSchema<TValues>): TValues {
       const result: AnyRecord = { ...(schema.initialValues || {}) };
       const fields = this.getAllFields(schema);
       for (const field of fields) {
-        if (field.type === "divider" || field.type === "html" || field.type === "button") continue;
+        if (["divider", "html", "button", "media-preview", "provider-status", "request-log", "debug-json"].includes(field.type)) continue;
         if (Object.prototype.hasOwnProperty.call(result, field.name)) continue;
         if (field.value !== undefined) result[field.name] = cloneValue(field.value);
         else if (field.defaultValue !== undefined) result[field.name] = cloneValue(field.defaultValue);
@@ -1740,7 +2565,9 @@ button {
         case "checkbox":
         case "switch": return false;
         case "multiselect":
-        case "checkbox-group": return [];
+        case "checkbox-group":
+        case "media-picker": return [];
+        case "channel-picker": return field.multiple ? [] : "";
         case "range": return field.min ?? 0;
         case "number": return "";
         case "rating": return field.allowZero === false ? 1 : 0;
@@ -1758,7 +2585,11 @@ button {
     private getAllFields(schema: RodMenuSchema<TValues> = this.schemaValue): RodMenuField[] {
       const direct = schema.fields ? Array.from(schema.fields) : [];
       const sectionFields = schema.sections?.flatMap((section) => Array.from(section.fields)) ?? [];
-      return [...direct, ...sectionFields];
+      const tabFields = schema.tabs?.flatMap((tab) => [
+        ...(tab.fields ? Array.from(tab.fields) : []),
+        ...(tab.sections?.flatMap((section) => Array.from(section.fields)) ?? []),
+      ]) ?? [];
+      return [...direct, ...sectionFields, ...tabFields];
     }
 
     private mount(): void {
@@ -1770,6 +2601,7 @@ button {
       if (this.schemaValue.scrollLock !== false) lockDocumentScroll(this.doc);
       this.bindGlobalEvents();
       this.setupVisualViewport();
+      this.setupAnchorTracking();
 
       requestAnimationFrame(() => {
         const root = this.getRootElement();
@@ -1790,7 +2622,7 @@ button {
       root.className = `rm-root ${this.schemaValue.className || ""}`.trim();
       root.dataset.open = "false";
       root.dataset.loading = String(this.loading);
-      root.dataset.presentation = normalizePresentation(this.schemaValue.presentation, this.win);
+      root.dataset.presentation = normalizePresentation(this.schemaValue.presentation, this.win, !!this.schemaValue.anchor);
       root.dataset.side = this.schemaValue.drawerSide || "right";
       root.style.setProperty("--rm-z", String(this.schemaValue.zIndex ?? globalConfig.zIndex));
       root.style.setProperty("--rm-width", getSizeWidth(this.schemaValue.size));
@@ -1833,14 +2665,107 @@ button {
       for (const section of this.schemaValue.sections || []) {
         body.append(this.renderSection(section));
       }
+      if (this.schemaValue.tabs?.length) {
+        body.append(this.renderTabs());
+      }
 
       shell.append(body);
+      this.positionFromAnchor(root, shell);
 
       if (this.schemaValue.actions?.length) shell.append(this.renderActions());
 
       root.append(backdrop, shell);
       this.root.append(root);
       this.refreshDynamicState();
+    }
+
+    private renderTabs(): HTMLElement {
+      const wrapper = createElement(this.doc, "div");
+      wrapper.className = "rm-tabs-wrap";
+
+      const visibleTabs = (this.schemaValue.tabs || []).filter((tab) => !tab.visibleWhen || this.safePredicate(tab.visibleWhen));
+      if (!visibleTabs.length) return wrapper;
+      if (!this.activeTabId || !visibleTabs.some((tab) => tab.id === this.activeTabId)) this.activeTabId = visibleTabs[0].id;
+
+      const nav = createElement(this.doc, "div");
+      nav.className = "rm-tabs";
+      nav.setAttribute("role", "tablist");
+
+      for (const tab of visibleTabs) {
+        const button = createElement(this.doc, "button");
+        button.type = "button";
+        button.className = "rm-tab";
+        button.dataset.active = String(tab.id === this.activeTabId);
+        button.setAttribute("role", "tab");
+        button.setAttribute("aria-selected", String(tab.id === this.activeTabId));
+        if (tab.icon) {
+          const icon = createElement(this.doc, "span");
+          icon.className = "rm-tab-icon";
+          icon.innerHTML = tab.icon;
+          button.append(icon);
+        }
+        const label = createElement(this.doc, "span");
+        label.textContent = tab.label;
+        button.append(label);
+        if (tab.badge != null) {
+          const badge = createElement(this.doc, "span");
+          badge.className = "rm-badge";
+          badge.textContent = String(tab.badge);
+          button.append(badge);
+        }
+        button.addEventListener("click", () => this.setActiveTab(tab.id));
+        nav.append(button);
+      }
+      wrapper.append(nav);
+
+      const active = visibleTabs.find((tab) => tab.id === this.activeTabId) || visibleTabs[0];
+      const panel = createElement(this.doc, "div");
+      panel.className = "rm-tab-panel";
+      panel.dataset.tabPanel = active.id;
+      panel.setAttribute("role", "tabpanel");
+      if (active.fields?.length) panel.append(this.renderSection({ fields: active.fields }));
+      for (const section of active.sections || []) panel.append(this.renderSection(section));
+      wrapper.append(panel);
+      return wrapper;
+    }
+
+    private resolveAnchorRect(): DOMRect | null {
+      const anchor = this.schemaValue.anchor;
+      if (!anchor) return null;
+      try {
+        const resolved = typeof anchor === "function" ? anchor() : anchor;
+        if (!resolved) return null;
+        if (resolved instanceof this.win.Element) return resolved.getBoundingClientRect();
+        if (typeof (resolved as DOMRect).left === "number" && typeof (resolved as DOMRect).top === "number") return resolved as DOMRect;
+      } catch (error) {
+        this.reportError(error);
+      }
+      return null;
+    }
+
+    private positionFromAnchor(root: HTMLElement, shell: HTMLElement): void {
+      const rect = this.resolveAnchorRect();
+      if (!rect) return;
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      root.style.setProperty("--rm-origin-x", `${centerX}px`);
+      root.style.setProperty("--rm-origin-y", `${centerY}px`);
+
+      if (root.dataset.presentation !== "popover") return;
+      const offset = Math.max(0, this.schemaValue.anchorOffset ?? 10);
+      const align = this.schemaValue.anchorAlign ?? "center";
+      const viewportWidth = this.win.innerWidth;
+      const viewportHeight = this.win.innerHeight;
+      const preferredX = align === "start" ? rect.left : align === "end" ? rect.right : centerX;
+      const left = Math.max(8, Math.min(viewportWidth - 8, preferredX));
+      const spaceBelow = viewportHeight - rect.bottom;
+      const placeAbove = spaceBelow < 280 && rect.top > spaceBelow;
+      const top = placeAbove ? Math.max(8, rect.top - offset) : Math.min(viewportHeight - 8, rect.bottom + offset);
+      root.dataset.popoverAbove = String(placeAbove);
+      shell.style.setProperty("--rm-popover-left", `${left}px`);
+      shell.style.setProperty("--rm-popover-top", `${top}px`);
+      shell.style.setProperty("--rm-popover-align", align === "start" ? "0%" : align === "end" ? "100%" : "50%");
+      shell.style.setProperty("--rm-popover-shift", align === "start" ? "0%" : align === "end" ? "-100%" : "-50%");
     }
 
     private renderHeader(): HTMLElement {
@@ -1989,7 +2914,45 @@ button {
         row.append(labelRow);
       }
 
-      row.append(this.createControl(field));
+      const control = this.createControl(field);
+      if (field.trailingAction) {
+        const controlRow = createElement(this.doc, "div");
+        controlRow.className = "rm-control-row";
+        controlRow.append(control);
+
+        const trailing = field.trailingAction;
+        const action = createElement(this.doc, "button");
+        action.type = "button";
+        action.className = "rm-trailing-action";
+        action.dataset.variant = trailing.variant || "secondary";
+        action.dataset.trailingAction = trailing.id || field.name;
+        action.title = trailing.title || trailing.label;
+        action.disabled = !!trailing.disabled || !!trailing.disabledWhen?.(this.valuesValue, this.context);
+        if (trailing.icon) {
+          const icon = createElement(this.doc, "span");
+          icon.className = "rm-action-icon";
+          icon.innerHTML = trailing.icon;
+          action.append(icon);
+        }
+        const label = createElement(this.doc, "span");
+        label.textContent = trailing.label;
+        action.append(label);
+        action.addEventListener("click", async () => {
+          if (action.disabled) return;
+          action.disabled = true;
+          action.dataset.loading = "true";
+          try { await trailing.handler(this.context); }
+          catch (error) { this.reportError(error); }
+          finally {
+            action.dataset.loading = "false";
+            action.disabled = !!trailing.disabled || !!trailing.disabledWhen?.(this.valuesValue, this.context);
+          }
+        });
+        controlRow.append(action);
+        row.append(controlRow);
+      } else {
+        row.append(control);
+      }
 
       if (field.help) {
         const help = createElement(this.doc, "div");
@@ -2297,6 +3260,274 @@ button {
           });
           return button;
         }
+        case "media-preview": {
+          const item = typeof field.item === "function" ? field.item(this.context) : field.item;
+          const card = createElement(this.doc, "article");
+          card.className = "rm-media-preview";
+          card.dataset.compact = String(!!field.compact);
+          if (item.thumbnail) {
+            const image = createElement(this.doc, "img");
+            image.className = "rm-media-thumb";
+            image.src = item.thumbnail;
+            image.alt = item.title || item.type || "Media preview";
+            image.loading = "lazy";
+            card.append(image);
+          } else {
+            const placeholder = createElement(this.doc, "div");
+            placeholder.className = "rm-media-placeholder";
+            placeholder.textContent = item.type === "video" ? "VIDEO" : item.type === "audio" ? "AUDIO" : "MEDIA";
+            card.append(placeholder);
+          }
+          const copy = createElement(this.doc, "div");
+          copy.className = "rm-media-copy";
+          const title = createElement(this.doc, "strong");
+          title.textContent = item.title || item.source || item.id;
+          copy.append(title);
+          if (item.description) {
+            const description = createElement(this.doc, "p");
+            description.textContent = item.description;
+            copy.append(description);
+          }
+          const meta = [
+            item.type,
+            item.quality,
+            item.width && item.height ? `${item.width}×${item.height}` : null,
+            item.provider,
+            field.showSource !== false ? item.source : null,
+          ].filter(Boolean).join(" · ");
+          if (meta) {
+            const metadata = createElement(this.doc, "small");
+            metadata.textContent = meta;
+            copy.append(metadata);
+          }
+          if (item.url) {
+            const open = createElement(this.doc, "a");
+            open.className = "rm-media-open";
+            open.href = item.url;
+            open.target = "_blank";
+            open.rel = "noopener noreferrer";
+            open.textContent = "Abrir origem";
+            copy.append(open);
+          }
+          card.append(copy);
+          return card;
+        }
+        case "media-picker": {
+          const items = typeof field.items === "function" ? field.items(this.context) : field.items;
+          const wrap = createElement(this.doc, "div");
+          wrap.className = "rm-media-picker";
+          wrap.style.setProperty("--rm-media-columns", String(field.columns ?? 2));
+          let selected = new Set(Array.isArray(value) ? value.map(String) : []);
+
+          const sync = () => {
+            wrap.querySelectorAll<HTMLElement>("[data-media-id]").forEach((node) => {
+              node.dataset.selected = String(selected.has(node.dataset.mediaId || ""));
+            });
+          };
+
+          if (field.selectAll !== false && items.length > 1) {
+            const toolbar = createElement(this.doc, "div");
+            toolbar.className = "rm-picker-toolbar";
+            const count = createElement(this.doc, "span");
+            const updateCount = () => { count.textContent = `${selected.size} de ${items.length} selecionados`; };
+            updateCount();
+            const all = createElement(this.doc, "button");
+            all.type = "button";
+            all.className = "rm-mini-button";
+            all.textContent = "Selecionar tudo";
+            all.addEventListener("click", () => {
+              selected = new Set(items.filter((item) => !item.disabled).map((item) => item.id));
+              this.commitField(field, Array.from(selected));
+              sync();
+              updateCount();
+            });
+            toolbar.append(count, all);
+            wrap.append(toolbar);
+          }
+
+          const grid = createElement(this.doc, "div");
+          grid.className = "rm-media-grid";
+          for (const item of items) {
+            const card = createElement(this.doc, "button");
+            card.type = "button";
+            card.className = "rm-media-item";
+            card.dataset.mediaId = item.id;
+            card.dataset.selected = String(selected.has(item.id));
+            card.disabled = !!item.disabled;
+            if (item.thumbnail) {
+              const image = createElement(this.doc, "img");
+              image.src = item.thumbnail;
+              image.alt = item.title || item.id;
+              image.loading = "lazy";
+              card.append(image);
+            }
+            const detail = createElement(this.doc, "span");
+            detail.className = "rm-media-item-copy";
+            const title = createElement(this.doc, "strong");
+            title.textContent = item.title || item.quality || item.id;
+            detail.append(title);
+            const meta = [item.type, item.quality, item.width && item.height ? `${item.width}×${item.height}` : null, item.provider].filter(Boolean).join(" · ");
+            if (meta) {
+              const small = createElement(this.doc, "small");
+              small.textContent = meta;
+              detail.append(small);
+            }
+            card.append(detail);
+            const check = createElement(this.doc, "span");
+            check.className = "rm-media-check";
+            check.textContent = "✓";
+            card.append(check);
+            card.addEventListener("click", () => {
+              if (selected.has(item.id)) selected.delete(item.id);
+              else {
+                if (field.maxSelected && selected.size >= field.maxSelected) return;
+                selected.add(item.id);
+              }
+              this.commitField(field, Array.from(selected));
+              sync();
+            });
+            grid.append(card);
+          }
+          wrap.append(grid);
+          this.inputNodes.set(field.name, wrap);
+          return wrap;
+        }
+        case "provider-status": {
+          const providers = typeof field.providers === "function" ? field.providers(this.context) : field.providers;
+          const list = createElement(this.doc, "div");
+          list.className = "rm-provider-list";
+          for (const provider of providers) {
+            const row = createElement(this.doc, "div");
+            row.className = "rm-provider";
+            row.dataset.state = provider.state;
+            const dot = createElement(this.doc, "span");
+            dot.className = "rm-provider-dot";
+            const copy = createElement(this.doc, "span");
+            copy.className = "rm-provider-copy";
+            const label = createElement(this.doc, "strong");
+            label.textContent = provider.label;
+            copy.append(label);
+            const description = createElement(this.doc, "small");
+            description.textContent = provider.error || provider.description || provider.state;
+            copy.append(description);
+            const duration = createElement(this.doc, "span");
+            duration.className = "rm-provider-duration";
+            duration.textContent = provider.durationMs != null ? `${provider.durationMs} ms` : "";
+            row.append(dot, copy, duration);
+            list.append(row);
+          }
+          return list;
+        }
+        case "request-log": {
+          const entries = typeof field.entries === "function" ? field.entries(this.context) : field.entries;
+          const list = createElement(this.doc, "div");
+          list.className = "rm-request-log";
+          if (field.maxHeight) list.style.maxHeight = `${field.maxHeight}px`;
+          for (const entry of entries) {
+            const row = createElement(this.doc, "button");
+            row.type = "button";
+            row.className = "rm-request-row";
+            const status = entry.status == null ? "" : String(entry.status);
+            row.innerHTML = `<span class="rm-request-method"></span><span class="rm-request-url"></span><span class="rm-request-status"></span>`;
+            const method = row.querySelector<HTMLElement>(".rm-request-method");
+            const url = row.querySelector<HTMLElement>(".rm-request-url");
+            const statusNode = row.querySelector<HTMLElement>(".rm-request-status");
+            if (method) method.textContent = entry.method || "GET";
+            if (url) url.textContent = entry.url;
+            if (statusNode) statusNode.textContent = [status, entry.durationMs != null ? `${entry.durationMs}ms` : ""].filter(Boolean).join(" · ");
+            if (field.onSelect) row.addEventListener("click", () => field.onSelect?.(entry, this.context));
+            list.append(row);
+          }
+          return list;
+        }
+        case "debug-json": {
+          const data = typeof field.data === "function" ? field.data(this.context) : field.data;
+          const wrap = createElement(this.doc, "div");
+          wrap.className = "rm-debug-json";
+          const toolbar = createElement(this.doc, "div");
+          toolbar.className = "rm-picker-toolbar";
+          const label = createElement(this.doc, "span");
+          label.textContent = "JSON";
+          const copy = createElement(this.doc, "button");
+          copy.type = "button";
+          copy.className = "rm-mini-button";
+          copy.textContent = "Copiar";
+          const text = (() => {
+            try { return JSON.stringify(data, null, field.pretty === false ? 0 : 2); }
+            catch { return String(data); }
+          })();
+          copy.addEventListener("click", async () => {
+            try {
+              await this.win.navigator.clipboard?.writeText(text);
+              notifyToaster("success", "Copiado", "JSON copiado para a área de transferência.");
+            } catch (error) { this.reportError(error); }
+          });
+          toolbar.append(label, copy);
+          const pre = createElement(this.doc, "pre");
+          pre.textContent = text;
+          if (field.maxHeight) pre.style.maxHeight = `${field.maxHeight}px`;
+          wrap.append(toolbar, pre);
+          return wrap;
+        }
+        case "channel-picker": {
+          const wrap = createElement(this.doc, "div");
+          wrap.className = "rm-channel-picker";
+          const optionsHost = createElement(this.doc, "div");
+          optionsHost.className = "rm-channel-options";
+          let selected = new Set(field.multiple ? (Array.isArray(value) ? value.map(String) : []) : [String(value ?? "")].filter(Boolean));
+
+          const renderOptions = (query = "") => {
+            optionsHost.replaceChildren();
+            const q = query.trim().toLowerCase();
+            for (const option of field.options) {
+              if (q && !`${option.label} ${option.description || ""}`.toLowerCase().includes(q)) continue;
+              const button = createElement(this.doc, "button");
+              button.type = "button";
+              button.className = "rm-channel-option";
+              button.dataset.selected = String(selected.has(option.value));
+              button.disabled = !!option.disabled;
+              if (option.icon) {
+                const icon = createElement(this.doc, "span");
+                icon.innerHTML = option.icon;
+                button.append(icon);
+              }
+              const copy = createElement(this.doc, "span");
+              const title = createElement(this.doc, "strong");
+              title.textContent = option.label;
+              copy.append(title);
+              if (option.description) {
+                const small = createElement(this.doc, "small");
+                small.textContent = option.description;
+                copy.append(small);
+              }
+              button.append(copy);
+              button.addEventListener("click", () => {
+                if (field.multiple) {
+                  selected.has(option.value) ? selected.delete(option.value) : selected.add(option.value);
+                  this.commitField(field, Array.from(selected));
+                } else {
+                  selected = new Set([option.value]);
+                  this.commitField(field, option.value);
+                }
+                renderOptions(q);
+              });
+              optionsHost.append(button);
+            }
+          };
+
+          if (field.searchable) {
+            const search = createElement(this.doc, "input");
+            search.type = "search";
+            search.className = "rm-control rm-channel-search";
+            search.placeholder = field.placeholder || "Buscar…";
+            search.addEventListener("input", () => renderOptions(search.value));
+            wrap.append(search);
+          }
+          renderOptions();
+          wrap.append(optionsHost);
+          this.inputNodes.set(field.name, wrap);
+          return wrap;
+        }
         case "html": {
           const html = createElement(this.doc, "div");
           html.innerHTML = typeof field.html === "function" ? field.html(this.context) : field.html;
@@ -2324,14 +3555,32 @@ button {
         button.className = "rm-action";
         button.dataset.action = action.id;
         button.dataset.variant = action.variant || (action.role === "destructive" ? "danger" : action.role === "cancel" ? "secondary" : "primary");
+        if (action.ariaLabel) button.setAttribute("aria-label", action.ariaLabel);
         if (action.icon) {
           const icon = createElement(this.doc, "span");
+          icon.className = "rm-action-icon";
           icon.innerHTML = action.icon;
           button.append(icon);
         }
         const text = createElement(this.doc, "span");
+        text.className = "rm-action-label";
         text.textContent = action.label;
         button.append(text);
+        if (action.badge != null) {
+          const badge = createElement(this.doc, "span");
+          badge.className = "rm-badge rm-action-badge";
+          badge.dataset.actionBadge = action.id;
+          const rawBadge = typeof action.badge === "function" ? action.badge(this.context) : action.badge;
+          badge.textContent = rawBadge == null ? "" : String(rawBadge);
+          badge.hidden = rawBadge == null || rawBadge === "";
+          button.append(badge);
+        }
+        if (action.shortcut) {
+          const shortcut = createElement(this.doc, "kbd");
+          shortcut.className = "rm-shortcut";
+          shortcut.textContent = action.shortcut;
+          button.append(shortcut);
+        }
         button.addEventListener("click", () => void this.runAction(action));
         footer.append(button);
       }
@@ -2340,7 +3589,9 @@ button {
 
     private commitField(field: RodMenuField, raw: unknown): void {
       const value = field.transform ? field.transform(raw, this.context) : raw;
-      (this.valuesValue as AnyRecord)[field.name] = value;
+      this.stateStore.set(field.name, value);
+      this.valuesValue = this.stateStore.snapshot();
+      this.persistenceManager.trigger("change");
       this.setFieldError(field.name, null);
       try { field.onChange?.(value, this.context); } catch (error) { this.reportError(error); }
       try { this.schemaValue.onChange?.(this.context); } catch (error) { this.reportError(error); }
@@ -2357,6 +3608,7 @@ button {
       this.setActionLoading(action.id, true);
       try {
         const data = action.handler ? await action.handler(this.context) : undefined;
+        if (action.role === "submit") this.persistenceManager.trigger("submit");
         const shouldClose = action.close ?? ["submit", "cancel", "destructive"].includes(action.role || "custom");
         if (shouldClose) this.finish(action.id, data, "action");
       } catch (error) {
@@ -2384,9 +3636,26 @@ button {
       for (const action of this.schemaValue.actions || []) {
         const button = this.root.querySelector<HTMLButtonElement>(`.rm-action[data-action="${CSS.escape(action.id)}"]`);
         if (!button) continue;
-        const visible = !action.hidden && (!action.visibleWhen || action.visibleWhen(this.valuesValue, this.context));
+        const visible = !action.hidden && (!action.visibleWhen || this.safePredicate(action.visibleWhen));
         button.hidden = !visible;
-        button.disabled = this.loading || this.actionLoading.has(action.id) || !!action.disabled || !!action.disabledWhen?.(this.valuesValue, this.context);
+        const disabled = this.loading || this.actionLoading.has(action.id) || !!action.disabled || !!(action.disabledWhen && this.safePredicate(action.disabledWhen));
+        button.disabled = disabled;
+        const badge = button.querySelector<HTMLElement>(".rm-action-badge");
+        if (badge && action.badge != null) {
+          try {
+            const value = typeof action.badge === "function" ? action.badge(this.context) : action.badge;
+            badge.textContent = value == null ? "" : String(value);
+            badge.hidden = value == null || value === "";
+          } catch (error) { this.reportError(error); }
+        }
+      }
+
+      for (const field of this.getAllFields()) {
+        const trailing = field.trailingAction;
+        if (!trailing) continue;
+        const button = this.root.querySelector<HTMLButtonElement>(`.rm-trailing-action[data-trailing-action="${CSS.escape(trailing.id || field.name)}"]`);
+        if (!button || button.dataset.loading === "true") continue;
+        button.disabled = !!trailing.disabled || !!(trailing.disabledWhen && this.safePredicate(trailing.disabledWhen));
       }
     }
 
@@ -2396,13 +3665,19 @@ button {
       const fields = this.getAllFields();
 
       for (const field of fields) {
-        if (["divider", "html", "button", "hidden"].includes(field.type)) continue;
+        if (["divider", "html", "button", "hidden", "media-preview", "provider-status", "request-log", "debug-json"].includes(field.type)) continue;
         const row = this.fieldNodes.get(field.name);
         if (row?.dataset.hidden === "true") continue;
         const value = this.readFieldValue(field);
 
         if (field.required && this.isEmptyValue(value)) {
           this.setFieldError(field.name, "Campo obrigatório.");
+          firstInvalid ||= this.inputNodes.get(field.name) || row || null;
+          continue;
+        }
+
+        if (field.type === "media-picker" && field.minSelected && Array.isArray(value) && value.length < field.minSelected) {
+          this.setFieldError(field.name, `Selecione pelo menos ${field.minSelected} item(ns).`);
           firstInvalid ||= this.inputNodes.get(field.name) || row || null;
           continue;
         }
@@ -2448,7 +3723,9 @@ button {
         const node = this.customNodes.get(field.name);
         if (node) {
           const next = field.read(node, this.context);
-          (this.valuesValue as AnyRecord)[field.name] = next;
+          this.stateStore.set(field.name, next);
+          this.valuesValue = this.stateStore.snapshot();
+          this.persistenceManager.trigger("change");
           return next;
         }
       }
@@ -2504,6 +3781,7 @@ button {
     private setValue(name: string, value: unknown): void {
       this.stateStore.set(name, value);
       this.valuesValue = this.stateStore.snapshot();
+      this.persistenceManager.trigger("change");
       this.writeValueToControl(name, value);
       this.refreshDynamicState();
       try { this.schemaValue.onChange?.(this.context); } catch (error) { this.reportError(error); }
@@ -2512,6 +3790,7 @@ button {
     private setValues(values: Partial<TValues>): void {
       this.stateStore.patch(values);
       this.valuesValue = this.stateStore.snapshot();
+      this.persistenceManager.trigger("change");
       for (const [name, value] of Object.entries(values)) {
         this.writeValueToControl(name, value);
       }
@@ -2541,8 +3820,19 @@ button {
     private reset(): void {
       this.stateStore.replace(this.cloneValues(this.initialValues));
       this.valuesValue = this.stateStore.snapshot();
+      this.persistenceManager.trigger("change");
       this.render();
       requestAnimationFrame(() => { this.getRootElement().dataset.open = "true"; });
+    }
+
+    private setActiveTab(tabId: string): void {
+      if (!this.schemaValue.tabs?.some((tab) => tab.id === tabId)) return;
+      if (this.activeTabId === tabId) return;
+      this.activeTabId = tabId;
+      this.render();
+      requestAnimationFrame(() => {
+        if (!this.destroyed) this.getRootElement().dataset.open = "true";
+      });
     }
 
     private update(patch: Partial<RodMenuSchema<TValues>>): void {
@@ -2574,6 +3864,12 @@ button {
     private bindGlobalEvents(): void {
       const keydown = (event: KeyboardEvent) => {
         if (this.destroyed || this.settled) return;
+        const shortcutAction = this.schemaValue.actions?.find((action) => action.shortcut && matchesShortcut(event, action.shortcut));
+        if (shortcutAction) {
+          event.preventDefault();
+          void this.runAction(shortcutAction);
+          return;
+        }
         if (event.key === "Escape" && this.schemaValue.dismissible !== false && this.schemaValue.closeOnEscape !== false) {
           event.preventDefault();
           this.finish("dismiss", undefined, "escape");
@@ -2624,6 +3920,22 @@ button {
       this.listeners.push(() => { viewport.removeEventListener("resize", sync); viewport.removeEventListener("scroll", sync); });
     }
 
+    private setupAnchorTracking(): void {
+      if (!this.schemaValue.anchor) return;
+      const sync = () => {
+        if (this.destroyed) return;
+        const root = this.root.querySelector<HTMLElement>(".rm-root");
+        const shell = this.root.querySelector<HTMLElement>(".rm-shell");
+        if (root && shell) this.positionFromAnchor(root, shell);
+      };
+      this.win.addEventListener("resize", sync, { passive: true });
+      this.win.addEventListener("scroll", sync, { passive: true, capture: true });
+      this.listeners.push(() => {
+        this.win.removeEventListener("resize", sync);
+        this.win.removeEventListener("scroll", sync, true);
+      });
+    }
+
     private bindSwipe(handle: HTMLElement, shell: HTMLElement): void {
       let startY = 0;
       let currentY = 0;
@@ -2670,6 +3982,7 @@ button {
     private finish(action: string | "dismiss", data: unknown, reason: RodMenuResult["reason"]): void {
       if (this.settled) return;
       this.settled = true;
+      this.persistenceManager.trigger("close");
       const result: RodMenuResult<TValues> = {
         action,
         values: this.cloneValues(this.valuesValue),
@@ -2729,15 +4042,68 @@ button {
     }
   }
 
+  interface RodMenuMediaPresetOptions<TValues extends AnyRecord = AnyRecord> {
+    title?: string;
+    description?: string;
+    media: readonly RodMenuMediaItem[];
+    source?: RodMenuMediaItem;
+    channels?: readonly OptionItem[];
+    initialValues?: Partial<TValues>;
+    store?: RodMenuStoreConfig<TValues>;
+    presentation?: Presentation;
+    anchor?: RodMenuSchema<TValues>["anchor"];
+    extraFields?: readonly RodMenuField[];
+    actions?: readonly RodMenuAction[];
+  }
+
+  interface RodMenuDebugPresetOptions {
+    title?: string;
+    description?: string;
+    summary?: unknown;
+    media?: readonly RodMenuMediaItem[];
+    providers?: readonly RodMenuProviderItem[];
+    requests?: readonly RodMenuRequestEntry[];
+    relay?: unknown;
+    logs?: unknown;
+    presentation?: Presentation;
+  }
+
+  interface RodMenuHistoryPresetOptions<T = unknown> {
+    title?: string;
+    description?: string;
+    items: readonly T[];
+    presentation?: Presentation;
+    renderItem?: (item: T, index: number, context: RodMenuContext<any>) => Node | string;
+  }
+
+  interface RodMenuPresetApi {
+    media<TValues extends AnyRecord = AnyRecord>(options: RodMenuMediaPresetOptions<TValues>): RodMenuHandle<TValues>;
+    settings<TValues extends AnyRecord = AnyRecord>(schema: RodMenuSchema<TValues>): RodMenuHandle<TValues>;
+    history<T = unknown>(options: RodMenuHistoryPresetOptions<T>): RodMenuHandle;
+    debug(options: RodMenuDebugPresetOptions): RodMenuHandle;
+    channelPicker<T extends string = string>(options: {
+      title?: string;
+      description?: string;
+      channels: readonly OptionItem[];
+      multiple?: boolean;
+      searchable?: boolean;
+      value?: T | readonly T[];
+      presentation?: Presentation;
+      anchor?: RodMenuSchema["anchor"];
+    }): Promise<T | T[] | null>;
+  }
+
   interface RodMenuPublicApi {
     readonly version: typeof VERSION;
     readonly config: Readonly<RodMenuConfig>;
     readonly runtime: Readonly<RodMenuRuntimeStatus>;
     readonly ready: Promise<RodMenuRuntimeStatus>;
+    readonly presets: RodMenuPresetApi;
+    readonly aio: RodMenuPresetApi;
     open<TValues extends AnyRecord = AnyRecord>(schema: RodMenuSchema<TValues>): RodMenuHandle<TValues>;
     form<TValues extends AnyRecord = AnyRecord>(schema: Omit<RodMenuSchema<TValues>, "actions"> & { actions?: readonly RodMenuAction[] }): Promise<RodMenuResult<TValues>>;
     confirm(options: { title: string; description?: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean; presentation?: Presentation }): Promise<boolean>;
-    actions<T extends string = string>(options: { title?: string; description?: string; presentation?: Presentation; items: readonly { label: string; value: T; variant?: ActionVariant; icon?: string }[] }): Promise<T | null>;
+    actions<T extends string = string>(options: { title?: string; description?: string; presentation?: Presentation; anchor?: RodMenuSchema["anchor"]; items: readonly { label: string; value: T; variant?: ActionVariant; icon?: string; badge?: string | number; shortcut?: string }[] }): Promise<T | null>;
     configure(config: Partial<RodMenuConfig>): void;
     loadDependencies(): Promise<RodMenuRuntimeStatus>;
     get(id: string): RodMenuHandle | undefined;
@@ -2757,6 +4123,186 @@ button {
     broto: { ...runtimeStatus.broto },
   });
 
+  const presetApi: RodMenuPresetApi = {
+    media<TValues extends AnyRecord = AnyRecord>(options: RodMenuMediaPresetOptions<TValues>): RodMenuHandle<TValues> {
+      const fields: RodMenuField[] = [];
+      if (options.source) {
+        fields.push({
+          type: "media-preview",
+          name: "sourcePreview",
+          item: options.source,
+          showSource: true,
+        });
+      }
+      fields.push({
+        type: "media-picker",
+        name: "selectedMedia",
+        label: options.media.length === 1 ? "Mídia" : "Mídias",
+        items: options.media,
+        value: options.media.filter((item) => !item.disabled).map((item) => item.id),
+        selectAll: options.media.length > 1,
+        minSelected: 1,
+      });
+      if (options.channels?.length) {
+        fields.push({
+          type: "channel-picker",
+          name: "channel",
+          label: "Canal",
+          options: options.channels,
+          searchable: options.channels.length > 8,
+        });
+      }
+      if (options.extraFields?.length) fields.push(...options.extraFields);
+
+      const actions: readonly RodMenuAction[] = options.actions || [
+        { id: "cancel", label: "Cancelar", role: "cancel", variant: "ghost" },
+        {
+          id: "run",
+          label: "Executar",
+          role: "submit",
+          variant: "primary",
+          badge: (context) => {
+            const selected = context.get<unknown[]>("selectedMedia");
+            return Array.isArray(selected) && selected.length > 1 ? selected.length : null;
+          },
+          disabledWhen: (values) => !Array.isArray(values.selectedMedia) || values.selectedMedia.length === 0,
+        },
+      ];
+
+      return api.open<TValues>({
+        title: options.title || "Mídia detectada",
+        description: options.description || "Escolha o que fazer com a mídia encontrada.",
+        presentation: options.presentation || "auto",
+        anchor: options.anchor,
+        fields,
+        actions,
+        initialValues: options.initialValues,
+        store: options.store,
+      });
+    },
+
+    settings<TValues extends AnyRecord = AnyRecord>(schema: RodMenuSchema<TValues>): RodMenuHandle<TValues> {
+      return api.open<TValues>({
+        ...schema,
+        title: schema.title || "Configurações",
+        store: schema.store || { persist: { key: `rod-menu:settings:${schema.id || "default"}`, storage: "local" } },
+        actions: schema.actions || [
+          { id: "reset", label: "Restaurar", role: "custom", variant: "ghost", close: false, handler: (context) => context.reset() },
+          { id: "done", label: "Concluir", role: "submit", variant: "primary" },
+        ],
+      });
+    },
+
+    history<T = unknown>(options: RodMenuHistoryPresetOptions<T>): RodMenuHandle {
+      return api.open({
+        title: options.title || "Histórico",
+        description: options.description,
+        presentation: options.presentation || "bottom-sheet",
+        fields: [{
+          type: "custom",
+          name: "history",
+          render(context) {
+            const list = createElement(context.host.ownerDocument, "div");
+            list.className = "rm-history-list";
+            options.items.forEach((item, index) => {
+              const row = createElement(context.host.ownerDocument, "div");
+              row.className = "rm-history-item";
+              const rendered = options.renderItem?.(item, index, context);
+              if (typeof rendered === "string") row.textContent = rendered;
+              else if (rendered) row.append(rendered);
+              else {
+                try { row.textContent = typeof item === "string" ? item : JSON.stringify(item); }
+                catch { row.textContent = String(item); }
+              }
+              list.append(row);
+            });
+            return list;
+          },
+        }],
+        actions: [{ id: "close", label: "Fechar", role: "cancel", variant: "secondary" }],
+      });
+    },
+
+    debug(options: RodMenuDebugPresetOptions): RodMenuHandle {
+      const tabs: RodMenuTab[] = [];
+      if (options.summary !== undefined) tabs.push({
+        id: "summary",
+        label: "Resumo",
+        fields: [{ type: "debug-json", name: "debugSummary", data: options.summary, maxHeight: 360 }],
+      });
+      if (options.media?.length) tabs.push({
+        id: "media",
+        label: "Mídia",
+        badge: options.media.length,
+        fields: [{ type: "media-picker", name: "debugMedia", items: options.media, selectAll: false }],
+      });
+      if (options.providers?.length) tabs.push({
+        id: "providers",
+        label: "Providers",
+        badge: options.providers.length,
+        fields: [{ type: "provider-status", name: "debugProviders", providers: options.providers }],
+      });
+      if (options.requests?.length) tabs.push({
+        id: "requests",
+        label: "Requests",
+        badge: options.requests.length,
+        fields: [{ type: "request-log", name: "debugRequests", entries: options.requests, maxHeight: 420 }],
+      });
+      if (options.relay !== undefined) tabs.push({
+        id: "relay",
+        label: "Relay",
+        fields: [{ type: "debug-json", name: "debugRelay", data: options.relay, maxHeight: 420 }],
+      });
+      if (options.logs !== undefined) tabs.push({
+        id: "logs",
+        label: "Logs",
+        fields: [{ type: "debug-json", name: "debugLogs", data: options.logs, maxHeight: 420 }],
+      });
+      if (!tabs.length) tabs.push({ id: "summary", label: "Resumo", fields: [{ type: "html", name: "empty", html: "<p>Sem dados de debug.</p>" }] });
+
+      return api.open({
+        title: options.title || "Debug",
+        description: options.description,
+        presentation: options.presentation || "bottom-sheet",
+        size: "lg",
+        tabs,
+        actions: [{ id: "close", label: "Fechar", role: "cancel", variant: "secondary" }],
+      });
+    },
+
+    async channelPicker<T extends string = string>(options: {
+      title?: string;
+      description?: string;
+      channels: readonly OptionItem[];
+      multiple?: boolean;
+      searchable?: boolean;
+      value?: T | readonly T[];
+      presentation?: Presentation;
+      anchor?: RodMenuSchema["anchor"];
+    }): Promise<T | T[] | null> {
+      const result = await api.open<{ channel: T | T[] }>({
+        title: options.title || "Escolha o canal",
+        description: options.description,
+        presentation: options.presentation || "auto",
+        anchor: options.anchor,
+        fields: [{
+          type: "channel-picker",
+          name: "channel",
+          options: options.channels,
+          multiple: options.multiple,
+          searchable: options.searchable,
+          value: options.value,
+          required: true,
+        }],
+        actions: [
+          { id: "cancel", label: "Cancelar", role: "cancel", variant: "ghost" },
+          { id: "select", label: "Selecionar", role: "submit", variant: "primary" },
+        ],
+      }).result;
+      return result.action === "select" ? result.values.channel : null;
+    },
+  };
+
   const api: RodMenuPublicApi = {
     version: VERSION,
     get config() { return Object.freeze({ ...globalConfig, dependencyUrls: { ...globalConfig.dependencyUrls } }); },
@@ -2769,6 +4315,8 @@ button {
       });
     },
     ready: readyPromise,
+    presets: presetApi,
+    aio: presetApi,
     open<TValues extends AnyRecord = AnyRecord>(schema: RodMenuSchema<TValues>): RodMenuHandle<TValues> {
       return new SurfaceController<TValues>(schema).handle;
     },
@@ -2777,7 +4325,9 @@ button {
         { id: "cancel", label: "Cancelar", role: "cancel", variant: "secondary" },
         { id: "submit", label: "Continuar", role: "submit", variant: "primary" },
       ];
-      return api.open<TValues>({ ...schema, actions }).result;
+      const handle = api.open<TValues>({ ...schema, actions });
+      await handle.ready;
+      return handle.result;
     },
     async confirm(options): Promise<boolean> {
       const result = await api.open({
@@ -2791,13 +4341,14 @@ button {
       }).result;
       return result.action === "confirm";
     },
-    async actions<T extends string = string>(options: { title?: string; description?: string; presentation?: Presentation; items: readonly { label: string; value: T; variant?: ActionVariant; icon?: string }[] }): Promise<T | null> {
+    async actions<T extends string = string>(options: { title?: string; description?: string; presentation?: Presentation; anchor?: RodMenuSchema["anchor"]; items: readonly { label: string; value: T; variant?: ActionVariant; icon?: string; badge?: string | number; shortcut?: string }[] }): Promise<T | null> {
       const result = await api.open({
         title: options.title,
         description: options.description,
         presentation: options.presentation,
+        anchor: options.anchor,
         actions: [
-          ...options.items.map((item) => ({ id: item.value, label: item.label, icon: item.icon, variant: item.variant || "secondary" as ActionVariant, role: "custom" as ActionRole, close: true })),
+          ...options.items.map((item) => ({ id: item.value, label: item.label, icon: item.icon, badge: item.badge, shortcut: item.shortcut, variant: item.variant || "secondary" as ActionVariant, role: "custom" as ActionRole, close: true })),
           { id: "cancel", label: "Cancelar", variant: "ghost", role: "cancel" },
         ],
       }).result;
