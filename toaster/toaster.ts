@@ -1,4450 +1,9429 @@
-<!doctype html>
-<html lang="pt-BR">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#09090b">
-  <meta name="color-scheme" content="dark">
-  <title>Rod Toaster · Playground e documentação</title>
-  <meta
-    name="description"
-    content="Landing page interativa do Rod Toaster v4.9.0: mensagens, conteúdo expansível e scrollável, image icons, loading, multi loading com progresso agregado, confirmações, picker robusto no Safari/iPhone, tarefas, grupos, retry, undo, scopes, eventos, temas e persistência."
-  >
+// @global RodToaster
+// @outfile dist/toaster.js
 
-  <style>
-    :root {
-      --page-bg: #070708;
-      --page-bg-soft: #0d0d10;
-      --surface: rgba(18, 18, 22, 0.78);
-      --surface-strong: rgba(24, 24, 29, 0.94);
-      --surface-hover: rgba(31, 31, 38, 0.96);
-      --border: rgba(255, 255, 255, 0.09);
-      --border-strong: rgba(255, 255, 255, 0.17);
-      --text: rgba(250, 250, 250, 0.96);
-      --text-soft: rgba(228, 228, 231, 0.84);
-      --muted: rgba(161, 161, 170, 0.78);
-      --muted-2: rgba(113, 113, 122, 0.82);
-      --accent: #a3ff75;
-      --accent-2: #78d7ff;
-      --accent-3: #c6a7ff;
-      --danger: #fb7185;
-      --warning: #facc15;
-      --success: #4ade80;
-      --radius-xl: 28px;
-      --radius-lg: 20px;
-      --radius-md: 14px;
-      --radius-sm: 10px;
-      --shadow:
-        0 1px 0 rgba(255, 255, 255, 0.04) inset,
-        0 28px 80px rgba(0, 0, 0, 0.38);
-      --content-width: 1460px;
-      --sidebar-width: 268px;
-      --font-sans:
-        Inter,
-        ui-sans-serif,
-        system-ui,
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        sans-serif;
-      --font-mono:
-        "SFMono-Regular",
-        Consolas,
-        "Liberation Mono",
-        Menlo,
-        monospace;
+/*
+ * Rod Super Toaster
+ * Version 4.9.0
+ *
+ * Browser-first, bundler-optional TypeScript IIFE.
+ * Compile with: tsc --target ES2022 --lib ES2022,DOM --strict
+ */
+
+(function installRodToaster(globalWindow: Window & typeof globalThis): void {
+  "use strict";
+
+  const VERSION = "4.9.0" as const;
+  const TOAST_GLOBAL = "RodToaster" as const;
+  const INSPECTOR_GLOBAL = "RodObjectInspector" as const;
+  const TOAST_HOST_ID = "__rod-super-toaster-host__";
+  const STATE_SYMBOL = Symbol.for("rod.super-toaster.state");
+  const OPTIONS_SYMBOL: unique symbol = Symbol("rod.super-toaster.options");
+  const HISTORY_PATCH_SYMBOL = Symbol.for("rod.super-toaster.history-navigation-patch");
+  const MAX_Z_INDEX = 2_147_483_647;
+
+  type ToastType = "default" | "error" | "info" | "success" | "warning" | "debug";
+  type Theme = "auto" | "dark" | "light";
+  type ResolvedTheme = Exclude<Theme, "auto">;
+  type ToastSize = "compact" | "comfortable" | "large";
+  type ToastPosition =
+    | "top-center"
+    | "top-left"
+    | "top-right"
+    | "bottom-center"
+    | "bottom-left"
+    | "bottom-right";
+  type LoadingAnimation = "spinner" | "pulse" | "progress" | "none";
+  type LoadingState = "loading" | "settled";
+  type ActionVariant = "primary" | "secondary" | "danger" | "ghost";
+  type TaskStatus = "queued" | "running" | "paused" | "success" | "error" | "warning" | "cancelled";
+  type TaskStorageName = "sessionStorage" | "localStorage";
+  type ShadowMode = "open" | "closed";
+  type ToastLane = "notification" | "task" | "interaction";
+  type UnknownRecord = Record<string, unknown>;
+  type TimerHandle = number | null;
+  type MaybePromise<T> = T | Promise<T>;
+  type SvgIconName = keyof typeof SVG_ICONS;
+  type ToastImageFit = "cover" | "contain";
+
+  interface ToastImageIconDescriptor {
+    src: string | URL;
+    alt?: string;
+    fit?: ToastImageFit;
+    objectPosition?: string;
+    crossOrigin?: "" | "anonymous" | "use-credentials";
+    referrerPolicy?: ReferrerPolicy;
+    decoding?: "auto" | "sync" | "async";
+    loading?: "eager" | "lazy";
+  }
+
+  type ToastIcon =
+    | SvgIconName
+    | string
+    | URL
+    | Node
+    | ToastImageIconDescriptor
+    | false
+    | null;
+
+  type TaskIcon =
+    | SvgIconName
+    | string
+    | URL
+    | ToastImageIconDescriptor
+    | false;
+
+  type TopLayerHostElement = HTMLDivElement;
+
+
+  type PickerMediaType = "image" | "video";
+  type PickerReturnType = "items" | "ids" | "indexes" | "descriptors";
+  type PickerSelectionSeed = "all" | boolean | string | number | readonly (string | number)[];
+
+  interface PickerItemDescriptor {
+    id?: string | number;
+    pk?: string | number;
+    key?: string | number;
+    code?: string | number;
+    type?: string;
+    kind?: string;
+    mediaType?: string;
+    mimeType?: string;
+    media_type?: string | number;
+    isVideo?: boolean;
+    src?: string | URL;
+    url?: string | URL;
+    mediaUrl?: string | URL;
+    href?: string | URL;
+    poster?: string | URL | null;
+    thumbnail?: string | URL | null;
+    preview?: string | URL | null;
+    previewUrl?: string | URL | null;
+    label?: unknown;
+    title?: unknown;
+    alt?: unknown;
+    filename?: unknown;
+    name?: unknown;
+    disabled?: boolean;
+    selected?: boolean;
+  }
+
+  type PickerSource = string | URL | Blob | File | PickerItemDescriptor;
+
+  interface PickerNormalizedDescriptor<T extends PickerSource = PickerSource> {
+    id: string;
+    index: number;
+    type: PickerMediaType;
+    src: string;
+    poster: string | null;
+    label: string;
+    alt: string;
+    disabled: boolean;
+    original: T;
+    transient?: boolean;
+    dispose?(): void;
+  }
+
+  type PickerSelectionValue<T extends PickerSource = PickerSource> =
+    | T[]
+    | string[]
+    | number[]
+    | PickerNormalizedDescriptor<T>[];
+
+  interface PickerChangeEvent<T extends PickerSource = PickerSource> {
+    selected: T[];
+    selectedIds: string[];
+    selectedIndexes: number[];
+    selectedCount: number;
+    totalItems: number;
+    controller: ToastController;
+  }
+
+  interface PickerMeta<T extends PickerSource = PickerSource> {
+    value: PickerSelectionValue<T> | null;
+    reason: string;
+    actionId: string | null;
+    selection: PickerSelectionValue<T>;
+    selected: T[];
+    selectedIds: string[];
+    selectedIndexes: number[];
+    selectedCount: number;
+    totalItems: number;
+  }
+
+  type PickerResult<T extends PickerSource = PickerSource> =
+    | PickerSelectionValue<T>
+    | PickerMeta<T>
+    | null;
+
+  interface PickerOptions<T extends PickerSource = PickerSource> extends ToastOptions {
+    items?: readonly T[];
+    media?: readonly T[];
+    sources?: readonly T[];
+    defaultMediaType?: PickerMediaType;
+    defaultAllSelected?: boolean;
+    allSelectedByDefault?: boolean;
+    defaultSelected?: PickerSelectionSeed;
+    selected?: PickerSelectionSeed;
+    value?: PickerSelectionSeed;
+    defaultSelectedIndexes?: readonly number[];
+    selectedIndexes?: readonly number[];
+    multiple?: boolean;
+    minSelected?: number;
+    maxSelected?: number;
+    columns?: number;
+    itemMinWidth?: number;
+    aspectRatio?: string;
+    gap?: number;
+    showLabels?: boolean;
+    showType?: boolean;
+    showSelectionTools?: boolean;
+    selectAllLabel?: string;
+    clearAllLabel?: string;
+    imageLabel?: string;
+    videoLabel?: string;
+    emptyMessage?: string;
+    confirmIcon?: SvgIconName;
+    downloadLabel?: boolean;
+    dynamicConfirmLabel?: boolean;
+    countLabel?: false | string | ((state: { selected: number; total: number }) => string);
+    videoPreload?: "none" | "metadata" | "auto";
+    crossOrigin?: "" | "anonymous" | "use-credentials";
+    virtualizeAfter?: number;
+    overscanRows?: number;
+    mediaRootMargin?: string;
+    returnType?: PickerReturnType;
+    onChange?(event: PickerChangeEvent<T>): void;
+  }
+
+  interface WindowWithRodGlobals extends Window {
+    RodToaster?: ToasterApi;
+    toast?: ToasterApi;
+    RodObjectInspector?: ObjectInspectorApi;
+    ROD_OBJECT_INSPECTOR_SRC?: string;
+    [STATE_SYMBOL]?: ToasterState;
+    [HISTORY_PATCH_SYMBOL]?: boolean;
+  }
+
+  interface Palette {
+    bg: string;
+    border: string;
+    text: string;
+    accent: string;
+    icon: SvgIconName;
+  }
+
+  interface InspectorRenderOptions {
+    inspectDepth: number;
+    inspectItems: number;
+    previewItems: number;
+    showPrototype: boolean;
+    showNonEnumerable: boolean;
+    showObjectLength: boolean;
+    virtualize: boolean;
+    virtualizeAfter: number;
+    virtualRowHeight: number;
+    virtualOverscan: number;
+    virtualMaxHeight: number;
+    unmountOnCollapse: boolean;
+  }
+
+  interface ObjectInspectorRuntime {
+    render(
+      value: object,
+      documentRef: Document,
+      context: {
+        depth: number;
+        ancestors: Set<object>;
+        quoteStrings: boolean;
+        options: InspectorRenderOptions;
+      },
+    ): Node;
+    clearHighlight?(): void;
+  }
+
+  interface ObjectInspectorApi {
+    createStyle(documentRef: Document): HTMLStyleElement;
+    create(options: {
+      window: Window;
+      document: Document;
+      maxZIndex: number;
+      options: InspectorRenderOptions;
+      getHost(): { window: Window; document: Document };
+    }): ObjectInspectorRuntime;
+  }
+
+  interface ToastDismissEvent {
+    reason: string;
+    record: ToastRecord;
+    controller: ToastController;
+    scope: string | null;
+  }
+
+  interface ToastEvent extends UnknownRecord {
+    event: string;
+    timestamp: number;
+  }
+
+  type ToastEventListener = (event: ToastEvent) => void;
+
+  interface ToastActionContext {
+    action: ToastActionDescriptor;
+    controller: ToastController;
+    event: Event | null;
+    toast: ToasterApi;
+    close(value?: unknown, reason?: string): void;
+    update(next: UnknownRecord): ToastController;
+    setValidation(message: unknown): void;
+    values: UnknownRecord;
+    checked: Record<string, boolean>;
+  }
+
+  interface ToastActionDescriptor {
+    id?: string | number;
+    label?: string;
+    loadingLabel?: string;
+    successLabel?: string;
+    icon?: SvgIconName | false | null;
+    variant?: ActionVariant;
+    disabled?: boolean;
+    disabledUntilCountdown?: boolean;
+    close?: boolean;
+    keepOpen?: boolean;
+    value?: unknown;
+    shortcut?: string;
+    handle?(context: ToastActionContext): MaybePromise<unknown>;
+  }
+
+  interface NormalizedActionDescriptor {
+    id: string;
+    label: string;
+    labelTemplate: string;
+    loadingLabel: string | null;
+    successLabel: string | null;
+    icon: SvgIconName | false | null;
+    variant: ActionVariant;
+    disabled: boolean;
+    disabledUntilCountdown: boolean;
+    close: boolean;
+    keepOpen: boolean;
+    handle: ((context: ToastActionContext) => MaybePromise<unknown>) | null;
+    hasValue: boolean;
+    value: unknown;
+    shortcut: string | null;
+    raw: ToastActionDescriptor;
+  }
+
+  interface CheckboxDescriptor {
+    id?: string;
+    label?: string;
+    checked?: boolean;
+    disabled?: boolean;
+  }
+
+  interface CountdownDescriptor {
+    seconds?: number;
+    autoAction?: string;
+  }
+
+  interface ToastExpandedDescriptor {
+    /** Content rendered inside the expandable, scrollable area. */
+    content?: unknown;
+    /** Optional heading shown above the expanded content. */
+    title?: unknown;
+    /** Opens the expanded area immediately when the toast is created. */
+    defaultOpen?: boolean;
+    /** Maximum height of the inner scroll area. Defaults to min(42dvh, 360px). */
+    maxHeight?: number | string;
+  }
+
+  interface ToastOptions {
+    [OPTIONS_SYMBOL]?: true;
+    duration?: number;
+    type?: ToastType;
+    lane?: ToastLane;
+    id?: string | number | null;
+    dedupe?: boolean;
+    dedupeWindow?: number;
+    pauseOnInteraction?: boolean;
+    closeButton?: boolean;
+    role?: string;
+    swipeToDismiss?: boolean;
+    swipeThreshold?: number;
+    swipeVelocity?: number;
+    inspectDepth?: number;
+    inspectItems?: number;
+    previewItems?: number;
+    showPrototype?: boolean;
+    showNonEnumerable?: boolean;
+    showObjectLength?: boolean;
+    virtualizeInspector?: boolean;
+    virtualizeAfter?: number;
+    virtualRowHeight?: number;
+    virtualOverscan?: number;
+    virtualMaxHeight?: number;
+    unmountInspectorOnCollapse?: boolean;
+    loading?: boolean;
+    loadingState?: LoadingState;
+    title?: unknown;
+    description?: unknown;
+    icon?: ToastIcon;
+    animation?: LoadingAnimation;
+    loadingAnimation?: LoadingAnimation;
+    progress?: number | string | null;
+    progressLabel?: unknown;
+    dismissible?: boolean;
+    actions?: ToastActionDescriptor[];
+    scope?: unknown;
+    metadata?: UnknownRecord | null;
+    details?: unknown;
+    detailsLabel?: string;
+    /**
+     * Adds a side chevron that opens a scrollable content area inside the toast.
+     * The timeout is paused while this area is open or focused.
+     *
+     * Runtime shorthand is also accepted: passing any non-descriptor value is
+     * treated as `{ content: value }`.
+     */
+    expanded?: ToastExpandedDescriptor | unknown;
+    onDismiss?: ((event: ToastDismissEvent) => void) | null;
+    checkbox?: CheckboxDescriptor | string | Array<CheckboxDescriptor | string>;
+    countdown?: number | CountdownDescriptor;
+    shortcuts?: Record<string, string>;
+    dismissValue?: unknown;
+    returnMeta?: boolean;
+    validation?: unknown;
+    validationMessage?: string;
+    rejectOnActionError?: boolean;
+    copyError?: boolean;
+    copyLabel?: string;
+    error?: unknown;
+    inputLabel?: string;
+    inputType?: string;
+    value?: unknown;
+    placeholder?: string;
+    autocomplete?: AutoFill;
+    spellcheck?: boolean;
+    minLength?: number;
+    maxLength?: number;
+    required?: boolean;
+    requiredMessage?: string;
+    multiline?: boolean;
+    cancelLabel?: string;
+    confirmLabel?: string;
+    multiple?: boolean;
+    options?: readonly (SelectChoice<unknown> | unknown)[];
+    validate?(value: unknown): MaybePromise<boolean | string | undefined>;
+    actionLabel?: string;
+    actionIcon?: SvgIconName;
+    variant?: ActionVariant;
+    loadingLabel?: string;
+    successLabel?: string;
+    undo?(context: ToastActionContext): MaybePromise<unknown>;
+  }
+
+  interface SelectChoice<T = unknown> {
+    value: T;
+    label?: unknown;
+    disabled?: boolean;
+  }
+
+  interface SelectOptions<T = unknown> extends Omit<ToastOptions, "options" | "value" | "validate"> {
+    options?: readonly (SelectChoice<T> | T)[];
+    value?: T | readonly T[];
+    multiple?: boolean;
+    validate?(value: T | T[] | null): MaybePromise<boolean | string | undefined>;
+  }
+
+  interface NormalizedToastOptions {
+    type: ToastType;
+    lane: ToastLane;
+    id: string | null;
+    duration: number;
+    dedupe: boolean;
+    dedupeWindow: number;
+    pauseOnInteraction: boolean;
+    dismissible: boolean;
+    closeButton: boolean;
+    role: string;
+    swipeToDismiss: boolean;
+    swipeThreshold: number;
+    swipeVelocity: number;
+    inspectDepth: number;
+    inspectItems: number;
+    previewItems: number;
+    showPrototype: boolean;
+    showNonEnumerable: boolean;
+    showObjectLength: boolean;
+    virtualizeInspector: boolean;
+    virtualizeAfter: number;
+    virtualRowHeight: number;
+    virtualOverscan: number;
+    virtualMaxHeight: number;
+    unmountInspectorOnCollapse: boolean;
+    loading: boolean;
+    loadingState: LoadingState;
+    title: string;
+    description: string;
+    icon: Exclude<ToastIcon, null>;
+    animation: LoadingAnimation;
+    progress: number | null;
+    progressLabel: string | null;
+    scope: string | null;
+    metadata: UnknownRecord | null;
+    expanded: ToastExpandedDescriptor | null;
+    onDismiss: ((event: ToastDismissEvent) => void) | null;
+  }
+
+  interface ParsedToast {
+    args: unknown[];
+    options: ToastOptions;
+  }
+
+  interface SwipePayload {
+    dx?: number;
+    dy?: number;
+    velocityX?: number;
+    velocityY?: number;
+  }
+
+  interface ToastRecord {
+    node: HTMLDivElement;
+    options: NormalizedToastOptions;
+    args: unknown[];
+    dedupeKey: string | null;
+    createdAt: number;
+    lastSeenAt: number;
+    dismiss(immediate?: boolean, swipe?: SwipePayload | null, reason?: string): void;
+    update(nextArgs: unknown[], nextRawOptions?: ToastOptions): ToastController;
+    updateLoading(inputArgs: unknown[]): ToastController;
+    settleLoading(type: Exclude<ToastType, "default" | "debug">, inputArgs?: unknown[]): ToastController;
+    bumpDuplicate(): ToastController;
+    readonly removed: boolean;
+    dialogActions?: NormalizedActionDescriptor[];
+    externalUpdate?: (next: ToastOptions) => ToastController;
+  }
+
+  interface ToastController {
+    readonly id: string | null;
+    readonly element: HTMLDivElement;
+    readonly progress: number | null;
+    readonly state: string;
+    update(...inputArgs: unknown[]): ToastController;
+    setProgress(value: unknown, next?: ToastOptions): ToastController;
+    success(...inputArgs: unknown[]): ToastController;
+    error(...inputArgs: unknown[]): ToastController;
+    info(...inputArgs: unknown[]): ToastController;
+    warning(...inputArgs: unknown[]): ToastController;
+    dismiss(reason?: string | boolean, immediate?: boolean): void;
+    updateRich?(next?: ToastOptions): ToastController;
+  }
+
+  interface TaskSnapshot {
+    id: string;
+    title: string;
+    description: string;
+    icon: Exclude<TaskIcon, URL>;
+    status: TaskStatus;
+    progress: number | null;
+    progressLabel: string | null;
+    metadata: UnknownRecord;
+    scope: string | null;
+    createdAt: number;
+    updatedAt: number;
+    persist: boolean;
+  }
+
+  interface TaskExecutorContext {
+    task: TaskController;
+    signal: AbortSignal;
+    progress(value: unknown, next?: Partial<TaskDescriptor>): TaskController;
+    update(next?: Partial<TaskDescriptor>): TaskController;
+  }
+
+  interface TaskDescriptor {
+    id?: string;
+    key?: string;
+    toastId?: string;
+    title?: unknown;
+    description?: unknown;
+    icon?: TaskIcon;
+    status?: TaskStatus;
+    progress?: unknown;
+    progressLabel?: unknown;
+    metadata?: UnknownRecord;
+    scope?: unknown;
+    createdAt?: number;
+    updatedAt?: number;
+    restored?: boolean;
+    orphaned?: boolean;
+    persist?: boolean;
+    pausable?: boolean;
+    cancellable?: boolean;
+    cancelledTitle?: string;
+    cancelledDescription?: string;
+    actions?: ToastActionDescriptor[];
+    duration?: number;
+    pause?(context: { task: TaskController; signal: AbortSignal }): MaybePromise<void>;
+    resume?(context: { task: TaskController; signal: AbortSignal }): MaybePromise<void>;
+    cancel?(context: { task: TaskController; reason: unknown }): MaybePromise<void>;
+  }
+
+  interface TaskController {
+    readonly id: string;
+    readonly persist: boolean;
+    readonly abortController: AbortController;
+    readonly signal: AbortSignal;
+    readonly status: TaskStatus;
+    readonly progress: number | null;
+    readonly dismissed: boolean;
+    readonly element: HTMLDivElement | null;
+    controller: ToastController;
+    snapshot(): TaskSnapshot;
+    update(next?: Partial<TaskDescriptor>): TaskController;
+    start(next?: Partial<TaskDescriptor>): TaskController;
+    setProgress(value: unknown, next?: Partial<TaskDescriptor>): TaskController;
+    pause(): Promise<TaskController>;
+    resume(): Promise<TaskController>;
+    cancel(reason?: unknown): Promise<TaskController>;
+    success(next?: Partial<TaskDescriptor>): TaskController;
+    error(error: unknown, next?: Partial<TaskDescriptor>): TaskController;
+    warning(next?: Partial<TaskDescriptor>): TaskController;
+    dismiss(reason?: string, immediate?: boolean): TaskController;
+    run<T>(executor: (context: TaskExecutorContext) => Promise<T>): Promise<T>;
+  }
+
+  interface TaskGroupDescriptor {
+    id?: string;
+    parentTaskId?: string;
+    title?: string;
+    description?: string;
+    icon?: TaskIcon;
+    scope?: string;
+    metadata?: UnknownRecord;
+    persist?: boolean;
+    weights?: Record<string, number>;
+    errorTitle?: string;
+    successTitle?: string;
+    successDescription?: string;
+  }
+
+  interface TaskGroup {
+    id: string;
+    parent: TaskController;
+    children: Map<string, TaskController>;
+    weights: Map<string, number>;
+    task(keyOrDescriptor: string | TaskDescriptor, maybeDescriptor?: TaskDescriptor): TaskController | null;
+    setWeights(nextWeights?: Record<string, number>): TaskGroup;
+    recompute(): TaskGroup;
+    dismissAll(reason?: string): void;
+    complete(next?: Partial<TaskDescriptor>): TaskGroup;
+    unsubscribe?: () => void;
+  }
+
+  interface PromiseDescriptor<T = unknown> extends TaskDescriptor {
+    loading?: string | Partial<TaskDescriptor> | ((value: null) => string | Partial<TaskDescriptor>);
+    success?: string | Partial<TaskDescriptor> | ((value: T) => string | Partial<TaskDescriptor>);
+    error?: string | Partial<TaskDescriptor> | ((error: unknown) => string | Partial<TaskDescriptor>);
+  }
+
+  interface RetryDescriptor<T = unknown> extends TaskDescriptor {
+    run(context: {
+      attempt: number;
+      maxAttempts: number;
+      signal: AbortSignal;
+      task: TaskController;
+      progress(value: unknown, next?: Partial<TaskDescriptor>): TaskController;
+    }): Promise<T>;
+    maxAttempts?: number;
+    backoff?: number | number[] | ((attempt: number, error: unknown) => number);
+    success?: string | Partial<TaskDescriptor> | ((value: T) => string | Partial<TaskDescriptor>);
+    error?: string | Partial<TaskDescriptor> | ((error: unknown) => string | Partial<TaskDescriptor>);
+    retryTitle?: string;
+  }
+
+
+  type MultiLoadingItemStatus = "queued" | "loading" | "success" | "error" | "cancelled";
+
+  interface MultiLoadingItemContext {
+    id: string;
+    signal: AbortSignal;
+    controller: MultiLoadingController;
+    progress(value: unknown, next?: Partial<MultiLoadingItemDescriptor>): MultiLoadingController;
+    update(next?: Partial<MultiLoadingItemDescriptor>): MultiLoadingController;
+  }
+
+  interface MultiLoadingItemDescriptor {
+    id?: string | number;
+    title?: unknown;
+    description?: unknown;
+    icon?: TaskIcon;
+    status?: MultiLoadingItemStatus;
+    progress?: unknown;
+    progressLabel?: unknown;
+    cancellable?: boolean;
+    metadata?: UnknownRecord;
+    error?: unknown;
+    retry?: ((context: MultiLoadingItemContext) => MaybePromise<unknown>) | null;
+    cancel?: ((context: MultiLoadingItemContext & { reason: unknown }) => MaybePromise<void>) | null;
+  }
+
+  interface MultiLoadingDescriptor extends ToastOptions {
+    items?: readonly MultiLoadingItemDescriptor[];
+    maxHeight?: number | string;
+    viewportRatio?: number;
+    successDuration?: number;
+    successMorphDelay?: number;
+    successFadeDuration?: number;
+    cancelledDuration?: number;
+    autoDismiss?: boolean;
+    cancelAllLabel?: string;
+    emptyLabel?: string;
+    showSummary?: boolean;
+    cancellable?: boolean;
+    onItemSuccess?(item: MultiLoadingItemSnapshot): void;
+    onItemError?(item: MultiLoadingItemSnapshot): void;
+    onItemCancel?(item: MultiLoadingItemSnapshot): void;
+  }
+
+  interface MultiLoadingItemSnapshot {
+    id: string;
+    title: string;
+    description: string;
+    status: MultiLoadingItemStatus;
+    progress: number | null;
+    progressLabel: string | null;
+    metadata: UnknownRecord;
+    error: unknown;
+  }
+
+  interface MultiLoadingController {
+    readonly id: string | null;
+    readonly element: HTMLDivElement;
+    readonly size: number;
+    readonly activeCount: number;
+    readonly errorCount: number;
+    readonly successCount: number;
+    add(descriptor?: MultiLoadingItemDescriptor): MultiLoadingController;
+    update(id: string | number, next?: Partial<MultiLoadingItemDescriptor>): MultiLoadingController;
+    progress(id: string | number, value: unknown, next?: Partial<MultiLoadingItemDescriptor>): MultiLoadingController;
+    success(id: string | number, next?: Partial<MultiLoadingItemDescriptor>): MultiLoadingController;
+    error(id: string | number, error: unknown, next?: Partial<MultiLoadingItemDescriptor>): MultiLoadingController;
+    retry(id: string | number): Promise<MultiLoadingController>;
+    cancel(id: string | number, reason?: unknown): Promise<MultiLoadingController>;
+    cancelAll(reason?: unknown): Promise<MultiLoadingController>;
+    remove(id: string | number, immediate?: boolean): MultiLoadingController;
+    clearCompleted(immediate?: boolean): MultiLoadingController;
+    get(id: string | number): MultiLoadingItemSnapshot | null;
+    getItems(): MultiLoadingItemSnapshot[];
+    run<T>(id: string | number, executor: (context: MultiLoadingItemContext) => Promise<T>): Promise<T>;
+    dismiss(reason?: string, immediate?: boolean): void;
+  }
+
+  interface ScopeApi {
+    name: string;
+    show(...args: unknown[]): ToastController | null;
+    error(...args: unknown[]): ToastController | null;
+    info(...args: unknown[]): ToastController | null;
+    success(...args: unknown[]): ToastController | null;
+    warning(...args: unknown[]): ToastController | null;
+    loading(descriptor?: ToastOptions): ToastController | null;
+    multiLoading(descriptor?: MultiLoadingDescriptor): MultiLoadingController | null;
+    confirm(descriptor?: ToastOptions): Promise<unknown>;
+    prompt(descriptor?: ToastOptions): Promise<unknown>;
+    select<T = unknown>(descriptor?: SelectOptions<T>): Promise<T | T[] | null>;
+    picker<T extends PickerSource = PickerSource>(descriptor?: PickerOptions<T>): Promise<PickerResult<T>>;
+    undo(descriptor?: ToastOptions): Promise<unknown>;
+    task(descriptor?: TaskDescriptor): TaskController | null;
+    promise<T>(input: Promise<T> | ((context: TaskExecutorContext & { toast: ToasterApi }) => Promise<T>), descriptor?: PromiseDescriptor<T>): Promise<T>;
+    retry<T>(descriptor: RetryDescriptor<T>): Promise<T>;
+    group(descriptor?: TaskGroupDescriptor): TaskGroup;
+    dismissAll(immediate?: boolean): void;
+    getTasks(): TaskController[];
+    minimize(): boolean;
+    restore(): boolean;
+  }
+
+  interface ToasterConfig {
+    duration: number;
+    debugDuration: number;
+    shouldDebug: boolean | ((...args: unknown[]) => boolean);
+    downloadFallback: ((...args: unknown[]) => unknown) | null;
+    maxToasts: number;
+    dedupe: boolean;
+    dedupeWindow: number;
+    pauseOnInteraction: boolean;
+    closeButton: boolean;
+    position: ToastPosition;
+    theme: Theme;
+    size: ToastSize;
+    stacked: boolean;
+    stackVisible: number;
+    stackMaxHeight: number;
+    stackViewportRatio: number;
+    stackAutoCollapseThreshold: number;
+    stackToolbar: boolean;
+    persistAcrossSpaNavigation: boolean;
+    minimizeOnSpaNavigation: boolean;
+    /**
+     * Uses the browser Top Layer through a manual Popover when supported.
+     * This beats authored z-index values and stacking contexts.
+     */
+    useTopLayer: boolean;
+    idleHostTtl: number;
+    persistTasks: boolean;
+    taskProgressPersistInterval: number;
+    restoreTasksOnLoad: boolean;
+    taskStorage: TaskStorageName;
+    taskStorageKey: string;
+    maxPersistedTasks: number;
+    taskTerminalRetention: number;
+    successExitAnimation: boolean;
+    successCollapseDuration: number;
+    successExitDuration: number;
+    loadingDuration: number;
+    loadingAnimation: LoadingAnimation;
+    loadingIcon: SvgIconName | false;
+    loadingSuccessDuration: number;
+    loadingErrorDuration: number;
+    loadingInfoDuration: number;
+    loadingWarningDuration: number;
+    coalescePersistent: boolean;
+    swipeToDismiss: boolean;
+    swipeThreshold: number;
+    swipeVelocity: number;
+    objectInspectorSrc: string | null;
+    objectInspectorLoadTimeout: number;
+    inspectDepth: number;
+    inspectItems: number;
+    previewItems: number;
+    showPrototype: boolean;
+    showNonEnumerable: boolean;
+    showObjectLength: boolean;
+    virtualizeInspector: boolean;
+    virtualizeAfter: number;
+    virtualRowHeight: number;
+    virtualOverscan: number;
+    virtualMaxHeight: number;
+    unmountInspectorOnCollapse: boolean;
+    useShadowRoot: boolean;
+    shadowRootMode: ShadowMode;
+    fallbackToLightDom: boolean;
+  }
+
+  interface DialogStackEntry {
+    record: ToastRecord;
+    previousFocus: HTMLElement | null;
+  }
+
+  interface HostContext {
+    window: Window & typeof globalThis;
+    document: Document;
+    container: HTMLDivElement;
+    list: HTMLDivElement;
+    interactionList: HTMLDivElement;
+  }
+
+  interface ToasterState {
+    version: string;
+    api: ToasterApi | null;
+    config: ToasterConfig;
+    hostWindow: (Window & typeof globalThis) | null;
+    hostDocument: Document | null;
+    hostElement: HTMLDivElement | null;
+    shadowRoot: ShadowRoot | null;
+    renderRoot: ShadowRoot | HTMLDivElement | null;
+    hostMode: "shadow" | "light-dom" | null;
+    container: HTMLDivElement | null;
+    toasts: ToastRecord[];
+    recordsById: Map<string, ToastRecord>;
+    recordsByNode: WeakMap<Element, ToastRecord>;
+    dedupeRecords: Map<string, ToastRecord>;
+    objectIds: WeakMap<object, number>;
+    nextObjectId: number;
+    activeLoadingCount: number;
+    stackExpanded: boolean;
+    managerMinimized: boolean;
+    resolvedTheme: ResolvedTheme;
+    themeMediaQuery: MediaQueryList | null;
+    themeCleanup: (() => void) | null;
+    managerNode: HTMLButtonElement | null;
+    list: HTMLDivElement | null;
+    interactionList: HTMLDivElement | null;
+    toolbar: HTMLDivElement | null;
+    stackCountNode: HTMLDivElement | null;
+    managerCountNode: HTMLSpanElement | null;
+    listeners: Map<string, Set<ToastEventListener>>;
+    tasks: Map<string, TaskController>;
+    groups: Map<string, TaskGroup>;
+    dialogStack: DialogStackEntry[];
+    failedImageKeys: Set<string>;
+    restoredTasks: boolean;
+    outsidePointerDownHandler: ((event: PointerEvent) => void) | null;
+    inspectorPromise: Promise<ObjectInspectorApi> | null;
+    inspectorApi: ObjectInspectorApi | null;
+    inspectorRuntime: ObjectInspectorRuntime | null;
+    inspectorStyle: HTMLStyleElement | null;
+    spaObserver: MutationObserver | null;
+    spaCleanup: (() => void) | null;
+    hostRepairFrame: number | null;
+    historyRestore: (() => void) | null;
+    topLayerActive: boolean;
+    topLayerObserver: MutationObserver | null;
+    topLayerCleanup: (() => void) | null;
+    taskPersistTimer: number | null;
+    taskPersistLastAt: number;
+    idleDestroyTimer: number | null;
+    destroying: boolean;
+  }
+
+  interface ToasterApi {
+    (...args: unknown[]): ToastController | null;
+    error(...args: unknown[]): ToastController | null;
+    info(...args: unknown[]): ToastController | null;
+    success(...args: unknown[]): ToastController | null;
+    warning(...args: unknown[]): ToastController | null;
+    message(descriptor?: ToastOptions): ToastController | null;
+    copyError(error: unknown, options?: ToastOptions): ToastController | null;
+    loading(...args: unknown[]): ToastController | null;
+    multiLoading(descriptor?: MultiLoadingDescriptor): MultiLoadingController | null;
+    confirm(descriptor?: ToastOptions): Promise<unknown>;
+    prompt(descriptor?: ToastOptions): Promise<unknown>;
+    select<T = unknown>(descriptor?: SelectOptions<T>): Promise<T | T[] | null>;
+    picker<T extends PickerSource = PickerSource>(descriptor?: PickerOptions<T>): Promise<PickerResult<T>>;
+    undo(descriptor?: ToastOptions): Promise<unknown>;
+    task(descriptor?: TaskDescriptor): TaskController | null;
+    promise<T>(input: Promise<T> | ((context: TaskExecutorContext & { toast: ToasterApi }) => Promise<T>), descriptor?: PromiseDescriptor<T>): Promise<T>;
+    retry<T>(descriptor: RetryDescriptor<T>): Promise<T>;
+    group(descriptor?: TaskGroupDescriptor): TaskGroup;
+    scope(name: string, defaults?: ToastOptions): ScopeApi;
+    debug(...args: unknown[]): ToastController | null;
+    inspect(...args: unknown[]): ToastController | null;
+    options(options?: ToastOptions): ToastOptions;
+    with(options?: ToastOptions): (...args: unknown[]) => ToastController | null;
+    update(id: string | number, ...inputArgs: unknown[]): ToastController | null;
+    progress(id: string | number, value: unknown, next?: ToastOptions): ToastController | null;
+    resolve(id: string | number, type?: Exclude<ToastType, "default" | "debug">, ...inputArgs: unknown[]): ToastController | null;
+    dismiss(target?: string | number | ToastController | null, reason?: string, immediate?: boolean): boolean;
+    dismissAll(immediate?: boolean): void;
+    on(eventName: string, listener: ToastEventListener): () => void;
+    off(eventName: string, listener: ToastEventListener): boolean;
+    once(eventName: string, listener: ToastEventListener): () => void;
+    emit(eventName: string, payload?: UnknownRecord): ToastEvent;
+    getTasks(): TaskController[];
+    getTask(id: string | number): TaskController | null;
+    restoreTasks(): TaskController[];
+    clearPersistedTasks(): void;
+    expand(): void;
+    collapse(): void;
+    minimize(): boolean;
+    restore(): boolean;
+    toggleMinimized(): boolean;
+    isMinimized(): boolean;
+    toggleStack(): boolean;
+    loadInspector(): Promise<ObjectInspectorApi>;
+    configure(nextConfig?: Partial<ToasterConfig>): ToasterConfig & { resolvedTheme: ResolvedTheme };
+    setTheme(theme: Theme): ResolvedTheme;
+    getTheme(): { theme: Theme; resolvedTheme: ResolvedTheme };
+    setSize(size: ToastSize): ToastSize;
+    getSize(): ToastSize;
+    toggleTheme(): ResolvedTheme;
+    getConfig(): ToasterConfig & { resolvedTheme: ResolvedTheme };
+    getHostMode(): "shadow" | "light-dom" | null;
+    bringToFront(): boolean;
+    isTopLayer(): boolean;
+    destroy(reason?: string): void;
+    noConflict(): ToasterApi;
+    repairHost(): HTMLDivElement | null;
+    readonly version: string;
+    readonly objectInspector: ObjectInspectorApi | null;
+  }
+
+  const TOAST_COLORS: Record<ToastType, Palette> = {
+    default: { bg: "rgba(23,23,23,.985)", border: "rgba(255,255,255,.11)", text: "rgba(232,232,232,.96)", accent: "rgba(244,244,245,.9)", icon: "circle" },
+    error: { bg: "rgba(23,23,23,.985)", border: "rgba(251,113,133,.2)", text: "rgba(244,244,245,.96)", accent: "rgba(251,154,166,.98)", icon: "circle-x" },
+    info: { bg: "rgba(23,23,23,.985)", border: "rgba(186,230,253,.16)", text: "rgba(244,244,245,.96)", accent: "rgba(186,230,253,.96)", icon: "info" },
+    success: { bg: "rgba(23,23,23,.985)", border: "rgba(255,255,255,.12)", text: "rgba(244,244,245,.96)", accent: "rgba(250,250,250,.98)", icon: "check" },
+    warning: { bg: "rgba(23,23,23,.985)", border: "rgba(250,204,21,.2)", text: "rgba(244,244,245,.96)", accent: "rgba(250,212,119,.98)", icon: "triangle-alert" },
+    debug: { bg: "rgba(23,23,23,.985)", border: "rgba(255,255,255,.11)", text: "rgba(232,232,232,.96)", accent: "rgba(212,212,216,.94)", icon: "terminal" },
+  };
+
+  const LIGHT_TOAST_COLORS: Record<ToastType, Omit<Palette, "icon">> = {
+    default: { bg: "rgba(255,255,255,.985)", border: "rgba(24,24,27,.11)", text: "rgba(39,39,42,.94)", accent: "rgba(39,39,42,.84)" },
+    error: { bg: "rgba(255,255,255,.985)", border: "rgba(190,18,60,.16)", text: "rgba(39,39,42,.96)", accent: "rgba(190,18,60,.94)" },
+    info: { bg: "rgba(255,255,255,.985)", border: "rgba(3,105,161,.15)", text: "rgba(39,39,42,.96)", accent: "rgba(3,105,161,.9)" },
+    success: { bg: "rgba(255,255,255,.985)", border: "rgba(24,24,27,.12)", text: "rgba(39,39,42,.96)", accent: "rgba(24,24,27,.94)" },
+    warning: { bg: "rgba(255,255,255,.985)", border: "rgba(161,98,7,.17)", text: "rgba(39,39,42,.96)", accent: "rgba(161,98,7,.94)" },
+    debug: { bg: "rgba(255,255,255,.985)", border: "rgba(24,24,27,.11)", text: "rgba(39,39,42,.94)", accent: "rgba(63,63,70,.86)" },
+  };
+
+  const LIGHT_PALETTES = Object.fromEntries(
+    (Object.keys(TOAST_COLORS) as ToastType[]).map((type) => [
+      type,
+      { ...TOAST_COLORS[type], ...LIGHT_TOAST_COLORS[type] },
+    ]),
+  ) as Record<ToastType, Palette>;
+
+  const THEME_TOAST_COLORS: Record<ResolvedTheme, Record<ToastType, Palette>> = {
+    dark: TOAST_COLORS,
+    light: LIGHT_PALETTES,
+  };
+
+  const SVG_TEMPLATE_CACHE = new WeakMap<Document, Map<string, SVGSVGElement>>();
+
+  const SVG_ICONS = {
+    circle: `<circle cx="12" cy="12" r="7.5"></circle>`,
+    "circle-x": `<circle cx="12" cy="12" r="9"></circle><path d="m9 9 6 6"></path><path d="m15 9-6 6"></path>`,
+    info: `<circle cx="12" cy="12" r="9"></circle><path d="M12 11v5"></path><path d="M12 8h.01"></path>`,
+    check: `<path class="rod-icon-check-path" d="m6.5 12.5 3.25 3.25L17.5 8"></path>`,
+    "triangle-alert": `<path d="M10.3 3.8 2.4 18a2 2 0 0 0 1.75 3h15.7a2 2 0 0 0 1.75-3L13.7 3.8a2 2 0 0 0-3.4 0Z"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path>`,
+    terminal: `<path d="m7 8 4 4-4 4"></path><path d="M13 16h4"></path>`,
+    x: `<path d="M6 6l12 12"></path><path d="M18 6 6 18"></path>`,
+    "chevron-down": `<path d="m6 9 6 6 6-6"></path>`,
+    "chevrons-up": `<path d="m17 11-5-5-5 5"></path><path d="m17 18-5-5-5 5"></path>`,
+    "x-circle": `<circle cx="12" cy="12" r="9"></circle><path d="m9 9 6 6"></path><path d="m15 9-6 6"></path>`,
+    "loader-circle": `<path d="M21 12a9 9 0 1 1-6.22-8.56"></path>`,
+    download: `<path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path>`,
+    upload: `<path d="M12 21V9"></path><path d="m7 14 5-5 5 5"></path><path d="M5 3h14"></path>`,
+    refresh: `<path d="M20 11a8 8 0 1 0 2 5"></path><path d="M20 4v7h-7"></path>`,
+    clock: `<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>`,
+    sparkles: `<path d="m12 3-1.1 2.9L8 7l2.9 1.1L12 11l1.1-2.9L16 7l-2.9-1.1Z"></path><path d="m19 13-.7 1.8-1.8.7 1.8.7L19 18l.7-1.8 1.8-.7-1.8-.7Z"></path><path d="m5 14-.8 2.2L2 17l2.2.8L5 20l.8-2.2L8 17l-2.2-.8Z"></path>`,
+    history: `<path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path><path d="M12 7v5l3 2"></path>`,
+    send: `<path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path>`,
+    copy: `<rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>`,
+    pause: `<path d="M9 5v14"></path><path d="M15 5v14"></path>`,
+    play: `<path d="m8 5 11 7-11 7Z"></path>`,
+    image: `<rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="8.5" cy="9" r="1.5"></circle><path d="m21 15-5-5L5 20"></path>`,
+    square: `<rect x="5" y="5" width="14" height="14" rx="2"></rect>`,
+    list: `<path d="M8 6h13"></path><path d="M8 12h13"></path><path d="M8 18h13"></path><path d="M3 6h.01"></path><path d="M3 12h.01"></path><path d="M3 18h.01"></path>`,
+    folder: `<path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3Z"></path>`,
+    eye: `<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle>`,
+    trash: `<path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="m19 6-1 15H6L5 6"></path><path d="M10 11v5"></path><path d="M14 11v5"></path>`,
+    undo: `<path d="M9 7 4 12l5 5"></path><path d="M20 17a7 7 0 0 0-7-7H4"></path>`,
+    settings: `<circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1V21H9.6v-.09a1.7 1.7 0 0 0-1.1-1.55 1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1-.4H3V9.6h.09a1.7 1.7 0 0 0 1.55-1.1 1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1V3h4v.09a1.7 1.7 0 0 0 1.1 1.55 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.15.36.36.7.6 1 .27.3.63.5 1 .6h.09v4H21a1.7 1.7 0 0 0-1.6.4Z"></path>`,
+  } as const;
+
+  const DEFAULT_CONFIG: ToasterConfig = {
+    duration: 15_000,
+    debugDuration: 0,
+    shouldDebug: true,
+    downloadFallback: globalWindow.console?.debug?.bind(globalWindow.console) ?? globalWindow.console?.log?.bind(globalWindow.console) ?? null,
+    maxToasts: 20,
+    dedupe: true,
+    dedupeWindow: 1000,
+    pauseOnInteraction: true,
+    closeButton: true,
+    position: "top-center",
+    theme: "auto",
+    size: "compact",
+    stacked: true,
+    stackVisible: 3,
+    stackMaxHeight: 520,
+    stackViewportRatio: 0.48,
+    stackAutoCollapseThreshold: 6,
+    stackToolbar: true,
+    persistAcrossSpaNavigation: true,
+    minimizeOnSpaNavigation: true,
+    useTopLayer: true,
+    idleHostTtl: 0,
+    persistTasks: false,
+    taskProgressPersistInterval: 900,
+    restoreTasksOnLoad: true,
+    taskStorage: "sessionStorage",
+    taskStorageKey: "__rod_super_toaster_tasks_v1__",
+    maxPersistedTasks: 50,
+    taskTerminalRetention: 86_400_000,
+    successExitAnimation: true,
+    successCollapseDuration: 360,
+    successExitDuration: 220,
+    loadingDuration: 0,
+    loadingAnimation: "spinner",
+    loadingIcon: "loader-circle",
+    loadingSuccessDuration: 1400,
+    loadingErrorDuration: 7000,
+    loadingInfoDuration: 4000,
+    loadingWarningDuration: 6000,
+    coalescePersistent: true,
+    swipeToDismiss: true,
+    swipeThreshold: 72,
+    swipeVelocity: 0.45,
+    objectInspectorSrc: null,
+    objectInspectorLoadTimeout: 15_000,
+    inspectDepth: 80,
+    inspectItems: 1000,
+    previewItems: 30,
+    showPrototype: false,
+    showNonEnumerable: false,
+    showObjectLength: false,
+    virtualizeInspector: true,
+    virtualizeAfter: 60,
+    virtualRowHeight: 24,
+    virtualOverscan: 8,
+    virtualMaxHeight: 360,
+    unmountInspectorOnCollapse: true,
+    useShadowRoot: true,
+    shadowRootMode: "closed",
+    fallbackToLightDom: true,
+  };
+
+  const TOAST_OPTION_KEY_LIST = [
+    "duration", "type", "lane", "id", "dedupe", "dedupeWindow", "pauseOnInteraction",
+    "closeButton", "role", "swipeToDismiss", "swipeThreshold", "swipeVelocity",
+    "inspectDepth", "inspectItems", "previewItems", "showPrototype", "showNonEnumerable",
+    "showObjectLength", "virtualizeInspector", "virtualizeAfter", "virtualRowHeight",
+    "virtualOverscan", "virtualMaxHeight", "unmountInspectorOnCollapse", "loading",
+    "loadingState", "title", "description", "icon", "animation", "loadingAnimation",
+    "progress", "progressLabel", "dismissible", "actions", "scope", "metadata", "details",
+    "detailsLabel", "expanded", "onDismiss", "checkbox", "countdown", "shortcuts", "dismissValue",
+    "returnMeta", "validation", "validationMessage", "rejectOnActionError", "copyError",
+    "copyLabel", "error", "inputLabel", "inputType", "value", "placeholder", "autocomplete",
+    "spellcheck", "minLength", "maxLength", "required", "requiredMessage", "multiline",
+    "cancelLabel", "confirmLabel", "multiple", "options", "actionLabel", "actionIcon",
+    "variant", "loadingLabel", "successLabel", "undo",
+  ] as const;
+
+  const OPTION_KEYS = new Set<string>(TOAST_OPTION_KEY_LIST);
+  const LOADING_DESCRIPTOR_KEYS = OPTION_KEYS;
+
+  const ALLOWED_LOADING_ANIMATIONS = new Set<LoadingAnimation>(["spinner", "pulse", "progress", "none"]);
+  const ALLOWED_POSITIONS = new Set<ToastPosition>([
+    "top-center", "top-left", "top-right", "bottom-center", "bottom-left", "bottom-right",
+  ]);
+  const ALLOWED_SIZES = new Set<ToastSize>(["compact", "comfortable", "large"]);
+  const ALLOWED_ACTION_VARIANTS = new Set<ActionVariant>(["primary", "secondary", "danger", "ghost"]);
+  const ALLOWED_TASK_STATUSES = new Set<TaskStatus>(["queued", "running", "paused", "success", "error", "warning", "cancelled"]);
+
+  function hasOwn<T extends object, K extends PropertyKey>(object: T, key: K): key is K & keyof T {
+    return Object.prototype.hasOwnProperty.call(object, key);
+  }
+
+  function safeCall<T>(callback: () => T, fallback: T): T {
+    try {
+      return callback();
+    } catch {
+      return fallback;
     }
+  }
 
-    * {
-      box-sizing: border-box;
-    }
+  function clamp(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
+  }
 
-    html {
-      scroll-behavior: smooth;
-      background: var(--page-bg);
-    }
+  function isObject(value: unknown): value is object {
+    return (typeof value === "object" && value !== null) || typeof value === "function";
+  }
 
-    body {
-      min-width: 0;
-      min-height: 100dvh;
-      margin: 0;
-      overflow-x: hidden;
-      color: var(--text);
-      background:
-        radial-gradient(circle at 8% 4%, rgba(163, 255, 117, 0.11), transparent 30rem),
-        radial-gradient(circle at 90% 6%, rgba(120, 215, 255, 0.11), transparent 32rem),
-        radial-gradient(circle at 50% 82%, rgba(198, 167, 255, 0.07), transparent 36rem),
-        var(--page-bg);
-      font-family: var(--font-sans);
-      line-height: 1.55;
-      text-rendering: optimizeLegibility;
-      -webkit-font-smoothing: antialiased;
-    }
+  function isDomNode(value: unknown): value is Node {
+    return isObject(value) && "nodeType" in value && typeof (value as { cloneNode?: unknown }).cloneNode === "function";
+  }
 
-    button,
-    input,
-    select,
-    textarea {
-      font: inherit;
-    }
+  function isElementLike(value: unknown): value is Element {
+    return isDomNode(value) && typeof (value as { matches?: unknown }).matches === "function";
+  }
 
-    button,
-    a {
-      -webkit-tap-highlight-color: transparent;
-    }
+  function isInputElement(value: unknown): value is HTMLInputElement {
+    return isElementLike(value) && String((value as Element).tagName).toUpperCase() === "INPUT";
+  }
 
-    a {
-      color: inherit;
-    }
+  function isImageElement(value: unknown): value is HTMLImageElement {
+    return isElementLike(value) && String((value as Element).tagName).toUpperCase() === "IMG";
+  }
 
-    ::selection {
-      color: #071006;
-      background: var(--accent);
-    }
+  function isUrlObject(value: unknown): value is URL {
+    return isObject(value) &&
+      typeof (value as { href?: unknown }).href === "string" &&
+      safeCall(() => Object.prototype.toString.call(value) === "[object URL]", false);
+  }
 
-    .ambient-grid {
-      position: fixed;
-      inset: 0;
-      z-index: -2;
-      pointer-events: none;
-      background-image:
-        linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-      background-size: 34px 34px;
-      mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), transparent 92%);
-    }
+  function isToastImageIconDescriptor(value: unknown): value is ToastImageIconDescriptor {
+    return isPlainObject(value) && (
+      typeof value.src === "string" ||
+      isUrlObject(value.src)
+    );
+  }
 
-    .ambient-noise {
-      position: fixed;
-      inset: 0;
-      z-index: -1;
-      pointer-events: none;
-      opacity: 0.17;
-      background-image:
-        url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.92' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.22'/%3E%3C/svg%3E");
-      mix-blend-mode: soft-light;
-    }
+  function looksLikeImageSource(value: string): boolean {
+    const source = value.trim();
+    if (!source) return false;
+    return (
+      /^(?:https?:|blob:|data:image\/|file:)/i.test(source) ||
+      /^(?:\/|\.\.?\/)/.test(source) ||
+      /\.(?:avif|bmp|gif|heic|heif|ico|jpe?g|png|svg|webp)(?:[?#].*)?$/i.test(source)
+    );
+  }
 
-    .shell {
-      width: min(100%, var(--content-width));
-      margin-inline: auto;
-      padding: 18px;
-    }
+  function isUnknownRecord(value: unknown): value is UnknownRecord {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
 
-    .topbar {
-      position: sticky;
-      top: 12px;
-      z-index: 30;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      width: min(calc(100% - 36px), var(--content-width));
-      min-height: 58px;
-      margin: 12px auto 0;
-      padding: 8px 10px 8px 14px;
-      border: 1px solid var(--border);
-      border-radius: 18px;
-      background: rgba(9, 9, 11, 0.78);
-      box-shadow: 0 14px 38px rgba(0, 0, 0, 0.28);
-      backdrop-filter: blur(24px) saturate(1.25);
-      -webkit-backdrop-filter: blur(24px) saturate(1.25);
-    }
+  function isPlainObject(value: unknown): value is UnknownRecord {
+    if (!isUnknownRecord(value)) return false;
+    const prototype = safeCall(() => Object.getPrototypeOf(value), null);
+    return prototype === Object.prototype || prototype === null;
+  }
 
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      min-width: 0;
-      text-decoration: none;
-    }
+  function normalizeExpandedDescriptor(value: unknown): ToastExpandedDescriptor | null {
+    if (value === undefined || value === null || value === false) return null;
 
-    .brand-mark {
-      position: relative;
-      display: grid;
-      place-items: center;
-      width: 36px;
-      height: 36px;
-      flex: 0 0 36px;
-      border: 1px solid rgba(163, 255, 117, 0.18);
-      border-radius: 12px;
-      background:
-        radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.34), transparent 22%),
-        linear-gradient(145deg, rgba(163, 255, 117, 0.2), rgba(120, 215, 255, 0.08));
-      color: var(--accent);
-      box-shadow:
-        0 0 0 5px rgba(163, 255, 117, 0.025),
-        0 12px 26px rgba(0, 0, 0, 0.3);
-    }
-
-    .brand-mark::after {
-      content: "";
-      width: 13px;
-      height: 13px;
-      border: 2px solid currentColor;
-      border-top-color: transparent;
-      border-radius: 50%;
-      animation: brand-spin 1.1s linear infinite;
-    }
-
-    @keyframes brand-spin {
-      to {
-        transform: rotate(360deg);
+    if (isPlainObject(value)) {
+      const descriptorKeys = ["content", "title", "defaultOpen", "maxHeight"] as const;
+      if (descriptorKeys.some((key) => hasOwn(value, key))) {
+        return {
+          content: value.content,
+          title: value.title,
+          defaultOpen: Boolean(value.defaultOpen),
+          maxHeight: typeof value.maxHeight === "number" || typeof value.maxHeight === "string"
+            ? value.maxHeight
+            : undefined,
+        };
       }
     }
 
-    .brand-copy {
-      min-width: 0;
-    }
-
-    .brand-title {
-      display: block;
-      overflow: hidden;
-      font-weight: 780;
-      letter-spacing: -0.025em;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .brand-subtitle {
-      display: block;
-      overflow: hidden;
-      color: var(--muted);
-      font: 600 10px/1.3 var(--font-mono);
-      letter-spacing: 0.02em;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .topbar-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .status-pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      min-height: 34px;
-      padding: 0 11px;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      color: var(--muted);
-      background: rgba(255, 255, 255, 0.035);
-      font: 650 11px/1 var(--font-mono);
-      white-space: nowrap;
-    }
-
-    .status-dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--warning);
-      box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.08);
-    }
-
-    .status-pill[data-state="ready"] .status-dot {
-      background: var(--success);
-      box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.08);
-    }
-
-    .status-pill[data-state="error"] .status-dot {
-      background: var(--danger);
-      box-shadow: 0 0 0 4px rgba(251, 113, 133, 0.08);
-    }
-
-    .button {
-      appearance: none;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      min-height: 38px;
-      padding: 0 13px;
-      border: 1px solid var(--border);
-      border-radius: 11px;
-      outline: none;
-      color: var(--text-soft);
-      background: rgba(255, 255, 255, 0.045);
-      font-size: 12px;
-      font-weight: 720;
-      text-decoration: none;
-      cursor: pointer;
-      transition:
-        transform 160ms ease,
-        border-color 160ms ease,
-        background-color 160ms ease,
-        color 160ms ease;
-    }
-
-    .button:hover,
-    .button:focus-visible {
-      border-color: var(--border-strong);
-      color: var(--text);
-      background: rgba(255, 255, 255, 0.075);
-      transform: translateY(-1px);
-    }
-
-    .button:focus-visible {
-      outline: 2px solid rgba(163, 255, 117, 0.38);
-      outline-offset: 2px;
-    }
-
-    .button:active {
-      transform: translateY(0);
-    }
-
-    .button-primary {
-      border-color: rgba(163, 255, 117, 0.44);
-      color: #071006;
-      background: var(--accent);
-    }
-
-    .button-primary:hover,
-    .button-primary:focus-visible {
-      border-color: var(--accent);
-      color: #071006;
-      background: #b8ff96;
-    }
-
-    .button-ghost {
-      border-color: transparent;
-      background: transparent;
-    }
-
-    .button-danger {
-      border-color: rgba(251, 113, 133, 0.26);
-      color: #fecdd3;
-      background: rgba(251, 113, 133, 0.08);
-    }
-
-    .icon {
-      width: 16px;
-      height: 16px;
-      fill: none;
-      stroke: currentColor;
-      stroke-width: 2;
-      stroke-linecap: round;
-      stroke-linejoin: round;
-      pointer-events: none;
-    }
-
-    .hero {
-      position: relative;
-      display: grid;
-      grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
-      align-items: center;
-      gap: clamp(28px, 6vw, 88px);
-      min-height: min(820px, calc(100dvh - 86px));
-      padding: clamp(70px, 10vw, 132px) 22px 72px;
-    }
-
-    .hero-copy {
-      max-width: 860px;
-    }
-
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      min-height: 30px;
-      padding: 0 11px;
-      border: 1px solid rgba(163, 255, 117, 0.16);
-      border-radius: 999px;
-      color: #c7ffad;
-      background: rgba(163, 255, 117, 0.06);
-      font: 700 11px/1 var(--font-mono);
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
-    }
-
-    .eyebrow::before {
-      content: "";
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--accent);
-      box-shadow: 0 0 16px rgba(163, 255, 117, 0.8);
-    }
-
-    h1,
-    h2,
-    h3,
-    p {
-      margin-top: 0;
-    }
-
-    h1 {
-      max-width: 950px;
-      margin: 24px 0 22px;
-      font-size: clamp(48px, 8.2vw, 112px);
-      font-weight: 820;
-      line-height: 0.92;
-      letter-spacing: -0.072em;
-    }
-
-    .hero-gradient {
-      color: transparent;
-      background:
-        linear-gradient(
-          110deg,
-          #ffffff 0%,
-          #e7ffd8 32%,
-          #b9f0ff 66%,
-          #d9c8ff 100%
-        );
-      background-clip: text;
-      -webkit-background-clip: text;
-    }
-
-    .hero-description {
-      max-width: 720px;
-      margin-bottom: 30px;
-      color: var(--text-soft);
-      font-size: clamp(16px, 2vw, 21px);
-      line-height: 1.58;
-      letter-spacing: -0.012em;
-    }
-
-    .hero-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-    }
-
-    .install-card {
-      position: relative;
-      overflow: hidden;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-xl);
-      background:
-        linear-gradient(155deg, rgba(255, 255, 255, 0.055), transparent 42%),
-        rgba(12, 12, 15, 0.86);
-      box-shadow: var(--shadow);
-      transform: rotate(1.2deg);
-    }
-
-    .install-card::before {
-      content: "";
-      position: absolute;
-      inset: -120px -80px auto auto;
-      width: 280px;
-      height: 280px;
-      border-radius: 50%;
-      background: rgba(120, 215, 255, 0.08);
-      filter: blur(2px);
-    }
-
-    .window-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      min-height: 48px;
-      padding: 0 15px;
-      border-bottom: 1px solid var(--border);
-      background: rgba(255, 255, 255, 0.018);
-    }
-
-    .window-dots {
-      display: flex;
-      gap: 6px;
-    }
-
-    .window-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--muted-2);
-    }
-
-    .window-dot:nth-child(1) {
-      background: #ff6b7a;
-    }
-
-    .window-dot:nth-child(2) {
-      background: #facc15;
-    }
-
-    .window-dot:nth-child(3) {
-      background: #4ade80;
-    }
-
-    .window-label {
-      color: var(--muted);
-      font: 600 10px/1 var(--font-mono);
-    }
-
-    .install-body {
-      padding: 22px;
-    }
-
-    .mini-toast {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
-      align-items: center;
-      gap: 11px;
-      margin-bottom: 22px;
-      padding: 13px;
-      border: 1px solid var(--border-strong);
-      border-radius: 14px;
-      background: rgba(9, 9, 11, 0.96);
-      box-shadow: 0 16px 38px rgba(0, 0, 0, 0.3);
-    }
-
-    .mini-toast-spinner {
-      width: 18px;
-      height: 18px;
-      border: 2px solid rgba(163, 255, 117, 0.25);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: brand-spin 0.85s linear infinite;
-    }
-
-
-    .mini-toast-image {
-      display: block;
-      width: 26px;
-      height: 26px;
-      flex: 0 0 26px;
-      aspect-ratio: 1;
-      overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 8px;
-      background:
-        linear-gradient(145deg, rgba(163, 255, 117, 0.16), rgba(120, 215, 255, 0.12)),
-        #111114;
-      object-fit: cover;
-      object-position: center;
-      box-shadow:
-        0 1px 0 rgba(255, 255, 255, 0.08) inset,
-        0 6px 16px rgba(0, 0, 0, 0.24);
-    }
-
-    .mini-toast-copy {
-      min-width: 0;
-    }
-
-    .mini-toast-title {
-      display: block;
-      font-size: 12px;
-      font-weight: 730;
-    }
-
-    .mini-toast-description {
-      display: block;
-      overflow: hidden;
-      color: var(--muted);
-      font-size: 11px;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .mini-toast-progress {
-      color: var(--accent);
-      font: 700 10px/1 var(--font-mono);
-    }
-
-    .mini-picker {
-      display: grid;
-      gap: 10px;
-      margin: -8px 0 22px;
-      padding: 12px;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      background: rgba(7, 7, 9, 0.68);
-    }
-
-    .mini-picker-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      color: var(--muted);
-      font: 650 10px/1 var(--font-mono);
-    }
-
-    .mini-picker-head strong {
-      color: var(--accent);
-      font-weight: 750;
-    }
-
-    .mini-picker-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 7px;
-    }
-
-    .mini-picker-item {
-      position: relative;
-      aspect-ratio: 1;
-      overflow: hidden;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      background:
-        radial-gradient(circle at 28% 25%, rgba(255,255,255,.22), transparent 24%),
-        linear-gradient(145deg, rgba(120, 215, 255, .28), rgba(198, 167, 255, .16) 52%, rgba(163, 255, 117, .18));
-      box-shadow: 0 8px 18px rgba(0,0,0,.18);
-    }
-
-    .mini-picker-item:nth-child(2) {
-      background:
-        radial-gradient(circle at 68% 22%, rgba(255,255,255,.2), transparent 22%),
-        linear-gradient(145deg, rgba(251, 113, 133, .28), rgba(250, 204, 21, .15));
-    }
-
-    .mini-picker-item:nth-child(3) {
-      background:
-        radial-gradient(circle at 50% 40%, rgba(255,255,255,.16), transparent 30%),
-        linear-gradient(145deg, rgba(120, 215, 255, .2), rgba(12, 12, 18, .72));
-    }
-
-    .mini-picker-item:nth-child(4) {
-      background:
-        radial-gradient(circle at 30% 70%, rgba(255,255,255,.18), transparent 30%),
-        linear-gradient(145deg, rgba(163, 255, 117, .24), rgba(120, 215, 255, .1));
-    }
-
-    .mini-picker-item::after {
-      content: "";
-      position: absolute;
-      inset: 0;
-      border-radius: inherit;
-      box-shadow: inset 0 0 0 1px transparent;
-    }
-
-    .mini-picker-item.is-selected::after {
-      box-shadow: inset 0 0 0 2px rgba(255,255,255,.9);
-    }
-
-    .mini-picker-item i,
-    .mini-picker-item b {
-      position: absolute;
-      z-index: 2;
-      display: grid;
-      place-items: center;
-      border-radius: 999px;
-      font-style: normal;
-    }
-
-    .mini-picker-item i {
-      bottom: 5px;
-      left: 5px;
-      min-width: 18px;
-      height: 18px;
-      padding: 0 5px;
-      color: #fff;
-      background: rgba(0,0,0,.46);
-      font: 700 8px/18px var(--font-mono);
-      backdrop-filter: blur(8px);
-    }
-
-    .mini-picker-item b {
-      top: 5px;
-      right: 5px;
-      width: 18px;
-      height: 18px;
-      color: #08080a;
-      background: rgba(255,255,255,.94);
-      font: 800 9px/1 var(--font-sans);
-    }
-
-    .mini-picker-item:not(.is-selected) b {
-      color: #fff;
-      background: rgba(0,0,0,.42);
-    }
-
-    .install-label {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 8px;
-      color: var(--muted);
-      font: 650 11px/1 var(--font-mono);
-    }
-
-    .code-shell {
-      position: relative;
-      overflow: hidden;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      background: rgba(5, 5, 7, 0.92);
-    }
-
-    pre {
-      margin: 0;
-      overflow: auto;
-      padding: 17px;
-      color: rgba(228, 228, 231, 0.9);
-      font: 12px/1.65 var(--font-mono);
-      tab-size: 2;
-      scrollbar-width: thin;
-      scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
-    }
-
-    code {
-      font-family: var(--font-mono);
-    }
-
-    .code-comment {
-      color: #71717a;
-    }
-
-    .code-keyword {
-      color: #c4b5fd;
-    }
-
-    .code-string {
-      color: #fdba74;
-    }
-
-    .code-call {
-      color: #93c5fd;
-    }
-
-    .code-number {
-      color: #bef264;
-    }
-
-    .layout {
-      display: grid;
-      grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-      align-items: start;
-      gap: 24px;
-      padding: 34px 0 90px;
-    }
-
-    .sidebar {
-      position: sticky;
-      top: 88px;
-      max-height: calc(100dvh - 106px);
-      overflow: auto;
-      padding: 13px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      background: rgba(11, 11, 14, 0.7);
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-      scrollbar-width: thin;
-      scrollbar-color: rgba(255, 255, 255, 0.13) transparent;
-    }
-
-    .sidebar-title {
-      margin: 4px 8px 10px;
-      color: var(--muted-2);
-      font: 700 10px/1 var(--font-mono);
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    .sidebar-list {
-      display: grid;
-      gap: 3px;
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-
-    .sidebar-link {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      min-height: 38px;
-      padding: 0 10px;
-      border-radius: 10px;
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 650;
-      text-decoration: none;
-      transition:
-        color 140ms ease,
-        background-color 140ms ease;
-    }
-
-    .sidebar-link:hover,
-    .sidebar-link[data-active="true"] {
-      color: var(--text);
-      background: rgba(255, 255, 255, 0.055);
-    }
-
-    .sidebar-count {
-      min-width: 24px;
-      padding: 3px 6px;
-      border-radius: 999px;
-      color: var(--muted-2);
-      background: rgba(255, 255, 255, 0.04);
-      font: 650 9px/1 var(--font-mono);
-      text-align: center;
-    }
-
-    .content {
-      min-width: 0;
-    }
-
-    .catalog-head {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(260px, 420px);
-      align-items: end;
-      gap: 24px;
-      margin-bottom: 26px;
-      padding: 5px 2px;
-    }
-
-    .catalog-head h2 {
-      margin-bottom: 9px;
-      font-size: clamp(30px, 4.2vw, 58px);
-      line-height: 1;
-      letter-spacing: -0.055em;
-    }
-
-    .catalog-head p {
-      max-width: 680px;
-      margin-bottom: 0;
-      color: var(--muted);
-    }
-
-    .search-wrap {
-      position: relative;
-    }
-
-    .search-wrap .icon {
-      position: absolute;
-      top: 50%;
-      left: 13px;
-      color: var(--muted-2);
-      transform: translateY(-50%);
-      pointer-events: none;
-    }
-
-    .search {
-      width: 100%;
-      height: 44px;
-      padding: 0 14px 0 40px;
-      border: 1px solid var(--border);
-      border-radius: 13px;
-      outline: none;
-      color: var(--text);
-      background: rgba(255, 255, 255, 0.038);
-      transition:
-        border-color 160ms ease,
-        box-shadow 160ms ease,
-        background-color 160ms ease;
-    }
-
-    .search::placeholder {
-      color: var(--muted-2);
-    }
-
-    .search:focus {
-      border-color: rgba(163, 255, 117, 0.32);
-      background: rgba(255, 255, 255, 0.052);
-      box-shadow: 0 0 0 4px rgba(163, 255, 117, 0.055);
-    }
-
-    .section {
-      scroll-margin-top: 100px;
-      margin-bottom: 52px;
-    }
-
-    .section-header {
-      display: flex;
-      align-items: end;
-      justify-content: space-between;
-      gap: 20px;
-      margin-bottom: 15px;
-      padding: 0 2px;
-    }
-
-    .section-kicker {
-      display: block;
-      margin-bottom: 5px;
-      color: var(--accent);
-      font: 700 10px/1 var(--font-mono);
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
-    .section-title {
-      margin-bottom: 0;
-      font-size: clamp(23px, 3vw, 36px);
-      line-height: 1;
-      letter-spacing: -0.04em;
-    }
-
-    .section-description {
-      max-width: 560px;
-      margin-bottom: 0;
-      color: var(--muted);
-      font-size: 13px;
-      text-align: right;
-    }
-
-    .demo-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px;
-    }
-
-    .demo-card {
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      min-width: 0;
-      overflow: hidden;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      background:
-        linear-gradient(145deg, rgba(255, 255, 255, 0.035), transparent 38%),
-        var(--surface);
-      box-shadow: 0 18px 44px rgba(0, 0, 0, 0.2);
-      transition:
-        transform 170ms ease,
-        border-color 170ms ease,
-        background-color 170ms ease;
-    }
-
-    .demo-card:hover {
-      border-color: var(--border-strong);
-      background-color: var(--surface-strong);
-      transform: translateY(-2px);
-    }
-
-    .demo-card[data-hidden="true"] {
-      display: none;
-    }
-
-    .demo-head {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
-      gap: 12px;
-      padding: 18px 18px 14px;
-    }
-
-    .demo-index {
-      display: grid;
-      place-items: center;
-      width: 32px;
-      height: 32px;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      color: var(--accent-2);
-      background: rgba(120, 215, 255, 0.055);
-      font: 700 10px/1 var(--font-mono);
-    }
-
-    .demo-copy {
-      min-width: 0;
-    }
-
-    .demo-title {
-      margin-bottom: 4px;
-      font-size: 15px;
-      line-height: 1.25;
-      letter-spacing: -0.018em;
-    }
-
-    .demo-description {
-      margin-bottom: 0;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.55;
-    }
-
-    .demo-code {
-      flex: 1;
-      min-height: 0;
-      margin: 0 12px;
-      overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, 0.065);
-      border-radius: 13px;
-      background: rgba(5, 5, 7, 0.88);
-    }
-
-    .demo-code pre {
-      max-height: 330px;
-      padding: 15px;
-      font-size: 11px;
-      line-height: 1.62;
-    }
-
-    .demo-footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 12px;
-    }
-
-    .demo-meta {
-      min-width: 0;
-      overflow: hidden;
-      color: var(--muted-2);
-      font: 650 9px/1 var(--font-mono);
-      letter-spacing: 0.04em;
-      text-overflow: ellipsis;
-      text-transform: uppercase;
-      white-space: nowrap;
-    }
-
-    .demo-actions {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      flex: 0 0 auto;
-    }
-
-    .button-small {
-      min-height: 32px;
-      padding-inline: 10px;
-      border-radius: 9px;
-      font-size: 10px;
-    }
-
-    .api-table-wrap {
-      overflow: hidden;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-lg);
-      background: var(--surface);
-    }
-
-    .api-table-scroller {
-      overflow-x: auto;
-    }
-
-    .api-table {
-      width: 100%;
-      min-width: 780px;
-      border-collapse: collapse;
-      font-size: 12px;
-    }
-
-    .api-table th,
-    .api-table td {
-      padding: 13px 15px;
-      border-bottom: 1px solid var(--border);
-      text-align: left;
-      vertical-align: top;
-    }
-
-    .api-table tr:last-child td {
-      border-bottom: 0;
-    }
-
-    .api-table th {
-      color: var(--muted-2);
-      background: rgba(255, 255, 255, 0.018);
-      font: 700 10px/1 var(--font-mono);
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-
-    .api-table code {
-      color: #d8b4fe;
-      font-size: 11px;
-    }
-
-    .api-table td:nth-child(2) {
-      color: var(--text-soft);
-    }
-
-    .api-table td:nth-child(3) {
-      color: var(--muted);
-    }
-
-    .empty-results {
-      display: none;
-      place-items: center;
-      min-height: 260px;
-      padding: 40px;
-      border: 1px dashed var(--border-strong);
-      border-radius: var(--radius-lg);
-      color: var(--muted);
-      text-align: center;
-    }
-
-    .empty-results[data-visible="true"] {
-      display: grid;
-    }
-
-    .footer {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: center;
-      gap: 24px;
-      margin-top: 42px;
-      padding: 28px 2px 46px;
-      border-top: 1px solid var(--border);
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .footer strong {
-      color: var(--text-soft);
-    }
-
-    .kbd {
-      display: inline-grid;
-      place-items: center;
-      min-width: 24px;
-      min-height: 22px;
-      padding: 2px 6px;
-      border: 1px solid var(--border-strong);
-      border-bottom-color: rgba(255, 255, 255, 0.23);
-      border-radius: 6px;
-      color: var(--text-soft);
-      background: rgba(255, 255, 255, 0.045);
-      box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
-      font: 650 10px/1 var(--font-mono);
-    }
-
-    .mobile-menu {
-      display: none;
-    }
-
-    .toast-result {
-      color: var(--accent);
-      font-weight: 700;
-    }
-
-    @media (max-width: 1080px) {
-      .hero {
-        grid-template-columns: 1fr;
-        min-height: auto;
+    return { content: value };
+  }
+
+  function isBlobLike(value: unknown): value is Blob {
+    if (!isObject(value)) return false;
+    const tag = safeCall(() => Object.prototype.toString.call(value), "");
+    return tag === "[object Blob]" || tag === "[object File]";
+  }
+
+  function toErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message || error.name;
+    return String(error);
+  }
+
+  function toErrorDetails(error: unknown): string {
+    if (error instanceof Error) return error.stack || error.message || error.name;
+    return String(error);
+  }
+
+  function safePrimitiveText(value: unknown, quoteStrings: boolean): string {
+    if (value === null) return "null";
+    if (value === undefined) return "undefined";
+    if (typeof value === "string") return quoteStrings ? JSON.stringify(value) : value;
+    if (typeof value === "bigint") return `${value}n`;
+    if (typeof value === "symbol") return safeCall(() => value.toString(), "Symbol(?)");
+    if (typeof value === "function") return `ƒ ${safeCall(() => value.name || "anonymous", "anonymous")}()`;
+    return String(value);
+  }
+
+  function normalizeProgress(value: unknown): number | null {
+    if (value === null || value === undefined || value === "") return null;
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return null;
+    return clamp(numeric > 1 ? numeric / 100 : numeric, 0, 1);
+  }
+
+  function normalizeLoadingAnimation(value: unknown): LoadingAnimation {
+    return typeof value === "string" && ALLOWED_LOADING_ANIMATIONS.has(value as LoadingAnimation)
+      ? (value as LoadingAnimation)
+      : "spinner";
+  }
+
+  function normalizeTheme(value: unknown): Theme {
+    return value === "dark" || value === "light" || value === "auto" ? value : "auto";
+  }
+
+  function normalizeToastSize(value: unknown): ToastSize {
+    return typeof value === "string" && ALLOWED_SIZES.has(value as ToastSize)
+      ? value as ToastSize
+      : "compact";
+  }
+
+  function normalizeTaskStatus(value: unknown): TaskStatus {
+    return typeof value === "string" && ALLOWED_TASK_STATUSES.has(value as TaskStatus)
+      ? (value as TaskStatus)
+      : "queued";
+  }
+
+  function normalizeImageIconDescriptor(
+    value: ToastImageIconDescriptor | URL | string | HTMLImageElement,
+  ): ToastImageIconDescriptor {
+    if (isImageElement(value)) {
+      return {
+        src: value.currentSrc || value.src,
+        alt: value.alt,
+        fit: (value.style.objectFit === "contain" ? "contain" : "cover"),
+        objectPosition: value.style.objectPosition || "center",
+        crossOrigin: value.crossOrigin === "anonymous" || value.crossOrigin === "use-credentials"
+          ? value.crossOrigin
+          : undefined,
+        referrerPolicy: (value.referrerPolicy || undefined) as ReferrerPolicy | undefined,
+        decoding: value.decoding || "async",
+        loading: value.loading || "eager",
+      };
+    }
+
+    if (typeof value === "string" || isUrlObject(value)) {
+      return { src: typeof value === "string" ? value : value.href };
+    }
+
+    return {
+      ...value,
+      src: isUrlObject(value.src) ? value.src.href : String(value.src),
+      fit: value.fit === "contain" ? "contain" : "cover",
+      objectPosition: value.objectPosition || "center",
+    };
+  }
+
+  function getImageIconDescriptor(value: unknown): ToastImageIconDescriptor | null {
+    if (isImageElement(value)) return normalizeImageIconDescriptor(value);
+    if (isToastImageIconDescriptor(value)) return normalizeImageIconDescriptor(value);
+    if (isUrlObject(value)) return normalizeImageIconDescriptor(value);
+    if (typeof value === "string" && !hasOwn(SVG_ICONS, value) && looksLikeImageSource(value)) {
+      return normalizeImageIconDescriptor(value);
+    }
+    return null;
+  }
+
+  function normalizeTaskIcon(value: TaskIcon | null | undefined, fallback: SvgIconName): Exclude<TaskIcon, URL> {
+    if (value === false) return false;
+    if (isUrlObject(value)) return value.href;
+    if (isToastImageIconDescriptor(value)) return normalizeImageIconDescriptor(value);
+    if (typeof value === "string") return value;
+    return fallback;
+  }
+
+  function iconKeyHash(value: string): string {
+    let hash = 2166136261;
+    for (let index = 0; index < value.length; index += 1) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+  }
+
+  function createImageIcon(
+    documentRef: Document,
+    descriptor: ToastImageIconDescriptor,
+  ): HTMLImageElement {
+    const normalized = normalizeImageIconDescriptor(descriptor);
+    const image = documentRef.createElement("img");
+    image.className = "rod-toast__icon-image";
+    image.alt = normalized.alt ?? "";
+    image.draggable = false;
+    image.decoding = normalized.decoding ?? "async";
+    image.loading = normalized.loading ?? "eager";
+    image.style.objectFit = normalized.fit === "contain" ? "contain" : "cover";
+    image.style.objectPosition = normalized.objectPosition || "center";
+
+    if (
+      normalized.crossOrigin === "" ||
+      normalized.crossOrigin === "anonymous" ||
+      normalized.crossOrigin === "use-credentials"
+    ) {
+      image.crossOrigin = normalized.crossOrigin;
+    }
+
+    if (normalized.referrerPolicy) {
+      image.referrerPolicy = normalized.referrerPolicy;
+    }
+
+    image.src = String(normalized.src);
+    return image;
+  }
+
+  function createSvgIcon(documentRef: Document, name: SvgIconName | string, size = 18): SVGSVGElement {
+    const iconName: SvgIconName = hasOwn(SVG_ICONS, name) ? name : "circle";
+    const normalizedSize = Math.max(1, Math.round(Number(size) || 18));
+    const cacheKey = `${iconName}:${normalizedSize}`;
+    let documentCache = SVG_TEMPLATE_CACHE.get(documentRef);
+    if (!documentCache) {
+      documentCache = new Map();
+      SVG_TEMPLATE_CACHE.set(documentRef, documentCache);
+    }
+
+    let template = documentCache.get(cacheKey);
+    if (!template) {
+      template = documentRef.createElementNS("http://www.w3.org/2000/svg", "svg");
+      template.setAttribute("viewBox", "0 0 24 24");
+      template.setAttribute("width", String(normalizedSize));
+      template.setAttribute("height", String(normalizedSize));
+      template.setAttribute("fill", "none");
+      template.setAttribute("stroke", "currentColor");
+      template.setAttribute("stroke-width", "2");
+      template.setAttribute("stroke-linecap", "round");
+      template.setAttribute("stroke-linejoin", "round");
+      template.setAttribute("aria-hidden", "true");
+      template.setAttribute("focusable", "false");
+      template.innerHTML = SVG_ICONS[iconName];
+      documentCache.set(cacheKey, template);
+    }
+
+    return template.cloneNode(true) as SVGSVGElement;
+  }
+
+  function parseLoadingInput(inputArgs: readonly unknown[], base: ToastOptions = {}): ToastOptions {
+    const args = [...inputArgs];
+    const next: ToastOptions = { ...base };
+    if (!args.length) return next;
+    const first = args.shift();
+    if (isLoadingDescriptor(first)) Object.assign(next, first);
+    else if (first !== undefined && first !== null) next.title = String(first);
+    if (args.length) {
+      const second = args.shift();
+      if (isLoadingDescriptor(second)) Object.assign(next, second);
+      else if (second !== undefined && second !== null) next.description = String(second);
+    }
+    if (args.length && isLoadingDescriptor(args[0])) Object.assign(next, args[0]);
+    return next;
+  }
+
+  function isLoadingDescriptor(value: unknown): value is ToastOptions {
+    return isPlainObject(value) && Reflect.ownKeys(value).some(
+      (key) => typeof key === "string" && LOADING_DESCRIPTOR_KEYS.has(key),
+    );
+  }
+
+  function getHighestAccessibleWindow(startWindow: Window & typeof globalThis): Window & typeof globalThis {
+    let currentWindow = startWindow;
+    while (currentWindow.parent && currentWindow.parent !== currentWindow) {
+      try {
+        const parentWindow = currentWindow.parent as Window & typeof globalThis;
+        void parentWindow.document.documentElement;
+        currentWindow = parentWindow;
+      } catch {
+        break;
+      }
+    }
+    return currentWindow;
+  }
+
+  const initialHostWindow = getHighestAccessibleWindow(globalWindow);
+  const typedGlobalWindow = globalWindow as WindowWithRodGlobals & typeof globalThis;
+  const typedInitialHostWindow = initialHostWindow as WindowWithRodGlobals & typeof globalThis;
+
+  const previousRodToaster = safeCall(() => typedInitialHostWindow[TOAST_GLOBAL] ?? null, null);
+  const previousToastGlobal = safeCall(() => typedInitialHostWindow.toast ?? null, null);
+  const existingToaster = safeCall(
+    () => typedInitialHostWindow[TOAST_GLOBAL] ?? typedGlobalWindow[TOAST_GLOBAL] ?? null,
+    null,
+  );
+
+  function isValidToaster(value: unknown): value is ToasterApi {
+    if (typeof value !== "function") return false;
+    const candidate = value as ToasterApi;
+    return (
+      typeof candidate.loading === "function" &&
+      typeof candidate.success === "function" &&
+      typeof candidate.error === "function" &&
+      typeof candidate.confirm === "function" &&
+      typeof candidate.picker === "function" &&
+      typeof candidate.multiLoading === "function" &&
+      typeof candidate.bringToFront === "function" &&
+      typeof candidate.destroy === "function"
+    );
+  }
+
+  function compareVersions(left: unknown, right: string): number {
+    const parse = (value: unknown): number[] => String(value ?? "")
+      .trim()
+      .split(/[.+-]/, 1)[0]!
+      .split(".")
+      .slice(0, 4)
+      .map((part) => {
+        const numeric = Number.parseInt(part, 10);
+        return Number.isFinite(numeric) ? numeric : 0;
+      });
+
+    const leftParts = parse(left);
+    const rightParts = parse(right);
+    const length = Math.max(leftParts.length, rightParts.length, 3);
+
+    for (let index = 0; index < length; index += 1) {
+      const leftPart = leftParts[index] ?? 0;
+      const rightPart = rightParts[index] ?? 0;
+      if (leftPart > rightPart) return 1;
+      if (leftPart < rightPart) return -1;
+    }
+    return 0;
+  }
+
+  function canReuseToaster(value: unknown): value is ToasterApi {
+    return isValidToaster(value) && compareVersions(value.version, VERSION) >= 0;
+  }
+
+  const existingState = safeCall(() => typedInitialHostWindow[STATE_SYMBOL] ?? null, null);
+
+  if (canReuseToaster(existingToaster)) {
+    typedGlobalWindow[TOAST_GLOBAL] = existingToaster;
+    typedGlobalWindow.toast = existingToaster;
+    return;
+  }
+
+  if (canReuseToaster(existingState?.api)) {
+    typedGlobalWindow[TOAST_GLOBAL] = existingState.api;
+    typedGlobalWindow.toast = existingState.api;
+    return;
+  }
+
+  function teardownLegacyRuntime(candidate: unknown): void {
+    if (!candidate || typeof candidate !== "object") return;
+    const legacy = candidate as {
+      api?: unknown;
+      spaCleanup?: (() => void) | null;
+      historyRestore?: (() => void) | null;
+      themeCleanup?: (() => void) | null;
+      topLayerCleanup?: (() => void) | null;
+      spaObserver?: MutationObserver | null;
+      topLayerObserver?: MutationObserver | null;
+      hostElement?: HTMLElement | null;
+      taskPersistTimer?: number | null;
+      hostWindow?: Window | null;
+    };
+
+    const legacyApi = legacy.api as { destroy?: (reason?: string) => void } | null | undefined;
+    if (typeof legacyApi?.destroy === "function") {
+      safeCall(() => legacyApi.destroy?.("upgrade"), undefined);
+      return;
+    }
+
+    safeCall(() => legacy.spaCleanup?.(), undefined);
+    safeCall(() => legacy.historyRestore?.(), undefined);
+    safeCall(() => legacy.themeCleanup?.(), undefined);
+    safeCall(() => legacy.topLayerCleanup?.(), undefined);
+    safeCall(() => legacy.spaObserver?.disconnect(), undefined);
+    safeCall(() => legacy.topLayerObserver?.disconnect(), undefined);
+    if (legacy.taskPersistTimer != null) {
+      safeCall(() => (legacy.hostWindow ?? initialHostWindow).clearTimeout(legacy.taskPersistTimer!), undefined);
+    }
+    safeCall(() => legacy.hostElement?.remove(), undefined);
+  }
+
+  const staleExistingToaster: unknown = existingToaster;
+  const staleStateApi: unknown = safeCall(
+    () => (existingState as { api?: unknown } | null)?.api ?? null,
+    null,
+  );
+  if (
+    isValidToaster(staleExistingToaster) &&
+    staleExistingToaster !== staleStateApi &&
+    compareVersions(staleExistingToaster.version, VERSION) < 0
+  ) {
+    safeCall(() => staleExistingToaster.destroy("upgrade"), undefined);
+  }
+
+  teardownLegacyRuntime(existingState);
+  safeCall(() => initialHostWindow.document.getElementById(TOAST_HOST_ID)?.remove(), undefined);
+  safeCall(() => { delete typedInitialHostWindow[STATE_SYMBOL]; }, undefined);
+
+  const state: ToasterState = {
+    version: VERSION,
+    api: null,
+    config: { ...DEFAULT_CONFIG },
+    hostWindow: null,
+    hostDocument: null,
+    hostElement: null,
+    shadowRoot: null,
+    renderRoot: null,
+    hostMode: null,
+    container: null,
+    toasts: [],
+    recordsById: new Map(),
+    recordsByNode: new WeakMap(),
+    dedupeRecords: new Map(),
+    objectIds: new WeakMap(),
+    nextObjectId: 1,
+    activeLoadingCount: 0,
+    stackExpanded: false,
+    managerMinimized: false,
+    resolvedTheme: "dark",
+    themeMediaQuery: null,
+    themeCleanup: null,
+    managerNode: null,
+    list: null,
+    interactionList: null,
+    toolbar: null,
+    stackCountNode: null,
+    managerCountNode: null,
+    listeners: new Map(),
+    tasks: new Map(),
+    groups: new Map(),
+    dialogStack: [],
+    failedImageKeys: new Set(),
+    restoredTasks: false,
+    outsidePointerDownHandler: null,
+    inspectorPromise: null,
+    inspectorApi: null,
+    inspectorRuntime: null,
+    inspectorStyle: null,
+    spaObserver: null,
+    spaCleanup: null,
+    hostRepairFrame: null,
+    historyRestore: null,
+    topLayerActive: false,
+    topLayerObserver: null,
+    topLayerCleanup: null,
+    taskPersistTimer: null,
+    taskPersistLastAt: 0,
+    idleDestroyTimer: null,
+    destroying: false,
+  };
+
+  try {
+    Object.defineProperty(typedInitialHostWindow, STATE_SYMBOL, { value: state, configurable: true });
+  } catch {
+    // Exotic/frozen windows still get local usage.
+  }
+
+  function getObjectId(value: object): number {
+    const known = state.objectIds.get(value);
+    if (known !== undefined) return known;
+    const id = state.nextObjectId++;
+    state.objectIds.set(value, id);
+    return id;
+  }
+
+  function getFallbackObjectPreview(value: object): string {
+    if (Array.isArray(value)) return `Array(${value.length})`;
+    const tag = safeCall(() => Object.prototype.toString.call(value), "[object Object]");
+    if (tag === "[object Map]") return `Map(${safeCall(() => (value as Map<unknown, unknown>).size, 0)})`;
+    if (tag === "[object Set]") return `Set(${safeCall(() => (value as Set<unknown>).size, 0)})`;
+    if (tag === "[object Date]") return safeCall(() => (value as Date).toISOString(), "Date");
+    if (tag === "[object RegExp]") return safeCall(() => String(value), "RegExp");
+    if (/Error\]$/.test(tag)) {
+      const candidate = value as { name?: unknown; message?: unknown };
+      return safeCall(() => `${String(candidate.name ?? "Error")}: ${String(candidate.message ?? "")}`, "Error");
+    }
+    const elementCandidate = value as Partial<Element>;
+    if (elementCandidate.nodeType === 1 && typeof elementCandidate.tagName === "string") {
+      const tagName = safeCall(() => elementCandidate.tagName!.toLowerCase(), "element");
+      const id = safeCall(() => (elementCandidate.id ? `#${elementCandidate.id}` : ""), "");
+      return `<${tagName}${id}>`;
+    }
+    return `${safeCall(() => (value as { constructor?: { name?: string } }).constructor?.name || "Object", "Object")} {…}`;
+  }
+
+  function createStyles(documentRef: Document, hostMode: "shadow" | "light-dom"): HTMLStyleElement {
+    const style = documentRef.createElement("style");
+    const hostReset = hostMode === "shadow"
+      ? `:host {
+          all: initial;
+          position: fixed !important;
+          inset: 0 !important;
+          width: 0 !important;
+          height: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: 0 !important;
+          overflow: visible !important;
+          visibility: visible !important;
+          opacity: 1 !important;
+          z-index: ${MAX_Z_INDEX} !important;
+          isolation: isolate !important;
+          pointer-events: none !important;
+          color-scheme: dark;
+        }`
+      : `#${TOAST_HOST_ID} {
+          all: initial !important;
+          position: fixed !important;
+          inset: 0 !important;
+          width: 0 !important;
+          height: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: 0 !important;
+          overflow: visible !important;
+          visibility: visible !important;
+          opacity: 1 !important;
+          z-index: ${MAX_Z_INDEX} !important;
+          isolation: isolate !important;
+          pointer-events: none !important;
+          color-scheme: dark;
+        }`;
+    const universalReset = hostMode === "shadow"
+      ? `
+          *,
+          *::before,
+          *::after {
+            box-sizing: border-box;
+          }
+        `
+      : `
+          #${TOAST_HOST_ID} *,
+          #${TOAST_HOST_ID} *::before,
+          #${TOAST_HOST_ID} *::after {
+            box-sizing: border-box;
+          }
+        `;
+    const controlReset = hostMode === "shadow"
+      ? `
+          button,
+          input,
+          textarea,
+          select {
+            font: inherit;
+          }
+        `
+      : `
+          #${TOAST_HOST_ID} button,
+          #${TOAST_HOST_ID} input,
+          #${TOAST_HOST_ID} textarea,
+          #${TOAST_HOST_ID} select {
+            font: inherit;
+          }
+        `;
+    style.textContent = `
+      ${hostReset}
+      ${universalReset}
+      ${controlReset}
+      .rod-toast-stack {
+        --rod-surface: rgba(23, 23, 23, .985);
+        --rod-surface-raised: rgba(28, 28, 29, .992);
+        --rod-border: rgba(255, 255, 255, .105);
+        --rod-border-strong: rgba(255, 255, 255, .18);
+        --rod-text: rgba(232, 232, 232, .96);
+        --rod-text-strong: rgba(255, 255, 255, .985);
+        --rod-muted: rgba(163, 163, 163, .9);
+        --rod-muted-soft: rgba(132, 132, 137, .84);
+        --rod-hover: rgba(255, 255, 255, .07);
+        --rod-overlay: rgba(255, 255, 255, .05);
+        --rod-focus: rgba(255, 255, 255, .34);
+        --rod-toast-stack-max-height: 660px;
+        --rod-toast-stack-max-viewport: 62dvh;
+        --rod-toast-width: min(580px, calc(100vw - 28px));
+        --rod-shadow: 0 1px 0 rgba(255, 255, 255, .055) inset, 0 2px 3px rgba(0, 0, 0, .2), 0 18px 46px rgba(0, 0, 0, .38);
+        --rod-shadow-raised: 0 1px 0 rgba(255, 255, 255, .07) inset, 0 4px 8px rgba(0, 0, 0, .22), 0 28px 66px rgba(0, 0, 0, .46);
+        --rod-ease-spring: cubic-bezier(.16, 1, .3, 1);
+        --rod-ease-soft: cubic-bezier(.22, .61, .36, 1);
+        position: fixed;
+        z-index: ${MAX_Z_INDEX};
+        isolation: isolate;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 11px;
+        pointer-events: none;
+        color: var(--rod-text);
+        color-scheme: dark;
+        font: 440 var(--rod-toaster-font-size, 15px)/var(--rod-toaster-line-height, 1.48) Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
 
-      .hero-copy {
-        max-width: 900px;
+      .rod-toast-stack[data-theme="light"] {
+        --rod-surface: rgba(255, 255, 255, .985);
+        --rod-surface-raised: rgba(255, 255, 255, .998);
+        --rod-border: rgba(24, 24, 27, .105);
+        --rod-border-strong: rgba(24, 24, 27, .17);
+        --rod-text: rgba(39, 39, 42, .94);
+        --rod-text-strong: rgba(9, 9, 11, .98);
+        --rod-muted: rgba(82, 82, 91, .82);
+        --rod-muted-soft: rgba(113, 113, 122, .78);
+        --rod-hover: rgba(24, 24, 27, .065);
+        --rod-overlay: rgba(24, 24, 27, .045);
+        --rod-focus: rgba(24, 24, 27, .32);
+        --rod-shadow: 0 1px 0 rgba(255, 255, 255, .96) inset, 0 1px 3px rgba(15, 23, 42, .08), 0 18px 48px rgba(15, 23, 42, .15);
+        --rod-shadow-raised: 0 1px 0 rgba(255, 255, 255, 1) inset, 0 3px 8px rgba(15, 23, 42, .09), 0 28px 64px rgba(15, 23, 42, .18);
+        color-scheme: light;
       }
 
-      .install-card {
-        width: min(100%, 680px);
-        transform: none;
+      .rod-toast-stack[data-position^="top"] {
+        top: max(env(safe-area-inset-top, 0px), 16px);
+        right: max(env(safe-area-inset-right, 0px), 16px);
+        left: max(env(safe-area-inset-left, 0px), 16px);
       }
 
-      .layout {
-        grid-template-columns: 1fr;
+      .rod-toast-stack[data-position^="bottom"] {
+        right: max(env(safe-area-inset-right, 0px), 16px);
+        bottom: max(env(safe-area-inset-bottom, 0px), 16px);
+        left: max(env(safe-area-inset-left, 0px), 16px);
+        flex-direction: column-reverse;
       }
 
-      .sidebar {
+      .rod-toast-stack[data-position$="left"] {
+        align-items: flex-start;
+      }
+
+      .rod-toast-stack[data-position$="right"] {
+        align-items: flex-end;
+      }
+
+      .rod-toast-stack__list,
+      .rod-toast-stack__toolbar,
+      .rod-toast-stack__interactions {
+        width: var(--rod-toast-width);
+      }
+
+      .rod-toast-stack__interactions {
+        position: relative;
+        z-index: 4;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 11px;
+        min-width: 0;
+        pointer-events: none;
+      }
+
+      .rod-toast-stack__interactions:empty {
         display: none;
       }
-    }
 
-    @media (max-width: 760px) {
-      .shell {
-        padding-inline: 12px;
+      .rod-toast-stack__interactions .rod-toast {
+        pointer-events: auto;
       }
 
-      .topbar {
-        top: 8px;
-        width: calc(100% - 20px);
+      .rod-toast-stack__interactions .rod-toast[data-dialog-active="false"] {
+        display: none!important;
+      }
+
+      .rod-toast-stack[data-has-interaction="true"] .rod-toast-stack__manager,
+      .rod-toast-stack[data-has-interaction="true"] .rod-toast-stack__toolbar,
+      .rod-toast-stack[data-has-interaction="true"] .rod-toast-stack__list {
+        visibility: hidden;
+        pointer-events: none!important;
+      }
+
+      .rod-toast-stack__manager {
+        appearance: none;
+        position: relative;
+        display: none;
+        place-items: center;
+        align-self: center;
+        width: 50px;
+        height: 50px;
+        padding: 0;
+        border: 1px solid var(--rod-border);
+        border-radius: 999px;
+        outline: 0;
+        background: var(--rod-surface);
+        color: var(--rod-text-strong);
+        box-shadow: var(--rod-shadow-raised);
+        pointer-events: auto;
+        touch-action: manipulation;
+        cursor: pointer;
+        animation: rod-toast-manager-enter 480ms var(--rod-ease-spring) both;
+        transition: transform 300ms var(--rod-ease-spring), background-color 180ms, border-color 180ms;
+      }
+
+      .rod-toast-stack__manager:hover,
+      .rod-toast-stack__manager:focus-visible {
+        border-color: var(--rod-border-strong);
+        background: var(--rod-surface-raised);
+        transform: translateY(-2px) scale(1.04);
+      }
+
+      .rod-toast-stack__manager svg {
+        width: 19px;
+        height: 19px;
+        animation: rod-toast-spinner 850ms linear infinite;
+      }
+
+      .rod-toast-stack__manager-count {
+        position: absolute;
+        top: -4px;
+        right: -5px;
+        display: none;
+        min-width: 19px;
+        height: 19px;
+        padding: 0 5px;
+        border: 2px solid var(--rod-surface);
+        border-radius: 999px;
+        background: var(--rod-text-strong);
+        color: var(--rod-surface);
+        font: 750 9px/15px system-ui, sans-serif;
+        text-align: center;
+      }
+
+      .rod-toast-stack__manager-count[data-visible="true"] {
+        display: block;
+      }
+
+      .rod-toast-stack[data-manager-minimized="true"] .rod-toast-stack__manager {
+        display: grid;
+      }
+
+      .rod-toast-stack[data-manager-minimized="true"] .rod-toast-stack__toolbar,
+      .rod-toast-stack[data-manager-minimized="true"] .rod-toast-stack__list {
+        display: none!important;
+      }
+
+      .rod-toast-stack__toolbar {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        min-height: 48px;
+        padding: 7px 8px 7px 16px;
+        border: 1px solid var(--rod-border);
+        border-radius: 16px;
+        background: var(--rod-surface);
+        box-shadow: var(--rod-shadow);
+        pointer-events: auto;
+        user-select: none;
+        animation: rod-toast-toolbar-enter 360ms var(--rod-ease-spring) both;
+      }
+
+      .rod-toast-stack[data-expanded="true"][data-has-many="true"] .rod-toast-stack__toolbar[data-enabled="true"] {
+        display: flex;
+      }
+
+      .rod-toast-stack__toolbar-label {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--rod-muted);
+        font: 650 12px/1.2 system-ui, sans-serif;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .rod-toast-stack__toolbar-actions {
+        display: flex;
+        gap: 4px;
+      }
+
+      .rod-toast-stack__toolbar-button,
+      .rod-toast__close,
+      .rod-toast__expand,
+      .rod-toast__content-expand,
+      .rod-toast__minimize {
+        appearance: none;
+        border: 1px solid transparent;
+        outline: 0;
+        background: transparent;
+        color: inherit;
+        touch-action: manipulation;
+        cursor: pointer;
+      }
+
+      .rod-toast-stack__toolbar-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 34px;
+        padding: 0 11px;
+        border-radius: 10px;
+        color: var(--rod-muted);
+        font: 650 11px/1 system-ui, sans-serif;
+        transition: transform 160ms var(--rod-ease-spring), background-color 140ms, border-color 140ms, color 140ms;
+      }
+
+      .rod-toast-stack__toolbar-button:hover,
+      .rod-toast-stack__toolbar-button:focus-visible {
+        border-color: var(--rod-border);
+        background: var(--rod-hover);
+        color: var(--rod-text-strong);
+        transform: translateY(-1px);
+      }
+
+      .rod-toast-stack__list {
+        position: relative;
+        isolation: isolate;
+        display: flex;
+        flex-direction: column;
+        gap: 11px;
+        min-width: 0;
+        overflow: visible;
+        pointer-events: none;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+      }
+
+      .rod-toast-stack[data-position^="bottom"] .rod-toast-stack__list {
+        flex-direction: column-reverse;
+      }
+
+      .rod-toast-stack__list::before,
+      .rod-toast-stack__list::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border: 1px solid var(--rod-border);
+        border-radius: 22px;
+        background: var(--rod-surface);
+        box-shadow: var(--rod-shadow);
+        opacity: 0;
+        transform-origin: top center;
+        pointer-events: none;
+        transition: opacity 240ms, transform 480ms var(--rod-ease-spring);
+      }
+
+      .rod-toast-stack__list::before {
+        z-index: -1;
+      }
+
+      .rod-toast-stack__list::after {
+        z-index: -2;
+      }
+
+      .rod-toast-stack[data-expanded="false"][data-stack-depth="2"] .rod-toast-stack__list::before,
+      .rod-toast-stack[data-expanded="false"][data-stack-depth="3"] .rod-toast-stack__list::before {
+        opacity: .94;
+        transform: translateY(12px) scaleX(.95);
+      }
+
+      .rod-toast-stack[data-expanded="false"][data-stack-depth="3"] .rod-toast-stack__list::after {
+        opacity: .76;
+        transform: translateY(22px) scaleX(.89);
+      }
+
+      .rod-toast-stack[data-expanded="true"] .rod-toast-stack__list {
+        max-height: min(var(--rod-toast-stack-max-height), var(--rod-toast-stack-max-viewport), 50dvh);
+        overflow-x: hidden;
+        overflow-y: auto;
+        padding: 2px 4px 8px 2px;
+        pointer-events: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-gutter: stable;
+      }
+
+      .rod-toast-stack[data-expanded="false"] .rod-toast {
+        display: none;
+      }
+
+      .rod-toast-stack[data-expanded="false"] .rod-toast[data-stack-index="0"] {
+        display: grid;
+        cursor: grab;
+      }
+
+      .rod-toast {
+        --rod-toast-bg: var(--rod-surface);
+        --rod-toast-border: var(--rod-border);
+        --rod-toast-text: var(--rod-text);
+        --rod-toast-accent: rgba(244, 244, 245, .76);
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 15px;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        min-height: 78px;
+        max-height: min(72dvh, 760px);
+        overflow: auto;
+        padding: 17px 14px 17px 18px;
+        border: 1px solid var(--rod-toast-border);
+        border-radius: var(--rod-toaster-border-radius, 22px);
+        background: var(--rod-toast-bg);
+        color: var(--rod-toast-text);
+        box-shadow: var(--rod-shadow);
+        opacity: 0;
+        transform: translate3d(0, -14px, 0) scale(.975);
+        transform-origin: top center;
+        transition: opacity 180ms, transform 260ms var(--rod-ease-spring), border-color 140ms, background-color 140ms;
+        pointer-events: auto;
+        touch-action: none;
+        user-select: text;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+        contain: layout paint style;
+      }
+
+      .rod-toast-stack[data-position^="bottom"] .rod-toast {
+        transform: translate3d(0, 14px, 0) scale(.975);
+        transform-origin: bottom center;
+      }
+
+      .rod-toast::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: linear-gradient(118deg, rgba(255, 255, 255, .035), transparent 34%, transparent 74%, rgba(255, 255, 255, .012));
+        pointer-events: none;
+      }
+
+      .rod-toast[data-visible="true"] {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(1);
+      }
+
+      .rod-toast:hover {
+        border-color: var(--rod-border-strong);
+      }
+
+      .rod-toast-stack[data-theme="light"] .rod-toast {
+        background: var(--rod-toast-bg);
+      }
+
+      .rod-toast-stack[data-expanded="true"][data-has-many="true"] .rod-toast[data-item-expanded="false"] {
+        max-height: 64px;
+        min-height: 64px;
+        overflow: hidden;
+        cursor: pointer;
+      }
+
+      .rod-toast-stack[data-expanded="true"][data-has-many="true"] .rod-toast[data-item-expanded="false"] .rod-toast__content {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .rod-toast-stack[data-expanded="true"][data-has-many="true"] .rod-toast[data-item-expanded="true"] {
+        max-height: min(68dvh, 720px);
+        overflow: auto;
+        border-color: var(--rod-border-strong);
+        background: var(--rod-surface-raised);
+        box-shadow: var(--rod-shadow-raised);
+      }
+
+      .rod-toast__icon {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 26px;
+        min-width: 26px;
+        height: 26px;
+        aspect-ratio: 1/1;
+        color: var(--rod-toast-accent);
+        user-select: none;
+        transition: color 180ms, transform 420ms var(--rod-ease-spring);
+      }
+
+      .rod-toast__icon svg {
+        width: 22px;
+        height: 22px;
+        overflow: visible;
+      }
+
+      .rod-toast__icon-image {
+        display: block;
+        width: 100%!important;
+        height: 100%!important;
+        min-width: 100%;
+        max-width: none!important;
+        aspect-ratio: 1/1;
+        border-radius: 7px;
+        background: var(--rod-overlay);
+        object-fit: cover;
+        object-position: center;
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+
+      .rod-toast__icon[data-rod-icon-kind="image"] {
+        isolation: isolate;
+      }
+
+      .rod-toast[data-visible="true"] .rod-toast__icon {
+        animation: rod-toast-icon-enter 520ms 90ms var(--rod-ease-spring) both;
+      }
+
+      .rod-toast__content {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 4px 8px;
+        min-width: 0;
+        color: inherit;
+        font-size: 15px;
+        letter-spacing: -.012em;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .rod-toast__arg {
+        min-width: 0;
+        max-width: 100%;
+      }
+
+      .rod-toast__actions {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin: 0;
+      }
+
+      .rod-toast__count {
+        display: none;
+        min-width: 27px;
+        height: 27px;
+        padding: 0 7px;
+        border: 1px solid var(--rod-border);
+        border-radius: 999px;
+        background: var(--rod-overlay);
+        color: var(--rod-muted);
+        font: 700 10px/25px system-ui, sans-serif;
+        text-align: center;
+      }
+
+      .rod-toast__count[data-visible="true"] {
+        display: block;
+      }
+
+      .rod-toast__close,
+      .rod-toast__expand,
+      .rod-toast__content-expand,
+      .rod-toast__minimize {
+        display: grid;
+        place-items: center;
+        width: 38px;
+        min-width: 38px;
+        height: 38px;
+        padding: 0;
+        border-radius: 12px;
+        color: var(--rod-muted);
+        transition: transform 160ms var(--rod-ease-spring), background-color 140ms, border-color 140ms, color 140ms;
+      }
+
+      .rod-toast__close:hover,
+      .rod-toast__expand:hover,
+      .rod-toast__content-expand:hover,
+      .rod-toast__minimize:hover,
+      .rod-toast__close:focus-visible,
+      .rod-toast__expand:focus-visible,
+      .rod-toast__content-expand:focus-visible,
+      .rod-toast__minimize:focus-visible {
+        border-color: var(--rod-border);
+        background: var(--rod-hover);
+        color: var(--rod-text-strong);
+        transform: scale(1.04);
+      }
+
+      .rod-toast__expand,
+      .rod-toast__content-expand,
+      .rod-toast__minimize {
+        display: none;
+      }
+
+      .rod-toast[data-has-expanded-content="true"] .rod-toast__content-expand {
+        display: grid;
+      }
+
+      .rod-toast[data-content-expanded="true"] .rod-toast__content-expand svg {
+        transform: rotate(180deg);
+      }
+
+      .rod-toast[data-loading="true"] .rod-toast__minimize,
+      .rod-toast-stack[data-expanded="true"][data-has-many="true"] .rod-toast__expand {
+        display: grid;
+      }
+
+      .rod-toast[data-item-expanded="true"] .rod-toast__expand svg {
+        transform: rotate(180deg);
+      }
+
+      .rod-toast__expanded-panel {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-rows: 0fr;
+        min-width: 0;
+        max-height: 0;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        border-top: 0 solid transparent;
+        opacity: 0;
+        transform: translateY(-5px);
+        transition:
+          grid-template-rows 260ms var(--rod-ease-spring),
+          max-height 260ms var(--rod-ease-spring),
+          margin 220ms var(--rod-ease-soft),
+          padding 220ms var(--rod-ease-soft),
+          border-color 180ms,
+          opacity 160ms,
+          transform 260ms var(--rod-ease-spring);
+      }
+
+      .rod-toast__expanded-inner {
+        min-height: 0;
+        min-width: 0;
+        overflow: hidden;
+      }
+
+      .rod-toast[data-content-expanded="true"] .rod-toast__expanded-panel {
+        grid-template-rows: 1fr;
+        max-height: calc(var(--rod-expanded-max-height, min(42dvh, 360px)) + 18px);
+        margin-top: 2px;
+        padding-top: 10px;
+        border-top-width: 1px;
+        border-top-color: var(--rod-border);
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .rod-toast__expanded-heading {
+        margin: 0 0 8px;
+        color: var(--rod-text-strong);
+        font: 650 11px/1.3 system-ui, sans-serif;
+        letter-spacing: -0.01em;
+      }
+
+      .rod-toast__expanded-scroll {
+        min-width: 0;
+        max-height: var(--rod-expanded-max-height, min(42dvh, 360px));
+        overflow-x: hidden;
+        overflow-y: auto;
+        padding: 1px 4px 3px 1px;
+        color: var(--rod-text);
+        font-size: 12px;
+        line-height: 1.48;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        scrollbar-color: var(--rod-border-strong) transparent;
+        touch-action: pan-y;
+      }
+
+      .rod-toast__expanded-value + .rod-toast__expanded-value {
         margin-top: 8px;
       }
 
-      .status-pill {
-        display: none;
+      .rod-token--null {
+        color: rgb(216, 180, 254);
       }
 
-      .topbar-actions .button-ghost {
-        display: none;
+      .rod-token--undefined,
+      .rod-token--meta {
+        color: rgb(212, 212, 216);
       }
 
-      .mobile-menu {
-        display: inline-flex;
+      .rod-token--string {
+        color: rgb(253, 186, 116);
       }
 
-      .hero {
-        padding: 68px 4px 54px;
+      .rod-token--number {
+        color: rgb(190, 242, 100);
       }
 
-      h1 {
-        font-size: clamp(47px, 16vw, 74px);
+      .rod-token--boolean {
+        color: rgb(147, 197, 253);
+        font-weight: 600;
       }
 
-      .catalog-head {
-        grid-template-columns: 1fr;
-        align-items: start;
+      .rod-token--symbol {
+        color: rgb(94, 234, 212);
       }
 
-      .demo-grid {
-        grid-template-columns: 1fr;
+      .rod-token--function {
+        color: rgb(253, 224, 71);
       }
 
-      .section-header {
-        align-items: start;
-        flex-direction: column;
+      .rod-toast__inspector-placeholder {
+        color: var(--rod-muted);
+        font-style: italic;
       }
 
-      .section-description {
-        text-align: left;
-      }
-
-      .footer {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    @media (max-width: 460px) {
-      .brand-subtitle {
-        display: none;
-      }
-
-      .topbar-actions .button span {
-        display: none;
-      }
-
-      .topbar-actions .button {
-        width: 38px;
-        padding: 0;
-      }
-
-      .hero-actions .button {
-        flex: 1 1 150px;
-      }
-
-      .install-body {
-        padding: 14px;
-      }
-
-      .demo-footer {
-        align-items: stretch;
-        flex-direction: column;
-      }
-
-      .demo-actions {
+      .rod-toast__loading-copy,
+      .rod-toast__confirm-copy,
+      .rod-toast__rich-copy,
+      .rod-toast__interactive-copy {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
         width: 100%;
       }
 
-      .demo-actions .button {
+      .rod-toast__loading-title,
+      .rod-toast__confirm-title,
+      .rod-toast__rich-title,
+      .rod-toast__interactive-title {
+        color: var(--rod-text-strong);
+        font: 680 15px/1.34 Inter, system-ui, sans-serif;
+        letter-spacing: -.02em;
+      }
+
+      .rod-toast__loading-description,
+      .rod-toast__confirm-description,
+      .rod-toast__rich-description,
+      .rod-toast__interactive-description {
+        color: var(--rod-muted);
+        font: 430 13px/1.5 Inter, system-ui, sans-serif;
+        letter-spacing: -.01em;
+      }
+
+      .rod-toast[data-loading="true"][data-loading-icon="false"] {
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+
+      .rod-toast[data-loading="true"][data-loading-icon="false"] .rod-toast__icon {
+        display: none;
+      }
+
+      .rod-toast[data-loading="true"][data-loading-content-empty="true"] {
+        grid-template-columns: auto auto;
+        justify-content: center;
+        width: fit-content;
+        min-width: 0;
+        max-width: min(100%, 280px);
+        margin-inline: auto;
+      }
+
+      .rod-toast[data-loading="true"][data-loading-content-empty="true"] .rod-toast__content {
+        display: none;
+      }
+
+      .rod-toast__progress {
+        display: grid;
+        gap: 7px;
+        width: 100%;
+        margin-top: 8px;
+      }
+
+      .rod-toast__progress-meta {
+        display: flex;
+        justify-content: flex-end;
+        min-height: 14px;
+        color: var(--rod-muted-soft);
+        font: 650 10px/1 system-ui, sans-serif;
+      }
+
+      .rod-toast__progress-track {
+        position: relative;
+        width: 100%;
+        height: 4px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--rod-overlay);
+      }
+
+      .rod-toast__progress-bar {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: var(--rod-loading-progress, 0%);
+        border-radius: inherit;
+        background: linear-gradient(90deg, color-mix(in srgb, var(--rod-toast-accent) 84%, transparent), var(--rod-toast-accent));
+        transition: width 420ms var(--rod-ease-soft);
+      }
+
+      .rod-toast:not([data-loading-animation="progress"]) .rod-toast__progress {
+        display: none;
+      }
+
+      .rod-toast[data-loading-indeterminate="true"] .rod-toast__progress-bar {
+        width: 38%;
+        animation: rod-toast-progress-indeterminate 1.1s cubic-bezier(.4, 0, .2, 1) infinite;
+      }
+
+      .rod-toast[data-loading-state="loading"][data-loading-spinner="true"] {
+        animation: rod-toast-spinner 850ms linear infinite;
+      }
+
+      .rod-toast[data-loading-state="loading"] .rod-toast__icon[data-rod-icon-kind="image"][data-loading-spinner="true"] {
+        animation: none;
+      }
+
+      .rod-toast[data-loading-state="loading"] .rod-toast__icon[data-rod-icon-kind="image"][data-loading-spinner="true"]::after {
+        content: "";
+        position: absolute;
+        z-index: 2;
+        right: -4px;
+        bottom: -4px;
+        width: 12px;
+        height: 12px;
+        border: 2px solid var(--rod-surface);
+        border-top-color: var(--rod-toast-accent);
+        border-radius: 999px;
+        background: var(--rod-surface);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, .28);
+        animation: rod-toast-spinner 700ms linear infinite;
+      }
+
+      .rod-toast[data-loading-state="loading"][data-loading-pulse="true"] {
+        animation: rod-toast-pulse 1.35s cubic-bezier(.4, 0, .6, 1) infinite;
+      }
+
+      .rod-toast[data-confirm="true"],
+      .rod-toast[data-rich="true"],
+      .rod-toast[data-interactive="true"] {
+        min-width: min(470px, calc(100vw - 28px));
+        max-width: min(620px, calc(100vw - 28px));
+        padding-block: 19px;
+        touch-action: pan-y;
+      }
+
+      .rod-toast[data-confirm="true"] .rod-toast__content,
+      .rod-toast[data-rich="true"] .rod-toast__content,
+      .rod-toast[data-interactive="true"] .rod-toast__content {
+        display: block;
+        width: 100%;
+      }
+
+      .rod-toast[data-confirm="true"] .rod-toast__minimize,
+      .rod-toast[data-rich="true"] .rod-toast__minimize,
+      .rod-toast[data-interactive="true"] .rod-toast__minimize,
+      .rod-toast[data-confirm="true"] .rod-toast__expand,
+      .rod-toast[data-rich="true"] .rod-toast__expand,
+      .rod-toast[data-interactive="true"] .rod-toast__expand {
+        display: none!important;
+      }
+
+      .rod-toast__confirm,
+      .rod-toast__rich,
+      .rod-toast__interactive {
+        display: grid;
+        gap: 17px;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .rod-toast__interactive-body {
+        min-width: 0;
+        min-height: 0;
+      }
+
+      .rod-toast__confirm-actions,
+      .rod-toast__action-bar,
+      .rod-toast__task-actions {
+        display: flex;
+        flex-flow: row wrap;
+        align-items: stretch;
+        justify-content: flex-end;
+        gap: 9px;
+        width: 100%;
+        container-type: inline-size;
+      }
+
+      .rod-toast__confirm-actions::-webkit-scrollbar {
+        display: none;
+      }
+
+      .rod-toast__confirm-button,
+      .rod-toast__action-button,
+      .rod-toast__task-button {
+        appearance: none;
+        display: inline-flex;
+        flex: 1 1 max-content;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        min-width: min(100%, 108px);
+        max-width: 100%;
+        min-height: 40px;
+        padding: 0 15px;
+        border: 1px solid var(--rod-border);
+        border-radius: 12px;
+        outline: 0;
+        background: var(--rod-overlay);
+        color: var(--rod-text);
+        font: 650 12px/1.2 system-ui, sans-serif;
+        cursor: pointer;
+        white-space: normal;
+        text-wrap: balance;
+        transition: transform 160ms var(--rod-ease-spring), background-color 140ms, border-color 140ms, color 140ms;
+      }
+
+      .rod-toast__confirm-button span,
+      .rod-toast__action-button span,
+      .rod-toast__task-button span {
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .rod-toast__confirm-button:hover:not(:disabled),
+      .rod-toast__action-button:hover:not(:disabled),
+      .rod-toast__task-button:hover:not(:disabled) {
+        border-color: var(--rod-border-strong);
+        background: var(--rod-hover);
+        transform: translateY(-2px);
+      }
+
+      .rod-toast__confirm-button:disabled,
+      .rod-toast__action-button:disabled,
+      .rod-toast__task-button:disabled {
+        opacity: .5;
+        cursor: wait;
+      }
+
+      .rod-toast__confirm-button[data-variant="primary"],
+      .rod-toast__action-button[data-variant="primary"] {
+        border-color: var(--rod-text-strong);
+        background: var(--rod-text-strong);
+        color: var(--rod-surface);
+      }
+
+      .rod-toast__confirm-button[data-variant="danger"],
+      .rod-toast__action-button[data-variant="danger"] {
+        border-color: rgba(248, 113, 113, .3);
+        background: rgba(127, 29, 29, .22);
+        color: rgba(252, 165, 165, .98);
+      }
+
+      .rod-toast__confirm-button[data-variant="ghost"],
+      .rod-toast__action-button[data-variant="ghost"] {
+        border-color: transparent;
+        background: transparent;
+        color: var(--rod-muted);
+      }
+
+      @container (max-width:340px) {
+        .rod-toast__confirm-button,
+        .rod-toast__action-button,
+        .rod-toast__task-button {
+          flex-basis: calc(50% - 5px);
+        }
+      }
+
+      .rod-toast__details {
+        overflow: hidden;
+        border: 1px solid var(--rod-border);
+        border-radius: 12px;
+        background: var(--rod-overlay);
+      }
+
+      .rod-toast__details summary {
+        display: flex;
+        align-items: center;
+        min-height: 36px;
+        padding: 0 11px;
+        color: var(--rod-muted);
+        font: 600 11px/1 system-ui, sans-serif;
+        cursor: pointer;
+      }
+
+      .rod-toast__details-body {
+        max-height: 280px;
+        overflow: auto;
+        padding: 10px;
+        border-top: 1px solid var(--rod-border);
+        font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .rod-toast__field {
+        display: grid;
+        gap: 6px;
+        min-width: 0;
+      }
+
+      .rod-toast__field-label {
+        color: var(--rod-muted);
+        font: 600 10px/1.2 system-ui, sans-serif;
+      }
+
+      .rod-toast__input,
+      .rod-toast__select,
+      .rod-toast__textarea {
+        appearance: none;
+        width: 100%;
+        min-width: 0;
+        min-height: 40px;
+        padding: 9px 11px;
+        border: 1px solid var(--rod-border);
+        border-radius: 12px;
+        outline: 0;
+        background: var(--rod-overlay);
+        color: var(--rod-text-strong);
+        font: 16px/1.45 system-ui, sans-serif;
+      }
+
+      .rod-toast__textarea {
+        min-height: 96px;
+        resize: vertical;
+      }
+
+      .rod-toast__input:focus,
+      .rod-toast__select:focus,
+      .rod-toast__textarea:focus {
+        border-color: var(--rod-border-strong);
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--rod-focus) 18%, transparent);
+      }
+
+      .rod-toast__checkboxes {
+        display: grid;
+        gap: 7px;
+      }
+
+      .rod-toast__checkbox {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        color: var(--rod-muted);
+        font: 11px/1.45 system-ui, sans-serif;
+        cursor: pointer;
+      }
+
+      .rod-toast__checkbox input {
+        width: 15px;
+        height: 15px;
+        margin: 1px 0 0;
+        accent-color: var(--rod-text-strong);
+      }
+
+      .rod-toast__validation {
+        display: none;
+        padding: 8px 10px;
+        border: 1px solid rgba(248, 113, 113, .24);
+        border-radius: 10px;
+        background: rgba(127, 29, 29, .16);
+        color: rgba(252, 165, 165, .96);
+        font: 500 11px/1.45 system-ui, sans-serif;
+      }
+
+      .rod-toast__validation[data-visible="true"] {
+        display: block;
+      }
+
+      .rod-toast__countdown {
+        display: none;
+        gap: 5px;
+        color: var(--rod-muted);
+        font: 500 10px/1.2 system-ui, sans-serif;
+      }
+
+      .rod-toast__countdown[data-visible="true"] {
+        display: grid;
+      }
+
+      .rod-toast__countdown-track {
+        position: relative;
+        height: 3px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--rod-overlay);
+      }
+
+      .rod-toast__countdown-bar {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: var(--rod-countdown-progress, 100%);
+        border-radius: inherit;
+        background: var(--rod-text);
+        transition: width 250ms linear;
+      }
+
+      .rod-toast__task-status {
+        color: var(--rod-muted-soft);
+        font: 650 9px/1 system-ui, sans-serif;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+      }
+
+      .rod-toast[data-completing="true"] {
+        align-self: center;
+        justify-self: center;
+        grid-template-columns: 1fr;
+        gap: 0;
+        width: 54px;
+        min-width: 54px;
+        max-width: 54px;
+        height: 54px;
+        min-height: 54px;
+        max-height: 54px;
+        padding: 0;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--rod-surface);
+        box-shadow: var(--rod-shadow-raised);
+        cursor: default;
+      }
+
+      .rod-toast[data-completing="true"] .rod-toast__content,
+      .rod-toast[data-completing="true"] .rod-toast__actions {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .rod-toast[data-completing="true"] .rod-toast__icon {
+        justify-self: center;
+        width: 54px;
+        min-width: 54px;
+        height: 54px;
+        margin: 0;
+      }
+
+      .rod-toast[data-completing="true"] .rod-icon-check-path {
+        stroke-dasharray: 24;
+        stroke-dashoffset: 24;
+        animation: rod-toast-check-draw 280ms 100ms ease-out forwards;
+      }
+
+      .rod-toast[data-success-exit="true"] {
+        opacity: 0;
+        transform: translate3d(0, -18px, 0) scale(.86);
+      }
+
+      @keyframes rod-toast-spinner {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @keyframes rod-toast-pulse {
+        0%,
+        100% {
+          opacity: .55;
+          transform: scale(.92);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1.08);
+        }
+      }
+
+      @keyframes rod-toast-progress-indeterminate {
+        0% {
+          left: -42%;
+        }
+        50% {
+          left: 42%;
+        }
+        100% {
+          left: 104%;
+        }
+      }
+
+      @keyframes rod-toast-check-draw {
+        to {
+          stroke-dashoffset: 0;
+        }
+      }
+
+      @keyframes rod-toast-icon-enter {
+        0% {
+          opacity: 0;
+          transform: scale(.72) rotate(-9deg);
+        }
+        62% {
+          opacity: 1;
+          transform: scale(1.08) rotate(1deg);
+        }
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      @keyframes rod-toast-toolbar-enter {
+        from {
+          opacity: 0;
+          transform: translateY(-8px) scale(.98);
+        }
+        to {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      @keyframes rod-toast-manager-enter {
+        0% {
+          opacity: 0;
+          transform: translateY(-10px) scale(.72);
+        }
+        70% {
+          opacity: 1;
+          transform: translateY(1px) scale(1.06);
+        }
+        100% {
+          opacity: 1;
+          transform: none;
+        }
+      }
+
+      @media (max-width:560px) {
+        .rod-toast-stack {
+          --rod-toast-width: calc(100vw - 16px);
+        }
+        .rod-toast-stack[data-position^="top"] {
+          top: max(env(safe-area-inset-top, 0px), 8px);
+          right: 8px;
+          left: 8px;
+        }
+        .rod-toast-stack[data-position^="bottom"] {
+          right: 8px;
+          bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+          left: 8px;
+        }
+        .rod-toast[data-confirm="true"],
+        .rod-toast[data-rich="true"],
+        .rod-toast[data-interactive="true"] {
+          min-width: 0;
+          max-width: none;
+        }
+        .rod-toast__confirm-actions,
+        .rod-toast__action-bar,
+        .rod-toast__task-actions {
+          gap: 6px;
+        }
+        .rod-toast__confirm-button,
+        .rod-toast__action-button,
+        .rod-toast__task-button {
+          min-width: min(100%, 96px);
+          min-height: 36px;
+          padding-inline: 10px;
+          font-size: 10px;
+        }
+      }
+
+      .rod-toast-stack[data-size="compact"] {
+        --rod-toast-width: min(420px, calc(100vw - 16px));
+        --rod-toaster-font-size: 11px;
+        --rod-toaster-line-height: 1;
+        gap: 4px;
+      }
+
+      .rod-toast-stack[data-size="compact"] .rod-toast {
+        min-height: 48px;
+        max-height: min(64dvh, 620px);
+        gap: 9px;
+        padding: 8px 6px 8px 10px;
+        border-radius: 12px;
+      }
+
+      .rod-toast-stack[data-size="compact"] .rod-toast__icon {
+        width: 19px;
+        min-width: 19px;
+        height: 19px;
+      }
+
+      .rod-toast-stack[data-size="compact"] .rod-toast__icon svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      .rod-toast-stack[data-size="compact"] .rod-toast__icon-image {
+        border-radius: 5px;
+      }
+
+      .rod-toast-stack[data-size="compact"] .rod-toast__content {
+        font-size: 13px;
+        line-height: 1.38;
+      }
+
+      .rod-toast-stack[data-size="compact"] .rod-toast__actions {
+        gap: 1px;
+      }
+
+      .rod-toast-stack[data-size="compact"] .rod-toast__close,
+      .rod-toast-stack[data-size="compact"] .rod-toast__expand,
+      .rod-toast-stack[data-size="compact"] .rod-toast__content-expand,
+      .rod-toast-stack[data-size="compact"] .rod-toast__minimize {
+        width: 31px;
+        min-width: 31px;
+        height: 31px;
+        border-radius: 9px;
+      }
+
+      .rod-toast-stack[data-size="compact"] .rod-toast__loading-copy,
+      .rod-toast-stack[data-size="compact"] .rod-toast__confirm-copy,
+      .rod-toast-stack[data-size="compact"] .rod-toast__rich-copy,
+      .rod-toast-stack[data-size="compact"] .rod-toast__interactive-copy {
+        gap: 3px;
+      }
+
+      .rod-toast-stack[data-size="compact"] .rod-toast__loading-title,
+      .rod-toast-stack[data-size="compact"] .rod-toast__confirm-title,
+      .rod-toast-stack[data-size="compact"] .rod-toast__rich-title,
+      .rod-toast-stack[data-size="compact"] .rod-toast__interactive-title {
+        font-size: 11px;
+        line-height: 1;
+      }
+
+      .rod-toast-stack[data-size="compact"] .rod-toast__loading-description,
+      .rod-toast-stack[data-size="compact"] .rod-toast__confirm-description,
+      .rod-toast-stack[data-size="compact"] .rod-toast__rich-description,
+      .rod-toast-stack[data-size="compact"] .rod-toast__interactive-description {
+        font-size: 11px;
+        line-height: 1.4;
+      }
+
+      .rod-toast-stack[data-size="compact"] .rod-toast[data-confirm="true"],
+      .rod-toast-stack[data-size="compact"] .rod-toast[data-rich="true"],
+      .rod-toast-stack[data-size="compact"] .rod-toast[data-interactive="true"] {
+        min-width: min(390px, calc(100vw - 16px));
+        max-width: min(480px, calc(100vw - 16px));
+        padding-block: 12px;
+      }
+
+      .rod-toast-stack[data-size="compact"] .rod-toast__confirm,
+      .rod-toast-stack[data-size="compact"] .rod-toast__rich,
+      .rod-toast-stack[data-size="compact"] .rod-toast__interactive {
+        gap: 11px;
+      }
+
+      .rod-toast-stack[data-size="compact"] .rod-toast__confirm-button,
+      .rod-toast-stack[data-size="compact"] .rod-toast__action-button,
+      .rod-toast-stack[data-size="compact"] .rod-toast__task-button {
+        min-height: 32px;
+        padding: 0 10px;
+        border-radius: 9px;
+        font-size: 9px;
+      }
+
+      .rod-toast-stack[data-size="compact"] .rod-toast[data-visible="true"] .rod-toast__icon {
+        animation: none;
+      }
+
+      .rod-toast-stack[data-size="comfortable"] {
+        --rod-toast-width: min(520px, calc(100vw - 24px));
+        --rod-toaster-font-size: 14px;
+        --rod-toaster-line-height: 1.46;
+        gap: 10px;
+      }
+
+      .rod-toast-stack[data-size="comfortable"] .rod-toast {
+        min-height: 70px;
+        gap: 13px;
+        padding: 14px 11px 14px 16px;
+        border-radius: 19px;
+      }
+
+      .rod-toast-stack[data-size="comfortable"] .rod-toast__content {
+        font-size: 14px;
+      }
+
+      .rod-toast-stack[data-size="comfortable"] .rod-toast__close,
+      .rod-toast-stack[data-size="comfortable"] .rod-toast__expand,
+      .rod-toast-stack[data-size="comfortable"] .rod-toast__content-expand,
+      .rod-toast-stack[data-size="comfortable"] .rod-toast__minimize {
+        width: 36px;
+        min-width: 36px;
+        height: 36px;
+        border-radius: 11px;
+      }
+
+      .rod-toast-stack[data-size="comfortable"] .rod-toast[data-confirm="true"],
+      .rod-toast-stack[data-size="comfortable"] .rod-toast[data-rich="true"],
+      .rod-toast-stack[data-size="comfortable"] .rod-toast[data-interactive="true"] {
+        min-width: min(460px, calc(100vw - 24px));
+        max-width: min(580px, calc(100vw - 24px));
+        padding-block: 16px;
+      }
+
+      .rod-toast-stack[data-size="comfortable"] .rod-toast__confirm-button,
+      .rod-toast-stack[data-size="comfortable"] .rod-toast__action-button,
+      .rod-toast-stack[data-size="comfortable"] .rod-toast__task-button {
+        min-height: 38px;
+        padding: 0 13px;
+      }
+
+      .rod-toast-stack[data-size="large"] {
+        --rod-toast-width: min(640px, calc(100vw - 32px));
+        --rod-toaster-font-size: 16px;
+        --rod-toaster-line-height: 1.52;
+        gap: 13px;
+      }
+
+      .rod-toast-stack[data-size="large"] .rod-toast {
+        min-height: 88px;
+        gap: 17px;
+        padding: 20px 16px 20px 22px;
+        border-radius: 24px;
+      }
+
+      .rod-toast-stack[data-size="large"] .rod-toast__icon {
+        width: 31px;
+        min-width: 31px;
+        height: 31px;
+      }
+
+      .rod-toast-stack[data-size="large"] .rod-toast__icon svg {
+        width: 26px;
+        height: 26px;
+      }
+
+      .rod-toast-stack[data-size="large"] .rod-toast__icon-image {
+        border-radius: 9px;
+      }
+
+      .rod-toast-stack[data-size="large"] .rod-toast__content {
+        font-size: 16px;
+      }
+
+      .rod-toast-stack[data-size="large"] .rod-toast__close,
+      .rod-toast-stack[data-size="large"] .rod-toast__expand,
+      .rod-toast-stack[data-size="large"] .rod-toast__content-expand,
+      .rod-toast-stack[data-size="large"] .rod-toast__minimize {
+        width: 44px;
+        min-width: 44px;
+        height: 44px;
+        border-radius: 14px;
+      }
+
+      .rod-toast-stack[data-size="large"] .rod-toast__loading-title,
+      .rod-toast-stack[data-size="large"] .rod-toast__confirm-title,
+      .rod-toast-stack[data-size="large"] .rod-toast__rich-title,
+      .rod-toast-stack[data-size="large"] .rod-toast__interactive-title {
+        font-size: 17px;
+      }
+
+      .rod-toast-stack[data-size="large"] .rod-toast__loading-description,
+      .rod-toast-stack[data-size="large"] .rod-toast__confirm-description,
+      .rod-toast-stack[data-size="large"] .rod-toast__rich-description,
+      .rod-toast-stack[data-size="large"] .rod-toast__interactive-description {
+        font-size: 14px;
+      }
+
+      .rod-toast-stack[data-size="large"] .rod-toast[data-confirm="true"],
+      .rod-toast-stack[data-size="large"] .rod-toast[data-rich="true"],
+      .rod-toast-stack[data-size="large"] .rod-toast[data-interactive="true"] {
+        min-width: min(560px, calc(100vw - 32px));
+        max-width: min(700px, calc(100vw - 32px));
+        padding-block: 22px;
+      }
+
+      .rod-toast-stack[data-size="large"] .rod-toast__confirm-button,
+      .rod-toast-stack[data-size="large"] .rod-toast__action-button,
+      .rod-toast-stack[data-size="large"] .rod-toast__task-button {
+        min-height: 46px;
+        padding: 0 18px;
+        font-size: 13px;
+      }
+
+      @media (max-width:560px) {
+        .rod-toast-stack[data-size="compact"],
+        .rod-toast-stack[data-size="comfortable"],
+        .rod-toast-stack[data-size="large"] {
+          --rod-toast-width: calc(100vw - 16px);
+        }
+        .rod-toast-stack[data-size="large"] .rod-toast {
+          min-height: 78px;
+          gap: 14px;
+          padding: 17px 12px 17px 16px;
+        }
+        .rod-toast-stack[data-size="large"] .rod-toast[data-confirm="true"],
+        .rod-toast-stack[data-size="large"] .rod-toast[data-rich="true"],
+        .rod-toast-stack[data-size="large"] .rod-toast[data-interactive="true"] {
+          min-width: 0;
+          max-width: none;
+        }
+      }
+
+      /* Multi loading manager */
+      .rod-toast[data-multi-loading="true"] {
+        width: min(620px, calc(100vw - 20px));
+        max-width: min(620px, calc(100vw - 20px));
+        max-height: none;
+        overflow: hidden;
+        padding: 0;
+        grid-template-columns: 1fr;
+        gap: 0;
+        touch-action: pan-y;
+      }
+
+      .rod-toast[data-multi-loading="true"]>.rod-toast__icon,
+      .rod-toast[data-multi-loading="true"]>.rod-toast__actions {
+        display: none!important;
+      }
+
+      .rod-toast[data-multi-loading="true"]>.rod-toast__content {
+        display: block;
+        width: 100%;
+        min-width: 0;
+        overflow: hidden;
+      }
+
+      .rod-multi-loading {
+        display: grid;
+        grid-template-rows: auto auto minmax(0, 1fr);
+        width: 100%;
+        min-width: 0;
+        max-height: var(--rod-multi-max-height, min(50dvh, 520px));
+        overflow: hidden;
+      }
+
+      .rod-multi-loading__header {
+        position: relative;
+        z-index: 2;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 12px;
+        padding: 13px 13px 11px 15px;
+        border-bottom: 1px solid var(--rod-border);
+        background: var(--rod-surface);
+      }
+
+      .rod-multi-loading__heading {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .rod-multi-loading__title {
+        overflow: hidden;
+        color: var(--rod-text-strong);
+        font: 700 13px/1.2 system-ui, sans-serif;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .rod-multi-loading__summary {
+        overflow: hidden;
+        color: var(--rod-muted);
+        font: 600 10px/1.2 system-ui, sans-serif;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .rod-multi-loading__aggregate {
+        display: grid;
+        gap: 7px;
+        padding: 9px 14px 10px;
+        border-bottom: 1px solid var(--rod-border);
+        background: var(--rod-surface);
+      }
+
+      .rod-multi-loading__aggregate-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-width: 0;
+        color: var(--rod-muted);
+        font: 650 10px/1.2 system-ui, sans-serif;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .rod-multi-loading__aggregate-percent {
+        color: var(--rod-text-strong);
+        font-weight: 720;
+      }
+
+      .rod-multi-loading__aggregate-count {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .rod-multi-loading__aggregate-track {
+        position: relative;
+        width: 100%;
+        height: 4px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--rod-overlay);
+      }
+
+      .rod-multi-loading__aggregate-bar {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: var(--rod-multi-aggregate-progress, 0%);
+        border-radius: inherit;
+        background: var(--rod-text-strong);
+        transition: width 320ms var(--rod-ease-soft);
+      }
+
+      .rod-multi-loading__header-actions {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      .rod-multi-loading__header-button {
+        appearance: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        min-height: 31px;
+        padding: 0 9px;
+        border: 1px solid var(--rod-border);
+        border-radius: 9px;
+        background: var(--rod-overlay);
+        color: var(--rod-muted);
+        font: 650 10px/1 system-ui, sans-serif;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+
+      .rod-multi-loading__header-button:hover {
+        border-color: var(--rod-border-strong);
+        color: var(--rod-text-strong);
+        background: var(--rod-hover);
+      }
+
+      .rod-multi-loading__list {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        min-height: 0;
+        max-height: var(--rod-multi-list-height, min(42dvh, 440px));
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        scrollbar-color: var(--rod-border-strong) transparent;
+        scrollbar-gutter: stable;
+      }
+
+      .rod-multi-loading__empty {
+        display: grid;
+        place-items: center;
+        min-height: 90px;
+        padding: 24px;
+        color: var(--rod-muted);
+        font: 500 11px/1.4 system-ui, sans-serif;
+        text-align: center;
+      }
+
+      .rod-multi-loading__item {
+        --rod-multi-accent: var(--rod-toast-accent);
+        position: relative;
+        display: grid;
+        grid-template-columns: 30px minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 10px;
+        min-height: 58px;
+        padding: 9px 10px 9px 12px;
+        border-bottom: 1px solid var(--rod-border);
+        background: transparent;
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+        transform-origin: center;
+        transition: opacity 260ms ease, transform 340ms var(--rod-ease-spring), max-height 360ms var(--rod-ease-spring), min-height 360ms var(--rod-ease-spring), padding 360ms var(--rod-ease-spring), margin 360ms var(--rod-ease-spring), background-color 220ms, border-color 220ms;
+      }
+
+      .rod-multi-loading__item:last-child {
+        border-bottom: 0;
+      }
+
+      .rod-multi-loading__item[data-status="error"] {
+        background: color-mix(in srgb, rgba(251, 113, 133, .12) 60%, transparent);
+      }
+
+      .rod-multi-loading__item[data-status="cancelled"] {
+        opacity: .62;
+      }
+
+      .rod-multi-loading__lead {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border: 1px solid var(--rod-border);
+        border-radius: 10px;
+        background: var(--rod-overlay);
+        color: var(--rod-muted);
+        transition: width 340ms var(--rod-ease-spring), height 340ms var(--rod-ease-spring), border-radius 340ms var(--rod-ease-spring), background-color 220ms, color 220ms, transform 340ms var(--rod-ease-spring);
+      }
+
+      .rod-multi-loading__lead svg {
+        width: 15px;
+        height: 15px;
+      }
+
+      .rod-multi-loading__lead[data-spin="true"] svg {
+        animation: rod-toast-spinner 850ms linear infinite;
+      }
+
+      .rod-multi-loading__lead .rod-toast__icon-image {
+        width: 100%;
+        height: 100%;
+        border-radius: inherit;
+        object-fit: cover;
+      }
+
+      .rod-multi-loading__copy {
+        display: grid;
+        gap: 3px;
+        min-width: 0;
+        transition: opacity 180ms, width 320ms var(--rod-ease-spring), transform 320ms var(--rod-ease-spring);
+      }
+
+      .rod-multi-loading__item-title {
+        overflow: hidden;
+        color: var(--rod-text-strong);
+        font: 650 12px/1.25 system-ui, sans-serif;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .rod-multi-loading__item-description {
+        overflow: hidden;
+        color: var(--rod-muted);
+        font: 500 10px/1.3 system-ui, sans-serif;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .rod-multi-loading__progress {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: 2px;
+      }
+
+      .rod-multi-loading__track {
+        position: relative;
         flex: 1;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      html {
-        scroll-behavior: auto;
+        height: 3px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--rod-overlay);
       }
 
-      *,
-      *::before,
-      *::after {
-        animation-duration: 1ms !important;
-        animation-iteration-count: 1 !important;
-        scroll-behavior: auto !important;
-        transition-duration: 1ms !important;
+      .rod-multi-loading__bar {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: var(--rod-multi-progress, 0%);
+        border-radius: inherit;
+        background: var(--rod-toast-accent);
+        transition: width 360ms var(--rod-ease-soft);
       }
-    }
-  </style>
 
-  <script src="https://rod.migos.club/userscripts/toaster.js?v=4.7.0"></script>
-</head>
+      .rod-multi-loading__progress-label {
+        min-width: 30px;
+        color: var(--rod-muted-soft);
+        font: 650 9px/1 ui-monospace, monospace;
+        text-align: right;
+      }
 
-<body>
-  <div class="ambient-grid"></div>
-  <div class="ambient-noise"></div>
+      .rod-multi-loading__actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 4px;
+      }
 
-  <header class="topbar">
-    <a class="brand" href="#top" aria-label="Voltar ao início">
-      <span class="brand-mark" aria-hidden="true"></span>
-      <span class="brand-copy">
-        <span class="brand-title">Rod Toaster</span>
-        <span class="brand-subtitle">playground · documentação · v<span data-version>...</span></span>
-      </span>
-    </a>
+      .rod-multi-loading__button {
+        appearance: none;
+        display: grid;
+        place-items: center;
+        width: 31px;
+        height: 31px;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: 9px;
+        background: transparent;
+        color: var(--rod-muted);
+        cursor: pointer;
+        touch-action: manipulation;
+        transition: transform 160ms var(--rod-ease-spring), background-color 140ms, border-color 140ms, color 140ms;
+      }
 
-    <div class="topbar-actions">
-      <span id="runtime-status" class="status-pill" data-state="loading">
-        <span class="status-dot"></span>
-        <span data-status-label>Carregando API…</span>
-      </span>
+      .rod-multi-loading__button:hover,
+      .rod-multi-loading__button:focus-visible {
+        border-color: var(--rod-border);
+        background: var(--rod-hover);
+        color: var(--rod-text-strong);
+        transform: scale(1.04);
+      }
 
-      <button class="button button-ghost" type="button" data-action="toggle-theme" title="Alternar tema do toaster">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="4"></circle>
-          <path d="M12 2v2"></path>
-          <path d="M12 20v2"></path>
-          <path d="m4.93 4.93 1.42 1.42"></path>
-          <path d="m17.66 17.66 1.41 1.41"></path>
-          <path d="M2 12h2"></path>
-          <path d="M20 12h2"></path>
-          <path d="m6.34 17.66-1.41 1.41"></path>
-          <path d="m19.07 4.93-1.41 1.42"></path>
-        </svg>
-        <span>Tema</span>
-      </button>
+      .rod-multi-loading__button[data-action="retry"] {
+        width: auto;
+        display: inline-flex;
+        gap: 5px;
+        padding-inline: 8px;
+        color: rgba(253, 186, 116, .98);
+        font: 650 9px/1 system-ui, sans-serif;
+      }
 
-      <button class="button button-ghost" type="button" data-action="minimize">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M6 12h12"></path>
-        </svg>
-        <span>Minimizar</span>
-      </button>
+      .rod-multi-loading__button[data-action="retry"] svg {
+        width: 13px;
+        height: 13px;
+      }
 
-      <button class="button button-primary" type="button" data-action="quick-demo">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-          <path d="m8 5 11 7-11 7Z"></path>
-        </svg>
-        <span>Testar agora</span>
-      </button>
-    </div>
-  </header>
+      .rod-multi-loading__button:disabled {
+        opacity: .4;
+        cursor: wait;
+      }
 
-  <main id="top" class="shell">
-    <section class="hero">
-      <div class="hero-copy">
-        <span class="eyebrow">v4.9 · runtime de operações</span>
-        <h1>
-          Feedback visual que
-          <span class="hero-gradient">trabalha com você.</span>
-        </h1>
-        <p class="hero-description">
-          Mensagens, image icons, conteúdo expansível com scroll interno, dialogs com
-          ownership de foco, picker mobile robusto no Safari/iPhone, tasks com state
-          machine real, retries, persistência segura e grupos ponderados. A v4.9 também
-          traz progresso agregado no multi loading e mantém o timeout pausado enquanto
-          o conteúdo expandido estiver aberto ou focado.
-        </p>
+      .rod-multi-loading__item[data-status="success"] .rod-multi-loading__lead {
+        border-color: rgba(74, 222, 128, .36);
+        background: rgba(34, 197, 94, .16);
+        color: rgb(74, 222, 128);
+      }
 
-        <div class="hero-actions">
-          <button class="button button-primary" type="button" data-action="quick-demo">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M21 12a9 9 0 1 1-6.22-8.56"></path>
-            </svg>
-            Rodar demonstração
-          </button>
+      .rod-multi-loading__item[data-status="error"] .rod-multi-loading__lead {
+        border-color: rgba(251, 113, 133, .34);
+        background: rgba(190, 18, 60, .14);
+        color: rgb(251, 113, 133);
+      }
 
-          <a class="button" href="#catalog">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M8 6h13"></path>
-              <path d="M8 12h13"></path>
-              <path d="M8 18h13"></path>
-              <path d="M3 6h.01"></path>
-              <path d="M3 12h.01"></path>
-              <path d="M3 18h.01"></path>
-            </svg>
-            Explorar APIs
-          </a>
+      .rod-multi-loading__item[data-status="success"] .rod-multi-loading__lead svg {
+        animation: rod-multi-loading-check-in 260ms var(--rod-ease-spring) both;
+      }
 
-          <button class="button" type="button" data-action="copy-install">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="9" y="9" width="11" height="11" rx="2"></rect>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-            </svg>
-            Copiar instalação
-          </button>
-        </div>
-      </div>
+      .rod-multi-loading__item[data-success-exit="true"] {
+        pointer-events: none;
+        opacity: 0;
+        transform: translate3d(0, -12px, 0);
+      }
 
-      <aside class="install-card" aria-label="Instalação rápida">
-        <div class="window-bar">
-          <div class="window-dots" aria-hidden="true">
-            <span class="window-dot"></span>
-            <span class="window-dot"></span>
-            <span class="window-dot"></span>
-          </div>
-          <span class="window-label">toaster.js</span>
-        </div>
+      @keyframes rod-multi-loading-check-in {
+        0% {
+          opacity: 0;
+          transform: scale(.55);
+        }
 
-        <div class="install-body">
-          <div class="mini-toast" aria-hidden="true">
-            <img
-              class="mini-toast-image"
-              src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 600'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop stop-color='%236d5dfc'/%3E%3Cstop offset='.52' stop-color='%2363d7ff'/%3E%3Cstop offset='1' stop-color='%23a3ff75'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='1200' height='600' fill='url(%23g)'/%3E%3Ccircle cx='830' cy='170' r='155' fill='white' opacity='.25'/%3E%3Cpath d='M0 510 260 290l165 155 175-210 250 275 150-145 200 145v90H0Z' fill='%2309090b' opacity='.56'/%3E%3C/svg%3E"
-              alt=""
-            >
-            <span class="mini-toast-copy">
-              <span class="mini-toast-title">Enviando para o Telegram</span>
-              <span class="mini-toast-description">Thumbnail como icon · recorte 1:1</span>
-            </span>
-            <span class="mini-toast-progress">68%</span>
-          </div>
+        65% {
+          opacity: 1;
+          transform: scale(1.12);
+        }
 
-          <div class="mini-picker" aria-hidden="true">
-            <div class="mini-picker-head">
-              <span>Carrossel do Instagram</span>
-              <strong>4 de 6</strong>
-            </div>
-            <div class="mini-picker-grid">
-              <span class="mini-picker-item is-selected"><i>1</i><b>✓</b></span>
-              <span class="mini-picker-item is-selected"><i>2</i><b>✓</b></span>
-              <span class="mini-picker-item is-video"><i>3</i><b>▶</b></span>
-              <span class="mini-picker-item is-selected"><i>4</i><b>✓</b></span>
-            </div>
-          </div>
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
 
-          <div class="install-label">
-            <span>Instalação via script</span>
-            <span>zero build</span>
-          </div>
+      .rod-multi-loading__item[data-removing="true"] {
+        min-height: 0!important;
+        max-height: 0!important;
+        margin: 0!important;
+        padding-block: 0!important;
+        border-width: 0;
+        opacity: 0;
+        transform: translate3d(0, -7px, 0) scale(.92);
+        overflow: hidden;
+      }
 
-          <div class="code-shell">
-            <pre><code>&lt;script
-  src="https://rod.migos.club/userscripts/toaster.js?v=4.7.0"
-&gt;&lt;/script&gt;
+      @media (max-width:560px) {
+        .rod-toast[data-multi-loading="true"] {
+          width: calc(100vw - 12px);
+          max-width: calc(100vw - 12px);
+          border-radius: 16px;
+        }
+        .rod-multi-loading {
+          max-height: min(50dvh, 430px);
+        }
+        .rod-multi-loading__header {
+          padding: 11px 9px 9px 12px;
+        }
+        .rod-multi-loading__aggregate {
+          gap: 6px;
+          padding: 8px 11px 9px;
+        }
+        .rod-multi-loading__header-button span {
+          display: none;
+        }
+        .rod-multi-loading__header-button {
+          width: 31px;
+          padding: 0;
+        }
+        .rod-multi-loading__list {
+          max-height: min(41dvh, 350px);
+        }
+        .rod-multi-loading__item {
+          grid-template-columns: 28px minmax(0, 1fr) auto;
+          gap: 8px;
+          min-height: 54px;
+          padding: 8px;
+        }
+        .rod-multi-loading__lead {
+          width: 28px;
+          height: 28px;
+        }
+        .rod-multi-loading__item-title {
+          font-size: 11px;
+        }
+        .rod-multi-loading__item-description {
+          font-size: 9.5px;
+        }
+        .rod-multi-loading__button {
+          width: 29px;
+          height: 29px;
+        }
+        .rod-multi-loading__button[data-action="retry"] span {
+          display: none;
+        }
+        .rod-multi-loading__button[data-action="retry"] {
+          width: 29px;
+          padding: 0;
+        }
+      }
 
-&lt;script&gt;
-  toast.success({
-    title: "Pronto",
-    description: "A API já está disponível.",
-  });
-&lt;/script&gt;</code></pre>
-          </div>
-        </div>
-      </aside>
-    </section>
+      /* Media picker */
+      .rod-toast-stack .rod-toast[data-interactive-kind="picker"] {
+        width: min(760px, calc(100vw - 20px));
+        min-width: min(620px, calc(100vw - 20px));
+        max-width: min(760px, calc(100vw - 20px));
+        height: min(760px, calc(100dvh - max(env(safe-area-inset-top, 0px), 12px) - max(env(safe-area-inset-bottom, 0px), 12px) - 24px));
+        max-height: min(860px, calc(100dvh - max(env(safe-area-inset-top, 0px), 12px) - max(env(safe-area-inset-bottom, 0px), 12px) - 24px));
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: stretch;
+        padding: 14px 10px 12px 14px;
+        overflow: hidden;
+        touch-action: pan-y;
+      }
 
-    <div id="catalog" class="layout">
-      <nav class="sidebar" aria-label="Seções da documentação">
-        <div class="sidebar-title">Navegação</div>
-        <ul id="sidebar-list" class="sidebar-list"></ul>
-      </nav>
+      .rod-toast[data-interactive-kind="picker"]>.rod-toast__icon {
+        display: none;
+      }
 
-      <div class="content">
-        <div class="catalog-head">
-          <div>
-            <span class="section-kicker">Playground executável</span>
-            <h2>Todos os usos, sem fumaça.</h2>
-            <p>
-              Cada cartão contém código copiável e um botão que executa o exemplo
-              usando a versão real carregada de
-              <code>rod.migos.club/userscripts/toaster.js</code>.
-            </p>
-          </div>
+      .rod-toast[data-interactive-kind="picker"]>.rod-toast__content {
+        min-height: 0;
+        overflow: hidden;
+      }
 
-          <label class="search-wrap">
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="11" cy="11" r="8"></circle>
-              <path d="m21 21-4.35-4.35"></path>
-            </svg>
-            <input
-              id="search"
-              class="search"
-              type="search"
-              placeholder="Buscar picker, dialog stack, task, retry, performance…"
-              autocomplete="off"
-              spellcheck="false"
-            >
-          </label>
-        </div>
+      .rod-toast[data-interactive-kind="picker"]>.rod-toast__actions {
+        align-self: start;
+      }
 
-        <div id="sections"></div>
+      .rod-toast[data-interactive-kind="picker"] .rod-toast__interactive {
+        grid-template-rows: auto minmax(0, 1fr);
+        grid-auto-rows: auto;
+        gap: 11px;
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+      }
 
-        <div id="empty-results" class="empty-results">
-          <div>
-            <h3>Nenhum exemplo encontrado</h3>
-            <p>Experimente buscar por “picker”, “state machine”, “dialog stack”, “retry” ou “performance”.</p>
-          </div>
-        </div>
+      .rod-toast[data-interactive-kind="picker"] .rod-toast__interactive-body {
+        min-height: 0;
+        overflow: hidden;
+      }
 
-        <section id="reference" class="section">
-          <header class="section-header">
-            <div>
-              <span class="section-kicker">Mapa rápido</span>
-              <h2 class="section-title">Referência da API</h2>
-            </div>
-            <p class="section-description">
-              A superfície pública da versão carregada, agrupada por intenção.
-              O playground usa <code>window.RodToaster</code> como runtime canônico
-              e não confia no alias genérico <code>window.toast</code>.
-            </p>
-          </header>
+      .rod-toast[data-interactive-kind="picker"] .rod-toast__confirm-actions {
+        position: relative;
+        z-index: 3;
+        flex: none;
+        padding-top: 2px;
+        overflow: visible;
+        background: var(--rod-surface);
+      }
 
-          <div class="api-table-wrap">
-            <div class="api-table-scroller">
-              <table class="api-table">
-                <thead>
-                  <tr>
-                    <th>API</th>
-                    <th>Retorno</th>
-                    <th>Uso principal</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr><td><code>toast(...args)</code></td><td>Controller</td><td>Mensagem padrão com valores primitivos ou objetos.</td></tr>
-                  <tr><td><code>toast.success/info/warning/error()</code></td><td>Controller</td><td>Mensagens semânticas, descritores ricos e erros copiáveis.</td></tr>
-                  <tr><td><code>ToastOptions.icon</code></td><td>SVG | URL | Image descriptor | Node</td><td>Ícone vetorial ou imagem real forçada para uma caixa quadrada 1:1, com cover/contain e fallback semântico.</td></tr>
-                  <tr><td><code>ToastOptions.expanded</code></td><td>unknown | Expanded descriptor</td><td>Adiciona um chevron lateral e uma área interna expansível/scrollável. Aceita <code>content</code>, <code>title</code>, <code>defaultOpen</code> e <code>maxHeight</code>; o timeout pausa enquanto a área está aberta ou focada.</td></tr>
-                  <tr><td><code>toast.message()</code></td><td>Controller</td><td>Toast rico com título, detalhes e ações assíncronas.</td></tr>
-                  <tr><td><code>toast.loading()</code></td><td>Loading controller</td><td>Spinner, pulse, progresso e transição para estado terminal.</td></tr>
-                  <tr><td><code>toast.multiLoading()</code></td><td>MultiLoadingController</td><td>Lote compacto com itens independentes, progresso agregado do lote, “% concluído · x de x itens”, sucesso que transforma somente o indicador em check verde e sai em fade-up, retry, cancel individual/todos e scroll interno limitado.</td></tr>
-                  <tr><td><code>toast.confirm()</code></td><td>Promise&lt;T&gt;</td><td>Confirmação na interaction lane. Apenas o dialog do topo recebe foco, Enter e Escape; dismissible:false bloqueia dismiss implícito.</td></tr>
-                  <tr><td><code>toast.prompt()</code></td><td>Promise&lt;string|null&gt;</td><td>Entrada de texto simples ou multiline com validação.</td></tr>
-                  <tr><td><code>toast.select&lt;T&gt;()</code></td><td>Promise&lt;T|T[]|null&gt;</td><td>Seleção textual sem stringificar number/object; tokens internos preservam o valor original.</td></tr>
-                  <tr><td><code>toast.picker&lt;T&gt;()</code></td><td>Promise&lt;PickerResult&lt;T&gt;&gt;</td><td>Grid visual para imagens e vídeos com células de proporção estável inclusive no WebKit/iPhone, Blob/File, seleção múltipla e retorno por item, ID, index ou descriptor.</td></tr>
-                  <tr><td><code>toast.undo()</code></td><td>Promise&lt;boolean&gt;</td><td>Janela temporária para desfazer uma ação.</td></tr>
-                  <tr><td><code>toast.promise()</code></td><td>Promise&lt;T&gt;</td><td>Mapeia uma Promise para loading, success e error.</td></tr>
-                  <tr><td><code>toast.task()</code></td><td>Task controller</td><td>State machine com queued/running/paused e estados terminais success/error/cancelled; cancel races não ressuscitam a task.</td></tr>
-                  <tr><td><code>toast.group()</code></td><td>Task group</td><td>Agrega tarefas filhas e calcula progresso ponderado.</td></tr>
-                  <tr><td><code>toast.retry()</code></td><td>Promise&lt;T&gt;</td><td>Tentativas, backoff, cancelamento e retry manual.</td></tr>
-                  <tr><td><code>toast.scope()</code></td><td>Scoped API</td><td>Isola mensagens e tarefas por feature ou domínio.</td></tr>
-                  <tr><td><code>toast.on/once/off/emit()</code></td><td>unsubscribe / void</td><td>Eventos de lifecycle, actions, tarefas e grupos.</td></tr>
-                  <tr><td><code>toast.update/progress/resolve()</code></td><td>Controller</td><td>Atualização imperativa baseada em ID.</td></tr>
-                  <tr><td><code>toast.minimize/restore()</code></td><td>boolean</td><td>Controla o gerenciador compacto de tarefas.</td></tr>
-                  <tr><td><code>toast.bringToFront()/isTopLayer()</code></td><td>boolean</td><td>Reasserta o host no browser Top Layer sem executar esse trabalho a cada update de progresso.</td></tr>
-                  <tr><td><code>toast.destroy()/noConflict()</code></td><td>void / ToasterApi</td><td>Teardown real de observers/listeners/history patch e restauração segura dos globals anteriores.</td></tr>
-                  <tr><td><code>toast.setTheme/toggleTheme()</code></td><td>dark | light</td><td>Alterna tema em runtime ou acompanha o sistema com auto.</td></tr>
-                  <tr><td><code>toast.setSize/getSize()</code></td><td>compact | comfortable | large</td><td>Controla densidade e escala do componente.</td></tr>
-                  <tr><td><code>toast.configure()</code></td><td>Config</td><td>Inclui idleHostTtl, taskProgressPersistInterval, Top Layer, persistência, tema, tamanho, inspector e SPA.</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
+      .rod-toast__picker {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: 9px;
+        min-width: 0;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+      }
 
-        <footer class="footer">
-          <div>
-            <strong>Rod Toaster</strong><br>
-            v4.9: conteúdo expansível, timer com pause reasons, multi loading com agregado, picker estável no WebKit, interaction lane e runtime quente de alta performance.
-          </div>
-          <div>
-            Pressione <span class="kbd">Esc</span> para fechar dialogs ou recolher a pilha.
-          </div>
-        </footer>
-      </div>
-    </div>
-  </main>
+      .rod-toast__picker-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-width: 0;
+      }
 
-  <script>
-    (() => {
-      "use strict";
+      .rod-toast__picker-count {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--rod-muted);
+        font: 620 11px/1.25 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        font-variant-numeric: tabular-nums;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
 
-      const INSTALL_CODE =
-        '<script src="https://rod.migos.club/userscripts/toaster.js?v=4.7.0"><' +
-        '/script>';
+      .rod-toast__picker-tools {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 6px;
+      }
 
-      const sleep = (ms) =>
-        new Promise((resolve) => setTimeout(resolve, ms));
+      .rod-toast__picker-tool {
+        appearance: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 30px;
+        padding: 0 9px;
+        border: 1px solid var(--rod-border);
+        border-radius: 9px;
+        outline: 0;
+        background: var(--rod-overlay);
+        color: var(--rod-muted);
+        font: 650 10px/1 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        cursor: pointer;
+        touch-action: manipulation;
+        transition: color 150ms, background-color 150ms, border-color 150ms, opacity 150ms, transform 240ms var(--rod-ease-spring);
+      }
 
-      /**
-       * Playground-safe facade.
-       *
-       * window.toast is a generic alias and can be replaced by another library.
-       * All demos resolve window.RodToaster again at call time.
+      .rod-toast__picker-tool:hover:not(:disabled),
+      .rod-toast__picker-tool:focus-visible:not(:disabled) {
+        border-color: var(--rod-border-strong);
+        background: var(--rod-hover);
+        color: var(--rod-text-strong);
+        transform: translateY(-1px);
+      }
+
+      .rod-toast__picker-tool:active:not(:disabled) {
+        transform: translateY(0) scale(.97);
+      }
+
+      .rod-toast__picker-tool:disabled {
+        cursor: default;
+        opacity: .38;
+      }
+
+      .rod-toast__picker-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(var(--rod-picker-item-min, 112px), 1fr));
+        grid-auto-rows: auto;
+        align-content: start;
+        align-items: start;
+        justify-items: stretch;
+        gap: var(--rod-picker-gap, 8px);
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        padding: 1px 3px 7px 1px;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+        scrollbar-color: var(--rod-border-strong) transparent;
+        -webkit-overflow-scrolling: touch;
+        scroll-padding: 8px;
+      }
+
+      .rod-toast__picker-item {
+        appearance: none;
+        position: relative;
+        isolation: isolate;
+        display: block;
+        align-self: start;
+        width: 100%;
+        height: auto;
+        min-width: 0;
+        min-height: 0;
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid var(--rod-border);
+        border-radius: var(--rod-picker-radius, 13px);
+        outline: 0;
+        background: linear-gradient(145deg, var(--rod-overlay), transparent), var(--rod-surface-raised);
+        color: var(--rod-text);
+        line-height: 0;
+        cursor: pointer;
+        touch-action: manipulation;
+        contain: layout paint style;
+        transition: border-color 170ms, box-shadow 220ms, opacity 170ms, transform 300ms var(--rod-ease-spring);
+      }
+
+      /*
+       * Do not depend on CSS aspect-ratio for picker cells. WebKit can resolve
+       * intrinsic replaced-element sizes incorrectly inside a scrollable grid,
+       * producing the tall/overlapping cards seen on iOS. A normal-flow ratio
+       * spacer gives Grid a deterministic block-size before any image decodes.
        */
-      const toast = new Proxy(
-        function playgroundToastFacade(...args) {
-          const api = getToast();
-          if (!api) {
-            throw new Error("RodToaster runtime is unavailable.");
-          }
-          return Reflect.apply(api, api, args);
-        },
-        {
-          get(_target, property) {
-            const api = getToast();
-            if (!api) return undefined;
-            const value = api[property];
-            return typeof value === "function" ? value.bind(api) : value;
-          },
-          apply(_target, _thisArg, args) {
-            const api = getToast();
-            if (!api) {
-              throw new Error("RodToaster runtime is unavailable.");
-            }
-            return Reflect.apply(api, api, args);
-          },
-        },
+      .rod-toast__picker-item::before {
+        content: "";
+        display: block;
+        width: 100%;
+        padding-block-start: var(--rod-picker-aspect-padding, 100%);
+        pointer-events: none;
+      }
+
+      .rod-toast__picker-item:hover:not(:disabled),
+      .rod-toast__picker-item:focus-visible:not(:disabled) {
+        border-color: var(--rod-border-strong);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, .18), 0 0 0 1px color-mix(in srgb, var(--rod-text-strong) 7%, transparent);
+        transform: translateY(-2px) scale(1.012);
+      }
+
+      .rod-toast__picker-item:active:not(:disabled) {
+        transform: scale(.985);
+      }
+
+      .rod-toast__picker-item[data-selected="true"] {
+        border-color: color-mix(in srgb, var(--rod-text-strong) 62%, var(--rod-border));
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--rod-text-strong) 72%, transparent) inset, 0 10px 28px rgba(0, 0, 0, .2);
+      }
+
+      .rod-toast__picker-item:disabled {
+        cursor: default;
+        opacity: .38;
+        filter: grayscale(.35);
+      }
+
+      @supports (-webkit-touch-callout: none) {
+        .rod-toast__picker-grid {
+          grid-auto-flow: row;
+        }
+
+        .rod-toast__picker-item {
+          transform: none !important;
+        }
+      }
+
+      .rod-toast__picker-media {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        background: var(--rod-overlay);
+        pointer-events: none;
+        user-select: none;
+        -webkit-user-drag: none;
+        transition: filter 220ms, transform 420ms var(--rod-ease-spring);
+      }
+
+      .rod-toast__picker-item:hover:not(:disabled) .rod-toast__picker-media {
+        transform: scale(1.035);
+      }
+
+      .rod-toast__picker-item[data-selected="false"] .rod-toast__picker-media {
+        filter: saturate(.76) brightness(.78);
+      }
+
+      .rod-toast-stack[data-theme="light"] .rod-toast__picker-item[data-selected="false"] .rod-toast__picker-media {
+        filter: saturate(.82) brightness(.93);
+      }
+
+      .rod-toast__picker-shade {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        background: linear-gradient(to top, rgba(0, 0, 0, .48), transparent 46%);
+        pointer-events: none;
+        opacity: .66;
+        transition: opacity 180ms;
+      }
+
+      .rod-toast__picker-item[data-selected="true"] .rod-toast__picker-shade {
+        opacity: .32;
+      }
+
+      .rod-toast__picker-check {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 3;
+        display: grid;
+        place-items: center;
+        width: 25px;
+        height: 25px;
+        border: 1px solid rgba(255, 255, 255, .42);
+        border-radius: 999px;
+        background: rgba(10, 10, 11, .48);
+        color: rgba(255, 255, 255, .96);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, .2), 0 1px 0 rgba(255, 255, 255, .14) inset;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        opacity: .78;
+        transform: scale(.9);
+        transition: opacity 160ms, transform 300ms var(--rod-ease-spring), background-color 160ms, border-color 160ms;
+        pointer-events: none;
+      }
+
+      .rod-toast__picker-check svg {
+        width: 14px;
+        height: 14px;
+        stroke-width: 2.4;
+        opacity: 0;
+        transform: scale(.6);
+        transition: opacity 160ms, transform 280ms var(--rod-ease-spring);
+      }
+
+      .rod-toast__picker-item[data-selected="true"] .rod-toast__picker-check {
+        border-color: rgba(255, 255, 255, .88);
+        background: rgba(250, 250, 250, .96);
+        color: rgba(20, 20, 21, .98);
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      .rod-toast__picker-item[data-selected="true"] .rod-toast__picker-check svg {
+        opacity: 1;
+        transform: scale(1);
+      }
+
+      .rod-toast__picker-index,
+      .rod-toast__picker-kind {
+        position: absolute;
+        z-index: 3;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 22px;
+        min-height: 21px;
+        padding: 0 6px;
+        border: 1px solid rgba(255, 255, 255, .22);
+        border-radius: 999px;
+        background: rgba(10, 10, 11, .48);
+        color: rgba(255, 255, 255, .94);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, .16);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        font: 700 9px/1 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        font-variant-numeric: tabular-nums;
+        pointer-events: none;
+      }
+
+      .rod-toast__picker-index {
+        bottom: 8px;
+        left: 8px;
+      }
+
+      .rod-toast__picker-kind {
+        right: 8px;
+        bottom: 8px;
+        gap: 4px;
+        min-width: 0;
+        padding-inline: 6px;
+        text-transform: uppercase;
+      }
+
+      .rod-toast__picker-kind svg {
+        width: 11px;
+        height: 11px;
+      }
+
+      .rod-toast__picker-index[hidden],
+      .rod-toast__picker-kind[hidden],
+      .rod-toast__picker-label[hidden] {
+        display: none!important;
+      }
+
+      .rod-toast__picker-label {
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+        left: 38px;
+        z-index: 2;
+        overflow: hidden;
+        color: rgba(255, 255, 255, .96);
+        font: 650 10px/1.2 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        text-align: left;
+        text-overflow: ellipsis;
+        text-shadow: 0 1px 5px rgba(0, 0, 0, .58);
+        white-space: nowrap;
+        pointer-events: none;
+      }
+
+      .rod-toast__picker-label[data-has-kind="true"] {
+        right: 58px;
+      }
+
+      .rod-toast__picker-empty {
+        display: grid;
+        place-items: center;
+        min-height: 150px;
+        padding: 24px;
+        border: 1px dashed var(--rod-border);
+        border-radius: 13px;
+        color: var(--rod-muted);
+        background: var(--rod-overlay);
+        font: 500 12px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
+        text-align: center;
+      }
+
+      .rod-toast__picker-item[data-media-error="true"]::after {
+        content: "Preview unavailable";
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: grid;
+        place-items: center;
+        padding: 12px;
+        background: var(--rod-surface-raised);
+        color: var(--rod-muted);
+        font: 600 10px/1.3 system-ui, sans-serif;
+        text-align: center;
+      }
+
+      @media (max-width:560px) {
+        .rod-toast-stack .rod-toast[data-interactive-kind="picker"] {
+          width: calc(100vw - 10px);
+          min-width: 0;
+          max-width: calc(100vw - 10px);
+          height: calc(100dvh - max(env(safe-area-inset-top, 0px), 8px) - max(env(safe-area-inset-bottom, 0px), 8px) - 12px);
+          max-height: none;
+          padding: 11px 8px 9px 11px;
+          border-radius: 17px;
+        }
+        .rod-toast[data-interactive-kind="picker"] .rod-toast__interactive {
+          gap: 9px;
+        }
+        .rod-toast[data-interactive-kind="picker"] .rod-toast__interactive-copy {
+          gap: 3px;
+        }
+        .rod-toast[data-interactive-kind="picker"] .rod-toast__interactive-title {
+          font-size: 13px;
+        }
+        .rod-toast[data-interactive-kind="picker"] .rod-toast__interactive-description {
+          font-size: 11px;
+          line-height: 1.35;
+        }
+        .rod-toast__picker {
+          gap: 7px;
+        }
+        .rod-toast__picker-grid {
+          grid-template-columns: repeat(auto-fill, minmax(var(--rod-picker-item-min-mobile, 104px), 1fr));
+          gap: 6px;
+          padding-bottom: 5px;
+        }
+        .rod-toast__picker-toolbar {
+          align-items: center;
+          flex-direction: row;
+          gap: 6px;
+        }
+        .rod-toast__picker-tools {
+          width: auto;
+          gap: 4px;
+        }
+        .rod-toast__picker-tool {
+          flex: 0 0 auto;
+          min-height: 28px;
+          padding-inline: 8px;
+          font-size: 9px;
+        }
+        .rod-toast[data-interactive-kind="picker"] .rod-toast__confirm-actions {
+          gap: 6px;
+          padding-top: 0;
+        }
+        .rod-toast[data-interactive-kind="picker"] .rod-toast__confirm-button {
+          min-height: 38px!important;
+        }
+        .rod-toast__picker-label {
+          font-size: 9px;
+        }
+      }
+
+      @media (prefers-reduced-motion:reduce) {
+        .rod-toast,
+        .rod-toast__content,
+        .rod-toast__actions,
+        .rod-toast__icon,
+        .rod-toast__expand svg,
+        .rod-toast__content-expand svg,
+        .rod-toast__expanded-panel,
+        .rod-toast-stack__list::before,
+        .rod-toast-stack__list::after,
+        .rod-toast__picker-item,
+        .rod-toast__picker-media,
+        .rod-toast__picker-check {
+          transition-duration: 1ms!important;
+          animation-duration: 1ms!important;
+        }
+      }
+    `;
+    return style;
+  }
+
+  function resolveTheme(value: Theme = state.config.theme): ResolvedTheme {
+    if (value === "dark" || value === "light") return value;
+    const hostWindow = state.hostWindow ?? initialHostWindow;
+    return safeCall(() => hostWindow.matchMedia?.("(prefers-color-scheme: light)")?.matches === true, false)
+      ? "light"
+      : "dark";
+  }
+
+  function getToastPalette(type: ToastType): Palette {
+    const semanticType: ToastType = hasOwn(TOAST_COLORS, type) ? type : "default";
+    return THEME_TOAST_COLORS[state.resolvedTheme][semanticType];
+  }
+
+  function applyToastPalette(node: HTMLElement | null, type: ToastType): void {
+    if (!node) return;
+    const semanticType: ToastType = hasOwn(TOAST_COLORS, type) ? type : "default";
+    const paletteKey = `${state.resolvedTheme}:${semanticType}`;
+    if (node.dataset.rodPalette === paletteKey) return;
+    const palette = THEME_TOAST_COLORS[state.resolvedTheme][semanticType];
+    node.style.setProperty("--rod-toast-bg", palette.bg);
+    node.style.setProperty("--rod-toast-border", palette.border);
+    node.style.setProperty("--rod-toast-text", palette.text);
+    node.style.setProperty("--rod-toast-accent", palette.accent);
+    node.dataset.type = semanticType;
+    node.dataset.rodPalette = paletteKey;
+  }
+
+  function syncTheme(): boolean {
+    const previous = state.resolvedTheme;
+    state.resolvedTheme = resolveTheme();
+    if (state.container) state.container.dataset.theme = state.resolvedTheme;
+    if (state.hostElement) state.hostElement.dataset.rodToasterTheme = state.resolvedTheme;
+    for (const record of state.toasts) applyToastPalette(record.node, record.options.type);
+    return previous !== state.resolvedTheme;
+  }
+
+  function installThemeObserver(): void {
+    state.themeCleanup?.();
+    state.themeCleanup = null;
+    state.themeMediaQuery = null;
+    if (state.config.theme !== "auto") {
+      syncTheme();
+      return;
+    }
+    const hostWindow = state.hostWindow ?? initialHostWindow;
+    const mediaQuery = safeCall(() => hostWindow.matchMedia?.("(prefers-color-scheme: light)") ?? null, null);
+    if (!mediaQuery) {
+      syncTheme();
+      return;
+    }
+    const handleChange = (): void => {
+      if (syncTheme() && state.api) {
+        emitEvent("theme:change", { theme: state.config.theme, resolvedTheme: state.resolvedTheme });
+      }
+    };
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", handleChange);
+      state.themeCleanup = () => mediaQuery.removeEventListener("change", handleChange);
+    } else {
+      mediaQuery.addListener(handleChange);
+      state.themeCleanup = () => mediaQuery.removeListener(handleChange);
+    }
+    state.themeMediaQuery = mediaQuery;
+    syncTheme();
+  }
+
+  function resolveObjectInspectorSrc(): string {
+    const configured = state.config.objectInspectorSrc?.trim();
+    if (configured) return configured;
+    const explicit = safeCall(() => typedGlobalWindow.ROD_OBJECT_INSPECTOR_SRC, undefined);
+    if (typeof explicit === "string" && explicit.trim()) return explicit.trim();
+    const documents = [state.hostDocument, globalWindow.document].filter((item): item is Document => Boolean(item));
+    for (const documentRef of documents) {
+      const currentScript = safeCall(() => documentRef.currentScript, null);
+      const scripts = safeCall(() => Array.from(documentRef.scripts), [] as HTMLScriptElement[]);
+      const candidates = currentScript && String((currentScript as Element).tagName).toUpperCase() === "SCRIPT"
+        ? [currentScript as HTMLScriptElement, ...scripts.reverse()]
+        : scripts.reverse();
+      for (const script of candidates) {
+        const src = safeCall(() => script.src, "");
+        if (src && /toaster(?:\.min)?\.js(?:[?#].*)?$/i.test(src)) {
+          return src.replace(/toaster(?:\.min)?\.js([?#].*)?$/i, "object-inspector.js$1");
+        }
+      }
+    }
+    return "object-inspector.js";
+  }
+
+  function getObjectInspectorApi(): ObjectInspectorApi | null {
+    if (state.inspectorApi) return state.inspectorApi;
+    for (const candidate of [state.hostWindow, initialHostWindow, globalWindow]) {
+      if (!candidate) continue;
+      const api = safeCall(() => (candidate as WindowWithRodGlobals).RodObjectInspector ?? null, null);
+      if (api) return api;
+    }
+    return null;
+  }
+
+  function buildInspectorOptions(options: Pick<NormalizedToastOptions, "inspectDepth" | "inspectItems" | "previewItems" | "showPrototype" | "showNonEnumerable" | "showObjectLength" | "virtualizeInspector" | "virtualizeAfter" | "virtualRowHeight" | "virtualOverscan" | "virtualMaxHeight" | "unmountInspectorOnCollapse"> | ToasterConfig): InspectorRenderOptions {
+    return {
+      inspectDepth: options.inspectDepth,
+      inspectItems: options.inspectItems,
+      previewItems: options.previewItems,
+      showPrototype: options.showPrototype,
+      showNonEnumerable: options.showNonEnumerable,
+      showObjectLength: options.showObjectLength,
+      virtualize: options.virtualizeInspector,
+      virtualizeAfter: options.virtualizeAfter,
+      virtualRowHeight: options.virtualRowHeight,
+      virtualOverscan: options.virtualOverscan,
+      virtualMaxHeight: options.virtualMaxHeight,
+      unmountOnCollapse: options.unmountInspectorOnCollapse,
+    };
+  }
+
+  function installInspectorStyle(api: ObjectInspectorApi): void {
+    if (!state.renderRoot || !state.hostDocument || state.inspectorStyle?.isConnected) return;
+    const style = api.createStyle(state.hostDocument);
+    state.renderRoot.appendChild(style);
+    state.inspectorStyle = style;
+  }
+
+  function ensureInspectorRuntime(api: ObjectInspectorApi): ObjectInspectorRuntime {
+    installInspectorStyle(api);
+    if (state.inspectorRuntime) return state.inspectorRuntime;
+    const hostWindow = state.hostWindow ?? initialHostWindow;
+    const hostDocument = state.hostDocument ?? hostWindow.document;
+    state.inspectorRuntime = api.create({
+      window: hostWindow,
+      document: hostDocument,
+      maxZIndex: MAX_Z_INDEX,
+      options: buildInspectorOptions(state.config),
+      getHost: () => ({
+        window: state.hostWindow ?? initialHostWindow,
+        document: state.hostDocument ?? initialHostWindow.document,
+      }),
+    });
+    return state.inspectorRuntime;
+  }
+
+  function loadObjectInspector(): Promise<ObjectInspectorApi> {
+    const existing = getObjectInspectorApi();
+    if (existing) {
+      state.inspectorApi = existing;
+      ensureInspectorRuntime(existing);
+      return Promise.resolve(existing);
+    }
+    if (state.inspectorPromise) return state.inspectorPromise;
+    const hostWindow = state.hostWindow ?? initialHostWindow;
+    const hostDocument = safeCall(() => hostWindow.document, null);
+    if (!hostDocument) return Promise.reject(new Error("Object Inspector host document unavailable"));
+    const src = resolveObjectInspectorSrc();
+    const existingScript = safeCall(
+      () => Array.from(hostDocument.scripts).find((candidate) => candidate.dataset.rodObjectInspectorSrc === src) ?? null,
+      null,
+    );
+    const script = existingScript ?? hostDocument.createElement("script");
+    state.inspectorPromise = new Promise<ObjectInspectorApi>((resolve, reject) => {
+      let settled = false;
+      const timeout = hostWindow.setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        state.inspectorPromise = null;
+        cleanupListeners();
+        reject(new Error(`Timed out loading ${INSPECTOR_GLOBAL} from ${src}`));
+      }, state.config.objectInspectorLoadTimeout);
+      const cleanupListeners = (): void => {
+        script.removeEventListener("load", handleLoad);
+        script.removeEventListener("error", handleError);
+      };
+      const finish = (api: ObjectInspectorApi): void => {
+        if (settled) return;
+        settled = true;
+        hostWindow.clearTimeout(timeout);
+        cleanupListeners();
+        state.inspectorApi = api;
+        ensureInspectorRuntime(api);
+        resolve(api);
+      };
+      const handleLoad = (): void => {
+        const api = getObjectInspectorApi();
+        if (api) finish(api);
+        else handleError();
+      };
+      const handleError = (): void => {
+        if (settled) return;
+        settled = true;
+        hostWindow.clearTimeout(timeout);
+        cleanupListeners();
+        state.inspectorPromise = null;
+        reject(new Error(`Failed to load ${INSPECTOR_GLOBAL} from ${src}`));
+      };
+      script.addEventListener("load", handleLoad);
+      script.addEventListener("error", handleError);
+      if (!existingScript) {
+        script.src = src;
+        script.async = true;
+        script.dataset.rodObjectInspectorSrc = src;
+        (hostDocument.head ?? hostDocument.documentElement).appendChild(script);
+      } else {
+        const api = getObjectInspectorApi();
+        if (api) finish(api);
+      }
+    });
+    return state.inspectorPromise;
+  }
+
+  function hasEventListeners(eventName: string): boolean {
+    return Boolean(state.listeners.get(eventName)?.size || state.listeners.get("*")?.size);
+  }
+
+  function emitEvent(eventName: string, payload: UnknownRecord = {}): ToastEvent {
+    const event: ToastEvent = { event: eventName, timestamp: Date.now(), ...payload };
+    const directListeners = state.listeners.get(eventName);
+    if (directListeners) {
+      for (const listener of directListeners) safeCall(() => listener(event), undefined);
+    }
+    if (eventName !== "*") {
+      const wildcardListeners = state.listeners.get("*");
+      if (wildcardListeners) {
+        for (const listener of wildcardListeners) safeCall(() => listener(event), undefined);
+      }
+    }
+    return event;
+  }
+
+  function addEventListenerInternal(eventName: string, listener: ToastEventListener): () => void {
+    const name = String(eventName || "*");
+    const bucket = state.listeners.get(name) ?? new Set<ToastEventListener>();
+    bucket.add(listener);
+    state.listeners.set(name, bucket);
+    return () => {
+      bucket.delete(listener);
+      if (!bucket.size) state.listeners.delete(name);
+    };
+  }
+
+  function hasActiveLoadingRecords(): boolean {
+    return state.activeLoadingCount > 0;
+  }
+
+  function setDataValue(element: HTMLElement, key: string, value: string): void {
+    if (element.dataset[key] !== value) element.dataset[key] = value;
+  }
+
+  function setTextValue(node: Node, value: string): void {
+    if (node.textContent !== value) node.textContent = value;
+  }
+
+  function getStackRecords(): ToastRecord[] {
+    return state.toasts.filter((record) => record.options.lane !== "interaction" && !record.removed);
+  }
+
+  function getNotificationRecords(): ToastRecord[] {
+    return state.toasts.filter((record) => record.options.lane === "notification" && !record.removed);
+  }
+
+  function getTopDialogEntry(): DialogStackEntry | null {
+    return state.dialogStack.at(-1) ?? null;
+  }
+
+  function isTopDialog(record: ToastRecord): boolean {
+    return getTopDialogEntry()?.record === record;
+  }
+
+  function syncDialogStack(): void {
+    const top = getTopDialogEntry();
+    for (const entry of state.dialogStack) {
+      const active = entry === top && !entry.record.removed;
+      entry.record.node.dataset.dialogActive = String(active);
+      entry.record.node.setAttribute("aria-hidden", String(!active));
+      entry.record.node.inert = !active;
+    }
+    if (state.container) {
+      setDataValue(state.container, "hasInteraction", String(Boolean(top)));
+    }
+  }
+
+  function registerDialog(record: ToastRecord, previousFocus: Element | null): void {
+    const focus =
+      previousFocus && typeof (previousFocus as HTMLElement).focus === "function"
+        ? previousFocus as HTMLElement
+        : null;
+    state.dialogStack.push({ record, previousFocus: focus });
+    syncDialogStack();
+  }
+
+  function unregisterDialog(record: ToastRecord): void {
+    const index = state.dialogStack.findIndex((entry) => entry.record === record);
+    if (index < 0) return;
+    const [removedEntry] = state.dialogStack.splice(index, 1);
+    syncDialogStack();
+
+    const hostWindow = state.hostWindow ?? initialHostWindow;
+    hostWindow.queueMicrotask(() => {
+      const top = getTopDialogEntry();
+      if (top?.record.node.isConnected) {
+        safeCall(() => top.record.node.focus({ preventScroll: true }), undefined);
+        return;
+      }
+      if (removedEntry?.previousFocus?.isConnected) {
+        safeCall(() => removedEntry.previousFocus?.focus({ preventScroll: true }), undefined);
+      }
+    });
+  }
+
+  function setManagerMinimized(minimized: boolean): boolean {
+    const count = getStackRecords().length;
+    state.managerMinimized = Boolean(minimized) && count > 0;
+    syncStackLayout();
+    if (!state.managerMinimized && count > 1) setStackExpanded(true);
+    return state.managerMinimized;
+  }
+
+  function syncStackLayout(): void {
+    const container = state.container;
+    if (!container) return;
+
+    const records = getStackRecords();
+    const count = records.length;
+    let taskCount = 0;
+
+    for (let sourceIndex = count - 1, stackIndex = 0; sourceIndex >= 0; sourceIndex -= 1, stackIndex += 1) {
+      const record = records[sourceIndex];
+      setDataValue(record.node, "stackIndex", String(stackIndex));
+      if (!record.node.dataset.itemExpanded) record.node.dataset.itemExpanded = "false";
+      if (record.options.lane === "task" || record.options.metadata?.taskId) taskCount += 1;
+    }
+
+    if (count === 0) state.managerMinimized = false;
+    if (count <= 1) state.stackExpanded = false;
+
+    const stackVisible = Math.min(3, Math.max(1, Number(state.config.stackVisible) || 1));
+    const stackDepth = Math.min(count, stackVisible);
+    const effectiveExpanded = !state.config.stacked || state.stackExpanded || count <= 1;
+    const viewportRatio = clamp(Number(state.config.stackViewportRatio) || DEFAULT_CONFIG.stackViewportRatio, 0.2, 0.8);
+
+    setDataValue(container, "stacked", String(state.config.stacked));
+    setDataValue(container, "managerMinimized", String(state.managerMinimized));
+    setDataValue(container, "expanded", String(effectiveExpanded));
+    setDataValue(container, "stackDepth", String(stackDepth));
+    setDataValue(container, "count", String(count));
+    setDataValue(container, "hasMany", String(count > 1));
+    setDataValue(container, "hasInteraction", String(Boolean(getTopDialogEntry())));
+    setDataValue(container, "size", state.config.size);
+
+    const stackHeight = `${Math.max(180, state.config.stackMaxHeight)}px`;
+    const stackViewport = `${Math.round(viewportRatio * 100)}dvh`;
+    if (container.style.getPropertyValue("--rod-toast-stack-max-height") !== stackHeight) {
+      container.style.setProperty("--rod-toast-stack-max-height", stackHeight);
+    }
+    if (container.style.getPropertyValue("--rod-toast-stack-max-viewport") !== stackViewport) {
+      container.style.setProperty("--rod-toast-stack-max-viewport", stackViewport);
+    }
+
+    if (state.toolbar) setDataValue(state.toolbar, "enabled", String(state.config.stackToolbar));
+    if (state.stackCountNode) {
+      setTextValue(
+        state.stackCountNode,
+        taskCount
+          ? `${taskCount} ${taskCount === 1 ? "task" : "tasks"} · ${count} ${count === 1 ? "toast" : "toasts"}`
+          : `${count} ${count === 1 ? "toast" : "toasts"}`,
       );
+    }
+    if (state.managerCountNode) {
+      const visibleCount = taskCount || count;
+      setTextValue(state.managerCountNode, String(visibleCount));
+      setDataValue(state.managerCountNode, "visible", String(visibleCount > 1));
+    }
+    if (state.managerNode) {
+      const title = taskCount
+        ? `Restore ${taskCount} active ${taskCount === 1 ? "task" : "tasks"}`
+        : "Restore active toasts";
+      if (state.managerNode.title !== title) state.managerNode.title = title;
+    }
+  }
+
+  function setExpandedToast(record: ToastRecord, expanded: boolean): void {
+    if (record.removed || record.options.lane === "interaction") return;
+    for (const candidate of getStackRecords()) {
+      setDataValue(candidate.node, "itemExpanded", String(candidate === record && expanded));
+    }
+    if (expanded) {
+      safeCall(() => record.node.scrollIntoView({ block: "nearest", inline: "nearest" }), undefined);
+    }
+  }
+
+  function setStackExpanded(expanded: boolean): void {
+    const records = getStackRecords();
+    if (!state.config.stacked || records.length <= 1) {
+      state.stackExpanded = false;
+      for (const record of records) setDataValue(record.node, "itemExpanded", "false");
+      syncStackLayout();
+      return;
+    }
+    state.stackExpanded = Boolean(expanded);
+    if (state.stackExpanded) {
+      let alreadyExpanded = false;
+      for (const record of records) {
+        if (record.node.dataset.itemExpanded === "true") {
+          alreadyExpanded = true;
+          break;
+        }
+      }
+      if (!alreadyExpanded) {
+        const newest = records[records.length - 1];
+        if (newest) setExpandedToast(newest, true);
+      }
+    } else {
+      for (const record of records) setDataValue(record.node, "itemExpanded", "false");
+    }
+    syncStackLayout();
+  }
+
+  function toggleExpandedToast(record: ToastRecord): void {
+    if (record.removed) return;
+    setExpandedToast(record, record.node.dataset.itemExpanded !== "true");
+  }
+
+  const INTERACTIVE_SELECTOR = "button,a,summary,details,input,textarea,select,option,[contenteditable='true'],[role='button']";
+
+  function eventHasInteractiveTarget(event: Event): boolean {
+    const path = typeof event.composedPath === "function" ? event.composedPath() : [event.target];
+    return path.some((candidate) => isElementLike(candidate) && candidate.matches(INTERACTIVE_SELECTOR));
+  }
+
+  function getToastRecordByNode(node: Element): ToastRecord | null {
+    const record = state.recordsByNode.get(node);
+    return record && !record.removed ? record : null;
+  }
+
+  function handleStackClick(event: MouseEvent): void {
+    if (!state.config.stacked || eventHasInteractiveTarget(event)) return;
+    const target = event.target;
+    const toastNode = isElementLike(target) ? target.closest<HTMLElement>(".rod-toast") : null;
+    if (!toastNode || toastNode.dataset.suppressStackClick === "true") return;
+    const record = getToastRecordByNode(toastNode);
+    if (!record) return;
+    if (!state.stackExpanded) {
+      if (state.toasts.length <= 1 || toastNode.dataset.stackIndex !== "0") return;
+      setStackExpanded(true);
+      setExpandedToast(record, true);
+      return;
+    }
+    toggleExpandedToast(record);
+  }
 
 
-      const DEMO_ICON_SVG = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600">
-          <defs>
-            <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-              <stop stop-color="#6d5dfc"/>
-              <stop offset=".52" stop-color="#63d7ff"/>
-              <stop offset="1" stop-color="#a3ff75"/>
-            </linearGradient>
-          </defs>
-          <rect width="1200" height="600" fill="url(#g)"/>
-          <circle cx="830" cy="170" r="155" fill="white" opacity=".25"/>
-          <circle cx="260" cy="170" r="90" fill="#09090b" opacity=".16"/>
-          <path
-            d="M0 510 260 290l165 155 175-210 250 275 150-145 200 145v90H0Z"
-            fill="#09090b"
-            opacity=".56"
-          />
-        </svg>
-      `.trim();
+  function applyHostDominanceStyles(hostElement: HTMLElement): void {
+    const importantStyles = [
+      ["all", "initial"],
+      ["position", "fixed"],
+      ["inset", "0"],
+      ["top", "0"],
+      ["right", "0"],
+      ["bottom", "0"],
+      ["left", "0"],
+      ["width", "0"],
+      ["height", "0"],
+      ["min-width", "0"],
+      ["min-height", "0"],
+      ["max-width", "none"],
+      ["max-height", "none"],
+      ["margin", "0"],
+      ["padding", "0"],
+      ["border", "0"],
+      ["outline", "0"],
+      ["background", "transparent"],
+      ["overflow", "visible"],
+      ["visibility", "visible"],
+      ["opacity", "1"],
+      ["clip", "auto"],
+      ["clip-path", "none"],
+      ["filter", "none"],
+      ["transform", "none"],
+      ["perspective", "none"],
+      ["mask", "none"],
+      ["mix-blend-mode", "normal"],
+      ["isolation", "isolate"],
+      ["z-index", String(MAX_Z_INDEX)],
+      ["pointer-events", "none"],
+    ] as const;
 
-      const DEMO_ICON_IMAGE =
-        `data:image/svg+xml;charset=utf-8,${encodeURIComponent(DEMO_ICON_SVG)}`;
+    for (const [property, value] of importantStyles) {
+      if (
+        hostElement.style.getPropertyValue(property) !== value ||
+        hostElement.style.getPropertyPriority(property) !== "important"
+      ) {
+        hostElement.style.setProperty(property, value, "important");
+      }
+    }
+  }
 
-      const DEMO_LOGO_SVG = `
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-          <rect width="512" height="512" rx="112" fill="#09090b"/>
-          <path
-            d="M126 266c0-86 49-145 130-145 79 0 130 54 130 133 0 80-53 137-130 137-78 0-130-50-130-125Z"
-            fill="none"
-            stroke="#a3ff75"
-            stroke-width="34"
-          />
-          <path
-            d="M256 151v210M172 256h168"
-            stroke="#78d7ff"
-            stroke-width="27"
-            stroke-linecap="round"
-            opacity=".9"
-          />
-        </svg>
-      `.trim();
+  function isHostInTopLayer(
+    hostElement: TopLayerHostElement | null =
+      state.hostElement as TopLayerHostElement | null,
+  ): boolean {
+    if (!hostElement?.isConnected) return false;
+    return safeCall(() => hostElement.matches(":popover-open"), false);
+  }
 
-      const DEMO_LOGO_IMAGE =
-        `data:image/svg+xml;charset=utf-8,${encodeURIComponent(DEMO_LOGO_SVG)}`;
+  function disableHostTopLayer(): void {
+    const hostElement = state.hostElement as TopLayerHostElement | null;
 
-      const icons = {
-        play: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7Z"></path></svg>',
-        copy: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
+    state.topLayerCleanup?.();
+    state.topLayerCleanup = null;
+    state.topLayerObserver?.disconnect();
+    state.topLayerObserver = null;
+
+    if (hostElement) {
+      if (isHostInTopLayer(hostElement)) {
+        safeCall(() => hostElement.hidePopover?.(), undefined);
+      }
+      hostElement.removeAttribute("popover");
+      hostElement.dataset.rodToasterTopLayer = "z-index";
+      applyHostDominanceStyles(hostElement);
+    }
+
+    state.topLayerActive = false;
+  }
+
+  function promoteHostToTopLayer(reorder = false): boolean {
+    const hostElement = state.hostElement as TopLayerHostElement | null;
+
+    if (!hostElement?.isConnected) {
+      state.topLayerActive = false;
+      return false;
+    }
+
+    applyHostDominanceStyles(hostElement);
+
+    if (
+      !state.config.useTopLayer ||
+      typeof hostElement.showPopover !== "function"
+    ) {
+      hostElement.dataset.rodToasterTopLayer = "z-index";
+      state.topLayerActive = false;
+      return false;
+    }
+
+    hostElement.setAttribute("popover", "manual");
+
+    const wasOpen = isHostInTopLayer(hostElement);
+
+    // A synchronous hide/show moves the host to the end of the browser Top
+    // Layer without a painted intermediate frame.
+    if (reorder && wasOpen) {
+      safeCall(() => hostElement.hidePopover?.(), undefined);
+    }
+
+    if (!isHostInTopLayer(hostElement)) {
+      safeCall(() => hostElement.showPopover?.(), undefined);
+    }
+
+    state.topLayerActive = isHostInTopLayer(hostElement);
+    hostElement.dataset.rodToasterTopLayer =
+      state.topLayerActive ? "popover" : "z-index";
+
+    return state.topLayerActive;
+  }
+
+  function installTopLayerGuard(
+    hostWindow: Window & typeof globalThis,
+    hostDocument: Document,
+  ): void {
+    state.topLayerCleanup?.();
+    state.topLayerCleanup = null;
+    state.topLayerObserver?.disconnect();
+    state.topLayerObserver = null;
+
+    if (!state.config.useTopLayer || !state.hostElement) {
+      promoteHostToTopLayer(false);
+      return;
+    }
+
+    const promoteAfterExternalTopLayerChange = (event: Event): void => {
+      if (!state.toasts.length) return;
+
+      const toggleEvent = event as Event & { newState?: string };
+      if (event.target === state.hostElement) {
+        // Pages may call hidePopover() generically. Re-open only when the host
+        // really ended up closed; our synchronous hide/show reorder remains open.
+        hostWindow.queueMicrotask(() => {
+          if (state.toasts.length && !isHostInTopLayer()) promoteHostToTopLayer(false);
+        });
+        return;
+      }
+
+      if (typeof toggleEvent.newState === "string" && toggleEvent.newState !== "open") return;
+      hostWindow.queueMicrotask(() => {
+        if (state.toasts.length) promoteHostToTopLayer(true);
+      });
+    };
+
+    hostDocument.addEventListener(
+      "toggle",
+      promoteAfterExternalTopLayerChange,
+      true,
+    );
+    hostDocument.addEventListener(
+      "fullscreenchange",
+      promoteAfterExternalTopLayerChange,
+      true,
+    );
+    hostDocument.addEventListener(
+      "webkitfullscreenchange",
+      promoteAfterExternalTopLayerChange,
+      true,
+    );
+
+    // showModal() mutates the dialog's open attribute. This covers browsers
+    // where dialog toggle events are missing or inconsistent.
+    if (
+      typeof hostWindow.MutationObserver === "function" &&
+      hostDocument.documentElement
+    ) {
+      const observer = new hostWindow.MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          const target = mutation.target;
+          if (
+            isElementLike(target) &&
+            target !== state.hostElement &&
+            target.matches("dialog[open]")
+          ) {
+            hostWindow.queueMicrotask(() => {
+              if (state.toasts.length) promoteHostToTopLayer(true);
+            });
+            break;
+          }
+        }
+      });
+
+      observer.observe(hostDocument.documentElement, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["open"],
+      });
+
+      state.topLayerObserver = observer;
+    }
+
+    state.topLayerCleanup = () => {
+      hostDocument.removeEventListener(
+        "toggle",
+        promoteAfterExternalTopLayerChange,
+        true,
+      );
+      hostDocument.removeEventListener(
+        "fullscreenchange",
+        promoteAfterExternalTopLayerChange,
+        true,
+      );
+      hostDocument.removeEventListener(
+        "webkitfullscreenchange",
+        promoteAfterExternalTopLayerChange,
+        true,
+      );
+      state.topLayerObserver?.disconnect();
+      state.topLayerObserver = null;
+      state.topLayerCleanup = null;
+    };
+
+    promoteHostToTopLayer(false);
+  }
+
+  function removeHostInteractionListeners(): void {
+    if (state.hostDocument && state.outsidePointerDownHandler) {
+      state.hostDocument.removeEventListener("pointerdown", state.outsidePointerDownHandler, true);
+    }
+    state.outsidePointerDownHandler = null;
+  }
+
+  function scheduleHostRepair(): void {
+    if (!state.config.persistAcrossSpaNavigation || state.hostRepairFrame !== null) return;
+    const hostWindow = state.hostWindow ?? initialHostWindow;
+    const requestFrame = hostWindow.requestAnimationFrame?.bind(hostWindow) ?? ((callback: FrameRequestCallback) => hostWindow.setTimeout(() => callback(performance.now()), 0));
+    state.hostRepairFrame = requestFrame(() => {
+      state.hostRepairFrame = null;
+      if (state.toasts.length) {
+        ensureHost();
+        promoteHostToTopLayer(false);
+      }
+    });
+  }
+
+  function installSpaPersistence(hostWindow: Window & typeof globalThis, hostDocument: Document): void {
+    if (!state.config.persistAcrossSpaNavigation) return;
+
+    if (state.spaCleanup && state.hostWindow !== hostWindow) state.spaCleanup();
+    if (state.spaCleanup) return;
+
+    const callbacks: Array<() => void> = [];
+    const navigationHandler = (): void => {
+      if (state.config.minimizeOnSpaNavigation && hasActiveLoadingRecords()) setManagerMinimized(true);
+      scheduleHostRepair();
+    };
+
+    hostWindow.addEventListener("popstate", navigationHandler);
+    hostWindow.addEventListener("hashchange", navigationHandler);
+    hostWindow.addEventListener("rod:toaster:navigation", navigationHandler as EventListener);
+    callbacks.push(() => {
+      hostWindow.removeEventListener("popstate", navigationHandler);
+      hostWindow.removeEventListener("hashchange", navigationHandler);
+      hostWindow.removeEventListener("rod:toaster:navigation", navigationHandler as EventListener);
+    });
+
+    const pageHideHandler = (): void => {
+      flushTaskSnapshots();
+    };
+    hostWindow.addEventListener("pagehide", pageHideHandler);
+    callbacks.push(() => hostWindow.removeEventListener("pagehide", pageHideHandler));
+
+    const patchedWindow = hostWindow as WindowWithRodGlobals & typeof globalThis;
+    if (!safeCall(() => Boolean(patchedWindow[HISTORY_PATCH_SYMBOL]), false)) {
+      const history = hostWindow.history;
+      const originals: Partial<Record<"pushState" | "replaceState", History["pushState"]>> = {};
+      const patchedMethods: Partial<Record<"pushState" | "replaceState", History["pushState"]>> = {};
+      for (const methodName of ["pushState", "replaceState"] as const) {
+        const original = history[methodName];
+        originals[methodName] = original;
+        const patched = function patchedHistoryMethod(this: History, data: unknown, unused: string, url?: string | URL | null): void {
+          Reflect.apply(original, this, [data, unused, url]);
+          safeCall(() => hostWindow.dispatchEvent(new hostWindow.CustomEvent("rod:toaster:navigation")), false);
+        } as History["pushState"];
+        patchedMethods[methodName] = patched;
+        history[methodName] = patched;
+      }
+      safeCall(() => {
+        Object.defineProperty(patchedWindow, HISTORY_PATCH_SYMBOL, { value: true, configurable: true });
+      }, undefined);
+      state.historyRestore = () => {
+        for (const methodName of ["pushState", "replaceState"] as const) {
+          const original = originals[methodName];
+          const patched = patchedMethods[methodName];
+          if (original && patched && history[methodName] === patched) history[methodName] = original;
+        }
+        safeCall(() => { delete patchedWindow[HISTORY_PATCH_SYMBOL]; }, undefined);
+      };
+      callbacks.push(() => {
+        state.historyRestore?.();
+        state.historyRestore = null;
+      });
+    }
+
+    if (typeof hostWindow.MutationObserver === "function" && hostDocument.documentElement) {
+      state.spaObserver = new hostWindow.MutationObserver(() => {
+        if (state.toasts.length && state.hostElement && !state.hostElement.isConnected) scheduleHostRepair();
+      });
+      state.spaObserver.observe(hostDocument.documentElement, { childList: true });
+      callbacks.push(() => {
+        state.spaObserver?.disconnect();
+        state.spaObserver = null;
+      });
+    }
+
+    state.spaCleanup = () => {
+      callbacks.forEach((callback) => safeCall(callback, undefined));
+      state.spaCleanup = null;
+    };
+  }
+
+  function destroyHost(options: { keepPersistence?: boolean } = {}): void {
+    removeHostInteractionListeners();
+    state.topLayerCleanup?.();
+    state.topLayerCleanup = null;
+    state.topLayerObserver?.disconnect();
+    state.topLayerObserver = null;
+    state.topLayerActive = false;
+    state.inspectorRuntime?.clearHighlight?.();
+    state.themeCleanup?.();
+    state.themeCleanup = null;
+    state.themeMediaQuery = null;
+    if (!options.keepPersistence) state.spaCleanup?.();
+    if (state.idleDestroyTimer !== null) {
+      (state.hostWindow ?? initialHostWindow).clearTimeout(state.idleDestroyTimer);
+      state.idleDestroyTimer = null;
+    }
+    state.hostElement?.remove();
+    state.hostElement = null;
+    state.shadowRoot = null;
+    state.renderRoot = null;
+    state.hostMode = null;
+    state.container = null;
+    state.managerNode = null;
+    state.managerCountNode = null;
+    state.list = null;
+    state.interactionList = null;
+    state.toolbar = null;
+    state.stackCountNode = null;
+    state.inspectorRuntime = null;
+    state.inspectorStyle = null;
+    state.stackExpanded = false;
+    state.managerMinimized = false;
+  }
+
+  function handleHostIdle(): void {
+    if (state.toasts.length || !state.hostElement) return;
+    if (isHostInTopLayer()) safeCall(() => (state.hostElement as TopLayerHostElement).hidePopover?.(), undefined);
+    state.topLayerActive = false;
+    state.hostElement.dataset.rodToasterTopLayer = "idle";
+
+    if (state.idleDestroyTimer !== null) {
+      (state.hostWindow ?? initialHostWindow).clearTimeout(state.idleDestroyTimer);
+      state.idleDestroyTimer = null;
+    }
+    const ttl = Math.max(0, Number(state.config.idleHostTtl) || 0);
+    if (ttl > 0) {
+      state.idleDestroyTimer = (state.hostWindow ?? initialHostWindow).setTimeout(() => {
+        state.idleDestroyTimer = null;
+        if (!state.toasts.length) destroyHost({ keepPersistence: state.config.persistAcrossSpaNavigation });
+      }, ttl);
+    }
+  }
+
+  function cancelIdleHostDestroy(): void {
+    if (state.idleDestroyTimer !== null) {
+      (state.hostWindow ?? initialHostWindow).clearTimeout(state.idleDestroyTimer);
+      state.idleDestroyTimer = null;
+    }
+  }
+
+  function ensureHost(): HostContext | null {
+    if (
+      state.hostElement?.isConnected &&
+      state.hostWindow &&
+      state.hostDocument &&
+      state.container &&
+      state.list &&
+      state.interactionList
+    ) {
+      applyHostDominanceStyles(state.hostElement);
+      promoteHostToTopLayer(false);
+      return {
+        window: state.hostWindow,
+        document: state.hostDocument,
+        container: state.container,
+        list: state.list,
+        interactionList: state.interactionList,
+      };
+    }
+
+    const hostWindow = getHighestAccessibleWindow(globalWindow);
+    const hostDocument = safeCall(() => hostWindow.document, null);
+    if (!hostDocument) return null;
+
+    const parent = hostDocument.documentElement ?? hostDocument.body;
+    if (!parent) return null;
+
+    if (state.hostElement && !state.hostElement.isConnected && state.hostDocument === hostDocument && state.container && state.list && state.interactionList) {
+      applyHostDominanceStyles(state.hostElement);
+      parent.appendChild(state.hostElement);
+      installTopLayerGuard(hostWindow, hostDocument);
+      installSpaPersistence(hostWindow, hostDocument);
+      promoteHostToTopLayer(true);
+      syncStackLayout();
+      return { window: state.hostWindow ?? hostWindow, document: state.hostDocument, container: state.container, list: state.list, interactionList: state.interactionList };
+    }
+
+    if (state.hostElement?.isConnected) destroyHost();
+    else removeHostInteractionListeners();
+
+    const hostElement = hostDocument.createElement("div") as TopLayerHostElement;
+    hostElement.id = TOAST_HOST_ID;
+    // Each toast owns its status/alert semantics. The host itself is not a live
+    // region, avoiding duplicate screen-reader announcements.
+    if (state.config.useTopLayer && typeof hostElement.showPopover === "function") {
+      hostElement.setAttribute("popover", "manual");
+    }
+    applyHostDominanceStyles(hostElement);
+
+    let shadowRoot: ShadowRoot | null = null;
+    let renderRoot: ShadowRoot | HTMLDivElement = hostElement;
+    let hostMode: "shadow" | "light-dom" = "light-dom";
+
+    if (state.config.useShadowRoot) {
+      shadowRoot = safeCall(() => hostElement.attachShadow({ mode: state.config.shadowRootMode }), null);
+      if (shadowRoot) {
+        renderRoot = shadowRoot;
+        hostMode = "shadow";
+      } else if (!state.config.fallbackToLightDom) {
+        return null;
+      }
+    }
+
+    if (!shadowRoot) hostElement.dataset.rodToasterFallback = "light-dom";
+    hostElement.dataset.rodToasterHostMode = hostMode;
+
+    const container = hostDocument.createElement("div");
+    const managerButton = hostDocument.createElement("button");
+    const managerCount = hostDocument.createElement("span");
+    const toolbar = hostDocument.createElement("div");
+    const toolbarLabel = hostDocument.createElement("div");
+    const toolbarActions = hostDocument.createElement("div");
+    const minimizeButton = hostDocument.createElement("button");
+    const collapseButton = hostDocument.createElement("button");
+    const clearButton = hostDocument.createElement("button");
+    const interactionList = hostDocument.createElement("div");
+    const list = hostDocument.createElement("div");
+
+    container.className = "rod-toast-stack";
+    container.dataset.position = state.config.position;
+    container.dataset.theme = state.resolvedTheme;
+    container.dataset.size = state.config.size;
+    container.dataset.expanded = "true";
+    container.dataset.stackDepth = "0";
+    container.dataset.managerMinimized = String(state.managerMinimized);
+
+    managerButton.type = "button";
+    managerButton.className = "rod-toast-stack__manager";
+    managerButton.append(createSvgIcon(hostDocument, "loader-circle", 19));
+    managerCount.className = "rod-toast-stack__manager-count";
+    managerCount.textContent = "0";
+    managerCount.dataset.visible = "false";
+    managerButton.append(managerCount);
+    managerButton.setAttribute("aria-label", "Restore active toast tasks");
+    managerButton.title = "Restore active tasks";
+    managerButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setManagerMinimized(false);
+    });
+
+    toolbar.className = "rod-toast-stack__toolbar";
+    toolbar.dataset.enabled = String(state.config.stackToolbar);
+    toolbarLabel.className = "rod-toast-stack__toolbar-label";
+    toolbarLabel.textContent = "0 toasts";
+    toolbarActions.className = "rod-toast-stack__toolbar-actions";
+
+    const configureToolbarButton = (button: HTMLButtonElement, icon: SvgIconName, label: string, ariaLabel: string): void => {
+      button.type = "button";
+      button.className = "rod-toast-stack__toolbar-button";
+      button.append(createSvgIcon(hostDocument, icon, 14));
+      const text = hostDocument.createElement("span");
+      text.textContent = label;
+      button.append(text);
+      button.setAttribute("aria-label", ariaLabel);
+    };
+
+    configureToolbarButton(minimizeButton, "chevron-down", "Minimize", "Minimize active toast tasks");
+    configureToolbarButton(collapseButton, "chevrons-up", "Collapse", "Collapse toast stack");
+    configureToolbarButton(clearButton, "x-circle", "Close all", "Dismiss all toasts");
+
+    minimizeButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setManagerMinimized(true);
+    });
+    collapseButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setStackExpanded(false);
+    });
+    clearButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      let delayIndex = 0;
+      const records = getStackRecords();
+      for (let index = records.length - 1; index >= 0; index -= 1) {
+        const record = records[index];
+        hostWindow.setTimeout(() => record.dismiss(false, null, "dismissAll"), delayIndex * 28);
+        delayIndex += 1;
+      }
+    });
+
+    toolbarActions.append(minimizeButton, collapseButton, clearButton);
+    toolbar.append(toolbarLabel, toolbarActions);
+    interactionList.className = "rod-toast-stack__interactions";
+    list.className = "rod-toast-stack__list";
+    container.append(interactionList, managerButton, toolbar, list);
+    renderRoot.append(createStyles(hostDocument, hostMode), container);
+    parent.append(hostElement);
+
+    state.hostWindow = hostWindow;
+    state.hostDocument = hostDocument;
+    state.hostElement = hostElement;
+    state.shadowRoot = shadowRoot;
+    state.renderRoot = renderRoot;
+    state.hostMode = hostMode;
+    state.container = container;
+    state.managerNode = managerButton;
+    state.managerCountNode = managerCount;
+    state.list = list;
+    state.interactionList = interactionList;
+    state.toolbar = toolbar;
+    state.stackCountNode = toolbarLabel;
+
+    installThemeObserver();
+    syncTheme();
+    installTopLayerGuard(hostWindow, hostDocument);
+    promoteHostToTopLayer(true);
+    installSpaPersistence(hostWindow, hostDocument);
+
+    for (let index = state.toasts.length - 1; index >= 0; index -= 1) {
+      const record = state.toasts[index];
+      if (!record.node.isConnected) {
+        (record.options.lane === "interaction" ? interactionList : list).append(record.node);
+      }
+    }
+
+    const inspectorApi = getObjectInspectorApi();
+    if (inspectorApi) state.inspectorApi = inspectorApi;
+
+    container.addEventListener("click", handleStackClick);
+    container.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.stackExpanded) {
+        event.preventDefault();
+        event.stopPropagation();
+        setStackExpanded(false);
+      }
+    }, true);
+
+    state.outsidePointerDownHandler = (event: PointerEvent): void => {
+      if (!state.stackExpanded) return;
+      const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+      if (!path.includes(hostElement)) setStackExpanded(false);
+    };
+    hostDocument.addEventListener("pointerdown", state.outsidePointerDownHandler, true);
+    syncDialogStack();
+    syncStackLayout();
+    return { window: hostWindow, document: hostDocument, container, list, interactionList };
+  }
+
+  function createTextNode(documentRef: Document, text: string, className = ""): HTMLSpanElement {
+    const node = documentRef.createElement("span");
+    node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  }
+
+  function renderPrimitive(value: unknown, documentRef: Document, quoteStrings = true): HTMLSpanElement {
+    let className = "";
+    if (value === null) className = "rod-token--null";
+    else if (value === undefined) className = "rod-token--undefined";
+    else if (typeof value === "string") className = "rod-token--string";
+    else if (typeof value === "number" || typeof value === "bigint") className = "rod-token--number";
+    else if (typeof value === "boolean") className = "rod-token--boolean";
+    else if (typeof value === "symbol") className = "rod-token--symbol";
+    else if (typeof value === "function") className = "rod-token--function";
+    return createTextNode(documentRef, safePrimitiveText(value, quoteStrings), className);
+  }
+
+  function renderToastValue(value: unknown, documentRef: Document, options: NormalizedToastOptions | ToasterConfig): Node {
+    if (!isObject(value)) return renderPrimitive(value, documentRef, false);
+    const api = getObjectInspectorApi();
+    if (api) {
+      state.inspectorApi = api;
+      return ensureInspectorRuntime(api).render(value, documentRef, {
+        depth: 0,
+        ancestors: new Set<object>(),
+        quoteStrings: false,
+        options: buildInspectorOptions(options),
+      });
+    }
+    const placeholder = documentRef.createElement("span");
+    placeholder.className = "rod-toast__inspector-placeholder";
+    placeholder.textContent = getFallbackObjectPreview(value);
+    void loadObjectInspector()
+      .then((loadedApi) => {
+        if (!placeholder.isConnected) return;
+        const inspectorNode = ensureInspectorRuntime(loadedApi).render(value, documentRef, {
+          depth: 0,
+          ancestors: new Set<object>(),
+          quoteStrings: false,
+          options: buildInspectorOptions(options),
+        });
+        placeholder.replaceWith(inspectorNode);
+      })
+      .catch((error: unknown) => {
+        if (!placeholder.isConnected) return;
+        placeholder.textContent = `${getFallbackObjectPreview(value)} [inspector unavailable]`;
+        safeCall(() => console.warn(error), undefined);
+      });
+    return placeholder;
+  }
+
+  function isOptionsCandidate(value: unknown): value is ToastOptions {
+    if (!isUnknownRecord(value)) return false;
+    if ((value as ToastOptions)[OPTIONS_SYMBOL]) return true;
+    return Reflect.ownKeys(value).some((key) => typeof key === "string" && OPTION_KEYS.has(key));
+  }
+
+  function parseArguments(inputArgs: readonly unknown[], forcedType: ToastType | null): ParsedToast {
+    const args = [...inputArgs];
+    let options: ToastOptions = {};
+    if (args.length > 1 && isOptionsCandidate(args.at(-1))) {
+      options = { ...(args.pop() as ToastOptions) };
+      delete options[OPTIONS_SYMBOL];
+    }
+    if (!args.length) args.push("");
+    if (forcedType) options.type = forcedType;
+    return { args, options };
+  }
+
+  function normalizeToastOptions(options: ToastOptions): NormalizedToastOptions {
+    const type: ToastType = typeof options.type === "string" && hasOwn(TOAST_COLORS, options.type)
+      ? options.type
+      : "default";
+    const loading = Boolean(options.loading);
+    const defaultDuration = loading
+      ? state.config.loadingDuration
+      : type === "debug"
+        ? state.config.debugDuration
+        : state.config.duration;
+    const animation = normalizeLoadingAnimation(options.animation ?? options.loadingAnimation ?? state.config.loadingAnimation);
+    const progress = normalizeProgress(options.progress);
+    const icon = options.icon === false || options.icon === null
+      ? false
+      : options.icon ?? (loading ? state.config.loadingIcon : TOAST_COLORS[type].icon);
+    const durationCandidate = Number(options.duration);
+    const dedupeWindowCandidate = Number(options.dedupeWindow);
+    const lane: ToastLane =
+      options.lane === "interaction" || options.lane === "task" || options.lane === "notification"
+        ? options.lane
+        : loading
+          ? "task"
+          : "notification";
+
+    return {
+      type,
+      lane,
+      id: options.id == null ? null : String(options.id),
+      duration: Number.isFinite(durationCandidate) ? durationCandidate : defaultDuration,
+      dedupe: options.dedupe ?? state.config.dedupe,
+      dedupeWindow: Number.isFinite(dedupeWindowCandidate) ? dedupeWindowCandidate : state.config.dedupeWindow,
+      pauseOnInteraction: options.pauseOnInteraction ?? state.config.pauseOnInteraction,
+      dismissible: options.dismissible !== false,
+      closeButton: options.dismissible !== false && (options.closeButton ?? state.config.closeButton),
+      role: typeof options.role === "string" && options.role ? options.role : type === "error" ? "alert" : "status",
+      swipeToDismiss: options.dismissible !== false && (options.swipeToDismiss ?? state.config.swipeToDismiss),
+      swipeThreshold: Number.isFinite(Number(options.swipeThreshold))
+        ? Math.max(24, Number(options.swipeThreshold))
+        : state.config.swipeThreshold,
+      swipeVelocity: Number.isFinite(Number(options.swipeVelocity))
+        ? Math.max(0.05, Number(options.swipeVelocity))
+        : state.config.swipeVelocity,
+      inspectDepth: Number.isFinite(Number(options.inspectDepth)) ? Math.max(0, Number(options.inspectDepth)) : state.config.inspectDepth,
+      inspectItems: Number.isFinite(Number(options.inspectItems)) ? Math.max(0, Number(options.inspectItems)) : state.config.inspectItems,
+      previewItems: Number.isFinite(Number(options.previewItems)) ? Math.max(0, Number(options.previewItems)) : state.config.previewItems,
+      showPrototype: options.showPrototype ?? state.config.showPrototype,
+      showNonEnumerable: options.showNonEnumerable ?? state.config.showNonEnumerable,
+      showObjectLength: options.showObjectLength ?? state.config.showObjectLength,
+      virtualizeInspector: options.virtualizeInspector ?? state.config.virtualizeInspector,
+      virtualizeAfter: Number.isFinite(Number(options.virtualizeAfter)) ? Math.max(1, Number(options.virtualizeAfter)) : state.config.virtualizeAfter,
+      virtualRowHeight: Number.isFinite(Number(options.virtualRowHeight)) ? Math.max(16, Number(options.virtualRowHeight)) : state.config.virtualRowHeight,
+      virtualOverscan: Number.isFinite(Number(options.virtualOverscan)) ? Math.max(1, Number(options.virtualOverscan)) : state.config.virtualOverscan,
+      virtualMaxHeight: Number.isFinite(Number(options.virtualMaxHeight)) ? Math.max(120, Number(options.virtualMaxHeight)) : state.config.virtualMaxHeight,
+      unmountInspectorOnCollapse: options.unmountInspectorOnCollapse ?? state.config.unmountInspectorOnCollapse,
+      loading,
+      loadingState: options.loadingState === "settled" ? "settled" : "loading",
+      title: options.title == null ? "" : String(options.title),
+      description: options.description == null ? "" : String(options.description),
+      icon: icon as Exclude<ToastIcon, null>,
+      animation,
+      progress,
+      progressLabel: options.progressLabel == null ? null : String(options.progressLabel),
+      scope: options.scope == null ? null : String(options.scope),
+      metadata: isUnknownRecord(options.metadata) ? options.metadata : null,
+      expanded: normalizeExpandedDescriptor(options.expanded),
+      onDismiss: typeof options.onDismiss === "function" ? options.onDismiss : null,
+    };
+  }
+
+  function shouldRenderDebug(args: unknown[]): boolean {
+    const setting = state.config.shouldDebug;
+    return typeof setting === "function"
+      ? safeCall(() => Boolean(setting(...args)), false)
+      : Boolean(setting);
+  }
+
+  function runDownloadFallback(args: unknown[]): unknown {
+    const fallback = state.config.downloadFallback;
+    return typeof fallback === "function" ? safeCall(() => fallback(...args), null) : null;
+  }
+
+  function createDedupeKey(args: unknown[], options: NormalizedToastOptions): string {
+    if (options.id) return `id:${options.id}`;
+    const signatures = args.map((value) => {
+      if (value === null) return "null";
+      if (isObject(value)) return `ref:${getObjectId(value)}`;
+      return `${typeof value}:${safePrimitiveText(value, false)}`;
+    });
+    return `${options.scope ?? "global"}|${options.type}|${signatures.join("|")}`;
+  }
+
+  function removeRecord(record: ToastRecord): void {
+    const index = state.toasts.indexOf(record);
+    if (index >= 0) state.toasts.splice(index, 1);
+    if (record.options.id && state.recordsById.get(record.options.id) === record) state.recordsById.delete(record.options.id);
+    if (record.dedupeKey && state.dedupeRecords.get(record.dedupeKey) === record) state.dedupeRecords.delete(record.dedupeKey);
+    if (record.options.lane === "interaction") unregisterDialog(record);
+  }
+
+  function enforceToastLimit(incoming: NormalizedToastOptions): void {
+    if (incoming.lane !== "notification") return;
+    const limit = Math.max(1, state.config.maxToasts);
+    let notifications = getNotificationRecords();
+    while (notifications.length >= limit) {
+      // Prefer evicting ephemeral notifications. Persistent notifications are
+      // a second choice. Task and interaction lanes are never evicted here.
+      const candidate = notifications.find((record) => record.options.duration > 0) ?? notifications[0];
+      if (!candidate) break;
+      candidate.dismiss(true, null, "limit");
+      notifications = getNotificationRecords();
+    }
+  }
+
+  function createCloseButton(documentRef: Document, dismiss: () => void): HTMLButtonElement {
+    const button = documentRef.createElement("button");
+    button.type = "button";
+    button.className = "rod-toast__close";
+    button.append(createSvgIcon(documentRef, "x", 16));
+    button.setAttribute("aria-label", "Close toast");
+    button.title = "Close";
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      dismiss();
+    });
+    return button;
+  }
+
+  function createMinimizeButton(documentRef: Document): HTMLButtonElement {
+    const button = documentRef.createElement("button");
+    button.type = "button";
+    button.className = "rod-toast__minimize";
+    button.append(createSvgIcon(documentRef, "chevron-down", 16));
+    button.setAttribute("aria-label", "Minimize active toast tasks");
+    button.title = "Minimize";
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setManagerMinimized(true);
+    });
+    return button;
+  }
+
+  function createExpandButton(documentRef: Document, getRecord: () => ToastRecord): HTMLButtonElement {
+    const button = documentRef.createElement("button");
+    button.type = "button";
+    button.className = "rod-toast__expand";
+    button.append(createSvgIcon(documentRef, "chevron-down", 16));
+    button.setAttribute("aria-label", "Expand toast");
+    button.title = "Expand or collapse";
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleExpandedToast(getRecord());
+    });
+    return button;
+  }
+
+  function createContentExpandButton(
+    documentRef: Document,
+    toggle: () => void,
+  ): HTMLButtonElement {
+    const button = documentRef.createElement("button");
+    button.type = "button";
+    button.className = "rod-toast__content-expand";
+    button.append(createSvgIcon(documentRef, "chevron-down", 16));
+    button.setAttribute("aria-label", "Expand toast content");
+    button.setAttribute("aria-expanded", "false");
+    button.title = "Expand content";
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggle();
+    });
+    return button;
+  }
+
+  function setToastIcon(
+    node: HTMLElement,
+    documentRef: Document,
+    iconValue: NormalizedToastOptions["icon"],
+    fallbackName: SvgIconName,
+  ): boolean {
+    if (iconValue === false) {
+      if (node.childNodes.length) node.replaceChildren();
+      node.dataset.rodIconKey = "false";
+      node.dataset.rodIconKind = "none";
+      return false;
+    }
+
+    const imageDescriptor = getImageIconDescriptor(iconValue);
+
+    if (imageDescriptor) {
+      const normalized = normalizeImageIconDescriptor(imageDescriptor);
+      const source = String(normalized.src);
+      const fit = normalized.fit === "contain" ? "contain" : "cover";
+      const objectPosition = normalized.objectPosition || "center";
+      const keyPayload = [
+        source, fit, objectPosition, normalized.crossOrigin ?? "",
+        normalized.referrerPolicy ?? "", normalized.decoding ?? "async", normalized.loading ?? "eager",
+      ].join("|");
+      const key = `image:${iconKeyHash(keyPayload)}`;
+
+      if (state.failedImageKeys.has(key)) {
+        const fallbackKey = `failed:${key}:svg:${fallbackName}`;
+        if (node.dataset.rodIconKey !== fallbackKey || !node.firstChild) {
+          node.replaceChildren(createSvgIcon(documentRef, fallbackName, 17));
+          node.dataset.rodIconKey = fallbackKey;
+        }
+        node.dataset.rodIconKind = "svg";
+        return true;
+      }
+
+      if (node.dataset.rodIconKey === key && node.firstChild) {
+        node.dataset.rodIconKind = "image";
+        return true;
+      }
+
+      const image = createImageIcon(documentRef, normalized);
+      image.addEventListener("error", () => {
+        state.failedImageKeys.add(key);
+        if (node.dataset.rodIconKey !== key) return;
+        node.replaceChildren(createSvgIcon(documentRef, fallbackName, 17));
+        node.dataset.rodIconKey = `failed:${key}:svg:${fallbackName}`;
+        node.dataset.rodIconKind = "svg";
+      }, { once: true });
+
+      node.replaceChildren(image);
+      node.dataset.rodIconKey = key;
+      node.dataset.rodIconKind = "image";
+      return true;
+    }
+
+    if (isDomNode(iconValue)) {
+      node.replaceChildren(iconValue.cloneNode(true));
+      node.dataset.rodIconKey = `node:${getObjectId(iconValue as object)}`;
+      node.dataset.rodIconKind = "node";
+      return true;
+    }
+
+    const iconName: SvgIconName = typeof iconValue === "string" && hasOwn(SVG_ICONS, iconValue)
+      ? iconValue
+      : fallbackName;
+    const key = `svg:${iconName}`;
+    if (node.dataset.rodIconKey === key && node.firstChild) {
+      node.dataset.rodIconKind = "svg";
+      return true;
+    }
+    node.replaceChildren(createSvgIcon(documentRef, iconName, 17));
+    node.dataset.rodIconKey = key;
+    node.dataset.rodIconKind = "svg";
+    return true;
+  }
+
+  function installSwipeToDismiss(record: ToastRecord, host: HostContext): void {
+    const node = record.node;
+    let active = false;
+    let pointerId: number | null = null;
+    let startX = 0;
+    let startY = 0;
+    let lastX = 0;
+    let lastY = 0;
+    let lastTime = 0;
+    let velocityX = 0;
+    let velocityY = 0;
+    let startScrollTop = 0;
+    let scrollOwner: HTMLElement = node;
+    let mode: "pending" | "scroll" | "swipe" = "pending";
+    let moved = false;
+
+    const resetVisualState = (): void => {
+      node.dataset.swiping = "false";
+      node.style.removeProperty("transition");
+      node.style.removeProperty("transform");
+      node.style.removeProperty("opacity");
+    };
+    const snapBack = (): void => {
+      node.dataset.swiping = "false";
+      node.style.transition = "transform 220ms cubic-bezier(.2,.8,.2,1),opacity 180ms ease";
+      node.style.transform = "translate3d(0,0,0) scale(1)";
+      node.style.opacity = "1";
+      host.window.setTimeout(() => { if (!record.removed) resetVisualState(); }, 240);
+    };
+    const suppressNextStackClick = (): void => {
+      node.dataset.suppressStackClick = "true";
+      host.window.setTimeout(() => { if (node.isConnected) delete node.dataset.suppressStackClick; }, 350);
+    };
+    const finish = (event: PointerEvent, cancelled: boolean): void => {
+      if (!active || event.pointerId !== pointerId) return;
+      active = false;
+      const capturedPointerId = pointerId;
+      if (capturedPointerId !== null) safeCall(() => node.releasePointerCapture(capturedPointerId), undefined);
+      const dx = event.clientX - startX;
+      const dy = event.clientY - startY;
+      const distance = Math.hypot(dx, dy);
+      const speed = Math.hypot(velocityX, velocityY);
+      const shouldDismiss = !cancelled && mode === "swipe" && (
+        distance >= record.options.swipeThreshold ||
+        (distance >= 24 && speed >= record.options.swipeVelocity)
+      );
+      if (moved) suppressNextStackClick();
+      if (shouldDismiss) {
+        record.dismiss(false, { dx, dy, velocityX, velocityY }, "swipe");
+        return;
+      }
+      if (mode === "swipe") snapBack();
+      else resetVisualState();
+    };
+
+    node.addEventListener("pointerdown", (event) => {
+      if (!record.options.swipeToDismiss || record.removed || !event.isPrimary || event.button > 0 || eventHasInteractiveTarget(event)) return;
+      active = true;
+      pointerId = event.pointerId;
+      startX = lastX = event.clientX;
+      startY = lastY = event.clientY;
+      lastTime = event.timeStamp || performance.now();
+      velocityX = velocityY = 0;
+      scrollOwner = state.stackExpanded && host.list ? host.list : node;
+      startScrollTop = scrollOwner.scrollTop;
+      mode = "pending";
+      moved = false;
+      node.dataset.swiping = "true";
+      node.style.transition = "none";
+      safeCall(() => node.setPointerCapture(event.pointerId), undefined);
+    });
+
+    node.addEventListener("pointermove", (event) => {
+      if (!active || event.pointerId !== pointerId || record.removed) return;
+      const dx = event.clientX - startX;
+      const dy = event.clientY - startY;
+      const distance = Math.hypot(dx, dy);
+      const now = event.timeStamp || performance.now();
+      const elapsed = Math.max(1, now - lastTime);
+      velocityX = (event.clientX - lastX) / elapsed;
+      velocityY = (event.clientY - lastY) / elapsed;
+      lastX = event.clientX;
+      lastY = event.clientY;
+      lastTime = now;
+      if (distance < 5) return;
+      if (mode === "pending") {
+        const maxScrollTop = Math.max(0, scrollOwner.scrollHeight - scrollOwner.clientHeight);
+        const verticalDominant = Math.abs(dy) > Math.abs(dx) * 1.25;
+        const canScroll = (dy > 0 && startScrollTop > 0) || (dy < 0 && startScrollTop < maxScrollTop);
+        mode = maxScrollTop > 1 && verticalDominant && canScroll ? "scroll" : "swipe";
+      }
+      if (mode === "scroll") {
+        const maxScrollTop = Math.max(0, scrollOwner.scrollHeight - scrollOwner.clientHeight);
+        scrollOwner.scrollTop = clamp(startScrollTop - dy, 0, maxScrollTop);
+        return;
+      }
+      event.preventDefault();
+      moved ||= distance > 8;
+      const opacity = 1 - Math.min(0.78, distance / Math.max(record.options.swipeThreshold * 2.25, 1));
+      const rotation = clamp(dx / 28, -7, 7);
+      node.style.transform = `translate3d(${dx}px,${dy}px,0) rotate(${rotation}deg)`;
+      node.style.opacity = String(opacity);
+    });
+
+    node.addEventListener("pointerup", (event) => finish(event, false));
+    node.addEventListener("pointercancel", (event) => finish(event, true));
+    node.addEventListener("lostpointercapture", (event) => { if (active && event.pointerId === pointerId) finish(event, true); });
+  }
+
+  function createToastRecord(args: unknown[], rawOptions: ToastOptions): { record: ToastRecord; controller: ToastController } | null {
+    const options = normalizeToastOptions(rawOptions);
+    cancelIdleHostDestroy();
+    const host = ensureHost();
+    if (!host) {
+      safeCall(() => console.log(`[${String(rawOptions.type ?? "toast")}]`, ...args), undefined);
+      return null;
+    }
+
+    if (options.id) {
+      const existing = state.recordsById.get(options.id);
+      if (existing && !existing.removed) existing.dismiss(true, null, "replaced");
+    }
+    enforceToastLimit(options);
+    const palette = getToastPalette(options.type);
+    const node = host.document.createElement("div");
+    const icon = host.document.createElement("div");
+    const content = host.document.createElement("div");
+    const actions = host.document.createElement("div");
+    const count = host.document.createElement("div");
+    let loadingCopy: HTMLDivElement | null = null;
+    let loadingTitle: HTMLDivElement | null = null;
+    let loadingDescription: HTMLDivElement | null = null;
+    let progressMeta: HTMLDivElement | null = null;
+    let progressBar: HTMLDivElement | null = null;
+    let expandedPanel: HTMLDivElement | null = null;
+    let expandedInner: HTMLDivElement | null = null;
+    let expandedHeading: HTMLDivElement | null = null;
+    let expandedScroll: HTMLDivElement | null = null;
+    let expandedButton: HTMLButtonElement | null = null;
+    let contentExpanded = false;
+
+    node.className = "rod-toast";
+    node.setAttribute("role", options.role);
+    node.tabIndex = -1;
+    applyToastPalette(node, options.type);
+    icon.className = "rod-toast__icon";
+    setToastIcon(icon, host.document, options.icon, palette.icon);
+    icon.setAttribute("aria-hidden", "true");
+    content.className = "rod-toast__content";
+    actions.className = "rod-toast__actions";
+    count.className = "rod-toast__count";
+    count.textContent = "1";
+    count.dataset.visible = "false";
+    node.dataset.itemExpanded = "false";
+    node.dataset.lane = options.lane;
+    node.dataset.completing = "false";
+    node.dataset.successExit = "false";
+    node.dataset.hasExpandedContent = String(Boolean(options.expanded));
+    node.dataset.contentExpanded = "false";
+    actions.append(count);
+    node.append(icon, content, actions);
+
+    let removed = false;
+    let removalTimer: TimerHandle = null;
+    let timerStartedAt = 0;
+    let remainingDuration = options.duration;
+    const pauseReasons = new Set<string>();
+    let duplicateCount = 1;
+    let completing = false;
+    let dismissReason = "programmatic";
+    let record!: ToastRecord;
+    let controller!: ToastController;
+
+    const ensureLoadingNodes = (): {
+      copy: HTMLDivElement;
+      title: HTMLDivElement;
+      description: HTMLDivElement;
+      progressMeta: HTMLDivElement;
+      progressBar: HTMLDivElement;
+    } => {
+      if (loadingCopy && loadingTitle && loadingDescription && progressMeta && progressBar) {
+        return { copy: loadingCopy, title: loadingTitle, description: loadingDescription, progressMeta, progressBar };
+      }
+      const progress = host.document.createElement("div");
+      const progressTrack = host.document.createElement("div");
+      loadingCopy = host.document.createElement("div");
+      loadingTitle = host.document.createElement("div");
+      loadingDescription = host.document.createElement("div");
+      progressMeta = host.document.createElement("div");
+      progressBar = host.document.createElement("div");
+      loadingCopy.className = "rod-toast__loading-copy";
+      loadingTitle.className = "rod-toast__loading-title";
+      loadingDescription.className = "rod-toast__loading-description";
+      progress.className = "rod-toast__progress";
+      progressMeta.className = "rod-toast__progress-meta";
+      progressTrack.className = "rod-toast__progress-track";
+      progressBar.className = "rod-toast__progress-bar";
+      progressTrack.append(progressBar);
+      progress.append(progressMeta, progressTrack);
+      loadingCopy.append(loadingTitle, loadingDescription, progress);
+      return { copy: loadingCopy, title: loadingTitle, description: loadingDescription, progressMeta, progressBar };
+    };
+
+    const renderLoading = (nextOptions: NormalizedToastOptions): void => {
+      const loadingUi = ensureLoadingNodes();
+      const hasTitle = Boolean(nextOptions.title);
+      const hasDescription = Boolean(nextOptions.description);
+      const hasProgress = nextOptions.animation === "progress";
+      const contentEmpty = !hasTitle && !hasDescription && !hasProgress;
+      const fallbackIcon = nextOptions.loadingState === "settled"
+        ? TOAST_COLORS[nextOptions.type].icon
+        : state.config.loadingIcon || "loader-circle";
+      const hasIcon = setToastIcon(icon, host.document, nextOptions.icon, fallbackIcon);
+
+      setDataValue(node, "loading", "true");
+      setDataValue(node, "loadingState", nextOptions.loadingState);
+      setDataValue(node, "loadingAnimation", nextOptions.animation);
+      setDataValue(node, "loadingIcon", String(hasIcon));
+      setDataValue(node, "loadingContentEmpty", String(contentEmpty));
+      setDataValue(node, "loadingIndeterminate", String(hasProgress && nextOptions.progress === null));
+      setDataValue(icon, "loadingSpinner", String(nextOptions.loadingState === "loading" && nextOptions.animation === "spinner"));
+      setDataValue(icon, "loadingPulse", String(nextOptions.loadingState === "loading" && nextOptions.animation === "pulse"));
+
+      setTextValue(loadingUi.title, nextOptions.title);
+      if (loadingUi.title.hidden === hasTitle) loadingUi.title.hidden = !hasTitle;
+      setTextValue(loadingUi.description, nextOptions.description);
+      if (loadingUi.description.hidden === hasDescription) loadingUi.description.hidden = !hasDescription;
+
+      const progressPercent = nextOptions.progress === null ? 0 : Math.round(nextOptions.progress * 100);
+      const progressValue = `${progressPercent}%`;
+      if (node.style.getPropertyValue("--rod-loading-progress") !== progressValue) {
+        node.style.setProperty("--rod-loading-progress", progressValue);
+      }
+
+      const progressText = nextOptions.progressLabel ?? (nextOptions.progress === null ? "" : `${progressPercent}%`);
+      setTextValue(loadingUi.progressMeta, progressText);
+      const hideProgressMeta = !progressText || nextOptions.animation !== "progress";
+      if (loadingUi.progressMeta.hidden !== hideProgressMeta) loadingUi.progressMeta.hidden = hideProgressMeta;
+
+      if (content.firstChild !== loadingUi.copy || content.childNodes.length !== 1) {
+        content.replaceChildren(loadingUi.copy);
+      }
+    };
+
+    const renderArgs = (nextArgs: unknown[], nextOptions: NormalizedToastOptions): void => {
+      if (nextOptions.loading) {
+        renderLoading(nextOptions);
+        return;
+      }
+
+      setDataValue(node, "loading", "false");
+      setDataValue(node, "loadingState", "");
+      setDataValue(node, "loadingAnimation", "");
+      setDataValue(node, "loadingIcon", "true");
+      setDataValue(node, "loadingContentEmpty", "false");
+      setDataValue(node, "loadingIndeterminate", "false");
+      setDataValue(icon, "loadingSpinner", "false");
+      setDataValue(icon, "loadingPulse", "false");
+      setToastIcon(icon, host.document, nextOptions.icon, TOAST_COLORS[nextOptions.type].icon);
+
+      const nextContent = host.document.createDocumentFragment();
+      for (const value of nextArgs) {
+        const wrapper = host.document.createElement("span");
+        wrapper.className = "rod-toast__arg";
+        wrapper.append(renderToastValue(value, host.document, nextOptions));
+        nextContent.append(wrapper);
+      }
+      content.replaceChildren(nextContent);
+    };
+
+    const clearTimer = (): void => {
+      if (removalTimer !== null) {
+        host.window.clearTimeout(removalTimer);
+        removalTimer = null;
+      }
+    };
+
+    const cleanup = (reason = dismissReason): void => {
+      if (removed) return;
+      removed = true;
+      dismissReason = reason || dismissReason || "programmatic";
+      clearTimer();
+      if (options.loading && options.loadingState === "loading") {
+        state.activeLoadingCount = Math.max(0, state.activeLoadingCount - 1);
+      }
+      const dismissEvent: ToastDismissEvent = { reason: dismissReason, record, controller, scope: options.scope };
+
+      // Internal state is committed before user callbacks. This makes onDismiss
+      // safely re-entrant, including maxToasts=1 + creating another toast.
+      removeRecord(record);
+      state.recordsByNode.delete(node);
+      node.remove();
+      syncStackLayout();
+      if (hasEventListeners("dismiss")) emitEvent("dismiss", dismissEvent as unknown as UnknownRecord);
+      safeCall(() => options.onDismiss?.(dismissEvent), undefined);
+      if (!state.toasts.length) handleHostIdle();
+    };
+
+    const playSuccessExit = (): void => {
+      if (completing || removed || !node.isConnected) return;
+      completing = true;
+      clearTimer();
+      setToastIcon(icon, host.document, "check", "check");
+      node.dataset.swiping = "false";
+      const requestFrame = host.window.requestAnimationFrame?.bind(host.window) ?? ((callback: FrameRequestCallback) => host.window.setTimeout(() => callback(performance.now()), 0));
+      requestFrame(() => {
+        if (!node.isConnected) return cleanup();
+        node.dataset.completing = "true";
+        host.window.setTimeout(() => {
+          if (!node.isConnected) return cleanup();
+          node.dataset.successExit = "true";
+          host.window.setTimeout(() => cleanup(), Math.max(80, state.config.successExitDuration));
+        }, Math.max(120, state.config.successCollapseDuration));
+      });
+    };
+
+    const dismiss = (immediate = false, swipe: SwipePayload | null = null, reason = "programmatic"): void => {
+      dismissReason = reason || "programmatic";
+      if (removed || !node.isConnected) return cleanup(dismissReason);
+      clearTimer();
+      if (immediate) return cleanup();
+      if (!swipe && options.type === "success" && state.config.successExitAnimation) return playSuccessExit();
+      if (swipe) {
+        const rawX = Number(swipe.dx) || Number(swipe.velocityX) || 0;
+        const rawY = Number(swipe.dy) || Number(swipe.velocityY) || 0;
+        const length = Math.hypot(rawX, rawY) || 1;
+        const viewportDistance = Math.hypot(host.window.innerWidth || 1000, host.window.innerHeight || 1000) * 1.2;
+        const targetX = rawX / length * viewportDistance;
+        const targetY = rawY / length * viewportDistance;
+        node.dataset.swiping = "false";
+        node.style.transition = "transform 220ms cubic-bezier(.2,.8,.2,1),opacity 180ms ease";
+        node.style.transform = `translate3d(${targetX}px,${targetY}px,0) rotate(${clamp(targetX / 90, -16, 16)}deg)`;
+        node.style.opacity = "0";
+        host.window.setTimeout(() => cleanup(), 240);
+        return;
+      }
+      node.dataset.visible = "false";
+      const onTransitionEnd = (event: TransitionEvent): void => {
+        if (event.target === node && (event.propertyName === "opacity" || event.propertyName === "transform")) cleanup();
+      };
+      node.addEventListener("transitionend", onTransitionEnd, { once: true });
+      host.window.setTimeout(() => cleanup(), 300);
+    };
+
+    const scheduleTimer = (): void => {
+      clearTimer();
+      if (removed || pauseReasons.size > 0 || !Number.isFinite(remainingDuration) || remainingDuration <= 0) return;
+      timerStartedAt = Date.now();
+      removalTimer = host.window.setTimeout(() => dismiss(false, null, "timeout"), remainingDuration);
+    };
+    const pauseTimer = (reason = "interaction"): void => {
+      if (pauseReasons.has(reason)) return;
+      const wasPaused = pauseReasons.size > 0;
+      pauseReasons.add(reason);
+      if (wasPaused) return;
+      if (removalTimer !== null && Number.isFinite(remainingDuration) && remainingDuration > 0) {
+        remainingDuration = Math.max(0, remainingDuration - (Date.now() - timerStartedAt));
+      }
+      clearTimer();
+    };
+    const resumeTimer = (reason = "interaction"): void => {
+      if (!pauseReasons.delete(reason) || pauseReasons.size > 0) return;
+      scheduleTimer();
+    };
+    const resetTimer = (duration = options.duration): void => {
+      remainingDuration = duration;
+      clearTimer();
+      if (pauseReasons.size === 0) scheduleTimer();
+    };
+
+    const ensureExpandedNodes = (): {
+      panel: HTMLDivElement;
+      inner: HTMLDivElement;
+      heading: HTMLDivElement;
+      scroll: HTMLDivElement;
+    } => {
+      if (expandedPanel && expandedInner && expandedHeading && expandedScroll) {
+        return { panel: expandedPanel, inner: expandedInner, heading: expandedHeading, scroll: expandedScroll };
+      }
+
+      expandedPanel = host.document.createElement("div");
+      expandedInner = host.document.createElement("div");
+      expandedHeading = host.document.createElement("div");
+      expandedScroll = host.document.createElement("div");
+      expandedPanel.className = "rod-toast__expanded-panel";
+      expandedInner.className = "rod-toast__expanded-inner";
+      expandedHeading.className = "rod-toast__expanded-heading";
+      expandedScroll.className = "rod-toast__expanded-scroll";
+      expandedScroll.tabIndex = 0;
+      expandedScroll.setAttribute("role", "region");
+      expandedScroll.setAttribute("aria-label", "Expanded toast content");
+      expandedInner.append(expandedHeading, expandedScroll);
+      expandedPanel.append(expandedInner);
+      node.append(expandedPanel);
+      return { panel: expandedPanel, inner: expandedInner, heading: expandedHeading, scroll: expandedScroll };
+    };
+
+    const setContentExpanded = (open: boolean): void => {
+      const canExpand = Boolean(options.expanded);
+      contentExpanded = canExpand && Boolean(open);
+      setDataValue(node, "contentExpanded", String(contentExpanded));
+      expandedButton?.setAttribute("aria-expanded", String(contentExpanded));
+      if (expandedButton) expandedButton.title = contentExpanded ? "Collapse content" : "Expand content";
+
+      if (contentExpanded) {
+        pauseTimer("expanded");
+        if (state.stackExpanded && getStackRecords().length > 1 && record && !record.removed) {
+          setExpandedToast(record, true);
+        }
+      } else {
+        resumeTimer("expanded");
+      }
+    };
+
+    const renderExpandedContent = (descriptor: ToastExpandedDescriptor | null): void => {
+      setDataValue(node, "hasExpandedContent", String(Boolean(descriptor)));
+      if (!descriptor) {
+        setContentExpanded(false);
+        expandedPanel?.remove();
+        expandedPanel = expandedInner = expandedHeading = expandedScroll = null;
+        if (expandedButton) {
+          expandedButton.remove();
+          expandedButton = null;
+        }
+        return;
+      }
+
+      const expandedUi = ensureExpandedNodes();
+      const rawMaxHeight = descriptor.maxHeight;
+      const maxHeight = typeof rawMaxHeight === "number"
+        ? `${Math.max(80, rawMaxHeight)}px`
+        : typeof rawMaxHeight === "string" && rawMaxHeight.trim()
+          ? rawMaxHeight.trim()
+          : "min(42dvh, 360px)";
+      node.style.setProperty("--rod-expanded-max-height", maxHeight);
+
+      expandedUi.heading.textContent = descriptor.title == null ? "" : String(descriptor.title);
+      expandedUi.heading.hidden = !expandedUi.heading.textContent;
+      expandedUi.scroll.replaceChildren();
+
+      const appendValue = (value: unknown): void => {
+        const wrapper = host.document.createElement("div");
+        wrapper.className = "rod-toast__expanded-value";
+        if (isDomNode(value)) wrapper.append(value.cloneNode(true));
+        else wrapper.append(renderToastValue(value, host.document, options));
+        expandedUi.scroll.append(wrapper);
       };
 
-      const sections = [
-        {
-          id: "messages",
-          title: "Mensagens e conteúdo rico",
-          kicker: "Fundamentos",
-          description:
-            "Do aviso de uma linha ao erro expansível com ações e cópia de stack.",
-        },
-        {
-          id: "interaction",
-          title: "Interação e decisões",
-          kicker: "Dialogs compactos",
-          description:
-            "Confirm, prompt, select, checkbox, atalhos e contagem regressiva.",
-        },
-        {
-          id: "media",
-          title: "Picker de mídia",
-          kicker: "Instagram & carrosséis",
-          description:
-            "Grid visual para imagens e vídeos, seleção múltipla, limites, Blob/File e retornos tipados.",
-        },
-        {
-          id: "async",
-          title: "Operações assíncronas",
-          kicker: "Estado vivo",
-          description:
-            "Loading, Promise, retry e progresso imperativo sem trocar de toast.",
-        },
-        {
-          id: "multi-loading",
-          title: "Multi loading",
-          kicker: "Lotes sem poluir a tela",
-          description:
-            "Vários envios dentro de um único toaster, com progresso independente, retry, cancel individual e scroll interno até metade da viewport.",
-        },
-        {
-          id: "tasks",
-          title: "Tarefas e gerenciador",
-          kicker: "Download manager",
-          description:
-            "Pause, resume, cancel, grupos ponderados, persistência e navegação SPA.",
-        },
-        {
-          id: "runtime",
-          title: "Runtime v4.9",
-          kicker: "Invariantes & performance",
-          description:
-            "Dialog stack isolada, state machine terminal, lifecycle seguro, persistência throttled e host ocioso reutilizável.",
-        },
-        {
-          id: "architecture",
-          title: "Organização e integração",
-          kicker: "Arquitetura",
-          description:
-            "Scopes, eventos, IDs, configuração, inspeção, Top Layer e controles globais.",
-        },
-      ];
+      if (Array.isArray(descriptor.content)) descriptor.content.forEach(appendValue);
+      else appendValue(descriptor.content ?? "");
 
-      function makeDemoMediaSvg(label, from, to) {
-        const svg = `
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 900">
-            <defs>
-              <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-                <stop stop-color="${from}"/>
-                <stop offset="1" stop-color="${to}"/>
-              </linearGradient>
-              <filter id="noise">
-                <feTurbulence type="fractalNoise" baseFrequency=".78" numOctaves="3" stitchTiles="stitch"/>
-                <feColorMatrix type="saturate" values="0"/>
-                <feComponentTransfer><feFuncA type="table" tableValues="0 .09"/></feComponentTransfer>
-              </filter>
-            </defs>
-            <rect width="900" height="900" rx="72" fill="url(#g)"/>
-            <circle cx="720" cy="160" r="250" fill="rgba(255,255,255,.12)"/>
-            <circle cx="120" cy="760" r="310" fill="rgba(0,0,0,.12)"/>
-            <rect width="900" height="900" filter="url(#noise)" opacity=".65"/>
-            <text x="58" y="810" fill="white" font-family="system-ui,sans-serif" font-size="58" font-weight="750">${label}</text>
-          </svg>
-        `;
-        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+      if (!expandedButton) {
+        expandedButton = createContentExpandButton(host.document, () => setContentExpanded(!contentExpanded));
+        actions.append(expandedButton);
       }
 
-      const DEMO_MEDIA = [
-        {
-          id: "ig-1",
-          type: "image",
-          src: makeDemoMediaSvg("Foto 01", "#5f76ff", "#b772ff"),
-          label: "01 · Foto",
-        },
-        {
-          id: "ig-2",
-          type: "image",
-          src: makeDemoMediaSvg("Foto 02", "#ff5d79", "#ffb15c"),
-          label: "02 · Foto",
-        },
-        {
-          id: "ig-3",
-          type: "video",
-          src: "https://example.invalid/demo-reel.mp4",
-          poster: makeDemoMediaSvg("Vídeo 03", "#0f8fb8", "#0d152d"),
-          label: "03 · Vídeo",
-        },
-        {
-          id: "ig-4",
-          type: "image",
-          src: makeDemoMediaSvg("Foto 04", "#2ea76f", "#6ed7db"),
-          label: "04 · Foto",
-        },
-        {
-          id: "ig-5",
-          type: "video",
-          src: "https://example.invalid/demo-story.mp4",
-          poster: makeDemoMediaSvg("Vídeo 05", "#7d58d6", "#dc69a7"),
-          label: "05 · Vídeo",
-        },
-        {
-          id: "ig-6",
-          type: "image",
-          src: makeDemoMediaSvg("Foto 06", "#7b8a35", "#e4bc54"),
-          label: "06 · Foto",
-        },
-      ];
+      if (!contentExpanded && descriptor.defaultOpen) setContentExpanded(true);
+    };
 
-      const demos = [
-        {
-          id: "semantic",
-          section: "messages",
-          title: "Toasts semânticos",
-          description:
-            "As variantes básicas compartilham a mesma API e mudam ícone, accent e role.",
-          tags: "default info success warning error semantic",
-          code: `toast("Mensagem neutra");
-toast.info("A sincronização começou.");
-toast.success("Arquivo salvo.");
-toast.warning("A conexão está instável.");
-toast.error("Não foi possível concluir.");`,
-          async run() {
-            toast("Mensagem neutra");
-            await sleep(140);
-            toast.info("A sincronização começou.");
-            await sleep(140);
-            toast.success("Arquivo salvo.");
-            await sleep(140);
-            toast.warning("A conexão está instável.");
-            await sleep(140);
-            toast.error("Não foi possível concluir.");
-          },
-        },
+    const update = (nextArgs: unknown[], nextRawOptions: ToastOptions = {}): ToastController => {
+      const shouldEmitUpdate = hasEventListeners("update");
+      const previous = shouldEmitUpdate ? { ...options } : null;
+      const wasActiveLoading = options.loading && options.loadingState === "loading";
+      const nextOptions = normalizeToastOptions({ ...options, ...nextRawOptions });
+      const isActiveLoading = nextOptions.loading && nextOptions.loadingState === "loading";
 
-        {
-          id: "expanded-content",
-          section: "messages",
-          title: "Conteúdo expansível e scrollável",
-          description:
-            "Adicione expanded sem mudar o fluxo do toast. O chevron abre uma área interna com scroll e congela o timeout enquanto estiver aberta ou com foco.",
-          tags: "expanded expandable scroll details chevron focus timer pause content v4.9",
-          code: `toast.info("Sincronização concluída com avisos", {
-  duration: 8000,
-  expanded: {
-    title: "Detalhes da execução",
-    maxHeight: 260,
-    content: {
-      sent: 18,
-      skipped: 4,
-      failed: 1,
-      notes: [
-        "Os itens já enviados foram ignorados.",
-        "O item com erro pode ser reenviado individualmente.",
-      ],
-    },
-  },
-});`,
-          run() {
-            toast.info("Sincronização concluída com avisos", {
-              duration: 8000,
-              expanded: {
-                title: "Detalhes da execução",
-                maxHeight: 260,
-                content: {
-                  sent: 18,
-                  skipped: 4,
-                  failed: 1,
-                  notes: [
-                    "Os itens já enviados foram ignorados.",
-                    "O item com erro pode ser reenviado individualmente.",
-                    "Enquanto este painel estiver aberto, o timeout fica pausado.",
-                    "Ao fechar, o toast continua contando apenas o tempo restante.",
-                  ],
-                },
-              },
-            });
-          },
-        },
+      if (wasActiveLoading !== isActiveLoading) {
+        state.activeLoadingCount = Math.max(0, state.activeLoadingCount + (isActiveLoading ? 1 : -1));
+      }
 
-        {
-          id: "expanded-default-open",
-          section: "messages",
-          title: "Expanded aberto por padrão",
-          description:
-            "defaultOpen já monta o painel aberto. Também é possível passar qualquer valor diretamente em expanded como shorthand para { content }.",
-          tags: "expanded defaultOpen shorthand content maxHeight v4.9",
-          code: `toast("Resposta do worker", {
-  expanded: {
-    title: "Payload",
-    defaultOpen: true,
-    maxHeight: "32dvh",
-    content: response,
-  },
-});
+      Object.assign(options, nextOptions);
+      applyToastPalette(node, nextOptions.type);
+      if (node.getAttribute("role") !== nextOptions.role) node.setAttribute("role", nextOptions.role);
+      renderArgs(nextArgs, nextOptions);
+      renderExpandedContent(nextOptions.expanded);
+      resetTimer(nextOptions.duration);
 
-// shorthand:
-toast("Debug", {
-  expanded: response,
-});`,
-          run() {
-            toast("Resposta do worker", {
-              duration: 9000,
-              expanded: {
-                title: "Payload",
-                defaultOpen: true,
-                maxHeight: "32dvh",
-                content: {
-                  ok: true,
-                  provider: "instagram",
-                  media: [
-                    { id: "C1", status: "sent" },
-                    { id: "C2", status: "already_sent" },
-                    { id: "C3", status: "pending" },
-                  ],
-                },
-              },
-            });
-          },
-        },
+      if (shouldEmitUpdate && previous) {
+        emitEvent("update", {
+          record,
+          controller,
+          previous,
+          options: { ...options },
+          args: nextArgs,
+          scope: options.scope,
+        } as unknown as UnknownRecord);
+      }
+      return controller;
+    };
 
-        {
-          id: "image-icon-url",
-          section: "messages",
-          title: "Imagem como icon",
-          description:
-            "Passe uma URL de imagem no mesmo campo icon. O toaster força a mídia para uma caixa quadrada e usa cover por padrão.",
-          tags: "icon image url thumbnail avatar square cover v4.5",
-          code: `toast.success({
-  title: "Post enviado",
-  description: "@rodkisten · thumbnail real como icon",
-  icon: post.thumbnailUrl,
-});`,
-          run() {
-            toast.success({
-              title: "Post enviado",
-              description:
-                "Uma imagem 2:1 foi automaticamente recortada para o icon 1:1.",
-              icon: DEMO_ICON_IMAGE,
-              duration: 8000,
-            });
-          },
-        },
-        {
-          id: "image-icon-descriptor",
-          section: "messages",
-          title: "Image icon configurável",
-          description:
-            "Use descriptor para controlar cover/contain, posição do recorte, CORS, referrer policy, decoding e loading.",
-          tags: "icon image descriptor fit contain cover objectPosition cors referrerPolicy",
-          code: `toast.info({
-  title: "Conta conectada",
-  description: "Logo preservado sem crop.",
-  icon: {
-    src: account.logo,
-    fit: "contain",
-    objectPosition: "center",
-    crossOrigin: "anonymous",
-    referrerPolicy: "no-referrer",
-    decoding: "async",
-    loading: "eager",
-  },
-});`,
-          run() {
-            toast.info({
-              title: "Image descriptor",
-              description:
-                'fit: "contain" preserva toda a arte dentro da caixa quadrada.',
-              icon: {
-                src: DEMO_LOGO_IMAGE,
-                fit: "contain",
-                objectPosition: "center",
-                decoding: "async",
-                loading: "eager",
-              },
-              duration: 8000,
-            });
-          },
-        },
-        {
-          id: "image-icon-element",
-          section: "messages",
-          title: "HTMLImageElement e fallback",
-          description:
-            "Um <img> existente também pode virar icon. Se a fonte falhar, o toaster volta ao ícone semântico do tipo.",
-          tags: "icon htmlimageelement img fallback error semantic",
-          code: `const avatar = document.createElement("img");
-avatar.src = user.avatar;
-avatar.style.objectFit = "cover";
-avatar.style.objectPosition = "50% 30%";
+    const updateLoading = (inputArgs: unknown[]): ToastController => {
+      const parsed = parseLoadingInput(inputArgs);
+      return update([], {
+        ...options,
+        ...parsed,
+        loading: true,
+        loadingState: parsed.loadingState ?? options.loadingState ?? "loading",
+      });
+    };
 
-toast.warning({
-  title: "Perfil atualizado",
-  icon: avatar,
-});`,
-          async run() {
-            const image = document.createElement("img");
-            image.src = DEMO_ICON_IMAGE;
-            image.alt = "Preview";
-            image.style.objectFit = "cover";
-            image.style.objectPosition = "72% 38%";
+    const settleLoading = (type: Exclude<ToastType, "default" | "debug">, inputArgs: unknown[] = []): ToastController => {
+      const parsed = parseLoadingInput(inputArgs);
+      const durationByType: Record<Exclude<ToastType, "default" | "debug">, number> = {
+        success: state.config.loadingSuccessDuration,
+        error: state.config.loadingErrorDuration,
+        info: state.config.loadingInfoDuration,
+        warning: state.config.loadingWarningDuration,
+      };
+      return update([], {
+        ...options,
+        ...parsed,
+        type,
+        loading: true,
+        loadingState: "settled",
+        animation: "none",
+        icon: parsed.icon ?? TOAST_COLORS[type].icon,
+        progress: type === "success" ? 1 : parsed.progress ?? options.progress,
+        duration: Number.isFinite(Number(parsed.duration)) ? Number(parsed.duration) : durationByType[type],
+      });
+    };
 
-            toast.warning({
-              title: "HTMLImageElement",
-              description:
-                "O toaster normalizou a imagem e aplicou o mesmo layout quadrado.",
-              icon: image,
-              duration: 8000,
-            });
+    const bumpDuplicate = (): ToastController => {
+      duplicateCount += 1;
+      count.textContent = `×${duplicateCount}`;
+      count.dataset.visible = "true";
+      resetTimer(options.duration);
+      return controller;
+    };
 
-            await sleep(350);
+    record = {
+      node,
+      options,
+      args,
+      dedupeKey: null,
+      createdAt: Date.now(),
+      lastSeenAt: Date.now(),
+      dismiss,
+      update,
+      updateLoading,
+      settleLoading,
+      bumpDuplicate,
+      get removed() { return removed; },
+    };
 
-            toast.error({
-              title: "Fallback automático",
-              description:
-                "Esta URL é inválida de propósito. O icon volta para circle-x.",
-              icon: {
-                src: "https://invalid.invalid/rod-toaster-icon-demo.webp",
-                fit: "cover",
-              },
-              duration: 8000,
-            });
-          },
-        },
-
-        {
-          id: "rich-message",
-          section: "messages",
-          title: "Mensagem rica com ações",
-          description:
-            "Título, descrição, details expansível e botões assíncronos no próprio toast.",
-          tags: "message rich details actions async",
-          code: `toast.message({
-  title: "Worker respondeu com HTTP 413",
-  description: "O arquivo excedeu o limite configurado.",
-  icon: "triangle-alert",
-  details: {
-    endpoint: "/send",
-    status: 413,
-    limit: "50 MB",
-  },
-  actions: [
-    {
-      id: "inspect",
-      label: "Inspecionar",
-      icon: "eye",
-      variant: "secondary",
-      close: false,
-      handle({ update }) {
-        update({
-          description: "Detalhes atualizados sem fechar o toast.",
-        });
+    controller = {
+      get id() { return options.id; },
+      get element() { return node; },
+      get progress() { return options.progress; },
+      get state() { return options.loading ? options.loadingState : options.type; },
+      update(...inputArgs: unknown[]) {
+        if (options.loading) return updateLoading(inputArgs);
+        const parsed = parseArguments(inputArgs, null);
+        return update(parsed.args, parsed.options);
       },
-    },
-  ],
-});`,
-          run() {
-            toast.message({
-              title: "Worker respondeu com HTTP 413",
-              description: "O arquivo excedeu o limite configurado.",
-              icon: "triangle-alert",
-              details: {
-                endpoint: "/send",
-                status: 413,
-                limit: "50 MB",
-              },
-              actions: [
-                {
-                  id: "inspect",
-                  label: "Inspecionar",
-                  icon: "eye",
-                  variant: "secondary",
-                  close: false,
-                  successLabel: "Atualizado",
-                  handle({ update }) {
-                    update({
-                      description:
-                        "Detalhes atualizados sem fechar o toast.",
-                    });
-                  },
-                },
-              ],
-            });
+      setProgress(value: unknown, next: ToastOptions = {}) {
+        return updateLoading([{ ...next, progress: value, animation: next.animation ?? "progress" }]);
+      },
+      success(...inputArgs: unknown[]) { return settleLoading("success", inputArgs); },
+      error(...inputArgs: unknown[]) { return settleLoading("error", inputArgs); },
+      info(...inputArgs: unknown[]) { return settleLoading("info", inputArgs); },
+      warning(...inputArgs: unknown[]) { return settleLoading("warning", inputArgs); },
+      dismiss(reason: string | boolean = "programmatic", immediate = false) {
+        if (typeof reason === "boolean") dismiss(reason, null, "programmatic");
+        else dismiss(Boolean(immediate), null, String(reason || "programmatic"));
+      },
+    };
+
+    if (options.lane !== "interaction") {
+      actions.append(createMinimizeButton(host.document));
+      if (!options.expanded) actions.append(createExpandButton(host.document, () => record));
+    }
+    renderExpandedContent(options.expanded);
+    if (options.closeButton) actions.append(createCloseButton(host.document, () => dismiss(false, null, "close")));
+
+    if (options.pauseOnInteraction) {
+      node.addEventListener("pointerenter", () => pauseTimer("pointer"));
+      node.addEventListener("pointerleave", () => resumeTimer("pointer"));
+      node.addEventListener("focusin", () => pauseTimer("focus"));
+      node.addEventListener("focusout", (event) => {
+        if (!isDomNode(event.relatedTarget) || !node.contains(event.relatedTarget)) resumeTimer("focus");
+      });
+    } else {
+      // Expanded content is explicitly interactive even when generic interaction
+      // pausing was disabled by the caller. Focus must never race the timeout.
+      node.addEventListener("focusin", () => pauseTimer("expanded-focus"));
+      node.addEventListener("focusout", (event) => {
+        if (!isDomNode(event.relatedTarget) || !node.contains(event.relatedTarget)) resumeTimer("expanded-focus");
+      });
+    }
+
+    node.addEventListener("keydown", (event) => {
+      if (options.lane === "interaction" || event.key !== "Escape") return;
+      if (contentExpanded) {
+        event.preventDefault();
+        event.stopPropagation();
+        setContentExpanded(false);
+      } else if (state.stackExpanded) {
+        event.preventDefault();
+        event.stopPropagation();
+        setStackExpanded(false);
+      } else if (options.dismissible) {
+        event.preventDefault();
+        event.stopPropagation();
+        dismiss(false, null, "escape");
+      }
+    });
+
+    renderArgs(args, options);
+    (options.lane === "interaction" ? host.interactionList : host.list).prepend(node);
+    state.toasts.push(record);
+    state.recordsByNode.set(node, record);
+    if (options.id) state.recordsById.set(options.id, record);
+    if (options.lane !== "interaction") {
+      const stackCount = getStackRecords().length;
+      const autoCollapseThreshold = Math.max(2, Number(state.config.stackAutoCollapseThreshold) || 6);
+      if (stackCount >= autoCollapseThreshold) state.stackExpanded = false;
+    }
+    promoteHostToTopLayer(true);
+    if (options.loading && options.loadingState === "loading") state.activeLoadingCount += 1;
+    if (hasEventListeners("create")) {
+      emitEvent("create", { record, controller, options: { ...options }, args, scope: options.scope } as unknown as UnknownRecord);
+    }
+    installSwipeToDismiss(record, host);
+    syncStackLayout();
+    const requestFrame = host.window.requestAnimationFrame?.bind(host.window) ?? ((callback: FrameRequestCallback) => host.window.setTimeout(() => callback(performance.now()), 0));
+    requestFrame(() => { if (node.isConnected) node.dataset.visible = "true"; });
+    scheduleTimer();
+    return { record, controller };
+  }
+
+  function showParsedToast(parsed: ParsedToast): ToastController | null {
+    const options = normalizeToastOptions(parsed.options);
+    if (options.id) {
+      const existing = state.recordsById.get(options.id);
+      if (existing && !existing.removed) {
+        existing.lastSeenAt = Date.now();
+        return options.loading || existing.options.loading
+          ? existing.updateLoading([{ ...parsed.options, loading: true }])
+          : existing.update(parsed.args, parsed.options);
+      }
+    }
+    const dedupeKey = options.dedupe ? createDedupeKey(parsed.args, options) : null;
+    if (dedupeKey && !options.id) {
+      const existing = state.dedupeRecords.get(dedupeKey);
+      const now = Date.now();
+      const persistentDuplicate = state.config.coalescePersistent && options.duration <= 0 && (existing?.options.duration ?? 1) <= 0;
+      const insideWindow = Boolean(existing && now - existing.lastSeenAt <= options.dedupeWindow);
+      if (existing && !existing.removed && (persistentDuplicate || insideWindow)) {
+        existing.lastSeenAt = now;
+        return existing.bumpDuplicate();
+      }
+    }
+    const created = createToastRecord(parsed.args, parsed.options);
+    if (!created) return null;
+    created.record.dedupeKey = dedupeKey;
+    if (options.id) state.recordsById.set(options.id, created.record);
+    if (dedupeKey) state.dedupeRecords.set(dedupeKey, created.record);
+    return created.controller;
+  }
+
+  function showToast(inputArgs: readonly unknown[], forcedType: ToastType | null): ToastController | null {
+    return showParsedToast(parseArguments(inputArgs, forcedType));
+  }
+
+  function showLoadingToast(inputArgs: readonly unknown[]): ToastController | null {
+    const descriptor = parseLoadingInput(inputArgs);
+    return showParsedToast({
+      args: [],
+      options: {
+        ...descriptor,
+        type: (descriptor.type as ToastType | undefined) ?? "default",
+        loading: true,
+        loadingState: "loading",
+        animation: descriptor.animation ?? state.config.loadingAnimation,
+        icon: descriptor.icon === undefined ? state.config.loadingIcon : descriptor.icon,
+        duration: Number.isFinite(Number(descriptor.duration)) ? Number(descriptor.duration) : state.config.loadingDuration,
+        dedupe: descriptor.dedupe ?? false,
+      },
+    });
+  }
+
+
+  interface MultiLoadingInternalItem {
+    descriptor: MultiLoadingItemDescriptor;
+    id: string;
+    title: string;
+    description: string;
+    status: MultiLoadingItemStatus;
+    progress: number | null;
+    progressLabel: string | null;
+    metadata: UnknownRecord;
+    error: unknown;
+    abortController: AbortController;
+    node: HTMLDivElement;
+    lead: HTMLDivElement;
+    copy: HTMLDivElement;
+    titleNode: HTMLDivElement;
+    descriptionNode: HTMLDivElement;
+    progressNode: HTMLDivElement;
+    progressLabelNode: HTMLSpanElement;
+    actionsNode: HTMLDivElement;
+    retryButton: HTMLButtonElement;
+    cancelButton: HTMLButtonElement;
+    successTimer: number | null;
+    removing: boolean;
+    running: boolean;
+  }
+
+  function showMultiLoadingToast(descriptor: MultiLoadingDescriptor = {}): MultiLoadingController | null {
+    const options: MultiLoadingDescriptor = isPlainObject(descriptor) ? { ...descriptor } : {};
+    const created = createToastRecord([], {
+      ...options,
+      lane: "task",
+      title: "",
+      description: "",
+      icon: false,
+      loading: false,
+      duration: 0,
+      dedupe: false,
+      closeButton: false,
+      swipeToDismiss: false,
+      pauseOnInteraction: false,
+      role: options.role ?? "status",
+      metadata: { ...(options.metadata ?? {}), multiLoading: true },
+    });
+    if (!created) return null;
+
+    const { controller: toastController, record } = created;
+    const node = toastController.element;
+    const content = node.querySelector<HTMLDivElement>(".rod-toast__content");
+    if (!content) {
+      toastController.dismiss("unavailable", true);
+      return null;
+    }
+
+    const documentRef = node.ownerDocument;
+    const hostWindow = state.hostWindow ?? initialHostWindow;
+    const root = documentRef.createElement("div");
+    const header = documentRef.createElement("div");
+    const heading = documentRef.createElement("div");
+    const titleNode = documentRef.createElement("div");
+    const summaryNode = documentRef.createElement("div");
+    const aggregate = documentRef.createElement("div");
+    const aggregateMeta = documentRef.createElement("div");
+    const aggregatePercent = documentRef.createElement("span");
+    const aggregateCount = documentRef.createElement("span");
+    const aggregateTrack = documentRef.createElement("div");
+    const aggregateBar = documentRef.createElement("div");
+    const headerActions = documentRef.createElement("div");
+    const clearButton = documentRef.createElement("button");
+    const cancelAllButton = documentRef.createElement("button");
+    const list = documentRef.createElement("div");
+    const empty = documentRef.createElement("div");
+    const items = new Map<string, MultiLoadingInternalItem>();
+    const aggregateProgressById = new Map<string, number>();
+    const aggregateCompletedIds = new Set<string>();
+    let nextId = 1;
+    let dismissed = false;
+
+    node.dataset.multiLoading = "true";
+    root.className = "rod-multi-loading";
+    header.className = "rod-multi-loading__header";
+    heading.className = "rod-multi-loading__heading";
+    titleNode.className = "rod-multi-loading__title";
+    summaryNode.className = "rod-multi-loading__summary";
+    aggregate.className = "rod-multi-loading__aggregate";
+    aggregateMeta.className = "rod-multi-loading__aggregate-meta";
+    aggregatePercent.className = "rod-multi-loading__aggregate-percent";
+    aggregateCount.className = "rod-multi-loading__aggregate-count";
+    aggregateTrack.className = "rod-multi-loading__aggregate-track";
+    aggregateBar.className = "rod-multi-loading__aggregate-bar";
+    headerActions.className = "rod-multi-loading__header-actions";
+    list.className = "rod-multi-loading__list";
+    empty.className = "rod-multi-loading__empty";
+    empty.textContent = String(options.emptyLabel ?? "No active operations.");
+
+    titleNode.textContent = String(options.title ?? "Processing items");
+    heading.append(titleNode, summaryNode);
+
+    const configureHeaderButton = (button: HTMLButtonElement, icon: SvgIconName, label: string, action: string): void => {
+      button.type = "button";
+      button.className = "rod-multi-loading__header-button";
+      button.dataset.action = action;
+      button.append(createSvgIcon(documentRef, icon, 13));
+      const span = documentRef.createElement("span");
+      span.textContent = label;
+      button.append(span);
+    };
+
+    configureHeaderButton(clearButton, "check", "Clear done", "clear");
+    configureHeaderButton(cancelAllButton, "x-circle", String(options.cancelAllLabel ?? "Cancel all"), "cancel-all");
+    headerActions.append(clearButton, cancelAllButton);
+    header.append(heading, headerActions);
+    aggregateMeta.append(aggregatePercent, aggregateCount);
+    aggregateTrack.append(aggregateBar);
+    aggregate.append(aggregateMeta, aggregateTrack);
+    root.append(header, aggregate, list);
+    content.replaceChildren(root);
+
+    const viewportRatio = clamp(Number(options.viewportRatio) || 0.5, 0.2, 0.5);
+    const rawMaxHeight = options.maxHeight;
+    const maxHeight = typeof rawMaxHeight === "number"
+      ? `${Math.max(160, rawMaxHeight)}px`
+      : typeof rawMaxHeight === "string" && rawMaxHeight.trim()
+        ? rawMaxHeight
+        : `min(${Math.round(viewportRatio * 100)}dvh,520px)`;
+    root.style.setProperty("--rod-multi-max-height", maxHeight);
+    root.style.setProperty("--rod-multi-list-height", `min(${Math.max(16, Math.round(viewportRatio * 100) - 8)}dvh,440px)`);
+
+    const successDuration = Math.max(400, Number(options.successDuration) || 2200);
+    const successMorphDelay = Math.max(0, Number(options.successMorphDelay) || 220);
+    const successFadeDuration = Math.max(180, Number(options.successFadeDuration) || 420);
+    const cancelledDuration = Math.max(120, Number(options.cancelledDuration) || 650);
+    const globalCancellable = options.cancellable !== false;
+
+    const snapshot = (item: MultiLoadingInternalItem): MultiLoadingItemSnapshot => ({
+      id: item.id,
+      title: item.title,
+      description: item.description,
+      status: item.status,
+      progress: item.progress,
+      progressLabel: item.progressLabel,
+      metadata: { ...item.metadata },
+      error: item.error,
+    });
+
+    const counts = () => {
+      let active = 0;
+      let success = 0;
+      let error = 0;
+      let cancelled = 0;
+      for (const item of items.values()) {
+        if (item.removing) continue;
+        if (item.status === "success") success += 1;
+        else if (item.status === "error") error += 1;
+        else if (item.status === "cancelled") cancelled += 1;
+        else active += 1;
+      }
+      return { active, success, error, cancelled, total: items.size };
+    };
+
+    const syncAggregate = (): void => {
+      const total = aggregateProgressById.size;
+      let contribution = 0;
+      for (const progress of aggregateProgressById.values()) contribution += progress;
+      const normalized = total > 0 ? clamp(contribution / total, 0, 1) : 0;
+      const percent = Math.round(normalized * 100);
+      const completed = aggregateCompletedIds.size;
+      aggregate.style.setProperty("--rod-multi-aggregate-progress", `${percent}%`);
+      aggregatePercent.textContent = `${percent}% concluído`;
+      aggregateCount.textContent = `${completed} de ${total} ${total === 1 ? "item" : "itens"}`;
+      aggregateTrack.setAttribute("aria-valuemin", "0");
+      aggregateTrack.setAttribute("aria-valuemax", "100");
+      aggregateTrack.setAttribute("aria-valuenow", String(percent));
+      aggregateTrack.setAttribute("role", "progressbar");
+      aggregateTrack.setAttribute("aria-label", `Progresso total: ${percent}%`);
+    };
+
+    const syncSummary = (): void => {
+      const current = counts();
+      syncAggregate();
+      if (options.showSummary === false) {
+        summaryNode.hidden = true;
+      } else {
+        summaryNode.hidden = false;
+        const parts: string[] = [];
+        if (current.active) parts.push(`${current.active} active`);
+        if (current.error) parts.push(`${current.error} failed`);
+        if (current.success) parts.push(`${current.success} done`);
+        if (current.cancelled) parts.push(`${current.cancelled} cancelled`);
+        summaryNode.textContent = parts.length ? parts.join(" · ") : "All operations completed";
+      }
+      clearButton.disabled = current.success === 0 && current.cancelled === 0;
+      cancelAllButton.disabled = current.active === 0;
+      list.dataset.empty = String(items.size === 0);
+      if (!items.size) {
+        if (!empty.isConnected) list.append(empty);
+      } else {
+        empty.remove();
+      }
+
+      if (options.autoDismiss !== false && current.total > 0 && current.active === 0 && current.error === 0) {
+        hostWindow.setTimeout(() => {
+          if (!dismissed && counts().active === 0 && counts().error === 0) toastController.dismiss("multi-complete");
+        }, successDuration + successFadeDuration + 120);
+      }
+    };
+
+    const setLead = (item: MultiLoadingInternalItem, icon: TaskIcon, spin = false): void => {
+      item.lead.dataset.spin = "false";
+      item.lead.replaceChildren();
+      const imageDescriptor = getImageIconDescriptor(icon);
+      if (imageDescriptor) {
+        item.lead.append(createImageIcon(documentRef, imageDescriptor));
+      } else {
+        const name: SvgIconName = typeof icon === "string" && hasOwn(SVG_ICONS, icon) ? icon : "circle";
+        item.lead.append(createSvgIcon(documentRef, name, 15));
+      }
+      item.lead.dataset.spin = String(spin && !imageDescriptor);
+    };
+
+    const renderItem = (item: MultiLoadingInternalItem): void => {
+      item.node.dataset.status = item.status;
+      item.titleNode.textContent = item.title;
+      item.descriptionNode.textContent = item.description;
+      item.descriptionNode.hidden = !item.description;
+      const percent = item.progress === null ? 0 : Math.round(item.progress * 100);
+      item.node.style.setProperty("--rod-multi-progress", `${percent}%`);
+      item.progressLabelNode.textContent = item.progressLabel ?? (item.progress === null ? "" : `${percent}%`);
+      item.progressNode.hidden = item.progress === null || item.status === "success" || item.status === "error" || item.status === "cancelled";
+      item.retryButton.hidden = item.status !== "error" || typeof item.descriptor.retry !== "function";
+      item.cancelButton.hidden = !globalCancellable || item.descriptor.cancellable === false || item.status === "success" || item.status === "cancelled";
+
+      if (item.status === "success") setLead(item, "check", false);
+      else if (item.status === "error") setLead(item, "circle-x", false);
+      else if (item.status === "cancelled") setLead(item, "x", false);
+      else {
+        const persistentIcon = item.descriptor.icon ?? "loader-circle";
+        setLead(item, persistentIcon, item.status === "loading" && !getImageIconDescriptor(persistentIcon));
+      }
+      syncSummary();
+    };
+
+    const removeItem = (item: MultiLoadingInternalItem, immediate = false): void => {
+      if (item.removing) return;
+      item.removing = true;
+      if (item.successTimer !== null) hostWindow.clearTimeout(item.successTimer);
+      if (immediate) {
+        item.node.remove();
+        items.delete(item.id);
+        syncSummary();
+        return;
+      }
+      item.node.dataset.removing = "true";
+      hostWindow.setTimeout(() => {
+        item.node.remove();
+        items.delete(item.id);
+        syncSummary();
+      }, successFadeDuration + 40);
+    };
+
+    const completeSuccess = (item: MultiLoadingInternalItem): void => {
+      if (item.successTimer !== null) hostWindow.clearTimeout(item.successTimer);
+
+      // The row stays intact. Its leading status icon changes to the green
+      // check in renderItem(), then the whole row gently fades upward.
+      // This intentionally replaces the old "collapse into a green bubble"
+      // animation without changing the public multiLoading API.
+      const holdDuration = Math.max(0, successMorphDelay + successDuration);
+
+      item.node.dataset.successExit = "false";
+      item.successTimer = hostWindow.setTimeout(() => {
+        if (!item.node.isConnected || item.status !== "success") return;
+
+        item.node.dataset.successExit = "true";
+        item.successTimer = hostWindow.setTimeout(() => {
+          if (!item.node.isConnected || item.status !== "success") return;
+          removeItem(item, true);
+        }, successFadeDuration);
+      }, holdDuration);
+    };
+
+    let api!: MultiLoadingController;
+
+    const makeItem = (source: MultiLoadingItemDescriptor = {}): MultiLoadingInternalItem => {
+      const id = String(source.id ?? `item-${nextId++}`);
+      const existing = items.get(id);
+      if (existing) return existing;
+      const itemNode = documentRef.createElement("div");
+      const lead = documentRef.createElement("div");
+      const copy = documentRef.createElement("div");
+      const itemTitle = documentRef.createElement("div");
+      const description = documentRef.createElement("div");
+      const progress = documentRef.createElement("div");
+      const track = documentRef.createElement("div");
+      const bar = documentRef.createElement("div");
+      const progressLabel = documentRef.createElement("span");
+      const actions = documentRef.createElement("div");
+      const retry = documentRef.createElement("button");
+      const cancel = documentRef.createElement("button");
+
+      itemNode.className = "rod-multi-loading__item";
+      itemNode.dataset.multiItemId = id;
+      lead.className = "rod-multi-loading__lead";
+      copy.className = "rod-multi-loading__copy";
+      itemTitle.className = "rod-multi-loading__item-title";
+      description.className = "rod-multi-loading__item-description";
+      progress.className = "rod-multi-loading__progress";
+      track.className = "rod-multi-loading__track";
+      bar.className = "rod-multi-loading__bar";
+      progressLabel.className = "rod-multi-loading__progress-label";
+      actions.className = "rod-multi-loading__actions";
+      retry.className = "rod-multi-loading__button";
+      cancel.className = "rod-multi-loading__button";
+      retry.dataset.action = "retry";
+      cancel.dataset.action = "cancel";
+      retry.type = cancel.type = "button";
+      retry.append(createSvgIcon(documentRef, "refresh", 13));
+      const retryLabel = documentRef.createElement("span");
+      retryLabel.textContent = "Retry";
+      retry.append(retryLabel);
+      cancel.append(createSvgIcon(documentRef, "x", 14));
+      cancel.setAttribute("aria-label", `Cancel ${id}`);
+      cancel.title = "Cancel";
+      track.append(bar);
+      progress.append(track, progressLabel);
+      copy.append(itemTitle, description, progress);
+      actions.append(retry, cancel);
+      itemNode.append(lead, copy, actions);
+
+      const item: MultiLoadingInternalItem = {
+        descriptor: { ...source },
+        id,
+        title: String(source.title ?? `Item ${items.size + 1}`),
+        description: String(source.description ?? ""),
+        status: source.status ?? "queued",
+        progress: normalizeProgress(source.progress),
+        progressLabel: source.progressLabel == null ? null : String(source.progressLabel),
+        metadata: isUnknownRecord(source.metadata) ? { ...source.metadata } : {},
+        error: source.error ?? null,
+        abortController: new AbortController(),
+        node: itemNode,
+        lead,
+        copy,
+        titleNode: itemTitle,
+        descriptionNode: description,
+        progressNode: progress,
+        progressLabelNode: progressLabel,
+        actionsNode: actions,
+        retryButton: retry,
+        cancelButton: cancel,
+        successTimer: null,
+        removing: false,
+        running: false,
+      };
+
+      retry.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void api.retry(id);
+      });
+      cancel.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void api.cancel(id, "user");
+      });
+
+      items.set(id, item);
+      aggregateProgressById.set(id, item.status === "success" ? 1 : item.progress ?? 0);
+      if (item.status === "success") aggregateCompletedIds.add(id);
+      list.append(itemNode);
+      renderItem(item);
+      return item;
+    };
+
+    const patchItem = (item: MultiLoadingInternalItem, next: Partial<MultiLoadingItemDescriptor> = {}): void => {
+      item.descriptor = { ...item.descriptor, ...next };
+      if (hasOwn(next, "title")) item.title = String(next.title ?? "");
+      if (hasOwn(next, "description")) item.description = String(next.description ?? "");
+      if (hasOwn(next, "status") && next.status) item.status = next.status;
+      if (hasOwn(next, "progress")) item.progress = normalizeProgress(next.progress);
+      if (hasOwn(next, "progressLabel")) item.progressLabel = next.progressLabel == null ? null : String(next.progressLabel);
+      if (hasOwn(next, "error")) item.error = next.error;
+      if (isUnknownRecord(next.metadata)) item.metadata = { ...item.metadata, ...next.metadata };
+
+      const aggregateProgress = item.status === "success"
+        ? 1
+        : item.progress ?? 0;
+      aggregateProgressById.set(item.id, clamp(aggregateProgress, 0, 1));
+      if (item.status === "success") aggregateCompletedIds.add(item.id);
+      else aggregateCompletedIds.delete(item.id);
+
+      renderItem(item);
+    };
+
+    api = {
+      get id() { return toastController.id; },
+      get element() { return node; },
+      get size() { return items.size; },
+      get activeCount() { return counts().active; },
+      get errorCount() { return counts().error; },
+      get successCount() { return counts().success; },
+      add(source = {}) {
+        makeItem(source);
+        syncSummary();
+        return api;
+      },
+      update(id, next = {}) {
+        const item = items.get(String(id));
+        if (!item || item.removing) return api;
+        patchItem(item, next);
+        return api;
+      },
+      progress(id, value, next = {}) {
+        const item = items.get(String(id));
+        if (!item || item.removing || item.status === "success" || item.status === "cancelled") return api;
+        patchItem(item, { ...next, status: "loading", progress: value });
+        return api;
+      },
+      success(id, next = {}) {
+        const item = items.get(String(id));
+        if (!item || item.removing || item.status === "cancelled") return api;
+        patchItem(item, { ...next, status: "success", progress: 1, error: null });
+        safeCall(() => options.onItemSuccess?.(snapshot(item)), undefined);
+        completeSuccess(item);
+        return api;
+      },
+      error(id, error, next = {}) {
+        const item = items.get(String(id));
+        if (!item || item.removing || item.status === "cancelled") return api;
+        patchItem(item, {
+          ...next,
+          status: "error",
+          error,
+          description: next.description ?? toErrorMessage(error),
+        });
+        safeCall(() => options.onItemError?.(snapshot(item)), undefined);
+        return api;
+      },
+      async retry(id) {
+        const item = items.get(String(id));
+        if (!item || item.removing || typeof item.descriptor.retry !== "function" || item.running) return api;
+        item.running = true;
+        item.retryButton.disabled = true;
+        item.abortController = new AbortController();
+        patchItem(item, { status: "loading", error: null, progress: null, description: item.descriptor.description ?? "Retrying…" });
+        try {
+          await Promise.resolve().then(() => item.descriptor.retry?.({
+            id: item.id,
+            signal: item.abortController.signal,
+            controller: api,
+            progress: (value, next = {}) => api.progress(item.id, value, next),
+            update: (next = {}) => api.update(item.id, next),
+          }));
+          if (item.abortController.signal.aborted || item.status === "cancelled") throw createAbortError(item.abortController.signal.reason);
+          api.success(item.id, { description: item.descriptor.description ?? "Completed" });
+          return api;
+        } catch (error: unknown) {
+          if (!item.abortController.signal.aborted && item.status !== "cancelled") api.error(item.id, error);
+          return api;
+        } finally {
+          item.running = false;
+          item.retryButton.disabled = false;
+        }
+      },
+      async cancel(id, reason = "cancelled") {
+        const item = items.get(String(id));
+        if (!item || item.removing || item.status === "success" || item.status === "cancelled") return api;
+        if (!item.abortController.signal.aborted) item.abortController.abort(reason);
+        try {
+          if (typeof item.descriptor.cancel === "function") {
+            await Promise.resolve().then(() => item.descriptor.cancel?.({
+              id: item.id,
+              signal: item.abortController.signal,
+              controller: api,
+              reason,
+              progress: (value, next = {}) => api.progress(item.id, value, next),
+              update: (next = {}) => api.update(item.id, next),
+            }));
+          }
+        } finally {
+          patchItem(item, { status: "cancelled", description: "Cancelled" });
+          safeCall(() => options.onItemCancel?.(snapshot(item)), undefined);
+          hostWindow.setTimeout(() => removeItem(item, false), cancelledDuration);
+        }
+        return api;
+      },
+      async cancelAll(reason = "cancel-all") {
+        await Promise.allSettled([...items.values()].map((item) => api.cancel(item.id, reason)));
+        return api;
+      },
+      remove(id, immediate = false) {
+        const item = items.get(String(id));
+        if (item) removeItem(item, immediate);
+        return api;
+      },
+      clearCompleted(immediate = false) {
+        for (const item of [...items.values()]) {
+          if (item.status === "success" || item.status === "cancelled") removeItem(item, immediate);
+        }
+        return api;
+      },
+      get(id) {
+        const item = items.get(String(id));
+        return item ? snapshot(item) : null;
+      },
+      getItems() { return [...items.values()].map(snapshot); },
+      async run<T>(id: string | number, executor: (context: MultiLoadingItemContext) => Promise<T>): Promise<T> {
+        const key = String(id);
+        let item = items.get(key);
+        if (!item) item = makeItem({ id: key, status: "queued" });
+        if (item.running) throw new Error(`Multi loading item ${key} is already running.`);
+        item.descriptor.retry = (context) => executor(context);
+        item.running = true;
+        item.abortController = new AbortController();
+        patchItem(item, { status: "loading", error: null });
+        try {
+          const result = await executor({
+            id: item.id,
+            signal: item.abortController.signal,
+            controller: api,
+            progress: (value, next = {}) => api.progress(item!.id, value, next),
+            update: (next = {}) => api.update(item!.id, next),
+          });
+          if (item.abortController.signal.aborted || item.status === "cancelled") throw createAbortError(item.abortController.signal.reason);
+          api.success(item.id);
+          return result;
+        } catch (error: unknown) {
+          if (item.abortController.signal.aborted || item.status === "cancelled") {
+            if (item.status !== "cancelled") await api.cancel(item.id, item.abortController.signal.reason ?? "aborted");
+          } else {
+            api.error(item.id, error);
+          }
+          throw error;
+        } finally {
+          item.running = false;
+        }
+      },
+      dismiss(reason = "programmatic", immediate = false) {
+        dismissed = true;
+        for (const item of items.values()) {
+          if (!item.abortController.signal.aborted && item.status !== "success" && item.status !== "cancelled") {
+            item.abortController.abort(reason);
+          }
+          if (item.successTimer !== null) hostWindow.clearTimeout(item.successTimer);
+        }
+        toastController.dismiss(reason, immediate);
+      },
+    };
+
+    clearButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      api.clearCompleted(false);
+    });
+    cancelAllButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void api.cancelAll("user-all");
+    });
+
+    for (const item of options.items ?? []) api.add(item);
+    syncSummary();
+    record.externalUpdate = (next) => {
+      if (hasOwn(next, "title")) titleNode.textContent = String(next.title ?? "");
+      return toastController;
+    };
+    syncStackLayout();
+    return api;
+  }
+
+  function normalizeActionDescriptors(
+    actions: ToastActionDescriptor[] | undefined,
+    fallbackActions: ToastActionDescriptor[] = [],
+  ): NormalizedActionDescriptor[] {
+    const source = Array.isArray(actions) && actions.length ? actions : fallbackActions;
+    return source
+      .filter((action): action is ToastActionDescriptor => isUnknownRecord(action))
+      .map((action, index) => {
+        const id = action.id == null ? `action-${index + 1}` : String(action.id);
+        const label = action.label == null ? String(action.id ?? `Action ${index + 1}`) : String(action.label);
+        return {
+          id,
+          label,
+          labelTemplate: label,
+          loadingLabel: action.loadingLabel == null ? null : String(action.loadingLabel),
+          successLabel: action.successLabel == null ? null : String(action.successLabel),
+          icon: action.icon === false || action.icon === null
+            ? false
+            : typeof action.icon === "string" && hasOwn(SVG_ICONS, action.icon)
+              ? action.icon
+              : null,
+          variant: typeof action.variant === "string" && ALLOWED_ACTION_VARIANTS.has(action.variant as ActionVariant)
+            ? action.variant as ActionVariant
+            : "secondary",
+          disabled: Boolean(action.disabled),
+          disabledUntilCountdown: Boolean(action.disabledUntilCountdown),
+          close: action.close !== false && action.keepOpen !== true,
+          keepOpen: action.keepOpen === true || action.close === false,
+          handle: typeof action.handle === "function" ? action.handle : null,
+          hasValue: hasOwn(action, "value"),
+          value: action.value,
+          shortcut: action.shortcut == null ? null : String(action.shortcut),
+          raw: action,
+        };
+      });
+  }
+
+  function normalizeShortcutName(value: unknown): string {
+    const order = ["Control", "Alt", "Shift", "Meta"];
+    return String(value ?? "")
+      .split("+")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const lower = part.toLowerCase();
+        if (lower === "cmd" || lower === "command") return "Meta";
+        if (lower === "ctrl" || lower === "control") return "Control";
+        if (lower === "alt" || lower === "option") return "Alt";
+        if (lower === "shift") return "Shift";
+        if (lower === "esc") return "Escape";
+        if (lower === "return") return "Enter";
+        return part.length === 1 ? part.toUpperCase() : part;
+      })
+      .sort((left, right) => {
+        const leftIndex = order.indexOf(left);
+        const rightIndex = order.indexOf(right);
+        if (leftIndex >= 0 || rightIndex >= 0) return (leftIndex < 0 ? 99 : leftIndex) - (rightIndex < 0 ? 99 : rightIndex);
+        return 0;
+      })
+      .join("+");
+  }
+
+  function shortcutFromEvent(event: KeyboardEvent): string {
+    const parts: string[] = [];
+    if (event.ctrlKey) parts.push("Control");
+    if (event.altKey) parts.push("Alt");
+    if (event.shiftKey) parts.push("Shift");
+    if (event.metaKey) parts.push("Meta");
+    parts.push(event.key.length === 1 ? event.key.toUpperCase() : event.key);
+    return normalizeShortcutName(parts.join("+"));
+  }
+
+  function createDetailsNode(documentRef: Document, details: unknown, label = "Details"): HTMLDetailsElement | null {
+    if (details === undefined || details === null || details === false) return null;
+    const root = documentRef.createElement("details");
+    const summary = documentRef.createElement("summary");
+    const body = documentRef.createElement("div");
+    root.className = "rod-toast__details";
+    summary.textContent = String(label || "Details");
+    body.className = "rod-toast__details-body";
+    if (typeof details === "string") body.textContent = details;
+    else body.append(renderToastValue(details, documentRef, state.config));
+    root.append(summary, body);
+    return root;
+  }
+
+  async function copyText(value: unknown): Promise<boolean> {
+    const text = String(value ?? "");
+    const hostWindow = state.hostWindow ?? initialHostWindow;
+    const hostDocument = state.hostDocument ?? hostWindow.document;
+    if (hostWindow.navigator?.clipboard?.writeText) {
+      await hostWindow.navigator.clipboard.writeText(text);
+      return true;
+    }
+    const textarea = hostDocument.createElement("textarea");
+    textarea.value = text;
+    textarea.style.position = "fixed";
+    textarea.style.left = "-99999px";
+    (hostDocument.body ?? hostDocument.documentElement).append(textarea);
+    textarea.select();
+    const copied = safeCall(() => hostDocument.execCommand("copy"), false);
+    textarea.remove();
+    return copied;
+  }
+
+  function buildCheckboxes(
+    documentRef: Document,
+    checkbox: ToastOptions["checkbox"],
+  ): { node: HTMLDivElement | null; getValue(): Record<string, boolean> } {
+    const source = Array.isArray(checkbox) ? checkbox : checkbox ? [checkbox] : [];
+    if (!source.length) return { node: null, getValue: () => ({}) };
+    const root = documentRef.createElement("div");
+    const inputs = new Map<string, HTMLInputElement>();
+    root.className = "rod-toast__checkboxes";
+    source.forEach((item, index) => {
+      const descriptor: CheckboxDescriptor = typeof item === "string"
+        ? { id: `checkbox-${index + 1}`, label: item }
+        : item;
+      const id = String(descriptor.id ?? `checkbox-${index + 1}`);
+      const label = documentRef.createElement("label");
+      const input = documentRef.createElement("input");
+      const copy = documentRef.createElement("span");
+      label.className = "rod-toast__checkbox";
+      input.type = "checkbox";
+      input.checked = Boolean(descriptor.checked);
+      input.disabled = Boolean(descriptor.disabled);
+      input.dataset.checkboxId = id;
+      copy.textContent = String(descriptor.label ?? id);
+      label.append(input, copy);
+      root.append(label);
+      inputs.set(id, input);
+    });
+    return {
+      node: root,
+      getValue: () => Object.fromEntries([...inputs.entries()].map(([id, input]) => [id, input.checked])),
+    };
+  }
+
+  function formatDialogResult(
+    options: ToastOptions,
+    value: unknown,
+    reason: string,
+    actionId: string | null,
+    values: UnknownRecord,
+  ): unknown {
+    if (!options.returnMeta) return value;
+    return { value, reason, actionId, ...values };
+  }
+
+  interface DialogBodyApi {
+    focus?(): void;
+    getValues?(): UnknownRecord;
+    cleanup?(): void;
+    syncActionState?(): void;
+    onActionsReady?(): void;
+  }
+
+  interface ActionDialogSettings {
+    kind?: string;
+    type?: ToastType;
+    icon?: SvgIconName;
+    duration?: number;
+    dismissValue?: unknown;
+    fallbackActions?: ToastActionDescriptor[];
+    buildBody?(context: {
+      document: Document;
+      body: HTMLDivElement;
+      node: HTMLDivElement;
+      controller: ToastController;
+      options: ToastOptions;
+    }): DialogBodyApi | void;
+    validate?(context: {
+      action: NormalizedActionDescriptor;
+      values: UnknownRecord;
+      options: ToastOptions;
+    }): MaybePromise<boolean | string | undefined>;
+    resolveValue?(action: NormalizedActionDescriptor, values: UnknownRecord): unknown;
+  }
+
+  function getToastApi(): ToasterApi {
+    if (!state.api) throw new Error("RodToaster API is not initialized yet.");
+    return state.api;
+  }
+
+  function showActionDialog(descriptor: ToastOptions | string = {}, settings: ActionDialogSettings = {}): Promise<unknown> {
+    const options: ToastOptions = isPlainObject(descriptor) ? { ...descriptor } as ToastOptions : { title: String(descriptor ?? "") };
+    const fallbackActions = settings.fallbackActions ?? [
+      { id: "cancel", label: "Cancel", icon: "circle-x", variant: "secondary", value: settings.dismissValue ?? false },
+      { id: "confirm", label: "Confirm", icon: "check", variant: "primary", value: true },
+    ];
+    const normalizedActions = normalizeActionDescriptors(options.actions, fallbackActions);
+    const dismissValue = hasOwn(options, "dismissValue") ? options.dismissValue : settings.dismissValue ?? false;
+    const previousFocus = safeCall(() => (state.hostDocument ?? initialHostWindow.document).activeElement, null);
+
+    return new Promise<unknown>((resolve, reject) => {
+      let settled = false;
+      let actionInFlight = false;
+      let countdownTimer: TimerHandle = null;
+      let remainingSeconds = 0;
+      let initialSeconds = 0;
+      const cleanupCallbacks: Array<() => void> = [];
+      let getValues: () => UnknownRecord = () => ({});
+
+      const created = createToastRecord([], {
+        type: typeof options.type === "string" && hasOwn(TOAST_COLORS, options.type) ? options.type : settings.type ?? "default",
+        lane: "interaction",
+        title: options.title,
+        description: options.description,
+        icon: options.icon === undefined ? settings.icon ?? "circle" : options.icon,
+        duration: Number.isFinite(Number(options.duration)) ? Number(options.duration) : settings.duration ?? 0,
+        id: options.id,
+        scope: options.scope,
+        metadata: options.metadata,
+        dedupe: false,
+        pauseOnInteraction: options.pauseOnInteraction ?? true,
+        dismissible: options.dismissible !== false,
+        closeButton: options.dismissible !== false && (options.closeButton ?? true),
+        swipeToDismiss: options.dismissible !== false && (options.swipeToDismiss ?? true),
+        role: options.role ?? "alertdialog",
+        onDismiss: ({ reason }) => finish(dismissValue, reason, null),
+      });
+
+      if (!created) {
+        resolve(formatDialogResult(options, dismissValue, "unavailable", null, {}));
+        return;
+      }
+
+      const { controller, record } = created;
+      registerDialog(record, previousFocus);
+      const node = controller.element;
+      const content = node.querySelector<HTMLDivElement>(".rod-toast__content");
+      const iconNode = node.querySelector<HTMLElement>(".rod-toast__icon");
+      node.dataset.confirm = "false";
+      node.dataset.interactive = "true";
+      node.dataset.interactiveKind = settings.kind ?? "dialog";
+      node.setAttribute("aria-modal", "false");
+
+      if (!content) {
+        controller.dismiss("unavailable", true);
+        resolve(formatDialogResult(options, dismissValue, "unavailable", null, {}));
+        return;
+      }
+
+      const documentRef = node.ownerDocument;
+      const root = documentRef.createElement("div");
+      const copy = documentRef.createElement("div");
+      const title = documentRef.createElement("div");
+      const description = documentRef.createElement("div");
+      const body = documentRef.createElement("div");
+      const validation = documentRef.createElement("div");
+      const countdown = documentRef.createElement("div");
+      const countdownLabel = documentRef.createElement("div");
+      const countdownTrack = documentRef.createElement("div");
+      const countdownBar = documentRef.createElement("div");
+      const actionsNode = documentRef.createElement("div");
+      const dialogToken = `${record.createdAt}-${Math.random().toString(36).slice(2, 8)}`;
+
+      root.className = "rod-toast__interactive";
+      copy.className = "rod-toast__interactive-copy";
+      title.className = "rod-toast__interactive-title";
+      description.className = "rod-toast__interactive-description";
+      body.className = "rod-toast__interactive-body";
+      validation.className = "rod-toast__validation";
+      validation.dataset.visible = "false";
+      countdown.className = "rod-toast__countdown";
+      countdown.dataset.visible = "false";
+      countdownTrack.className = "rod-toast__countdown-track";
+      countdownBar.className = "rod-toast__countdown-bar";
+      actionsNode.className = "rod-toast__confirm-actions";
+      title.id = `rod-toast-dialog-title-${dialogToken}`;
+      description.id = `rod-toast-dialog-description-${dialogToken}`;
+      title.textContent = String(options.title ?? "");
+      title.hidden = !title.textContent;
+      description.textContent = String(options.description ?? "");
+      description.hidden = !description.textContent;
+      if (!title.hidden) node.setAttribute("aria-labelledby", title.id);
+      if (!description.hidden) node.setAttribute("aria-describedby", description.id);
+      countdownTrack.append(countdownBar);
+      countdown.append(countdownLabel, countdownTrack);
+      copy.append(title, description);
+      root.append(copy, body);
+
+      const checkboxApi = buildCheckboxes(documentRef, options.checkbox);
+      if (checkboxApi.node) body.append(checkboxApi.node);
+      const bodyApi = settings.buildBody?.({ document: documentRef, body, node, controller, options }) ?? {};
+      if (typeof bodyApi.cleanup === "function") cleanupCallbacks.push(bodyApi.cleanup);
+      getValues = (): UnknownRecord => ({
+        ...(bodyApi.getValues?.() ?? {}),
+        ...(checkboxApi.node ? { checked: checkboxApi.getValue() } : {}),
+      });
+
+      let currentDetailsNode = createDetailsNode(documentRef, options.details, options.detailsLabel ?? "Details");
+      if (currentDetailsNode) root.append(currentDetailsNode);
+      root.append(validation, countdown, actionsNode);
+      content.replaceChildren(root);
+
+      const buttons: Array<HTMLButtonElement & { __rodAction: NormalizedActionDescriptor }> = [];
+      const buttonByActionId = new Map<string, HTMLButtonElement & { __rodAction: NormalizedActionDescriptor }>();
+
+      function cleanup(): void {
+        if (countdownTimer !== null) {
+          (state.hostWindow ?? initialHostWindow).clearInterval(countdownTimer);
+          countdownTimer = null;
+        }
+        cleanupCallbacks.splice(0).forEach((callback) => safeCall(callback, undefined));
+      }
+
+      function finish(value: unknown, reason = "action", actionId: string | null = null): void {
+        if (settled) return;
+        settled = true;
+        const values = getValues();
+        cleanup();
+        resolve(formatDialogResult(options, value, reason, actionId, values));
+      }
+
+      const setValidation = (message: unknown): void => {
+        validation.textContent = String(message ?? "");
+        validation.dataset.visible = String(Boolean(validation.textContent));
+      };
+
+      const updateDialog = (next: UnknownRecord = {}): ToastController => {
+        if (hasOwn(next, "title")) {
+          title.textContent = String(next.title ?? "");
+          title.hidden = !title.textContent;
+          if (title.hidden) node.removeAttribute("aria-labelledby");
+          else node.setAttribute("aria-labelledby", title.id);
+        }
+        if (hasOwn(next, "description")) {
+          description.textContent = String(next.description ?? "");
+          description.hidden = !description.textContent;
+          if (description.hidden) node.removeAttribute("aria-describedby");
+          else node.setAttribute("aria-describedby", description.id);
+        }
+        if (hasOwn(next, "details")) {
+          const nextDetails = createDetailsNode(documentRef, next.details, String(next.detailsLabel ?? options.detailsLabel ?? "Details"));
+          currentDetailsNode?.remove();
+          currentDetailsNode = nextDetails;
+          if (currentDetailsNode) root.insertBefore(currentDetailsNode, validation);
+        }
+        if (hasOwn(next, "validation")) setValidation(next.validation);
+        return controller;
+      };
+      record.externalUpdate = (next: ToastOptions) => updateDialog(next as unknown as UnknownRecord);
+
+      const syncButtons = (): void => {
+        buttons.forEach((button) => {
+          const descriptorForButton = button.__rodAction;
+          const lockedByCountdown = descriptorForButton.disabledUntilCountdown && remainingSeconds > 0;
+          button.disabled = actionInFlight || descriptorForButton.disabled || lockedByCountdown;
+        });
+        bodyApi.syncActionState?.();
+      };
+
+      const setButtonBusyVisual = (
+        button: HTMLButtonElement & { __rodAction: NormalizedActionDescriptor },
+        action: NormalizedActionDescriptor,
+        busy: boolean,
+        originalIcon: Node | null,
+      ): void => {
+        const label = button.querySelector("span");
+        if (busy) {
+          if (label && action.loadingLabel) label.textContent = action.loadingLabel;
+          const currentSvg = button.querySelector("svg");
+          const loader = createSvgIcon(documentRef, "loader-circle", 15);
+          if (currentSvg) currentSvg.replaceWith(loader);
+          else button.insertBefore(loader, label);
+          button.dataset.busy = "true";
+        } else {
+          button.querySelector("svg")?.remove();
+          if (originalIcon) button.insertBefore(originalIcon.cloneNode(true), label);
+          if (label) label.textContent = action.label;
+          button.dataset.busy = "false";
+        }
+      };
+
+      const executeAction = async (
+        action: NormalizedActionDescriptor,
+        button: HTMLButtonElement & { __rodAction: NormalizedActionDescriptor },
+        event: Event | null,
+      ): Promise<void> => {
+        if (settled || actionInFlight || button.disabled || !isTopDialog(record)) return;
+        setValidation("");
+        actionInFlight = true;
+        const originalIcon = button.querySelector("svg")?.cloneNode(true) ?? null;
+        syncButtons();
+        setButtonBusyVisual(button, action, true, originalIcon);
+
+        try {
+          const values = getValues();
+          const validationResult = await settings.validate?.({ action, values, options });
+          if (validationResult !== true && validationResult !== undefined) {
+            setValidation(validationResult === false ? options.validationMessage ?? "Please review this value." : validationResult);
+            actionInFlight = false;
+            setButtonBusyVisual(button, action, false, originalIcon);
+            syncButtons();
+            return;
+          }
+
+          let closedByContext = false;
+          const close = (value: unknown = action.value, reason = "action"): void => {
+            closedByContext = true;
+            finish(value, reason, action.id);
+            controller.dismiss(reason);
+          };
+
+          emitEvent("action", { phase: "start", actionId: action.id, action: action.raw, controller, scope: options.scope ?? null } as unknown as UnknownRecord);
+          let result = action.handle
+            ? await Promise.resolve().then(() => action.handle!({
+                action: action.raw,
+                controller,
+                event,
+                toast: getToastApi(),
+                close,
+                update: updateDialog,
+                setValidation,
+                values,
+                checked: isUnknownRecord(values.checked) ? values.checked as Record<string, boolean> : {},
+              }))
+            : undefined;
+          if (closedByContext) return;
+          if (result === undefined) {
+            result = settings.resolveValue
+              ? settings.resolveValue(action, values)
+              : action.hasValue
+                ? action.value
+                : action.id;
+          }
+          if (action.successLabel) {
+            const labelNode = button.querySelector("span");
+            if (labelNode) labelNode.textContent = action.successLabel;
+            button.querySelector("svg")?.replaceWith(createSvgIcon(documentRef, "check", 15));
+            await new Promise<void>((resolveDelay) => (state.hostWindow ?? initialHostWindow).setTimeout(resolveDelay, 220));
+          }
+          emitEvent("action", { phase: "success", actionId: action.id, action: action.raw, result, controller, scope: options.scope ?? null } as unknown as UnknownRecord);
+          if (action.close) {
+            finish(result, "action", action.id);
+            controller.dismiss("action");
+            return;
+          }
+          actionInFlight = false;
+          setButtonBusyVisual(button, action, false, originalIcon);
+          syncButtons();
+        } catch (error: unknown) {
+          emitEvent("action", { phase: "error", actionId: action.id, action: action.raw, error, controller, scope: options.scope ?? null } as unknown as UnknownRecord);
+          actionInFlight = false;
+          setButtonBusyVisual(button, action, false, originalIcon);
+          syncButtons();
+          if (options.rejectOnActionError === false) {
+            setValidation(toErrorMessage(error));
+            return;
+          }
+          if (!settled) {
+            settled = true;
+            cleanup();
+            reject(error);
+            controller.dismiss("action-error", true);
+          }
+        }
+      };
+
+      normalizedActions.forEach((action) => {
+        const button = documentRef.createElement("button") as HTMLButtonElement & { __rodAction: NormalizedActionDescriptor };
+        const label = documentRef.createElement("span");
+        button.type = "button";
+        button.className = "rod-toast__confirm-button";
+        button.dataset.actionId = action.id;
+        button.dataset.variant = action.variant;
+        button.dataset.busy = "false";
+        button.__rodAction = action;
+        button.disabled = action.disabled;
+        if (action.icon) button.append(createSvgIcon(documentRef, action.icon, 15));
+        label.textContent = action.label;
+        button.append(label);
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void executeAction(action, button, event);
+        });
+        actionsNode.append(button);
+        buttons.push(button);
+        buttonByActionId.set(action.id, button);
+      });
+
+      const countdownValue = isUnknownRecord(options.countdown) ? options.countdown.seconds : options.countdown;
+      initialSeconds = Math.max(0, Math.ceil(Number(countdownValue) || 0));
+      remainingSeconds = initialSeconds;
+      const updateCountdown = (): void => {
+        countdown.dataset.visible = String(initialSeconds > 0);
+        if (!initialSeconds) return;
+        countdown.style.setProperty("--rod-countdown-progress", `${Math.round(clamp(remainingSeconds / initialSeconds, 0, 1) * 100)}%`);
+        countdownLabel.textContent = remainingSeconds > 0 ? `${remainingSeconds}s remaining` : "Ready";
+        buttons.forEach((button) => {
+          const action = button.__rodAction;
+          const label = button.querySelector("span");
+          if (label && button.dataset.busy !== "true") label.textContent = action.labelTemplate.replace(/\{seconds\}/g, String(remainingSeconds));
+        });
+        syncButtons();
+      };
+
+      if (initialSeconds > 0) {
+        updateCountdown();
+        countdownTimer = (state.hostWindow ?? initialHostWindow).setInterval(() => {
+          remainingSeconds = Math.max(0, remainingSeconds - 1);
+          updateCountdown();
+          if (remainingSeconds <= 0) {
+            if (countdownTimer !== null) (state.hostWindow ?? initialHostWindow).clearInterval(countdownTimer);
+            countdownTimer = null;
+            const autoActionId = isUnknownRecord(options.countdown) ? options.countdown.autoAction : null;
+            if (autoActionId != null) buttonByActionId.get(String(autoActionId))?.click();
+          }
+        }, 1000);
+      }
+
+      const shortcuts = new Map<string, string>();
+      Object.entries(options.shortcuts ?? {}).forEach(([shortcut, actionId]) => {
+        const normalizedShortcut = normalizeShortcutName(shortcut);
+        if (options.dismissible === false && normalizedShortcut === "Escape") return;
+        shortcuts.set(normalizedShortcut, String(actionId));
+      });
+      normalizedActions.forEach((action) => {
+        if (!action.shortcut) return;
+        const normalizedShortcut = normalizeShortcutName(action.shortcut);
+        if (options.dismissible === false && normalizedShortcut === "Escape") return;
+        shortcuts.set(normalizedShortcut, action.id);
+      });
+
+      const keyHandler = (event: KeyboardEvent): void => {
+        if (settled || !isTopDialog(record)) return;
+        if (event.key === "Escape" && options.dismissible === false) return;
+        const actionId = shortcuts.get(shortcutFromEvent(event));
+        if (actionId) {
+          const button = buttonByActionId.get(actionId);
+          if (button && !button.disabled) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            button.click();
+            return;
+          }
+        }
+        if (event.key === "Escape" && options.dismissible !== false) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          controller.dismiss("escape");
+        }
+      };
+      documentRef.addEventListener("keydown", keyHandler, true);
+      cleanupCallbacks.push(() => documentRef.removeEventListener("keydown", keyHandler, true));
+
+      bodyApi.onActionsReady?.();
+      syncButtons();
+      syncDialogStack();
+      setManagerMinimized(false);
+      syncStackLayout();
+      const preferredButton = buttons.find((button) => !button.disabled && button.dataset.variant === "primary") ?? buttons.find((button) => !button.disabled);
+      const hostWindow = state.hostWindow ?? initialHostWindow;
+      const requestFrame = hostWindow.requestAnimationFrame?.bind(hostWindow) ?? ((callback: FrameRequestCallback) => hostWindow.setTimeout(() => callback(performance.now()), 0));
+      requestFrame(() => {
+        if (!isTopDialog(record)) return;
+        bodyApi.focus?.();
+        if (!bodyApi.focus) preferredButton?.focus({ preventScroll: true });
+        iconNode?.setAttribute("aria-hidden", "true");
+      });
+      record.dialogActions = normalizedActions;
+    });
+  }
+
+  function showConfirmToast(descriptor: ToastOptions | string = {}): Promise<unknown> {
+    const options: ToastOptions = isPlainObject(descriptor) ? { ...descriptor } : { title: String(descriptor ?? "") };
+    options.shortcuts ??= { Escape: "cancel", Enter: "confirm" };
+    return showActionDialog(options, {
+      kind: "confirm",
+      dismissValue: false,
+      fallbackActions: [
+        { id: "cancel", label: "Cancel", icon: "circle-x", variant: "secondary", value: false },
+        { id: "confirm", label: "Confirm", icon: "check", variant: "primary", value: true },
+      ],
+    });
+  }
+
+  function showPromptToast(descriptor: ToastOptions | string = {}): Promise<unknown> {
+    const options: ToastOptions = isPlainObject(descriptor) ? { ...descriptor } : { title: String(descriptor ?? "") };
+    options.shortcuts ??= options.multiline
+      ? { Escape: "cancel", "Meta+Enter": "confirm", "Control+Enter": "confirm" }
+      : { Escape: "cancel", Enter: "confirm" };
+    let input: HTMLInputElement | HTMLTextAreaElement | null = null;
+    return showActionDialog(options, {
+      kind: "prompt",
+      dismissValue: hasOwn(options, "dismissValue") ? options.dismissValue : null,
+      fallbackActions: [
+        { id: "cancel", label: options.cancelLabel ?? "Cancel", icon: "circle-x", variant: "secondary", value: hasOwn(options, "dismissValue") ? options.dismissValue : null },
+        { id: "confirm", label: options.confirmLabel ?? "Save", icon: "check", variant: "primary" },
+      ],
+      buildBody({ document, body }) {
+        const field = document.createElement("label");
+        const label = document.createElement("span");
+        input = options.multiline ? document.createElement("textarea") : document.createElement("input");
+        field.className = "rod-toast__field";
+        label.className = "rod-toast__field-label";
+        label.textContent = String(options.inputLabel ?? "Value");
+        label.hidden = !options.inputLabel;
+        input.className = options.multiline ? "rod-toast__textarea" : "rod-toast__input";
+        if (isInputElement(input)) input.type = options.inputType ?? "text";
+        input.value = options.value == null ? "" : String(options.value);
+        input.placeholder = String(options.placeholder ?? "");
+        input.autocomplete = options.autocomplete ?? "off";
+        input.spellcheck = options.spellcheck !== false;
+        if (Number.isFinite(options.minLength)) input.minLength = Number(options.minLength);
+        if (Number.isFinite(options.maxLength)) input.maxLength = Number(options.maxLength);
+        input.required = Boolean(options.required);
+        field.append(label, input);
+        body.append(field);
+        return {
+          focus: () => {
+            input?.focus({ preventScroll: true });
+            if (isInputElement(input)) input.select();
           },
-        },
+          getValues: () => ({ input: input?.value ?? "" }),
+        };
+      },
+      async validate({ action, values }) {
+        if (action.id === "cancel") return true;
+        const value = String(values.input ?? "");
+        if (options.required && !value.trim()) return options.requiredMessage ?? "A value is required.";
+        return typeof options.validate === "function" ? options.validate(value) : true;
+      },
+      resolveValue(action, values) {
+        if (action.id === "cancel") return action.hasValue ? action.value : null;
+        return action.hasValue ? action.value : values.input;
+      },
+    });
+  }
+
+  function showSelectToast<T = unknown>(descriptor: SelectOptions<T> = {}): Promise<T | T[] | null> {
+    const options: SelectOptions<T> = isPlainObject(descriptor) ? { ...descriptor } as SelectOptions<T> : {};
+    options.shortcuts ??= { Escape: "cancel", Enter: "confirm" };
+    let select: HTMLSelectElement | null = null;
+    const choices = Array.isArray(options.options) ? options.options : [];
+    const valuesByToken = new Map<string, T>();
+
+    const promise = showActionDialog(options as ToastOptions, {
+      kind: "select",
+      dismissValue: hasOwn(options, "dismissValue") ? options.dismissValue : null,
+      fallbackActions: [
+        { id: "cancel", label: options.cancelLabel ?? "Cancel", icon: "circle-x", variant: "secondary", value: null },
+        { id: "confirm", label: options.confirmLabel ?? "Select", icon: "check", variant: "primary" },
+      ],
+      buildBody({ document, body }) {
+        const field = document.createElement("label");
+        const label = document.createElement("span");
+        select = document.createElement("select");
+        field.className = "rod-toast__field";
+        label.className = "rod-toast__field-label";
+        label.textContent = String(options.inputLabel ?? "Option");
+        label.hidden = !options.inputLabel;
+        select.className = "rod-toast__select";
+        select.multiple = Boolean(options.multiple);
+        const initialValues = options.multiple
+          ? (Array.isArray(options.value) ? options.value : options.value === undefined ? [] : [options.value])
+          : [options.value];
+
+        choices.forEach((choice, index) => {
+          const isDescriptor = isUnknownRecord(choice) && hasOwn(choice, "value");
+          const value = (isDescriptor ? choice.value : choice) as T;
+          const choiceLabel = isDescriptor ? choice.label : choice;
+          const disabled = isDescriptor ? Boolean(choice.disabled) : false;
+          const token = `choice:${index}`;
+          valuesByToken.set(token, value);
+          const option = document.createElement("option");
+          option.value = token;
+          option.textContent = String(choiceLabel ?? value ?? index);
+          option.disabled = disabled;
+          option.selected = initialValues.some((candidate) => Object.is(candidate, value));
+          select!.append(option);
+        });
+        field.append(label, select);
+        body.append(field);
+        return {
+          focus: () => select?.focus({ preventScroll: true }),
+          getValues: () => {
+            const tokens = select ? Array.from(select.selectedOptions, (option) => option.value) : [];
+            const selectedValues = tokens.map((token) => valuesByToken.get(token) as T);
+            return { selection: options.multiple ? selectedValues : selectedValues[0] ?? null };
+          },
+        };
+      },
+      async validate({ action, values }) {
+        if (action.id === "cancel") return true;
+        const selection = values.selection as T | T[] | null;
+        if (options.required && (selection == null || (Array.isArray(selection) && selection.length === 0))) {
+          return options.requiredMessage ?? "Choose an option.";
+        }
+        return typeof options.validate === "function" ? options.validate(selection) : true;
+      },
+      resolveValue(action, values) {
+        if (action.id === "cancel") return null;
+        return action.hasValue ? action.value : values.selection;
+      },
+    });
+
+    return promise as Promise<T | T[] | null>;
+  }
+
+  function inferPickerMediaType(value: PickerItemDescriptor | string, fallback: PickerMediaType = "image"): PickerMediaType {
+    if (typeof value !== "string") {
+      if (value.isVideo === true || Number(value.media_type) === 2) return "video";
+      if (Number(value.media_type) === 1) return "image";
+
+      const explicit = String(
+        value.type ??
+        value.kind ??
+        value.mediaType ??
+        value.mimeType ??
+        "",
+      ).toLowerCase();
+
+      if (explicit.startsWith("video") || explicit === "reel") return "video";
+      if (explicit.startsWith("image") || explicit === "photo") return "image";
+    }
+
+    const source = typeof value === "string"
+      ? value
+      : String(
+          value.src ??
+          value.url ??
+          value.mediaUrl ??
+          value.href ??
+          value.preview ??
+          value.thumbnail ??
+          value.poster ??
+          "",
+        );
+
+    if (/\.(?:mp4|webm|mov|m4v|mkv|avi|ogv|3gp|ts|m3u8)(?:$|[?#])/i.test(source)) return "video";
+    if (/\.(?:jpe?g|png|webp|gif|avif|bmp|svg)(?:$|[?#])/i.test(source)) return "image";
+    return fallback;
+  }
+
+  function normalizePickerItems<T extends PickerSource>(
+    source: readonly T[] | T | null | undefined,
+    options: PickerOptions<T> = {},
+  ): { items: Array<PickerNormalizedDescriptor<T> & { selected: boolean | null }>; objectUrls: string[] } {
+    const values: readonly T[] = Array.isArray(source)
+      ? source
+      : source == null
+        ? []
+        : [source as T];
+    const objectUrls: string[] = [];
+    const usedIds = new Set<string>();
+    const hostWindow = state.hostWindow ?? initialHostWindow;
+
+    const items = values
+      .map((input, index): (PickerNormalizedDescriptor<T> & { selected: boolean | null }) | null => {
+        const blobLike = isBlobLike(input);
+        const descriptorLike = !blobLike && isUnknownRecord(input) && [
+          "src", "url", "mediaUrl", "href", "poster", "thumbnail", "preview", "previewUrl",
+          "id", "pk", "key", "code", "type", "kind", "mediaType", "mimeType", "media_type", "isVideo",
+        ].some((key) => key in input);
+        const raw = (descriptorLike ? input : {}) as PickerItemDescriptor;
+
+        let srcCandidate: unknown = descriptorLike
+          ? raw.src ?? raw.url ?? raw.mediaUrl ?? raw.href ?? null
+          : blobLike
+            ? null
+            : input;
+
+        if (blobLike && !srcCandidate) {
+          const objectUrl = safeCall(() => hostWindow.URL.createObjectURL(input), null);
+          if (objectUrl) {
+            srcCandidate = objectUrl;
+            objectUrls.push(objectUrl);
+          }
+        }
+
+        if (srcCandidate == null) return null;
+        const src = String(srcCandidate).trim();
+        if (!src) return null;
+
+        const rawBaseId = String(raw.id ?? raw.pk ?? raw.key ?? raw.code ?? index);
+        let id = rawBaseId;
+        let collision = 1;
+        while (usedIds.has(id)) {
+          id = `${rawBaseId}:${collision}`;
+          collision += 1;
+        }
+        usedIds.add(id);
+
+        const type = inferPickerMediaType(
+          {
+            ...raw,
+            src,
+            type: raw.type ?? (blobLike ? input.type : undefined),
+          },
+          options.defaultMediaType ?? "image",
+        );
+        const posterCandidate = raw.poster ?? raw.thumbnail ?? raw.preview ?? raw.previewUrl ?? null;
+        const label = String(raw.label ?? raw.title ?? raw.filename ?? raw.name ?? "");
+        const alt = String(raw.alt ?? raw.label ?? `${type === "video" ? "Video" : "Image"} ${index + 1}`);
+
+        return {
+          id,
+          index,
+          type,
+          src,
+          poster: posterCandidate == null ? null : String(posterCandidate),
+          label,
+          alt,
+          disabled: Boolean(raw.disabled),
+          selected: hasOwn(raw, "selected") ? Boolean(raw.selected) : null,
+          transient: blobLike,
+          original: input,
+        };
+      })
+      .filter((item): item is PickerNormalizedDescriptor<T> & { selected: boolean | null } => item !== null);
+
+    return { items, objectUrls };
+  }
+
+  function getInitialPickerSelection<T extends PickerSource>(
+    items: Array<PickerNormalizedDescriptor<T> & { selected: boolean | null }>,
+    options: PickerOptions<T>,
+  ): Set<string> {
+    const selectable = items.filter((item) => !item.disabled);
+    if (!selectable.length) return new Set<string>();
+
+    const requested = options.value ?? options.selected ?? options.defaultSelected;
+    const requestedIds = new Set<string>();
+    if (Array.isArray(requested)) {
+      requested.forEach((value) => requestedIds.add(String(value)));
+    } else if (requested !== undefined && requested !== null && requested !== true && requested !== false && requested !== "all") {
+      requestedIds.add(String(requested));
+    }
+    const requestedIndexes = new Set<number>([
+      ...(options.defaultSelectedIndexes ?? []),
+      ...(options.selectedIndexes ?? []),
+    ].filter((value) => Number.isInteger(value) && value >= 0));
+
+    const shouldSelectAll =
+      options.defaultAllSelected === true ||
+      options.allSelectedByDefault === true ||
+      options.defaultSelected === "all" ||
+      options.defaultSelected === true ||
+      options.value === "all" ||
+      options.value === true ||
+      options.selected === "all" ||
+      options.selected === true;
+
+    const selected = new Set<string>();
+    for (const item of items) {
+      if (item.disabled) continue;
+      if (item.selected === true) {
+        selected.add(item.id);
+        continue;
+      }
+      if (item.selected === false) continue;
+      if (shouldSelectAll || requestedIds.has(item.id) || requestedIndexes.has(item.index)) {
+        selected.add(item.id);
+      }
+    }
+
+    if (options.multiple === false) {
+      const first = items.find((item) => selected.has(item.id) && !item.disabled) ?? (shouldSelectAll ? selectable[0] : null);
+      return new Set(first ? [first.id] : []);
+    }
+
+    return selected;
+  }
+
+  function normalizePickerAspectRatio(value: unknown): { css: string; paddingPercent: string } {
+    const fallbackRatio = 1;
+    const source = String(value ?? "").trim();
+    let ratio = fallbackRatio;
+
+    if (source) {
+      const fraction = source.match(/^([0-9]*\.?[0-9]+)\s*(?:\/|:)\s*([0-9]*\.?[0-9]+)$/);
+      if (fraction) {
+        const width = Number(fraction[1]);
+        const height = Number(fraction[2]);
+        if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+          ratio = width / height;
+        }
+      } else {
+        const numeric = Number(source);
+        if (Number.isFinite(numeric) && numeric > 0) ratio = numeric;
+      }
+    }
+
+    ratio = clamp(ratio, 0.05, 20);
+    const padding = 100 / ratio;
+    return {
+      css: `${ratio} / 1`,
+      paddingPercent: `${Number(padding.toFixed(5))}%`,
+    };
+  }
+
+  function showPickerToast<T extends PickerSource = PickerSource>(descriptor: PickerOptions<T> = {}): Promise<PickerResult<T>> {
+    const options: PickerOptions<T> = isPlainObject(descriptor) ? { ...descriptor } as PickerOptions<T> : {};
+    const rawSource = options.items ?? options.media ?? options.sources ?? [];
+    const normalized = normalizePickerItems<T>(rawSource, options);
+    const items = normalized.items;
+    const multiple = options.multiple !== false;
+    const requestedMinimum = Number.isFinite(Number(options.minSelected))
+      ? Math.max(0, Math.floor(Number(options.minSelected)))
+      : options.required === false
+        ? 0
+        : 1;
+    const minimum = multiple ? requestedMinimum : Math.min(1, requestedMinimum);
+    const requestedMaximum = Number.isFinite(Number(options.maxSelected))
+      ? Math.max(0, Math.floor(Number(options.maxSelected)))
+      : multiple
+        ? Infinity
+        : 1;
+    const maximum = multiple ? Math.max(minimum, requestedMaximum) : 1;
+    const selectedIds = getInitialPickerSelection(items, { ...options, multiple });
+    const preservedObjectUrls = new Set<string>();
+
+    if (Number.isFinite(maximum) && selectedIds.size > maximum) {
+      let kept = 0;
+      for (const item of items) {
+        if (!selectedIds.has(item.id)) continue;
+        kept += 1;
+        if (kept > maximum) selectedIds.delete(item.id);
+      }
+    }
+
+    options.shortcuts ??= {
+      Escape: "cancel",
+      "Meta+Enter": "confirm",
+      "Control+Enter": "confirm",
+    };
+
+    const promise = showActionDialog(options, {
+      kind: "picker",
+      icon: "image",
+      dismissValue: hasOwn(options, "dismissValue") ? options.dismissValue : null,
+      fallbackActions: [
         {
-          id: "error-copy",
-          section: "messages",
-          title: "Erro com stack copiável",
-          description:
-            "Ao receber um Error, o toaster cria details e uma action de copiar automaticamente.",
-          tags: "error copy stack details exception",
-          code: `try {
-  throw new Error("Falha ao processar playlist HLS.");
-} catch (error) {
-  toast.copyError(error, {
-    title: "Falha no pipeline",
-    description: "Abra os detalhes ou copie a stack.",
-  });
-}`,
-          run() {
-            try {
-              throw new Error("Falha ao processar playlist HLS.");
-            } catch (error) {
-              toast.copyError(error, {
-                title: "Falha no pipeline",
-                description: "Abra os detalhes ou copie a stack.",
-              });
-            }
-          },
-        },
-        {
-          id: "debug-inspector",
-          section: "messages",
-          title: "Debug com Object Inspector",
-          description:
-            "Objetos, arrays, Map, Set e Error podem ser explorados sem serialização destrutiva.",
-          tags: "debug inspect object inspector map set",
-          code: `toast.debug(
-  "Snapshot do pipeline",
-  {
-    provider: "twitter",
-    candidates: [
-      { type: "mp4", height: 1080 },
-      { type: "hls", height: 720 },
-    ],
-    headers: new Map([["Referer", location.origin]]),
-  },
-  toast.options({ duration: 0 }),
-);`,
-          run() {
-            toast.debug(
-              "Snapshot do pipeline",
-              {
-                provider: "twitter",
-                candidates: [
-                  { type: "mp4", height: 1080 },
-                  { type: "hls", height: 720 },
-                ],
-                headers: new Map([["Referer", location.origin]]),
-              },
-              toast.options({ duration: 0 }),
-            );
-          },
+          id: "cancel",
+          label: options.cancelLabel ?? "Cancel",
+          icon: "circle-x",
+          variant: "secondary",
+          value: hasOwn(options, "dismissValue") ? options.dismissValue : null,
         },
         {
           id: "confirm",
-          section: "interaction",
-          title: "Confirm com actions assíncronas",
-          description:
-            "O valor retornado por handle() vira diretamente o resultado do await.",
-          tags: "confirm actions handle promise repeat telegram",
-          code: `const confirmed = await toast.confirm({
-  title: "Enviar novamente?",
-  description:
-    "Este post já foi enviado ao Telegram em 24/07/2026 às 19:35.",
-  icon: "history",
-  duration: 0,
-  dismissible: true,
-  actions: [
-    {
-      id: "cancel",
-      label: "Cancelar",
-      icon: "circle-x",
-      variant: "secondary",
-      handle() {
-        return false;
-      },
-    },
-    {
-      id: "repeat",
-      label: "Enviar novamente",
-      icon: "send",
-      variant: "primary",
-      handle() {
-        return true;
-      },
-    },
-  ],
-});`,
-          async run() {
-            const confirmed = await toast.confirm({
-              title: "Enviar novamente?",
-              description:
-                "Este post já foi enviado ao Telegram em 24/07/2026 às 19:35.",
-              icon: "history",
-              duration: 0,
-              dismissible: true,
-              actions: [
-                {
-                  id: "cancel",
-                  label: "Cancelar",
-                  icon: "circle-x",
-                  variant: "secondary",
-                  handle() {
-                    return false;
-                  },
-                },
-                {
-                  id: "repeat",
-                  label: "Enviar novamente",
-                  icon: "send",
-                  variant: "primary",
-                  handle() {
-                    return true;
-                  },
-                },
-              ],
-            });
-
-            toast.info({
-              title: "Resultado do confirm",
-              description: confirmed ? "Reenviar: sim" : "Reenviar: não",
-            });
-          },
+          label: options.confirmLabel ?? (options.downloadLabel ? "Download" : "Use selected"),
+          icon: options.confirmIcon ?? (options.downloadLabel ? "download" : "check"),
+          variant: "primary",
         },
-        {
-          id: "confirm-meta",
-          section: "interaction",
-          title: "Checkbox, shortcuts e metadata",
-          description:
-            "returnMeta preserva value, reason, actionId e o estado dos checkboxes.",
-          tags: "confirm checkbox returnMeta shortcuts keyboard metadata",
-          code: `const result = await toast.confirm({
-  title: "Publicar alterações?",
-  description: "A ação pode disparar um novo deploy.",
-  icon: "send",
-  returnMeta: true,
-  checkbox: {
-    id: "remember",
-    label: "Não perguntar novamente nesta sessão",
-  },
-  shortcuts: {
-    Escape: "cancel",
-    "Meta+Enter": "publish",
-    "Control+Enter": "publish",
-  },
-  actions: [
-    {
-      id: "cancel",
-      label: "Cancelar",
-      variant: "secondary",
-      value: false,
-    },
-    {
-      id: "publish",
-      label: "Publicar",
-      icon: "send",
-      variant: "primary",
-      value: true,
-    },
-  ],
-});`,
-          async run() {
-            const result = await toast.confirm({
-              title: "Publicar alterações?",
-              description: "A ação pode disparar um novo deploy.",
-              icon: "send",
-              returnMeta: true,
-              checkbox: {
-                id: "remember",
-                label: "Não perguntar novamente nesta sessão",
-              },
-              shortcuts: {
-                Escape: "cancel",
-                "Meta+Enter": "publish",
-                "Control+Enter": "publish",
-              },
-              actions: [
-                {
-                  id: "cancel",
-                  label: "Cancelar",
-                  variant: "secondary",
-                  value: false,
-                },
-                {
-                  id: "publish",
-                  label: "Publicar",
-                  icon: "send",
-                  variant: "primary",
-                  value: true,
-                },
-              ],
-            });
-
-            toast.message({
-              title: "Metadata recebida",
-              description: JSON.stringify(result),
-              icon: "info",
-              details: result,
-            });
-          },
-        },
-        {
-          id: "horizontal-actions",
-          section: "interaction",
-          title: "Actions horizontais responsivas",
-          description:
-            "Confirm, rich message e tasks tentam manter os botões na mesma linha. O flex quebra apenas quando o conteúdo realmente não cabe.",
-          tags: "actions buttons horizontal flex wrap responsive css",
-          code: `await toast.confirm({
-  title: "Escolha uma ação",
-  actions: [
-    { id: "later", label: "Depois", value: "later" },
-    { id: "details", label: "Ver detalhes", value: "details" },
-    { id: "send", label: "Enviar agora", variant: "primary", value: "send" },
-  ],
-});`,
-          async run() {
-            await toast.confirm({
-              title: "Actions horizontais",
-              description: "A quebra acontece somente se a largura ou o texto exigir.",
-              actions: [
-                { id: "later", label: "Depois", icon: "clock", value: "later" },
-                { id: "details", label: "Ver detalhes", icon: "eye", value: "details" },
-                { id: "send", label: "Enviar agora", icon: "send", variant: "primary", value: "send" },
-              ],
-            });
-          },
-        },
-        {
-          id: "countdown",
-          section: "interaction",
-          title: "Countdown para ação destrutiva",
-          description:
-            "A action fica desabilitada até o cronômetro chegar a zero.",
-          tags: "confirm countdown danger delete disabled",
-          code: `await toast.confirm({
-  title: "Apagar cache local?",
-  description: "Essa operação não pode ser desfeita.",
-  icon: "trash",
-  countdown: 4,
-  actions: [
-    {
-      id: "cancel",
-      label: "Cancelar",
-      variant: "secondary",
-      value: false,
-    },
-    {
-      id: "delete",
-      label: "Excluir em {seconds}s",
-      icon: "trash",
-      variant: "danger",
-      disabledUntilCountdown: true,
-      value: true,
-    },
-  ],
-});`,
-          async run() {
-            const deleted = await toast.confirm({
-              title: "Apagar cache local?",
-              description: "Essa operação não pode ser desfeita.",
-              icon: "trash",
-              countdown: 4,
-              actions: [
-                {
-                  id: "cancel",
-                  label: "Cancelar",
-                  variant: "secondary",
-                  value: false,
-                },
-                {
-                  id: "delete",
-                  label: "Excluir em {seconds}s",
-                  icon: "trash",
-                  variant: "danger",
-                  disabledUntilCountdown: true,
-                  value: true,
-                },
-              ],
-            });
-
-            if (deleted) {
-              toast.success("Cache fictício apagado.");
-            }
-          },
-        },
-        {
-          id: "prompt",
-          section: "interaction",
-          title: "Prompt com validação",
-          description:
-            "Entrada simples ou textarea, validação síncrona/assíncrona e atalhos.",
-          tags: "prompt input textarea validation multiline",
-          code: `const caption = await toast.prompt({
-  title: "Editar legenda",
-  description: "Revise o texto antes do envio.",
-  inputLabel: "Legenda",
-  value: "Vídeo encontrado pelo userscript.",
-  placeholder: "Digite a legenda…",
-  multiline: true,
-  required: true,
-  maxLength: 280,
-  validate(value) {
-    return value.trim().length >= 8
-      ? true
-      : "Use pelo menos 8 caracteres.";
-  },
-});`,
-          async run() {
-            const caption = await toast.prompt({
-              title: "Editar legenda",
-              description: "Revise o texto antes do envio.",
-              inputLabel: "Legenda",
-              value: "Vídeo encontrado pelo userscript.",
-              placeholder: "Digite a legenda…",
-              multiline: true,
-              required: true,
-              maxLength: 280,
-              validate(value) {
-                return value.trim().length >= 8
-                  ? true
-                  : "Use pelo menos 8 caracteres.";
-              },
-            });
-
-            if (caption !== null) {
-              toast.success({
-                title: "Legenda salva",
-                description: caption,
-              });
-            }
-          },
-        },
-        {
-          id: "select",
-          section: "interaction",
-          title: "Select simples ou múltiplo",
-          description:
-            "O retorno é o value selecionado ou uma lista quando multiple=true.",
-          tags: "select options multiple channels",
-          code: `const channels = await toast.select({
-  title: "Escolha os canais",
-  description: "Segure Ctrl/Cmd para selecionar mais de um.",
-  inputLabel: "Destinos",
-  multiple: true,
-  required: true,
-  value: ["videos"],
-  options: [
-    { value: "videos", label: "Vídeos" },
-    { value: "social", label: "Instagram e Twitter" },
-    { value: "archive", label: "Arquivo privado" },
-  ],
-});`,
-          async run() {
-            const channels = await toast.select({
-              title: "Escolha os canais",
-              description: "Segure Ctrl/Cmd para selecionar mais de um.",
-              inputLabel: "Destinos",
-              multiple: true,
-              required: true,
-              value: ["videos"],
-              options: [
-                { value: "videos", label: "Vídeos" },
-                { value: "social", label: "Instagram e Twitter" },
-                { value: "archive", label: "Arquivo privado" },
-              ],
-            });
-
-            if (channels) {
-              toast.info({
-                title: "Canais selecionados",
-                description: channels.join(", "),
-              });
-            }
-          },
-        },
-        {
-          id: "undo",
-          section: "interaction",
-          title: "Undo temporizado",
-          description:
-            "Uma confirmação regressiva especializada em operações reversíveis.",
-          tags: "undo rollback countdown restore",
-          code: `const restored = await toast.undo({
-  title: "Item removido",
-  description: "@usuario saiu da lista.",
-  duration: 6000,
-  actionLabel: "Desfazer",
-  async undo() {
-    await restoreUser();
-  },
-});`,
-          async run() {
-            const restored = await toast.undo({
-              title: "Item removido",
-              description: "@usuario saiu da lista.",
-              duration: 6000,
-              actionLabel: "Desfazer",
-              async undo() {
-                await sleep(700);
-              },
-            });
-
-            if (restored) {
-              toast.success("Usuário restaurado.");
-            }
-          },
-        },
-        {
-          id: "picker-carousel",
-          section: "media",
-          title: "Picker de carrossel",
-          description:
-            "Sheet estável no iPhone: header e ações ficam fixos, só a grid rola, sem labels duplicadas e sem autofocus que desloca o viewport.",
-          tags: "picker media instagram carousel images videos defaultAllSelected download",
-          requires: "picker",
-          code: `const selected = await toast.picker({
-  title: "Baixar carrossel",
-  description: "Escolha as mídias que deseja baixar.",
-  icon: "download",
-  items: carouselItems,
-  multiple: true,
-  defaultAllSelected: true,
-  columns: 2,
-  virtualizeAfter: 60,
-  mediaRootMargin: "320px 0px",
-  downloadLabel: true,
-  showLabels: true,
-  showType: true,
-});
-
-console.log(selected);`,
-          async run() {
-            const selected = await toast.picker({
-              title: "Baixar carrossel",
-              description: "Escolha as mídias que deseja baixar.",
-              icon: "download",
-              items: DEMO_MEDIA,
-              multiple: true,
-              defaultAllSelected: true,
-              columns: 2,
-              virtualizeAfter: 4,
-              mediaRootMargin: "280px 0px",
-              downloadLabel: true,
-              showLabels: true,
-              showType: true,
-              selectAllLabel: "Selecionar tudo",
-              clearAllLabel: "Limpar",
-              cancelLabel: "Cancelar",
-              confirmLabel: "Baixar",
-            });
-
-            if (selected) {
-              toast.success({
-                title: "Seleção pronta",
-                description: `${selected.length} mídia(s) escolhida(s).`,
-              });
-            }
-          },
-        },
-        {
-          id: "picker-descriptors",
-          section: "media",
-          title: "IDs, indexes e descriptors",
-          description:
-            "IDs e indexes são namespaces separados. Descriptors de Blob/File expõem dispose() quando preservam uma object URL temporária.",
-          tags: "picker returnType ids indexes descriptors typed selection",
-          requires: "picker",
-          code: `const selected = await toast.picker({
-  title: "Selecionar slides",
-  items: carouselItems,
-  defaultSelected: ["ig-1", "ig-3"],
-  returnType: "descriptors",
-  countLabel: ({ selected, total }) =>
-    \`\${selected}/\${total} escolhidos\`,
-  onChange({ selectedIds }) {
-    console.log("seleção:", selectedIds);
-  },
-});`,
-          async run() {
-            const selected = await toast.picker({
-              title: "Selecionar slides",
-              description: "O retorno desta demo usa descriptors normalizados.",
-              items: DEMO_MEDIA,
-              defaultSelected: ["ig-1", "ig-3"],
-              returnType: "descriptors",
-              countLabel: ({ selected, total }) =>
-                `${selected}/${total} escolhidos`,
-              confirmLabel: "Usar seleção",
-              onChange({ selectedIds }) {
-                console.debug("[picker] selectedIds", selectedIds);
-              },
-            });
-
-            if (selected) {
-              toast.message({
-                title: "Descriptors selecionados",
-                description: `${selected.length} item(ns) retornado(s).`,
-                icon: "image",
-                details: selected,
-              });
-            }
-          },
-        },
-        {
-          id: "picker-limits",
-          section: "media",
-          title: "Limites e metadata",
-          description:
-            "Defina mínimo/máximo, custom label e receba reason, actionId, IDs e indexes com returnMeta.",
-          tags: "picker minSelected maxSelected returnMeta metadata validation",
-          requires: "picker",
-          code: `const result = await toast.picker({
-  title: "Escolha entre 2 e 4 mídias",
-  items: carouselItems,
-  minSelected: 2,
-  maxSelected: 4,
-  defaultSelected: ["ig-1", "ig-2"],
-  // Índices usam uma opção separada:
-  // defaultSelectedIndexes: [0, 1],
-  returnType: "ids",
-  returnMeta: true,
-  countLabel: "{selected} de {total}",
-});
-
-console.log(result.selectedIds);
-console.log(result.value);`,
-          async run() {
-            const result = await toast.picker({
-              title: "Escolha entre 2 e 4 mídias",
-              description: "O botão só fica válido dentro do intervalo.",
-              items: DEMO_MEDIA,
-              minSelected: 2,
-              maxSelected: 4,
-              defaultSelected: ["ig-1", "ig-2"],
-              returnType: "ids",
-              returnMeta: true,
-              countLabel: "{selected} de {total}",
-              confirmLabel: "Continuar",
-            });
-
-            if (result) {
-              toast.message({
-                title: "Metadata do picker",
-                description: `${result.selectedCount} selecionado(s).`,
-                icon: "list",
-                details: result,
-              });
-            }
-          },
-        },
-        {
-          id: "picker-files",
-          section: "media",
-          title: "Blob e File locais",
-          description:
-            "Blob/File usam object URLs de preview. Em returnType: items elas são limpas automaticamente; descriptors selecionados podem expor dispose().",
-          tags: "picker blob file objectURL local media cleanup",
-          requires: "picker",
-          code: `const files = [
-  new File([svgOne], "cover-1.svg", {
-    type: "image/svg+xml",
-  }),
-  new File([svgTwo], "cover-2.svg", {
-    type: "image/svg+xml",
-  }),
-];
-
-const selectedFiles = await toast.picker({
-  title: "Arquivos locais",
-  items: files,
-  defaultAllSelected: true,
-  returnType: "items",
-});`,
-          async run() {
-            const firstSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#647cff"/><stop offset="1" stop-color="#c36df6"/></linearGradient></defs><rect width="800" height="800" rx="70" fill="url(#g)"/><text x="52" y="730" fill="white" font-size="60" font-family="system-ui" font-weight="700">cover-1.svg</text></svg>`;
-            const secondSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#ff6b7d"/><stop offset="1" stop-color="#ffc45c"/></linearGradient></defs><rect width="800" height="800" rx="70" fill="url(#g)"/><text x="52" y="730" fill="white" font-size="60" font-family="system-ui" font-weight="700">cover-2.svg</text></svg>`;
-            const files = [
-              new File([firstSvg], "cover-1.svg", { type: "image/svg+xml" }),
-              new File([secondSvg], "cover-2.svg", { type: "image/svg+xml" }),
-            ];
-
-            const selected = await toast.picker({
-              title: "Arquivos locais",
-              description: "Blob/File recebem preview via object URL temporária.",
-              items: files,
-              defaultAllSelected: true,
-              returnType: "items",
-              confirmLabel: "Usar arquivos",
-            });
-
-            if (selected) {
-              toast.success({
-                title: "Arquivos selecionados",
-                description: selected.map((file) => file.name).join(", "),
-              });
-            }
-          },
-        },
-
-        {
-          id: "loading-image-icon",
-          section: "async",
-          title: "Loading com thumbnail fixa",
-          description:
-            "Com spinner + image icon, a thumbnail fica parada e um spinner pequeno é sobreposto no canto.",
-          tags: "loading image icon thumbnail spinner overlay progress task",
-          code: `const task = toast.loading({
-  title: "Baixando reel",
-  description: "@usuario · preparando mídia",
-  icon: {
-    src: media.thumbnail,
-    fit: "cover",
-  },
-  animation: "spinner",
-});
-
-task.setProgress(68, {
-  description: "68% baixado",
-  animation: "progress",
-});`,
-          async run() {
-            const task = toast.loading({
-              title: "Baixando reel",
-              description:
-                "A thumbnail fica fixa enquanto o spinner gira no canto.",
-              icon: {
-                src: DEMO_ICON_IMAGE,
-                fit: "cover",
-                objectPosition: "72% center",
-              },
-              animation: "spinner",
-            });
-
-            await sleep(900);
-
-            for (const value of [16, 34, 52, 68, 84, 100]) {
-              task.setProgress(value, {
-                description: `Download · ${value}%`,
-                animation: "progress",
-              });
-              await sleep(260);
-            }
-
-            task.success({
-              title: "Download concluído",
-              description: "A mesma operação chegou ao estado terminal.",
-            });
-          },
-        },
-
-        {
-          id: "loading",
-          section: "async",
-          title: "Loading atualizável",
-          description:
-            "Um único toast atravessa spinner, progress e success sem piscar.",
-          tags: "loading spinner pulse progress setProgress success",
-          code: `const task = toast.loading({
-  title: "Enviando para o Telegram",
-  description: "Preparando mídia",
-  icon: "upload",
-  animation: "spinner",
-});
-
-task.update({
-  description: "Obtendo URL do vídeo",
-});
-
-task.setProgress(68, {
-  description: "Enviando vídeo…",
-  animation: "progress",
-});
-
-task.success({
-  title: "Enviado",
-  description: "A mídia chegou ao Telegram.",
-});`,
-          async run() {
-            const task = toast.loading({
-              title: "Enviando para o Telegram",
-              description: "Preparando mídia",
-              icon: "upload",
-              animation: "spinner",
-            });
-
-            await sleep(650);
-            task.update({
-              description: "Obtendo URL do vídeo",
-              icon: "refresh",
-              animation: "pulse",
-            });
-
-            await sleep(650);
-
-            for (const progress of [12, 28, 46, 68, 84, 100]) {
-              task.setProgress(progress, {
-                description: `Enviando vídeo · ${progress}%`,
-                animation: "progress",
-              });
-              await sleep(280);
-            }
-
-            task.success({
-              title: "Enviado",
-              description: "A mídia chegou ao Telegram.",
-            });
-          },
-        },
-        {
-          id: "id-api",
-          section: "async",
-          title: "Atualização imperativa por ID",
-          description:
-            "Útil quando eventos externos conhecem apenas o identificador da operação.",
-          tags: "id update progress resolve imperative",
-          code: `toast.loading({
-  id: "upload:post:123",
-  title: "Upload",
-  description: "Na fila…",
-  icon: "upload",
-});
-
-toast.update("upload:post:123", {
-  description: "Conectando ao Worker…",
-});
-
-toast.progress("upload:post:123", 75, {
-  description: "75% enviado",
-});
-
-toast.resolve("upload:post:123", "success", {
-  title: "Concluído",
-});`,
-          async run() {
-            const id = `upload:demo:${Date.now()}`;
-
-            toast.loading({
-              id,
-              title: "Upload",
-              description: "Na fila…",
-              icon: "upload",
-            });
-
-            await sleep(600);
-            toast.update(id, {
-              description: "Conectando ao Worker…",
-            });
-
-            await sleep(600);
-            toast.progress(id, 35, {
-              description: "35% enviado",
-              animation: "progress",
-            });
-
-            await sleep(450);
-            toast.progress(id, 75, {
-              description: "75% enviado",
-              animation: "progress",
-            });
-
-            await sleep(450);
-            toast.resolve(id, "success", {
-              title: "Concluído",
-              description: "Upload finalizado.",
-            });
-          },
-        },
-        {
-          id: "promise",
-          section: "async",
-          title: "toast.promise()",
-          description:
-            "Recebe Promise ou função e injeta signal, progress, update e task.",
-          tags: "promise async cancellable progress signal",
-          code: `const result = await toast.promise(
-  async ({ progress, signal }) => {
-    for (let value = 0; value <= 100; value += 10) {
-      if (signal.aborted) throw signal.reason;
-      progress(value, {
-        description: \`Processando · \${value}%\`,
-      });
-      await wait(180);
-    }
-
-    return { messageId: 9281 };
-  },
-  {
-    loading: {
-      title: "Processando mídia",
-      icon: "loader-circle",
-    },
-    success: (result) => ({
-      title: "Concluído",
-      description: \`Mensagem \${result.messageId} criada.\`,
-    }),
-    error: (error) => ({
-      title: "Falhou",
-      description: error.message,
-    }),
-    cancellable: true,
-  },
-);`,
-          async run() {
-            await toast.promise(
-              async ({ progress, signal }) => {
-                for (let value = 0; value <= 100; value += 10) {
-                  if (signal.aborted) {
-                    throw signal.reason;
-                  }
-
-                  progress(value, {
-                    description: `Processando · ${value}%`,
-                  });
-
-                  await sleep(180);
+      ],
+      buildBody({ document, body, node, controller }) {
+        const hostWindow = state.hostWindow ?? initialHostWindow;
+        const root = document.createElement("div");
+        const toolbar = document.createElement("div");
+        const count = document.createElement("div");
+        const tools = document.createElement("div");
+        const selectAll = document.createElement("button");
+        const clearAll = document.createElement("button");
+        const grid = document.createElement("div");
+        const empty = document.createElement("div");
+        const buttonsById = new Map<string, HTMLButtonElement>();
+        const mediaElements = new Set<HTMLImageElement | HTMLVideoElement>();
+        const virtualizeAfter = Math.max(1, Number(options.virtualizeAfter) || 60);
+        const IntersectionObserverCtor = safeCall(
+          () => hostWindow.IntersectionObserver ?? null,
+          null,
+        );
+        const mediaObserver = items.length > virtualizeAfter && typeof IntersectionObserverCtor === "function"
+          ? new IntersectionObserverCtor((entries, observer) => {
+              for (const entry of entries) {
+                if (!entry.isIntersecting) continue;
+                const media = entry.target as HTMLImageElement | HTMLVideoElement;
+                const source = media.dataset.rodPickerSrc;
+                if (source && !media.getAttribute("src")) media.setAttribute("src", source);
+                const poster = media.dataset.rodPickerPoster;
+                if (poster && String(media.tagName).toUpperCase() === "VIDEO") {
+                  media.setAttribute("poster", poster);
                 }
-
-                return { messageId: 9281 };
-              },
-              {
-                loading: {
-                  title: "Processando mídia",
-                  description: "Inicializando…",
-                  icon: "loader-circle",
-                },
-                success: (result) => ({
-                  title: "Concluído",
-                  description: `Mensagem ${result.messageId} criada.`,
-                }),
-                error: (error) => ({
-                  title: "Falhou",
-                  description: error.message,
-                }),
-                cancellable: true,
-              },
-            );
-          },
-        },
-        {
-          id: "retry",
-          section: "async",
-          title: "Retry com backoff",
-          description:
-            "Tentativas numeradas, pausa automática, retry manual e cancelamento.",
-          tags: "retry backoff attempts error cancel",
-          code: `const response = await toast.retry({
-  title: "Enviando ao Worker",
-  maxAttempts: 3,
-  backoff: [1200, 2200],
-  async run({ attempt, progress }) {
-    progress(attempt / 3, {
-      description: \`Tentativa \${attempt} de 3\`,
-    });
-
-    await request();
-
-    if (attempt < 3) {
-      throw new Error(\`HTTP 503 na tentativa \${attempt}\`);
-    }
-
-    return { ok: true };
-  },
-});`,
-          async run() {
-            await toast.retry({
-              title: "Enviando ao Worker",
-              description: "A primeira resposta pode falhar de propósito.",
-              maxAttempts: 3,
-              backoff: [1200, 1800],
-              async run({ attempt, progress }) {
-                progress(attempt / 3, {
-                  description: `Tentativa ${attempt} de 3`,
-                });
-
-                await sleep(650);
-
-                if (attempt < 3) {
-                  throw new Error(`HTTP 503 na tentativa ${attempt}`);
-                }
-
-                return { ok: true };
-              },
-              success: {
-                title: "Worker respondeu",
-                description: "A terceira tentativa foi bem-sucedida.",
-              },
-            });
-          },
-        },
-        {
-          id: "multi-loading-batch",
-          section: "multi-loading",
-          requires: "multiLoading",
-          title: "Multi loading de envios",
-          description:
-            "Um único toaster acompanha o lote inteiro com % agregado e x de x itens sob o header. Cada linha tem progresso e X próprio; no sucesso apenas o indicador vira check verde e a linha sai em fade-up.",
-          tags: "multi loading batch upload aggregate progress percent completed items success check fade up cancel scroll v4.9",
-          code: `const batch = toast.multiLoading({
-  title: "Enviando mídias",
-  viewportRatio: 0.5,
-  successDuration: 1800,
-  cancellable: true,
-});
-
-files.forEach((file) => {
-  batch.add({
-    id: file.id,
-    title: file.name,
-    description: "Na fila",
-    icon: file.thumbnail,
-  });
-});
-
-await Promise.allSettled(
-  files.map((file) =>
-    batch.run(file.id, async ({ progress, signal }) => {
-      await upload(file, { signal, onProgress: progress });
-    }),
-  ),
-);`,
-          async run() {
-            const batch = toast.multiLoading({
-              id: `landing:multi:${Date.now()}`,
-              title: "Enviando 10 mídias",
-              viewportRatio: 0.5,
-              successDuration: 1500,
-              successMorphDelay: 180,
-              cancellable: true,
-              autoDismiss: false,
-            });
-
-            const files = Array.from({ length: 10 }, (_, index) => ({
-              id: `media-${index + 1}`,
-              name: `instagram-${String(index + 1).padStart(2, "0")}.${index % 4 === 0 ? "mp4" : "jpg"}`,
-              icon: DEMO_MEDIA[index % DEMO_MEDIA.length]?.src,
-              delay: 75 + (index % 4) * 25,
-            }));
-
-            files.forEach((file) => {
-              batch.add({
-                id: file.id,
-                title: file.name,
-                description: "Aguardando…",
-                icon: { src: file.icon, fit: "cover" },
-              });
-            });
-
-            await Promise.allSettled(
-              files.map((file, fileIndex) =>
-                batch.run(file.id, async ({ progress, signal }) => {
-                  for (let value = 0; value <= 100; value += 10) {
-                    if (signal.aborted) throw signal.reason;
-                    progress(value, {
-                      description: value < 100 ? `Enviando · ${value}%` : "Finalizando…",
-                    });
-                    await sleep(file.delay);
-                  }
-                  if (fileIndex === 4) throw new Error("HTTP 503 · falha simulada");
-                }),
-              ),
-            );
-          },
-        },
-        {
-          id: "multi-loading-retry",
-          section: "multi-loading",
-          requires: "multiLoading",
-          title: "Erro, retry e cancelamento granular",
-          description:
-            "Itens com erro permanecem visíveis e ganham Retry. O X cancela apenas aquela operação; Cancel all aborta somente itens ainda ativos.",
-          tags: "multi loading error retry cancel all abort signal",
-          code: `const batch = toast.multiLoading({
-  title: "Sincronizando posts",
-  cancelAllLabel: "Cancelar todos",
-});
-
-batch.add({
-  id: "post-42",
-  title: "Post 42",
-  retry: async ({ progress, signal }) => {
-    return sendPost({ signal, onProgress: progress });
-  },
-});
-
-batch.error("post-42", new Error("HTTP 503"));
-
-// O botão Retry chama o handler acima.
-await batch.retry("post-42");
-await batch.cancel("post-43");
-await batch.cancelAll();`,
-          async run() {
-            let retryAttempt = 0;
-            const batch = toast.multiLoading({
-              title: "Sincronizando posts",
-              cancelAllLabel: "Cancelar todos",
-              autoDismiss: false,
-              items: [
-                {
-                  id: "post-42",
-                  title: "Post 42",
-                  description: "Falhou ao enviar",
-                  icon: "send",
-                  retry: async ({ progress, signal }) => {
-                    retryAttempt += 1;
-                    for (let value = 0; value <= 100; value += 20) {
-                      if (signal.aborted) throw signal.reason;
-                      progress(value, { description: `Retry ${retryAttempt} · ${value}%` });
-                      await sleep(180);
-                    }
-                  },
-                },
-                {
-                  id: "post-43",
-                  title: "Post 43",
-                  description: "Processando…",
-                  icon: "send",
-                  status: "loading",
-                  progress: 0.38,
-                },
-                {
-                  id: "post-44",
-                  title: "Post 44",
-                  description: "Processando…",
-                  icon: "send",
-                  status: "loading",
-                  progress: 0.62,
-                },
-              ],
-            });
-
-            batch.error("post-42", new Error("HTTP 503 · toque em Retry"));
-          },
-        },
-        {
-          id: "task",
-          section: "tasks",
-          title: "Task com pause, resume e cancel",
-          description:
-            "A tarefa aparece no gerenciador e expõe signal, progress e lifecycle.",
-          tags: "task manager pause resume cancel progress",
-          code: `const download = toast.task({
-  id: "download:video:123",
-  title: "video-1080p.mp4",
-  description: "Na fila",
-  icon: "download",
-  status: "queued",
-  pausable: true,
-  cancellable: true,
-});
-
-await download.run(async ({ task, signal, progress }) => {
-  for (let value = 0; value <= 100; value += 4) {
-    while (task.status === "paused") {
-      await wait(120);
-    }
-
-    if (signal.aborted) throw signal.reason;
-
-    progress(value, {
-      description: \`Baixando · \${value}%\`,
-    });
-
-    await wait(110);
-  }
-});`,
-          async run() {
-            const task = toast.task({
-              id: `download:video:${Date.now()}`,
-              title: "video-1080p.mp4",
-              description: "Na fila",
-              icon: "download",
-              status: "queued",
-              pausable: true,
-              cancellable: true,
-            });
-
-            await task.run(async ({ task, signal, progress }) => {
-              for (let value = 0; value <= 100; value += 4) {
-                while (task.status === "paused") {
-                  await sleep(120);
-                }
-
-                if (signal.aborted) {
-                  throw signal.reason;
-                }
-
-                progress(value, {
-                  description: `Baixando · ${value}%`,
-                });
-
-                await sleep(110);
+                observer.unobserve(media);
               }
-            });
-          },
-        },
-
-        {
-          id: "task-image-icon",
-          section: "tasks",
-          title: "Task com thumbnail persistente",
-          description:
-            "Tasks preservam o image icon durante queued, running, paused, warning, success e error.",
-          tags: "task image icon thumbnail persistent states pause success",
-          code: `const download = toast.task({
-  title: "reel-1080p.mp4",
-  description: "@usuario",
-  icon: {
-    src: media.thumbnail,
-    fit: "cover",
-  },
-  status: "queued",
-  pausable: true,
-  cancellable: true,
-});`,
-          async run() {
-            const task = toast.task({
-              id: `task:image:${Date.now()}`,
-              title: "reel-1080p.mp4",
-              description: "Thumbnail persistente entre estados.",
-              icon: {
-                src: DEMO_ICON_IMAGE,
-                fit: "cover",
-              },
-              status: "queued",
-              pausable: true,
-              cancellable: true,
-            });
-
-            await sleep(500);
-            task.start({ description: "Iniciando download…" });
-
-            for (const value of [18, 38, 62, 82, 100]) {
-              task.setProgress(value, {
-                description: `${value}% baixado`,
-              });
-              await sleep(300);
-            }
-
-            task.success({
-              title: "reel-1080p.mp4",
-              description: "Concluído mantendo a thumbnail.",
-            });
-          },
-        },
-
-        {
-          id: "group",
-          section: "tasks",
-          title: "Grupo com progresso ponderado",
-          description:
-            "O parent acompanha várias subtarefas e calcula o avanço global por peso.",
-          tags: "group tasks weights parent child progress",
-          code: `const pipeline = toast.group({
-  id: "pipeline:post:123",
-  title: "Enviar vídeo ao Telegram",
-  weights: {
-    resolve: 5,
-    download: 55,
-    mux: 20,
-    upload: 20,
-  },
-});
-
-const resolve = pipeline.task("resolve", {
-  title: "Resolver mídia",
-});
-const download = pipeline.task("download", {
-  title: "Baixar segmentos",
-});
-const mux = pipeline.task("mux", {
-  title: "Unir áudio e vídeo",
-});
-const upload = pipeline.task("upload", {
-  title: "Enviar ao Worker",
-});`,
-          async run() {
-            const id = `pipeline:${Date.now()}`;
-            const pipeline = toast.group({
-              id,
-              title: "Enviar vídeo ao Telegram",
-              weights: {
-                resolve: 5,
-                download: 55,
-                mux: 20,
-                upload: 20,
-              },
-            });
-
-            const phases = [
-              ["resolve", "Resolver mídia", 420],
-              ["download", "Baixar segmentos", 1600],
-              ["mux", "Unir áudio e vídeo", 900],
-              ["upload", "Enviar ao Worker", 1100],
-            ];
-
-            for (const [key, title, duration] of phases) {
-              const child = pipeline.task(key, {
-                title,
-                icon:
-                  key === "upload"
-                    ? "upload"
-                    : key === "download"
-                      ? "download"
-                      : "refresh",
-              });
-
-              child.start({
-                description: "Em andamento…",
-              });
-
-              const steps = 10;
-              for (let index = 1; index <= steps; index += 1) {
-                child.setProgress(index / steps, {
-                  description: `${Math.round((index / steps) * 100)}%`,
-                });
-                await sleep(duration / steps);
-              }
-
-              child.success({
-                title,
-                description: "Concluído.",
-              });
-            }
-          },
-        },
-        {
-          id: "parallel-tasks",
-          section: "tasks",
-          title: "Vários downloads simultâneos",
-          description:
-            "Cada download mantém seu próprio controller e progresso independente.",
-          tags: "parallel simultaneous downloads concurrent tasks",
-          code: `const jobs = files.map((file, index) => {
-  const task = toast.task({
-    id: \`download:\${file.id}\`,
-    title: file.name,
-    icon: "download",
-    cancellable: true,
-  });
-
-  return task.run(async ({ progress, signal }) => {
-    await downloadFile(file, {
-      signal,
-      onProgress: progress,
-    });
-  });
-});
-
-await Promise.allSettled(jobs);`,
-          async run() {
-            const files = [
-              { id: "alpha", name: "nature-1080p.mp4", delay: 115 },
-              { id: "beta", name: "interview-720p.mp4", delay: 145 },
-              { id: "gamma", name: "reel-1080p.mp4", delay: 95 },
-            ];
-
-            const jobs = files.map((file) => {
-              const task = toast.task({
-                id: `download:${file.id}:${Date.now()}`,
-                title: file.name,
-                description: "Conectando…",
-                icon: "download",
-                cancellable: true,
-              });
-
-              return task.run(async ({ progress, signal }) => {
-                for (let value = 0; value <= 100; value += 5) {
-                  if (signal.aborted) {
-                    throw signal.reason;
-                  }
-
-                  progress(value, {
-                    description: `${value}% · download simultâneo`,
-                  });
-
-                  await sleep(file.delay);
-                }
-              });
-            });
-
-            await Promise.allSettled(jobs);
-          },
-        },
-        {
-          id: "persistence",
-          section: "tasks",
-          title: "Persistência entre reloads",
-          description:
-            "Snapshots visuais podem ser restaurados; Promises em execução não sobrevivem ao reload.",
-          tags: "persist tasks sessionStorage localStorage restore reload",
-          code: `toast.configure({
-  persistTasks: true,
-  taskStorage: "sessionStorage",
-  restoreTasksOnLoad: true,
-  maxPersistedTasks: 50,
-});
-
-const task = toast.task({
-  id: "persistent:download:123",
-  title: "Download persistente",
-  status: "running",
-  progress: 42,
-  persist: true,
-});
-
-toast.restoreTasks();`,
-          run() {
-            toast.configure({
-              persistTasks: true,
-              taskStorage: "sessionStorage",
-              restoreTasksOnLoad: true,
-              maxPersistedTasks: 50,
-            });
-
-            toast.task({
-              id: `persistent:download:${Date.now()}`,
-              title: "Download persistente",
-              description:
-                "O snapshot será guardado na sessionStorage.",
-              status: "running",
-              progress: 42,
-              persist: true,
-              cancellable: true,
-            });
-
-            toast.info({
-              title: "Persistência ativada",
-              description:
-                "Tarefas ativas serão restauradas visualmente como pausadas após reload.",
-            });
-          },
-        },
-        {
-          id: "spa-manager",
-          section: "tasks",
-          title: "Gerenciador minimizado em SPA",
-          description:
-            "pushState/replaceState minimizam tarefas ativas para um spinner compacto.",
-          tags: "spa pushState replaceState navigation minimize manager",
-          code: `const task = toast.loading({
-  title: "Download em andamento",
-  description: "Navegue sem perder o estado.",
-  icon: "download",
-});
-
-history.pushState(
-  { demo: true },
-  "",
-  "?route=outra-pagina",
-);
-
-// O toaster vira um spinner compacto.
-// Clique nele ou use:
-toast.restore();`,
-          async run() {
-            const task = toast.loading({
-              title: "Download em andamento",
-              description: "A navegação vai minimizar o gerenciador.",
-              icon: "download",
-              animation: "progress",
-              progress: 0.28,
-            });
-
-            await sleep(850);
-
-            try {
-              const nextUrl = new URL(location.href);
-              nextUrl.searchParams.set("toast-route", String(Date.now()));
-              history.pushState(
-                { toasterDemo: true },
-                "",
-                nextUrl,
-              );
-            } catch {
-              toast.minimize();
-            }
-
-            await sleep(1200);
-            task.setProgress(0.72, {
-              description:
-                "A tarefa continuou viva durante a navegação.",
-            });
-
-            await sleep(1200);
-            toast.restore();
-
-            await sleep(500);
-            task.success({
-              title: "Navegação concluída",
-              description: "O estado sobreviveu ao pushState.",
-            });
-          },
-        },
-        {
-          id: "scope",
-          section: "architecture",
-          title: "Scopes por feature",
-          description:
-            "Crie namespaces para downloads, uploads, Telegram ou qualquer domínio.",
-          tags: "scope namespace feature dismissAll getTasks",
-          code: `const telegram = toast.scope("telegram", {
-  icon: "send",
-});
-
-telegram.info({
-  title: "Fila criada",
-  description: "Dois envios aguardando.",
-});
-
-const task = telegram.task({
-  id: "send:123",
-  title: "Enviar post 123",
-  cancellable: true,
-});
-
-telegram.dismissAll();`,
-          async run() {
-            const scopeName = `telegram-${Date.now()}`;
-            const telegram = toast.scope(scopeName, {
-              icon: "send",
-            });
-
-            telegram.info({
-              title: "Fila criada",
-              description: "Dois envios aguardando.",
-            });
-
-            const task = telegram.task({
-              id: `send:${Date.now()}`,
-              title: "Enviar post 123",
-              description: "Preparando…",
-              cancellable: true,
-            });
-
-            task.start();
-
-            for (const value of [15, 35, 60, 85, 100]) {
-              task.setProgress(value, {
-                description: `${value}% enviado`,
-              });
-              await sleep(300);
-            }
-
-            task.success({
-              title: "Post enviado",
-              description: `Scope: ${scopeName}`,
-            });
-          },
-        },
-        {
-          id: "events",
-          section: "architecture",
-          title: "Eventos globais",
-          description:
-            "Observe criação, atualização, actions e tarefas sem acoplar sua regra de negócio ao DOM.",
-          tags: "events on once off emit lifecycle task update",
-          code: `const unsubscribe = toast.on(
-  "task:update",
-  ({ snapshot }) => {
-    console.log(
-      snapshot.id,
-      snapshot.status,
-      snapshot.progress,
-    );
-  },
-);
-
-toast.once("action", ({ actionId }) => {
-  console.log("Primeira action:", actionId);
-});
-
-toast.emit("app:ready", {
-  version: toast.version,
-});
-
-unsubscribe();`,
-          async run() {
-            const log = [];
-            const unsubscribe = toast.on(
-              "task:update",
-              ({ snapshot }) => {
-                log.push({
-                  id: snapshot.id,
-                  status: snapshot.status,
-                  progress: snapshot.progress,
-                });
-              },
-            );
-
-            const task = toast.task({
-              id: `events:${Date.now()}`,
-              title: "Emitindo eventos",
-              description: "Observe o console e o resumo final.",
-              icon: "terminal",
-            });
-
-            task.start();
-
-            for (const value of [0.2, 0.45, 0.7, 1]) {
-              task.setProgress(value);
-              await sleep(230);
-            }
-
-            task.success({
-              title: "Eventos capturados",
-              description: `${log.length} atualizações observadas.`,
-            });
-
-            unsubscribe();
-
-            toast.message({
-              title: "Últimos eventos",
-              description: `${log.length} snapshots coletados.`,
-              details: log,
-              icon: "terminal",
-            });
-          },
-        },
-        {
-          id: "controls",
-          section: "architecture",
-          title: "Controles globais",
-          description:
-            "Expanda, recolha, minimize, restaure, descarte e repare o host.",
-          tags: "minimize restore expand collapse dismissAll repairHost controls",
-          code: `toast.expand();
-toast.collapse();
-
-toast.minimize();
-toast.restore();
-
-toast.toggleMinimized();
-toast.isMinimized();
-
-toast.dismiss("task:123");
-toast.dismissAll();
-
-toast.repairHost();`,
-          async run() {
-            const first = toast.loading({
-              title: "Tarefa A",
-              description: "Gerenciador global",
-              icon: "download",
-            });
-            const second = toast.loading({
-              title: "Tarefa B",
-              description: "Mais um item na pilha",
-              icon: "upload",
-            });
-
-            await sleep(500);
-            toast.expand();
-            await sleep(850);
-            toast.collapse();
-            await sleep(700);
-            toast.minimize();
-            await sleep(1100);
-            toast.restore();
-            await sleep(500);
-
-            first.success({
-              title: "Tarefa A concluída",
-            });
-            second.success({
-              title: "Tarefa B concluída",
-            });
-          },
-        },
-
-        {
-          id: "dialog-stack-v46",
-          section: "runtime",
-          title: "Dialog stack com ownership",
-          description:
-            "Confirm, prompt, select e picker vivem numa lane de interação separada. Só o dialog do topo recebe teclado e foco.",
-          tags: "v4.9 dialog stack focus keyboard dismissible interaction lane",
-          code: `const first = toast.confirm({
-  id: "first-dialog",
-  title: "Primeira decisão",
-  dismissible: false,
-});
-
-const second = toast.confirm({
-  id: "second-dialog",
-  title: "Dialog do topo",
-});
-
-// Enter/Escape só afetam second-dialog.
-// Quando ele fecha, first-dialog volta ao topo.`,
-          async run() {
-            const first = toast.confirm({
-              id: `first-dialog:${Date.now()}`,
-              title: "Primeira decisão",
-              description: "Este dialog fica preservado abaixo do próximo.",
-              dismissible: false,
-              actions: [{ id: "confirm", label: "Concluir primeira", variant: "primary", value: true }],
-            });
-
-            await sleep(250);
-
-            const second = await toast.confirm({
-              title: "Dialog do topo",
-              description: "Só este recebe os atalhos enquanto estiver ativo.",
-              actions: [
-                { id: "cancel", label: "Voltar", variant: "secondary", value: false },
-                { id: "confirm", label: "Continuar", variant: "primary", value: true },
-              ],
-            });
-
-            toast.info({
-              title: "Ownership transferido",
-              description: `Segundo dialog: ${second ? "confirmado" : "cancelado"}. A primeira decisão voltou ao topo.`,
-            });
-
-            return first;
-          },
-        },
-        {
-          id: "task-state-machine-v46",
-          section: "runtime",
-          title: "Task state machine terminal",
-          description:
-            "success, error e cancelled são terminais. Updates tardios e executors que ignoram AbortSignal não ressuscitam uma tarefa.",
-          tags: "v4.9 task state machine terminal cancelled success race abort",
-          code: `const job = toast.task({
-  id: "download:123",
-  title: "Download",
-  cancellable: true,
-});
-
-await job.cancel();
-job.setProgress(80); // ignorado
-job.start();          // ignorado
-
-console.log(job.status); // "cancelled"`,
-          async run() {
-            const task = toast.task({
-              id: `terminal:${Date.now()}`,
-              title: "State machine v4.9",
-              description: "A tarefa será concluída e receberá updates tardios.",
-            });
-
-            task.start();
-            task.setProgress(55);
-            await sleep(450);
-            task.success({ title: "Estado terminal: success" });
-            task.setProgress(12);
-            task.start();
-
-            toast.info({
-              title: "Update tardio bloqueado",
-              description: `status=${task.status} · progress=${Math.round((task.progress || 0) * 100)}%`,
-            });
-          },
-        },
-        {
-          id: "typed-select-v46",
-          section: "runtime",
-          title: "select<T>() preserva valores",
-          description:
-            "A option usa tokens internos. Números e objetos não são mais convertidos para string pelo elemento <select>.",
-          tags: "v4.9 select generic typed number object token",
-          code: `const channel = await toast.select<number>({
-  title: "Escolha um canal",
-  value: 42,
-  options: [
-    { value: 42, label: "Canal 42" },
-    { value: 7, label: "Canal 7" },
-  ],
-});
-
-console.log(typeof channel); // "number"`,
-          async run() {
-            const channel = await toast.select({
-              title: "Escolha um channelId",
-              description: "O valor retornado continua sendo number.",
-              value: 42,
-              options: [
-                { value: 42, label: "Canal 42" },
-                { value: 7, label: "Canal 7" },
-              ],
-            });
-
-            if (channel !== null) {
-              toast.success({
-                title: "Tipo preservado",
-                description: `value=${channel} · typeof=${typeof channel}`,
-              });
-            }
-          },
-        },
-        {
-          id: "retry-zero-v46",
-          section: "runtime",
-          title: "Retry sem dead zone",
-          description:
-            "backoff: 0 significa tentar imediatamente. Delays reais usam countdown vivo e podem ser antecipados pelo usuário.",
-          tags: "v4.9 retry backoff zero countdown immediate",
-          code: `await toast.retry({
-  title: "Worker",
-  maxAttempts: 3,
-  backoff: 0,
-  async run({ attempt }) {
-    if (attempt < 3) throw new Error("503");
-    return { ok: true };
-  },
-});`,
-          async run() {
-            const startedAt = performance.now();
-            let attempts = 0;
-            await toast.retry({
-              title: "Retry imediato",
-              maxAttempts: 3,
-              backoff: 0,
-              async run({ attempt }) {
-                attempts = attempt;
-                await sleep(120);
-                if (attempt < 3) throw new Error(`HTTP 503 · tentativa ${attempt}`);
-                return { ok: true };
-              },
-              success: {
-                title: "Recuperado",
-                description: "backoff 0 não abriu um dialog persistente.",
-              },
-            });
-
-            toast.info({
-              title: `${attempts} tentativas`,
-              description: `${Math.round(performance.now() - startedAt)}ms no playground.`,
-            });
-          },
-        },
-        {
-          id: "persistence-performance-v46",
-          section: "runtime",
-          title: "Persistência segura e throttled",
-          description:
-            "Metadata circular/BigInt é sanitizada; progresso é persistido em lote, enquanto mudanças de status são flush imediato.",
-          tags: "v4.9 persistence performance throttle circular bigint storage",
-          code: `toast.configure({
-  persistTasks: false,
-  taskProgressPersistInterval: 900,
-});
-
-const task = toast.task({
-  id: "download:123",
-  persist: true, // override individual
-  metadata: { bytes: 10n },
-});`,
-          run() {
-            const circular = { provider: "instagram" };
-            circular.self = circular;
-
-            toast.configure({
-              persistTasks: false,
-              taskProgressPersistInterval: 900,
-            });
-
-            const task = toast.task({
-              id: `persist:${Date.now()}`,
-              title: "Snapshot seguro",
-              description: "persist:true funciona mesmo com o default global desligado.",
-              persist: true,
-              status: "running",
-              progress: 0.42,
-              metadata: {
-                bytes: 10n,
-                circular,
-              },
-            });
-
-            task.success({
-              title: "Snapshot sanitizado",
-              description: "BigInt e referências circulares não derrubam o lote.",
-            });
-          },
-        },
-        {
-          id: "lifecycle-v46",
-          section: "runtime",
-          title: "Lifecycle e host quente",
-          description:
-            "O stylesheet permanece parseado entre bursts. destroy/noConflict dão teardown real para upgrades e repairHost independe da política SPA.",
-          tags: "v4.9 destroy noConflict repairHost idleHostTtl hot host performance upgrade",
-          code: `toast.configure({
-  idleHostTtl: 0, // mantém host/CSS prontos
-  useTopLayer: true,
-});
-
-toast.repairHost();
-toast.bringToFront();
-
-// Para teardown explícito:
-// toast.destroy("uninstall");
-// toast.noConflict();`,
-          run() {
-            const config = toast.configure({
-              idleHostTtl: 0,
-              useTopLayer: true,
-            });
-
-            const host = toast.repairHost();
-            const topLayer = toast.bringToFront();
-
-            toast.message({
-              title: "Runtime aquecido",
-              description: `host=${Boolean(host)} · topLayer=${topLayer}`,
-              icon: "sparkles",
-              details: {
-                idleHostTtl: config.idleHostTtl,
-                taskProgressPersistInterval: config.taskProgressPersistInterval,
-                destroy: typeof toast.destroy,
-                noConflict: typeof toast.noConflict,
-              },
-            });
-          },
-        },
-        {
-          id: "theme-size",
-          section: "architecture",
-          title: "Tema e densidade",
-          description:
-            "Troque dark/light/auto em runtime e alterne entre compact, comfortable e large.",
-          tags: "theme dark light auto size compact comfortable large",
-          code: `toast.setTheme("light");
-toast.setSize("comfortable");
-
-console.log(toast.getTheme());
-console.log(toast.getSize());
-
-toast.toggleTheme();`,
-          async run() {
-            const originalTheme = toast.getTheme?.().theme || "auto";
-            const originalSize = toast.getSize?.() || "compact";
-
-            toast.setTheme?.("light");
-            toast.setSize?.("large");
-            toast.info({
-              title: "Tema light · large",
-              description: "O próximo estado muda para dark · compact.",
-            });
-
-            await sleep(1500);
-
-            toast.setTheme?.("dark");
-            toast.setSize?.("compact");
-            toast.success({
-              title: "Tema dark · compact",
-              description: "A configuração original será restaurada em instantes.",
-            });
-
-            await sleep(1500);
-            toast.setTheme?.(originalTheme);
-            toast.setSize?.(originalSize);
-          },
-        },
-        {
-          id: "configuration",
-          section: "architecture",
-          title: "Configuração global",
-          description:
-            "Posição, dedupe, duração, stack, navegação, inspector e persistência.",
-          tags: "configure config position dedupe stack inspector shadow dom",
-          code: `toast.configure({
-  position: "top-center",
-  theme: "auto",
-  size: "compact",
-  duration: 5000,
-  maxToasts: 20,
-  dedupe: true,
-  stacked: true,
-  stackVisible: 3,
-  stackMaxHeight: 560,
-  persistAcrossSpaNavigation: true,
-  minimizeOnSpaNavigation: true,
-  useTopLayer: true,
-  idleHostTtl: 0,
-  useShadowRoot: true,
-  shadowRootMode: "closed",
-  persistTasks: true,
-  taskProgressPersistInterval: 900,
-  taskStorage: "sessionStorage",
-});`,
-          run() {
-            const config = toast.configure({
-              position: "top-center",
-              theme: "auto",
-              size: "compact",
-              duration: 5000,
-              maxToasts: 20,
-              dedupe: true,
-              stacked: true,
-              stackVisible: 3,
-              stackMaxHeight: 560,
-              persistAcrossSpaNavigation: true,
-              minimizeOnSpaNavigation: true,
-              useTopLayer: true,
-              idleHostTtl: 0,
-              useShadowRoot: true,
-              shadowRootMode: "closed",
-              persistTasks: true,
-              taskProgressPersistInterval: 900,
-              taskStorage: "sessionStorage",
-            });
-
-            toast.message({
-              title: "Configuração aplicada",
-              description:
-                `Host: ${toast.getHostMode()} · posição: ${config.position}`,
-              icon: "settings",
-              details: config,
-            });
-          },
-        },
-      ];
-
-      const sectionById = new Map(
-        sections.map((section) => [section.id, section]),
-      );
-
-      const root = document.getElementById("sections");
-      const sidebar = document.getElementById("sidebar-list");
-      const search = document.getElementById("search");
-      const empty = document.getElementById("empty-results");
-      const runtimeStatus = document.getElementById("runtime-status");
-      const statusLabel = runtimeStatus.querySelector("[data-status-label]");
-
-      function getToast() {
-        const canonical = window.RodToaster;
-        if (
-          typeof canonical === "function" &&
-          typeof canonical.success === "function" &&
-          typeof canonical.error === "function"
-        ) {
-          return canonical;
+            }, {
+              root: grid,
+              rootMargin: options.mediaRootMargin ?? "320px 0px",
+            })
+          : null;
+
+        root.className = "rod-toast__picker";
+        toolbar.className = "rod-toast__picker-toolbar";
+        count.className = "rod-toast__picker-count";
+        tools.className = "rod-toast__picker-tools";
+        grid.className = "rod-toast__picker-grid";
+        grid.setAttribute("role", "listbox");
+        grid.setAttribute("aria-multiselectable", String(multiple));
+        empty.className = "rod-toast__picker-empty";
+
+        if (Number.isFinite(Number(options.columns)) && Number(options.columns) > 0) {
+          grid.style.gridTemplateColumns = `repeat(${Math.max(1, Math.floor(Number(options.columns)))},minmax(0,1fr))`;
         }
-
-        const alias = window.toast;
-        if (
-          typeof alias === "function" &&
-          typeof alias.success === "function" &&
-          typeof alias.error === "function"
-        ) {
-          return alias;
+        if (Number.isFinite(Number(options.itemMinWidth))) {
+          grid.style.setProperty("--rod-picker-item-min", `${Math.max(64, Number(options.itemMinWidth))}px`);
         }
+        const pickerAspectRatio = normalizePickerAspectRatio(options.aspectRatio ?? "1 / 1");
+        grid.style.setProperty("--rod-picker-aspect-ratio", pickerAspectRatio.css);
+        grid.style.setProperty("--rod-picker-aspect-padding", pickerAspectRatio.paddingPercent);
+        if (Number.isFinite(Number(options.gap))) grid.style.setProperty("--rod-picker-gap", `${Math.max(0, Number(options.gap))}px`);
 
-        return null;
-      }
+        selectAll.type = "button";
+        clearAll.type = "button";
+        selectAll.className = "rod-toast__picker-tool";
+        clearAll.className = "rod-toast__picker-tool";
+        selectAll.textContent = options.selectAllLabel ?? "Select all";
+        clearAll.textContent = options.clearAllLabel ?? "Clear";
 
-      function runtimeDiagnostic(api) {
-        if (!api) {
+        const selectableCount = items.filter((item) => !item.disabled).length;
+
+        const getSelectedItems = (): PickerNormalizedDescriptor<T>[] => items.filter(
+          (item) => !item.disabled && selectedIds.has(item.id),
+        );
+
+        const makeDisposableDescriptor = (item: PickerNormalizedDescriptor<T>): PickerNormalizedDescriptor<T> => {
+          if (!item.transient) return { ...item };
+          preservedObjectUrls.add(item.src);
+          let disposed = false;
           return {
-            version: null,
-            source: "none",
-            multiLoading: false,
+            ...item,
+            transient: true,
+            dispose() {
+              if (disposed) return;
+              disposed = true;
+              preservedObjectUrls.delete(item.src);
+              safeCall(() => (state.hostWindow ?? initialHostWindow).URL.revokeObjectURL(item.src), undefined);
+            },
           };
+        };
+
+        const getSelectionValue = (): PickerSelectionValue<T> => {
+          const selected = getSelectedItems();
+          switch (options.returnType ?? "items") {
+            case "ids":
+              return selected.map((item) => item.id);
+            case "indexes":
+              return selected.map((item) => item.index);
+            case "descriptors":
+              return selected.map(makeDisposableDescriptor);
+            case "items":
+            default:
+              return selected.map((item) => item.original);
+          }
+        };
+
+        let cachedConfirmButton: HTMLButtonElement | null = null;
+        const syncConfirmButton = (): void => {
+          const confirm = cachedConfirmButton?.isConnected
+            ? cachedConfirmButton
+            : node.querySelector<HTMLButtonElement>('[data-action-id="confirm"]');
+          if (!confirm) return;
+          cachedConfirmButton = confirm;
+          const label = confirm.querySelector("span");
+          const selectedCount = selectedIds.size;
+          const valid = selectedCount >= minimum && selectedCount <= maximum;
+          if (confirm.dataset.busy !== "true") confirm.disabled = !valid;
+          if (label && options.dynamicConfirmLabel !== false && confirm.dataset.busy !== "true") {
+            const base = options.confirmLabel ?? (options.downloadLabel ? "Download" : "Use selected");
+            label.textContent = selectedCount > 0 ? `${base} (${selectedCount})` : base;
+          }
+        };
+
+        const notifyChange = (): void => {
+          const selected = getSelectedItems();
+          safeCall(() => options.onChange?.({
+            selected: selected.map((item) => item.original),
+            selectedIds: selected.map((item) => item.id),
+            selectedIndexes: selected.map((item) => item.index),
+            selectedCount: selected.length,
+            totalItems: items.length,
+            controller,
+          }), undefined);
+        };
+
+        const syncButton = (id: string): void => {
+          const button = buttonsById.get(id);
+          if (!button) return;
+          const active = selectedIds.has(id);
+          button.dataset.selected = String(active);
+          button.setAttribute("aria-pressed", String(active));
+          button.setAttribute("aria-selected", String(active));
+        };
+
+        const renderSelectionState = (changedIds?: Iterable<string>): void => {
+          const selectedCount = selectedIds.size;
+          if (options.countLabel === false) {
+            count.textContent = "";
+            count.hidden = true;
+          } else {
+            count.hidden = false;
+            if (typeof options.countLabel === "function") {
+              count.textContent = String(options.countLabel({ selected: selectedCount, total: selectableCount }));
+            } else if (typeof options.countLabel === "string") {
+              count.textContent = options.countLabel
+                .replace(/\{selected\}/g, String(selectedCount))
+                .replace(/\{total\}/g, String(selectableCount));
+            } else {
+              count.textContent = `${selectedCount} of ${selectableCount} selected`;
+            }
+          }
+
+          if (changedIds) {
+            for (const id of changedIds) syncButton(id);
+          } else {
+            for (const id of buttonsById.keys()) syncButton(id);
+          }
+
+          selectAll.disabled = !multiple || selectableCount === 0 || selectedCount >= Math.min(selectableCount, maximum);
+          clearAll.disabled = selectedCount === 0;
+          syncConfirmButton();
+          notifyChange();
+        };
+
+        const setSelected = (item: PickerNormalizedDescriptor<T>, active: boolean): boolean => {
+          if (item.disabled) return false;
+          const changed = new Set<string>();
+          if (!multiple) {
+            for (const id of selectedIds) changed.add(id);
+            selectedIds.clear();
+            if (active) selectedIds.add(item.id);
+            changed.add(item.id);
+          } else if (active) {
+            if (selectedIds.size >= maximum && !selectedIds.has(item.id)) return false;
+            selectedIds.add(item.id);
+            changed.add(item.id);
+          } else {
+            selectedIds.delete(item.id);
+            changed.add(item.id);
+          }
+          renderSelectionState(changed);
+          return true;
+        };
+
+        const toggle = (item: PickerNormalizedDescriptor<T>): void => {
+          const active = selectedIds.has(item.id);
+          if (active && !multiple && minimum > 0) return;
+          setSelected(item, !active);
+        };
+
+        const isVideoMediaElement = (media: HTMLImageElement | HTMLVideoElement): media is HTMLVideoElement => (
+          String(media.tagName).toUpperCase() === "VIDEO"
+        );
+
+        const loadMedia = (media: HTMLImageElement | HTMLVideoElement, item: PickerNormalizedDescriptor<T>): void => {
+          const isVideoElement = isVideoMediaElement(media);
+          const source = isVideoElement ? item.src : item.poster ?? item.src;
+
+          if (mediaObserver) {
+            media.dataset.rodPickerSrc = source;
+            if (isVideoElement && item.poster) media.dataset.rodPickerPoster = item.poster;
+            mediaObserver.observe(media);
+            return;
+          }
+
+          media.setAttribute("src", source);
+          if (isVideoElement && item.poster) media.setAttribute("poster", item.poster);
+        };
+
+        const makeMedia = (item: PickerNormalizedDescriptor<T>): HTMLImageElement | HTMLVideoElement => {
+          let media: HTMLImageElement | HTMLVideoElement;
+          if (item.type === "video" && !item.poster) {
+            const video = document.createElement("video");
+            video.muted = true;
+            video.playsInline = true;
+            video.preload = mediaObserver ? "none" : options.videoPreload ?? "none";
+            video.setAttribute("playsinline", "");
+            video.setAttribute("webkit-playsinline", "");
+            media = video;
+          } else {
+            const image = document.createElement("img");
+            image.alt = item.alt;
+            image.loading = mediaObserver ? "lazy" : "eager";
+            image.decoding = "async";
+            media = image;
+          }
+          media.className = "rod-toast__picker-media";
+          media.draggable = false;
+          if (options.crossOrigin) media.crossOrigin = options.crossOrigin;
+          mediaElements.add(media);
+          loadMedia(media, item);
+          return media;
+        };
+
+        items.forEach((item) => {
+          const button = document.createElement("button");
+          const media = makeMedia(item);
+          const shade = document.createElement("span");
+          const check = document.createElement("span");
+          const index = document.createElement("span");
+          const kind = document.createElement("span");
+          const label = document.createElement("span");
+
+          button.type = "button";
+          button.className = "rod-toast__picker-item";
+          button.dataset.pickerId = item.id;
+          button.dataset.selected = String(selectedIds.has(item.id));
+          button.disabled = item.disabled;
+          button.setAttribute("role", "option");
+          button.setAttribute("aria-pressed", String(selectedIds.has(item.id)));
+          button.setAttribute("aria-selected", String(selectedIds.has(item.id)));
+          button.setAttribute("aria-label", item.label || `${item.type} ${item.index + 1}`);
+
+          let previewFallbackAttempted = false;
+          media.addEventListener("error", () => {
+            if (
+              !previewFallbackAttempted &&
+              !isVideoMediaElement(media) &&
+              item.type === "image" &&
+              item.poster &&
+              item.poster !== item.src
+            ) {
+              previewFallbackAttempted = true;
+              delete button.dataset.mediaError;
+              media.setAttribute("src", item.src);
+              return;
+            }
+            button.dataset.mediaError = "true";
+          });
+
+          shade.className = "rod-toast__picker-shade";
+          check.className = "rod-toast__picker-check";
+          check.append(createSvgIcon(document, "check", 14));
+          index.className = "rod-toast__picker-index";
+          index.textContent = String(item.index + 1);
+          kind.className = "rod-toast__picker-kind";
+
+          const normalizedLabel = item.label.trim().toLowerCase();
+          const typePattern = item.type === "video" ? /\b(v[ií]deo|video)\b/i : /\b(foto|photo|image|imagem)\b/i;
+          const labelHasType = typePattern.test(item.label);
+          const labelHasIndex = new RegExp(`^\\s*0*${item.index + 1}(?:\\s|[.·:_-]|$)`, "i").test(item.label);
+
+          kind.hidden = options.showType === false || labelHasType;
+          kind.append(createSvgIcon(document, item.type === "video" ? "play" : "image", 12));
+          const kindText = document.createElement("span");
+          kindText.textContent = item.type === "video" ? options.videoLabel ?? "Video" : options.imageLabel ?? "Photo";
+          kind.append(kindText);
+          index.hidden = labelHasIndex;
+          label.className = "rod-toast__picker-label";
+          label.textContent = item.label;
+          label.hidden = !normalizedLabel || options.showLabels === false;
+          label.dataset.hasKind = String(!kind.hidden);
+          if (index.hidden) label.style.left = "8px";
+
+          button.append(media, shade, check, index);
+          if (!kind.hidden) button.append(kind);
+          if (!label.hidden) button.append(label);
+          button.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            toggle(item);
+          });
+          buttonsById.set(item.id, button);
+          grid.append(button);
+        });
+
+        grid.addEventListener("keydown", (event) => {
+          if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+          const target = event.target;
+          if (!isElementLike(target) || !target.matches(".rod-toast__picker-item")) return;
+          const enabled = [...buttonsById.values()].filter((button) => !button.disabled);
+          const currentIndex = enabled.indexOf(target as HTMLButtonElement);
+          if (currentIndex < 0 || !enabled.length) return;
+          let nextIndex = currentIndex;
+          const currentButton = enabled[currentIndex];
+          const approximateColumns = Math.max(1, Math.round(grid.clientWidth / Math.max(1, currentButton.offsetWidth + (Number(options.gap) || 8))));
+          if (event.key === "ArrowLeft") nextIndex = currentIndex - 1;
+          else if (event.key === "ArrowRight") nextIndex = currentIndex + 1;
+          else if (event.key === "ArrowUp") nextIndex = currentIndex - approximateColumns;
+          else if (event.key === "ArrowDown") nextIndex = currentIndex + approximateColumns;
+          else if (event.key === "Home") nextIndex = 0;
+          else if (event.key === "End") nextIndex = enabled.length - 1;
+          nextIndex = clamp(nextIndex, 0, enabled.length - 1);
+          if (nextIndex === currentIndex) return;
+          event.preventDefault();
+          enabled[nextIndex]?.focus({ preventScroll: true });
+          enabled[nextIndex]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+        });
+
+        if (!items.length) empty.textContent = options.emptyMessage ?? "No images or videos available.";
+
+        if (options.showSelectionTools !== false && multiple && items.length) {
+          selectAll.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const changed = new Set<string>();
+            for (const item of items) {
+              if (item.disabled || selectedIds.size >= maximum) continue;
+              if (!selectedIds.has(item.id)) changed.add(item.id);
+              selectedIds.add(item.id);
+            }
+            renderSelectionState(changed);
+          });
+          clearAll.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const changed = new Set(selectedIds);
+            selectedIds.clear();
+            renderSelectionState(changed);
+          });
+          tools.append(selectAll, clearAll);
         }
+
+        toolbar.append(count);
+        if (tools.childElementCount) toolbar.append(tools);
+        root.append(toolbar, items.length ? grid : empty);
+        body.append(root);
+        renderSelectionState();
 
         return {
-          version: api.version || null,
-          source:
-            api === window.RodToaster
-              ? "RodToaster"
-              : api === window.toast
-                ? "toast"
-                : "unknown",
-          multiLoading: typeof api.multiLoading === "function",
+          focus() {
+            // iOS Safari may scroll a nested picker to the focused option. Do
+            // not autofocus grid items on coarse/touch pointers.
+            const hostWindow = state.hostWindow ?? initialHostWindow;
+            const finePointer = safeCall(() => hostWindow.matchMedia?.("(pointer: fine)")?.matches === true, false);
+            if (!finePointer) return;
+            const preferred = items.find((item) => selectedIds.has(item.id) && !item.disabled) ?? items.find((item) => !item.disabled);
+            buttonsById.get(preferred?.id ?? "")?.focus({ preventScroll: true });
+          },
+          getValues(): UnknownRecord {
+            const selected = getSelectedItems();
+            return {
+              selection: getSelectionValue(),
+              selected: selected.map((item) => item.original),
+              selectedIds: selected.map((item) => item.id),
+              selectedIndexes: selected.map((item) => item.index),
+              selectedCount: selected.length,
+              totalItems: items.length,
+            };
+          },
+          syncActionState: syncConfirmButton,
+          cleanup() {
+            mediaObserver?.disconnect();
+            const hostWindow = state.hostWindow ?? initialHostWindow;
+            const mediaToRelease = [...mediaElements];
+            const objectUrlsToRelease = normalized.objectUrls.filter((url) => !preservedObjectUrls.has(url));
+            mediaElements.clear();
+
+            // Keep decoded previews alive through the toast exit transition.
+            // Releasing them synchronously makes Safari flash blank cards while
+            // the picker is fading out.
+            hostWindow.setTimeout(() => {
+              for (const media of mediaToRelease) {
+                if (isVideoMediaElement(media)) {
+                  safeCall(() => media.pause(), undefined);
+                  media.removeAttribute("poster");
+                }
+                media.removeAttribute("src");
+                delete media.dataset.rodPickerSrc;
+                delete media.dataset.rodPickerPoster;
+              }
+              for (const url of objectUrlsToRelease) {
+                safeCall(() => hostWindow.URL.revokeObjectURL(url), undefined);
+              }
+            }, 360);
+          },
         };
-      }
-
-      function escapeHtml(value) {
-        return String(value)
-          .replaceAll("&", "&amp;")
-          .replaceAll("<", "&lt;")
-          .replaceAll(">", "&gt;");
-      }
-
-      function highlight(code) {
-        return escapeHtml(code)
-          .replace(
-            /\b(const|let|await|async|return|throw|new|if|else|for|while|true|false|null)\b/g,
-            '<span class="code-keyword">$1</span>',
-          )
-          .replace(
-            /(&quot;.*?&quot;|`.*?`)/g,
-            '<span class="code-string">$1</span>',
-          )
-          .replace(
-            /\b(\d+(?:\.\d+)?)\b/g,
-            '<span class="code-number">$1</span>',
-          )
-          .replace(
-            /\b(toast(?:\.[a-zA-Z]+)?|progress|update|task|signal)\b/g,
-            '<span class="code-call">$1</span>',
-          );
-      }
-
-      function makeSidebar() {
-        const counts = new Map();
-
-        demos.forEach((demo) => {
-          counts.set(
-            demo.section,
-            (counts.get(demo.section) || 0) + 1,
-          );
-        });
-
-        sidebar.innerHTML = sections
-          .map((section) => {
-            return `
-              <li>
-                <a class="sidebar-link" href="#${section.id}">
-                  <span>${section.title}</span>
-                  <span class="sidebar-count">${counts.get(section.id) || 0}</span>
-                </a>
-              </li>
-            `;
-          })
-          .join("");
-
-        sidebar.insertAdjacentHTML(
-          "beforeend",
-          `
-            <li>
-              <a class="sidebar-link" href="#reference">
-                <span>Referência da API</span>
-                <span class="sidebar-count">20</span>
-              </a>
-            </li>
-          `,
-        );
-      }
-
-      function makeCard(demo, index) {
-        const article = document.createElement("article");
-        article.className = "demo-card";
-        article.dataset.demoId = demo.id;
-        article.dataset.search = [
-          demo.title,
-          demo.description,
-          demo.tags,
-          demo.code,
-          sectionById.get(demo.section)?.title,
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        article.innerHTML = `
-          <header class="demo-head">
-            <span class="demo-index">${String(index + 1).padStart(2, "0")}</span>
-            <div class="demo-copy">
-              <h3 class="demo-title">${escapeHtml(demo.title)}</h3>
-              <p class="demo-description">${escapeHtml(demo.description)}</p>
-            </div>
-          </header>
-
-          <div class="demo-code">
-            <pre><code>${highlight(demo.code)}</code></pre>
-          </div>
-
-          <footer class="demo-footer">
-            <span class="demo-meta">${escapeHtml(demo.tags.split(" ").slice(0, 4).join(" · "))}</span>
-            <div class="demo-actions">
-              <button
-                class="button button-small"
-                type="button"
-                data-copy="${escapeHtml(demo.id)}"
-              >
-                ${icons.copy}
-                Copiar
-              </button>
-              <button
-                class="button button-primary button-small"
-                type="button"
-                data-run="${escapeHtml(demo.id)}"
-              >
-                ${icons.play}
-                Executar
-              </button>
-            </div>
-          </footer>
-        `;
-
-        return article;
-      }
-
-      function makeSections() {
-        root.replaceChildren();
-
-        sections.forEach((section) => {
-          const wrapper = document.createElement("section");
-          wrapper.id = section.id;
-          wrapper.className = "section";
-
-          const cards = demos
-            .map((demo, index) => ({ demo, index }))
-            .filter(({ demo }) => demo.section === section.id);
-
-          wrapper.innerHTML = `
-            <header class="section-header">
-              <div>
-                <span class="section-kicker">${escapeHtml(section.kicker)}</span>
-                <h2 class="section-title">${escapeHtml(section.title)}</h2>
-              </div>
-              <p class="section-description">${escapeHtml(section.description)}</p>
-            </header>
-            <div class="demo-grid"></div>
-          `;
-
-          const grid = wrapper.querySelector(".demo-grid");
-
-          cards.forEach(({ demo, index }) => {
-            grid.appendChild(makeCard(demo, index));
-          });
-
-          root.appendChild(wrapper);
-        });
-      }
-
-      async function copy(value, button) {
-        try {
-          await navigator.clipboard.writeText(value);
-        } catch {
-          const textarea = document.createElement("textarea");
-          textarea.value = value;
-          textarea.style.position = "fixed";
-          textarea.style.left = "-99999px";
-          document.body.appendChild(textarea);
-          textarea.select();
-          document.execCommand("copy");
-          textarea.remove();
+      },
+      async validate({ action, values }) {
+        if (action.id === "cancel") return true;
+        const selectedCount = Number(values.selectedCount) || 0;
+        if (selectedCount < minimum) {
+          return options.requiredMessage ?? (minimum === 1 ? "Select at least one item." : `Select at least ${minimum} items.`);
         }
+        if (selectedCount > maximum) return options.validationMessage ?? `Select at most ${maximum} items.`;
+        return typeof options.validate === "function" ? options.validate(values.selection) : true;
+      },
+      resolveValue(action, values) {
+        if (action.id === "cancel") return action.hasValue ? action.value : null;
+        return action.hasValue ? action.value : values.selection;
+      },
+    });
 
-        if (button) {
-          const original = button.innerHTML;
-          button.textContent = "Copiado";
-          setTimeout(() => {
-            button.innerHTML = original;
-          }, 900);
-        }
+    return promise as Promise<PickerResult<T>>;
+  }
+
+  function isRichDescriptor(value: unknown): value is ToastOptions {
+    return isPlainObject(value) && ["title", "description", "details", "actions", "error", "copyError"].some((key) => hasOwn(value, key));
+  }
+
+  function showRichToast(descriptor: ToastOptions | string = {}, forcedType: ToastType | null = null): ToastController | null {
+    const options: ToastOptions = isPlainObject(descriptor) ? { ...descriptor } : { title: String(descriptor ?? "") };
+    const type: ToastType = forcedType ?? (typeof options.type === "string" && hasOwn(TOAST_COLORS, options.type) ? options.type : "default");
+    const created = createToastRecord([], { ...options, type, dedupe: options.dedupe ?? false });
+    if (!created) return null;
+    const { controller, record } = created;
+    const node = controller.element;
+    const content = node.querySelector<HTMLDivElement>(".rod-toast__content");
+    if (!content) return controller;
+    const documentRef = node.ownerDocument;
+    node.dataset.rich = "true";
+
+    const render = (next: ToastOptions = options): void => {
+      const root = documentRef.createElement("div");
+      const copy = documentRef.createElement("div");
+      const title = documentRef.createElement("div");
+      const description = documentRef.createElement("div");
+      const actionBar = documentRef.createElement("div");
+      root.className = "rod-toast__rich";
+      copy.className = "rod-toast__rich-copy";
+      title.className = "rod-toast__rich-title";
+      description.className = "rod-toast__rich-description";
+      actionBar.className = "rod-toast__action-bar";
+      title.textContent = String(next.title ?? "");
+      title.hidden = !title.textContent;
+      description.textContent = String(next.description ?? "");
+      description.hidden = !description.textContent;
+      copy.append(title, description);
+      root.append(copy);
+
+      const details = next.details ?? next.error;
+      const detailsNode = createDetailsNode(
+        documentRef,
+        details instanceof Error ? details.stack ?? details.message : details,
+        next.detailsLabel ?? "Details",
+      );
+      if (detailsNode) root.append(detailsNode);
+
+      const normalizedActions = normalizeActionDescriptors(next.actions, []);
+      if (next.copyError !== false && next.error) {
+        const copyAction = normalizeActionDescriptors([{
+          id: "copy-error",
+          label: next.copyLabel ?? "Copy error",
+          icon: "copy",
+          variant: "secondary",
+          close: false,
+          successLabel: "Copied",
+          handle: () => copyText(next.error instanceof Error ? next.error.stack ?? next.error.message : next.error),
+        }])[0];
+        if (copyAction) normalizedActions.push(copyAction);
       }
 
-      async function executeDemo(id, button) {
-        const api = getToast();
-        const demo = demos.find((item) => item.id === id);
-
-        if (!api || !demo) {
-          console.error("Rod Toaster indisponível.");
-          return;
-        }
-
-        if (
-          demo.requires &&
-          typeof api[demo.requires] !== "function"
-        ) {
-          const diagnostic = runtimeDiagnostic(api);
-          const missingMethod = `toast.${demo.requires}()`;
-
-          console.error(
-            `[Playground] Runtime incompatível: ${missingMethod} não existe.`,
-            diagnostic,
-          );
-
-          api.warning?.({
-            title: "Runtime do Toaster desatualizado",
-            description:
-              `${missingMethod} não existe na API carregada ` +
-              `(v${diagnostic.version || "?"}, global ${diagnostic.source}). ` +
-              "Publique/carregue o toaster.js v4.9.0 antes de executar esta demo.",
-            icon: "triangle-alert",
-            duration: 9000,
-            details: diagnostic,
-          });
-
-          updateRuntimeStatus();
-          return;
-        }
-
-        const original = button?.innerHTML;
-
-        if (button) {
+      normalizedActions.forEach((action) => {
+        const button = documentRef.createElement("button");
+        const label = documentRef.createElement("span");
+        button.type = "button";
+        button.className = "rod-toast__action-button";
+        button.dataset.variant = action.variant;
+        button.dataset.busy = "false";
+        button.disabled = action.disabled;
+        if (action.icon) button.append(createSvgIcon(documentRef, action.icon, 14));
+        label.textContent = action.label;
+        button.append(label);
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (button.disabled) return;
           button.disabled = true;
-          button.textContent = "Executando…";
-        }
-
-        try {
-          await demo.run();
-        } catch (error) {
-          console.error(`[Demo ${id}]`, error);
-
-          api.error(error, {
-            title: `Erro na demo ${demo.title}`,
-          });
-        } finally {
-          if (button) {
+          button.dataset.busy = "true";
+          const originalLabel = label.textContent ?? action.label;
+          if (action.loadingLabel) label.textContent = action.loadingLabel;
+          void Promise.resolve().then(() =>
+            action.handle
+              ? action.handle({
+                  action: action.raw,
+                  controller,
+                  event,
+                  toast: getToastApi(),
+                  close: (_value, reason = "action") => controller.dismiss(reason),
+                  update: (nextDescriptor) => {
+                    Object.assign(next, nextDescriptor);
+                    render(next);
+                    return controller;
+                  },
+                  setValidation: () => undefined,
+                  values: {},
+                  checked: {},
+                })
+              : action.hasValue
+                ? action.value
+                : action.id,
+          ).then((result) => {
+            emitEvent("action", { phase: "success", actionId: action.id, action: action.raw, result, controller, scope: options.scope ?? null } as unknown as UnknownRecord);
+            if (action.successLabel) label.textContent = action.successLabel;
+            if (action.close) {
+              controller.dismiss("action");
+              return;
+            }
+            (state.hostWindow ?? initialHostWindow).setTimeout(() => {
+              label.textContent = originalLabel;
+              button.disabled = false;
+              button.dataset.busy = "false";
+            }, action.successLabel ? 650 : 0);
+          }).catch((error: unknown) => {
+            emitEvent("action", { phase: "error", actionId: action.id, action: action.raw, error, controller, scope: options.scope ?? null } as unknown as UnknownRecord);
+            label.textContent = originalLabel;
             button.disabled = false;
-            button.innerHTML = original;
-          }
-        }
-      }
-
-      function filterDemos() {
-        const query = search.value.trim().toLowerCase();
-        let visibleCount = 0;
-
-        document.querySelectorAll(".demo-card").forEach((card) => {
-          const visible = !query || card.dataset.search.includes(query);
-          card.dataset.hidden = String(!visible);
-          if (visible) visibleCount += 1;
-        });
-
-        document.querySelectorAll(".section").forEach((section) => {
-          if (section.id === "reference") return;
-          const visibleCards = section.querySelectorAll(
-            '.demo-card[data-hidden="false"]',
-          );
-          section.hidden = visibleCards.length === 0;
-        });
-
-        empty.dataset.visible = String(visibleCount === 0);
-      }
-
-      function updateRuntimeStatus() {
-        const api = getToast();
-
-        if (api) {
-          const hasV47 =
-            typeof api.picker === "function" &&
-            typeof api.multiLoading === "function" &&
-            typeof api.destroy === "function" &&
-            typeof api.noConflict === "function" &&
-            typeof api.bringToFront === "function";
-          const diagnostic = runtimeDiagnostic(api);
-
-          runtimeStatus.dataset.state = hasV47 ? "ready" : "error";
-          statusLabel.textContent = hasV47
-            ? `API pronta · v${api.version || "?"} · runtime v4.9`
-            : `API incompatível · v${api.version || "?"} · falta multiLoading`;
-
-          document.querySelectorAll("[data-version]").forEach((node) => {
-            node.textContent = api.version || "?";
+            button.dataset.busy = "false";
+            showSemanticToast("error", [error]);
           });
+        });
+        actionBar.append(button);
+      });
 
-          document.querySelectorAll("[data-run]").forEach((button) => {
-            const demo = demos.find((item) => item.id === button.dataset.run);
-            const missing =
-              demo?.requires &&
-              typeof api[demo.requires] !== "function";
+      if (normalizedActions.length) root.append(actionBar);
+      content.replaceChildren(root);
+    };
 
-            button.disabled = Boolean(missing);
-            button.title = missing
-              ? `A API carregada v${diagnostic.version || "?"} não possui toast.${demo.requires}().`
-              : "";
-          });
+    render(options);
+    controller.updateRich = (next: ToastOptions = {}) => {
+      Object.assign(options, next);
+      render(options);
+      return controller;
+    };
+    record.externalUpdate = controller.updateRich;
+    return controller;
+  }
 
-          return;
-        }
+  function showSemanticToast(type: ToastType, inputArgs: readonly unknown[]): ToastController | null {
+    const args = [...inputArgs];
+    if (args.length === 1 && isRichDescriptor(args[0])) return showRichToast(args[0], type);
+    if (args[0] instanceof Error) {
+      const error = args[0];
+      const tail = isOptionsCandidate(args[1]) ? args[1] : {};
+      return showRichToast({
+        ...tail,
+        title: tail.title ?? error.message ?? error.name ?? "Error",
+        description: tail.description ?? error.name ?? "Error",
+        error,
+        icon: tail.icon ?? "circle-x",
+        copyError: tail.copyError ?? true,
+      }, type);
+    }
+    return showToast(args, type);
+  }
 
-        runtimeStatus.dataset.state = "error";
-        statusLabel.textContent = "Falha ao carregar toaster.js";
+  function getTaskStorage(): Storage | null {
+    const hostWindow = state.hostWindow ?? initialHostWindow;
+    return safeCall(() => hostWindow[state.config.taskStorage], null);
+  }
 
-        document.querySelectorAll("[data-run]").forEach((button) => {
+  function getPersistedTaskSnapshots(): TaskSnapshot[] {
+    const storage = getTaskStorage();
+    if (!storage) return [];
+    return safeCall(() => {
+      const parsed: unknown = JSON.parse(storage.getItem(state.config.taskStorageKey) ?? "[]");
+      return Array.isArray(parsed) ? parsed.filter(isTaskSnapshot) : [];
+    }, [] as TaskSnapshot[]);
+  }
+
+  function isTaskSnapshot(value: unknown): value is TaskSnapshot {
+    return isUnknownRecord(value) &&
+      typeof value.id === "string" &&
+      typeof value.title === "string" &&
+      typeof value.status === "string" &&
+      ALLOWED_TASK_STATUSES.has(value.status as TaskStatus);
+  }
+
+  function toStorageSafeValue(
+    value: unknown,
+    seen = new WeakSet<object>(),
+    depth = 0,
+  ): unknown {
+    if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") return value;
+    if (value === undefined) return null;
+    if (typeof value === "bigint") return `${value}n`;
+    if (typeof value === "symbol") return safeCall(() => value.toString(), "Symbol(?)");
+    if (typeof value === "function") return `[Function: ${value.name || "anonymous"}]`;
+    if (!isObject(value)) return String(value);
+    if (depth >= 10) return "[MaxDepth]";
+    if (isDomNode(value)) return `[Node: ${(value as Node).nodeName}]`;
+    if (value instanceof Date) return safeCall(() => value.toISOString(), String(value));
+    if (value instanceof RegExp) return String(value);
+    if (value instanceof Error) {
+      return {
+        name: value.name,
+        message: value.message,
+        stack: value.stack ?? null,
+        cause: toStorageSafeValue(value.cause, seen, depth + 1),
+      };
+    }
+    if (seen.has(value)) return "[Circular]";
+    seen.add(value);
+    if (Array.isArray(value)) {
+      return value.slice(0, 1000).map((entry) => toStorageSafeValue(entry, seen, depth + 1));
+    }
+    if (value instanceof Map) {
+      return {
+        __type: "Map",
+        entries: Array.from(value.entries()).slice(0, 1000).map(([key, entry]) => [
+          toStorageSafeValue(key, seen, depth + 1),
+          toStorageSafeValue(entry, seen, depth + 1),
+        ]),
+      };
+    }
+    if (value instanceof Set) {
+      return {
+        __type: "Set",
+        values: Array.from(value.values()).slice(0, 1000).map((entry) => toStorageSafeValue(entry, seen, depth + 1)),
+      };
+    }
+    const output: UnknownRecord = {};
+    let count = 0;
+    for (const key of safeCall(() => Object.keys(value), [] as string[])) {
+      if (count >= 1000) {
+        output.__truncated = true;
+        break;
+      }
+      output[key] = toStorageSafeValue(safeCall(() => (value as UnknownRecord)[key], undefined), seen, depth + 1);
+      count += 1;
+    }
+    return output;
+  }
+
+  function sanitizeTaskSnapshot(snapshot: TaskSnapshot): TaskSnapshot {
+    const safeMetadata = toStorageSafeValue(snapshot.metadata);
+    return {
+      ...snapshot,
+      metadata: isUnknownRecord(safeMetadata) ? safeMetadata : { value: safeMetadata },
+    };
+  }
+
+  function hasPersistableTasks(): boolean {
+    for (const task of state.tasks.values()) {
+      if (task.persist && !task.dismissed) return true;
+    }
+    return false;
+  }
+
+  function flushTaskSnapshots(): void {
+    const hostWindow = state.hostWindow ?? initialHostWindow;
+    if (state.taskPersistTimer !== null) {
+      hostWindow.clearTimeout(state.taskPersistTimer);
+      state.taskPersistTimer = null;
+    }
+    const storage = getTaskStorage();
+    if (!storage) return;
+
+    const snapshots: TaskSnapshot[] = [];
+    const limit = Math.max(1, state.config.maxPersistedTasks);
+    for (const task of state.tasks.values()) {
+      if (!task.persist || task.dismissed) continue;
+      try {
+        snapshots.push(sanitizeTaskSnapshot(task.snapshot()));
+        if (snapshots.length > limit) snapshots.shift();
+      } catch (error: unknown) {
+        emitEvent("task:persist-error", { task, error } as unknown as UnknownRecord);
+      }
+    }
+
+    try {
+      storage.setItem(state.config.taskStorageKey, JSON.stringify(snapshots));
+      state.taskPersistLastAt = Date.now();
+    } catch (error: unknown) {
+      emitEvent("task:persist-error", { error, snapshots: snapshots.length } as unknown as UnknownRecord);
+    }
+  }
+
+  function persistTaskSnapshots(immediate = false): void {
+    if (state.destroying) return;
+    const hostWindow = state.hostWindow ?? initialHostWindow;
+    if (immediate) {
+      flushTaskSnapshots();
+      return;
+    }
+    if (state.taskPersistTimer !== null) return;
+    const interval = Math.max(100, Number(state.config.taskProgressPersistInterval) || DEFAULT_CONFIG.taskProgressPersistInterval);
+    const elapsed = Date.now() - state.taskPersistLastAt;
+    const delay = Math.max(0, interval - elapsed);
+    state.taskPersistTimer = hostWindow.setTimeout(flushTaskSnapshots, delay);
+  }
+
+  const TERMINAL_TASK_STATUSES = new Set<TaskStatus>(["success", "error", "cancelled"]);
+
+  function isTerminalTaskStatus(status: TaskStatus): boolean {
+    return TERMINAL_TASK_STATUSES.has(status);
+  }
+
+  function canTransitionTask(from: TaskStatus, to: TaskStatus): boolean {
+    if (from === to) return true;
+    if (isTerminalTaskStatus(from)) return false;
+    switch (from) {
+      case "queued":
+        return to === "running" || to === "paused" || to === "warning" || isTerminalTaskStatus(to);
+      case "running":
+        return to === "paused" || to === "warning" || isTerminalTaskStatus(to);
+      case "paused":
+        return to === "running" || to === "warning" || isTerminalTaskStatus(to);
+      case "warning":
+        return to === "running" || to === "paused" || isTerminalTaskStatus(to);
+      default:
+        return false;
+    }
+  }
+
+  function createAbortError(reason: unknown = "Cancelled"): Error {
+    if (reason instanceof Error) return reason;
+    return new DOMException(String(reason ?? "Cancelled"), "AbortError");
+  }
+
+  function createTaskController(descriptor: TaskDescriptor | string = {}): TaskController | null {
+    const options: TaskDescriptor = isPlainObject(descriptor) ? { ...descriptor } as TaskDescriptor : { title: String(descriptor ?? "") };
+    const id = String(options.id ?? `task-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    const existing = state.tasks.get(id);
+    if (existing && !existing.dismissed) return existing;
+
+    const abortController = new AbortController();
+    const taskState: TaskSnapshot & { restored: boolean; orphaned: boolean } = {
+      id,
+      title: String(options.title ?? "Task"),
+      description: String(options.description ?? ""),
+      icon: normalizeTaskIcon(options.icon, "clock"),
+      status: normalizeTaskStatus(options.status ?? "queued"),
+      progress: normalizeProgress(options.progress),
+      progressLabel: options.progressLabel == null ? null : String(options.progressLabel),
+      metadata: isUnknownRecord(options.metadata) ? { ...options.metadata } : {},
+      scope: options.scope == null ? null : String(options.scope),
+      createdAt: Number(options.createdAt) || Date.now(),
+      updatedAt: Number(options.updatedAt) || Date.now(),
+      persist: options.persist ?? state.config.persistTasks,
+      restored: Boolean(options.restored),
+      orphaned: Boolean(options.orphaned),
+    };
+    let dismissed = false;
+    const toastId = String(options.toastId ?? `task:${id}`);
+    let toastController: ToastController | null = null;
+
+    const task = {} as TaskController;
+    Object.defineProperties(task, {
+      id: { value: id, enumerable: true },
+      persist: { get: () => taskState.persist, enumerable: true },
+      abortController: { value: abortController, enumerable: true },
+      signal: { value: abortController.signal, enumerable: true },
+      status: { get: () => taskState.status, enumerable: true },
+      progress: { get: () => taskState.progress, enumerable: true },
+      dismissed: { get: () => dismissed, enumerable: true },
+      element: { get: () => toastController?.element ?? null, enumerable: true },
+    });
+
+    toastController = showLoadingToast([{
+      lane: "task",
+      id: toastId,
+      title: taskState.title,
+      description: taskState.description,
+      icon: taskState.icon,
+      animation: taskState.progress === null ? "spinner" : "progress",
+      progress: taskState.progress,
+      progressLabel: taskState.progressLabel,
+      duration: 0,
+      dedupe: false,
+      scope: taskState.scope,
+      metadata: { ...taskState.metadata, taskId: id },
+      onDismiss: ({ reason }: ToastDismissEvent) => {
+        dismissed = true;
+        state.tasks.delete(id);
+        if (taskState.persist && !state.destroying) persistTaskSnapshots(true);
+        if (hasEventListeners("task:dismiss")) emitEvent("task:dismiss", { task, reason } as unknown as UnknownRecord);
+      },
+    }]);
+    if (!toastController) return null;
+
+    const node = toastController.element;
+    const loadingCopy = node.querySelector<HTMLDivElement>(".rod-toast__loading-copy");
+    const taskStatus = node.ownerDocument.createElement("div");
+    const taskActions = node.ownerDocument.createElement("div");
+    taskStatus.className = "rod-toast__task-status";
+    taskActions.className = "rod-toast__task-actions";
+    loadingCopy?.append(taskStatus, taskActions);
+    let lastTaskActionsSignature = "";
+
+    const renderTaskActions = (): void => {
+      const signature = `${taskState.status}|${Boolean(options.pausable)}|${Boolean(options.cancellable)}|${Array.isArray(options.actions) ? options.actions.length : 0}`;
+      if (signature === lastTaskActionsSignature) return;
+      lastTaskActionsSignature = signature;
+      taskActions.replaceChildren();
+      const descriptors: ToastActionDescriptor[] = [];
+      if (options.pausable && (taskState.status === "running" || taskState.status === "queued")) descriptors.push({ id: "pause", label: "Pause", icon: "pause" });
+      if (options.pausable && taskState.status === "paused") descriptors.push({ id: "resume", label: "Resume", icon: "play" });
+      if (options.cancellable && !isTerminalTaskStatus(taskState.status)) descriptors.push({ id: "cancel", label: "Cancel", icon: "square" });
+      if (Array.isArray(options.actions)) descriptors.push(...options.actions.map((action) => ({ ...action, close: action.close === true })));
+
+      normalizeActionDescriptors(descriptors).forEach((action) => {
+        const button = node.ownerDocument.createElement("button");
+        const label = node.ownerDocument.createElement("span");
+        button.type = "button";
+        button.className = "rod-toast__task-button";
+        button.dataset.busy = "false";
+        if (action.icon) button.append(createSvgIcon(node.ownerDocument, action.icon, 14));
+        label.textContent = action.label;
+        button.append(label);
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (button.disabled) return;
+          if (action.id === "pause") { void task.pause(); return; }
+          if (action.id === "resume") { void task.resume(); return; }
+          if (action.id === "cancel") { void task.cancel("user"); return; }
           button.disabled = true;
-        });
-      }
-
-      function installIntersectionObserver() {
-        const links = [...document.querySelectorAll(".sidebar-link")];
-        const linkById = new Map(
-          links.map((link) => [
-            link.getAttribute("href").slice(1),
-            link,
-          ]),
-        );
-
-        const observer = new IntersectionObserver(
-          (entries) => {
-            const visible = entries
-              .filter((entry) => entry.isIntersecting)
-              .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
-
-            if (!visible) return;
-
-            links.forEach((link) => {
-              link.dataset.active = "false";
+          button.dataset.busy = "true";
+          void Promise.resolve()
+            .then(() => action.handle?.({
+              action: action.raw,
+              controller: toastController!,
+              event,
+              toast: getToastApi(),
+              close: (_value, reason = "action") => task.dismiss(reason),
+              update: (next) => {
+                task.update(next as Partial<TaskDescriptor>);
+                return toastController!;
+              },
+              setValidation: () => undefined,
+              values: {},
+              checked: {},
+            }))
+            .then(() => {
+              if (action.close) task.dismiss("action");
+            })
+            .catch((error: unknown) => {
+              emitEvent("action", { phase: "error", actionId: action.id, action: action.raw, error, controller: toastController, scope: taskState.scope } as unknown as UnknownRecord);
+              showSemanticToast("error", [error]);
+            })
+            .finally(() => {
+              button.disabled = false;
+              button.dataset.busy = "false";
             });
+        });
+        taskActions.append(button);
+      });
+      taskActions.hidden = !taskActions.childElementCount;
+    };
 
-            const active = linkById.get(visible.target.id);
-            if (active) active.dataset.active = "true";
-          },
-          {
-            rootMargin: "-15% 0px -70% 0px",
-            threshold: [0, 0.15, 0.4],
-          },
-        );
+    const apply = (next: Partial<TaskDescriptor> = {}, emit = true): TaskController => {
+      if (dismissed) return task;
+      const previousStatus = taskState.status;
+      const requestedStatus = hasOwn(next, "status") ? normalizeTaskStatus(next.status) : previousStatus;
+      const statusChanged = requestedStatus !== previousStatus;
+      const transitionAllowed = !statusChanged || canTransitionTask(previousStatus, requestedStatus);
 
-        document.querySelectorAll(".section").forEach((section) => {
-          observer.observe(section);
+      if (statusChanged && !transitionAllowed) {
+        emitEvent("task:transition-blocked", { task, from: previousStatus, to: requestedStatus } as unknown as UnknownRecord);
+        return task;
+      }
+
+      if (hasOwn(next, "title")) taskState.title = String(next.title ?? "");
+      if (hasOwn(next, "description")) taskState.description = String(next.description ?? "");
+      if (hasOwn(next, "icon")) taskState.icon = normalizeTaskIcon(next.icon, "circle");
+      if (statusChanged && transitionAllowed) taskState.status = requestedStatus;
+      if (hasOwn(next, "progress") && !isTerminalTaskStatus(previousStatus)) taskState.progress = normalizeProgress(next.progress);
+      if (hasOwn(next, "progressLabel")) taskState.progressLabel = next.progressLabel == null ? null : String(next.progressLabel);
+      if (isUnknownRecord(next.metadata)) taskState.metadata = { ...taskState.metadata, ...next.metadata };
+      taskState.updatedAt = Date.now();
+
+      let semanticIcon: Exclude<TaskIcon, URL>;
+      let semanticAnimation: LoadingAnimation;
+      const persistentImageIcon = getImageIconDescriptor(taskState.icon) ? taskState.icon : null;
+      switch (taskState.status) {
+        case "queued": semanticIcon = persistentImageIcon ?? (taskState.icon || "clock"); semanticAnimation = "pulse"; break;
+        case "running": semanticIcon = persistentImageIcon ?? (taskState.icon || "loader-circle"); semanticAnimation = taskState.progress === null ? "spinner" : "progress"; break;
+        case "paused": semanticIcon = persistentImageIcon ?? "pause"; semanticAnimation = "none"; break;
+        case "warning": semanticIcon = persistentImageIcon ?? "triangle-alert"; semanticAnimation = "none"; break;
+        case "cancelled": semanticIcon = persistentImageIcon ?? "square"; semanticAnimation = "none"; break;
+        case "success": semanticIcon = persistentImageIcon ?? "check"; semanticAnimation = "none"; break;
+        case "error": semanticIcon = persistentImageIcon ?? "circle-x"; semanticAnimation = "none"; break;
+      }
+
+      if (taskState.status === "success" || taskState.status === "error") {
+        const settle = taskState.status === "success" ? toastController!.success.bind(toastController) : toastController!.error.bind(toastController);
+        settle({
+          title: taskState.title,
+          description: taskState.description,
+          icon: semanticIcon,
+          duration: Number.isFinite(Number(next.duration)) ? Number(next.duration) : taskState.status === "success" ? state.config.loadingSuccessDuration : state.config.loadingErrorDuration,
+        });
+      } else {
+        toastController!.update({
+          title: taskState.title,
+          description: taskState.description,
+          icon: semanticIcon,
+          animation: semanticAnimation,
+          progress: taskState.progress,
+          progressLabel: taskState.progressLabel,
+          duration: taskState.status === "cancelled" ? state.config.loadingInfoDuration : 0,
         });
       }
 
-      async function quickDemo() {
-        const api = getToast();
-        if (!api) return;
+      setTextValue(taskStatus, taskState.status);
+      renderTaskActions();
+      if (taskState.persist) {
+        persistTaskSnapshots(statusChanged || isTerminalTaskStatus(taskState.status));
+      }
+      if (emit && hasEventListeners("task:update")) emitEvent("task:update", { task, snapshot: task.snapshot() } as unknown as UnknownRecord);
+      return task;
+    };
 
-        const task = api.loading({
-          title: "Rod Toaster",
-          description: "Percorrendo image icon, loading e picker…",
-          icon: {
-            src: DEMO_ICON_IMAGE,
-            fit: "cover",
-            objectPosition: "72% center",
-          },
-          animation: "spinner",
+    Object.assign(task, {
+      controller: toastController,
+      snapshot: (): TaskSnapshot => ({
+        id,
+        title: taskState.title,
+        description: taskState.description,
+        icon: taskState.icon,
+        status: taskState.status,
+        progress: taskState.progress,
+        progressLabel: taskState.progressLabel,
+        metadata: { ...taskState.metadata },
+        scope: taskState.scope,
+        createdAt: taskState.createdAt,
+        updatedAt: taskState.updatedAt,
+        persist: taskState.persist,
+      }),
+      update: (next: Partial<TaskDescriptor> = {}) => apply(next),
+      start: (next: Partial<TaskDescriptor> = {}) => {
+        if (isTerminalTaskStatus(taskState.status)) return task;
+        return apply({ ...next, status: "running" });
+      },
+      setProgress: (value: unknown, next: Partial<TaskDescriptor> = {}) => {
+        if (isTerminalTaskStatus(taskState.status)) return task;
+        const status = next.status ?? (taskState.status === "queued" ? "running" : taskState.status);
+        return apply({ ...next, status, progress: value });
+      },
+      pause: async (): Promise<TaskController> => {
+        if (dismissed || isTerminalTaskStatus(taskState.status) || taskState.status === "paused") return task;
+        await Promise.resolve().then(() => options.pause?.({ task, signal: task.signal }));
+        return apply({ status: "paused" });
+      },
+      resume: async (): Promise<TaskController> => {
+        if (dismissed || taskState.status !== "paused") return task;
+        await Promise.resolve().then(() => options.resume?.({ task, signal: task.signal }));
+        return apply({ status: "running" });
+      },
+      cancel: async (reason: unknown = "cancelled"): Promise<TaskController> => {
+        if (dismissed || isTerminalTaskStatus(taskState.status)) return task;
+        if (!abortController.signal.aborted) abortController.abort(reason);
+        try {
+          await Promise.resolve().then(() => options.cancel?.({ task, reason }));
+        } finally {
+          apply({
+            status: "cancelled",
+            title: options.cancelledTitle ?? taskState.title,
+            description: options.cancelledDescription ?? "Task cancelled.",
+          });
+          emitEvent("task:cancel", { task, reason } as unknown as UnknownRecord);
+        }
+        return task;
+      },
+      success: (next: Partial<TaskDescriptor> = {}) => apply({ ...next, status: "success", progress: 1 }),
+      error: (error: unknown, next: Partial<TaskDescriptor> = {}) => apply({
+        ...next,
+        status: "error",
+        description: next.description ?? toErrorMessage(error) ?? taskState.description,
+      }),
+      warning: (next: Partial<TaskDescriptor> = {}) => apply({ ...next, status: "warning" }),
+      dismiss: (reason = "programmatic", immediate = false): TaskController => {
+        toastController!.dismiss(reason, immediate);
+        return task;
+      },
+      run: async <T>(executor: (context: TaskExecutorContext) => Promise<T>): Promise<T> => {
+        if (isTerminalTaskStatus(taskState.status)) throw new Error(`Task ${id} is already ${taskState.status}.`);
+        task.start();
+        try {
+          const result = await executor({
+            task,
+            signal: task.signal,
+            progress: (value, next = {}) => task.setProgress(value, next),
+            update: (next = {}) => task.update(next),
+          });
+          if (task.signal.aborted || (task.status as TaskStatus) === "cancelled") throw createAbortError(task.signal.reason);
+          if (task.status === "error") throw new Error(`Task ${id} entered error state while executor was running.`);
+          task.success();
+          return result;
+        } catch (error: unknown) {
+          if (task.signal.aborted || (task.status as TaskStatus) === "cancelled") {
+            if ((task.status as TaskStatus) !== "cancelled") await task.cancel(task.signal.reason ?? "aborted");
+          } else if (!isTerminalTaskStatus(task.status)) {
+            task.error(error);
+          }
+          throw error;
+        }
+      },
+    } satisfies Partial<TaskController>);
+
+    state.tasks.set(id, task);
+    apply(options, false);
+    if (taskState.persist) persistTaskSnapshots(true);
+    if (hasEventListeners("task:create")) emitEvent("task:create", { task, snapshot: task.snapshot() } as unknown as UnknownRecord);
+    return task;
+  }
+
+  function resolvePhaseDescriptor<T>(
+    spec: string | Partial<TaskDescriptor> | ((value: T) => string | Partial<TaskDescriptor>) | undefined,
+    value: T,
+    fallback: Partial<TaskDescriptor> = {},
+  ): Partial<TaskDescriptor> {
+    const resolved = typeof spec === "function" ? spec(value) : spec;
+    if (resolved == null) return fallback;
+    if (typeof resolved === "string") return { ...fallback, description: resolved };
+    return { ...fallback, ...resolved };
+  }
+
+  async function showPromiseToast<T>(
+    input: Promise<T> | ((context: TaskExecutorContext & { toast: ToasterApi }) => Promise<T>),
+    descriptor: PromiseDescriptor<T> = {},
+  ): Promise<T> {
+    const loading = resolvePhaseDescriptor(descriptor.loading, null, {
+      title: descriptor.title ?? "Working",
+      description: descriptor.description ?? "Please wait…",
+      icon: descriptor.icon ?? "loader-circle",
+    });
+    const task = createTaskController({ ...descriptor, ...loading, status: "running" });
+    if (!task) {
+      return typeof input === "function"
+        ? input({
+            task: null as unknown as TaskController,
+            signal: new AbortController().signal,
+            progress: () => null as unknown as TaskController,
+            update: () => null as unknown as TaskController,
+            toast: getToastApi(),
+          })
+        : input;
+    }
+    try {
+      const result = typeof input === "function"
+        ? await input({
+            task,
+            signal: task.signal,
+            progress: (value, next = {}) => task.setProgress(value, next),
+            update: (next = {}) => task.update(next),
+            toast: getToastApi(),
+          })
+        : await input;
+      if (task.signal.aborted || (task.status as TaskStatus) === "cancelled") throw createAbortError(task.signal.reason);
+      if ((task.status as TaskStatus) === "error") throw new Error(`Task ${task.id} entered error state while promise was pending.`);
+      task.success(resolvePhaseDescriptor(descriptor.success, result, {
+        title: "Completed",
+        description: "The operation completed successfully.",
+      }));
+      return result;
+    } catch (error: unknown) {
+      if (task.signal.aborted || (task.status as TaskStatus) === "cancelled") {
+        if ((task.status as TaskStatus) !== "cancelled") await task.cancel(task.signal.reason ?? "cancelled");
+      } else if (!isTerminalTaskStatus(task.status)) {
+        task.error(error, resolvePhaseDescriptor(descriptor.error, error, {
+          title: "Failed",
+          description: toErrorMessage(error),
+        }));
+      }
+      throw error;
+    }
+  }
+
+  async function showUndoToast(descriptor: ToastOptions = {}): Promise<unknown> {
+    const duration = Number.isFinite(Number(descriptor.duration)) ? Number(descriptor.duration) : 6000;
+    const seconds = Math.max(1, Math.ceil(duration / 1000));
+    return showConfirmToast({
+      ...descriptor,
+      icon: descriptor.icon ?? "undo",
+      duration,
+      dismissValue: false,
+      countdown: seconds,
+      actions: [{
+        id: "undo",
+        label: `${descriptor.actionLabel ?? "Undo"} · {seconds}s`,
+        icon: descriptor.actionIcon ?? "undo",
+        variant: descriptor.variant ?? "secondary",
+        loadingLabel: descriptor.loadingLabel ?? "Undoing…",
+        successLabel: descriptor.successLabel ?? "Restored",
+        handle: async (context) => {
+          await descriptor.undo?.(context);
+          return true;
+        },
+      }],
+    });
+  }
+
+  async function showRetryToast<T>(descriptor: RetryDescriptor<T>): Promise<T> {
+    if (typeof descriptor.run !== "function") throw new TypeError("toast.retry() requires a run function.");
+    const maxAttempts = Math.max(1, Number(descriptor.maxAttempts) || 3);
+    const externalAbortController = new AbortController();
+    const task = createTaskController({
+      ...descriptor,
+      title: descriptor.title ?? "Trying operation",
+      description: descriptor.description ?? "Starting…",
+      icon: descriptor.icon ?? "refresh",
+      status: "running",
+      cancellable: true,
+      cancel: () => {
+        if (!externalAbortController.signal.aborted) externalAbortController.abort(createAbortError("Cancelled"));
+      },
+    });
+    if (!task) throw new Error("Could not create retry task.");
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      if (externalAbortController.signal.aborted || (task.status as TaskStatus) === "cancelled") throw createAbortError(externalAbortController.signal.reason);
+      task.update({
+        status: "running",
+        title: descriptor.title ?? "Trying operation",
+        description: `Attempt ${attempt} of ${maxAttempts}`,
+        icon: descriptor.icon ?? "refresh",
+        progress: null,
+      });
+      emitEvent("retry:attempt", { task, attempt, maxAttempts } as unknown as UnknownRecord);
+
+      try {
+        const result = await descriptor.run({
+          attempt,
+          maxAttempts,
+          signal: externalAbortController.signal,
+          task,
+          progress: (value, next = {}) => task.setProgress(value, next),
         });
+        if (externalAbortController.signal.aborted || (task.status as TaskStatus) === "cancelled") throw createAbortError(externalAbortController.signal.reason);
+        task.success(resolvePhaseDescriptor(descriptor.success, result, {
+          title: "Completed",
+          description: `Succeeded on attempt ${attempt}.`,
+        }));
+        return result;
+      } catch (error: unknown) {
+        if (externalAbortController.signal.aborted || (task.status as TaskStatus) === "cancelled") {
+          if ((task.status as TaskStatus) !== "cancelled") await task.cancel("cancelled");
+          throw error;
+        }
+        if (attempt >= maxAttempts) {
+          task.error(error, resolvePhaseDescriptor(descriptor.error, error, {
+            title: "All attempts failed",
+            description: toErrorMessage(error),
+          }));
+          throw error;
+        }
 
-        await sleep(600);
+        let configuredBackoff: number;
+        if (Array.isArray(descriptor.backoff)) {
+          configuredBackoff = descriptor.backoff.length
+            ? Number(descriptor.backoff[Math.min(attempt - 1, descriptor.backoff.length - 1)])
+            : 1000 * 2 ** (attempt - 1);
+        } else if (typeof descriptor.backoff === "function") {
+          configuredBackoff = Number(descriptor.backoff(attempt, error));
+        } else if (descriptor.backoff !== undefined) {
+          configuredBackoff = Number(descriptor.backoff);
+        } else {
+          configuredBackoff = 1000 * 2 ** (attempt - 1);
+        }
+        const delay = Math.max(0, Number.isFinite(configuredBackoff) ? configuredBackoff : 0);
+        if (delay <= 0) continue;
+
+        const seconds = Math.max(1, Math.ceil(delay / 1000));
         task.update({
-          description: "Loading virou pulse.",
-          animation: "pulse",
+          status: "paused",
+          title: descriptor.retryTitle ?? "Retry scheduled",
+          description: `Attempt ${attempt} failed. Retry in ${seconds}s or retry now.`,
+          icon: "clock",
         });
-
-        await sleep(600);
-
-        for (const value of [18, 38, 62, 84, 100]) {
-          task.setProgress(value, {
-            description: `Playground carregado · ${value}%`,
-            animation: "progress",
-          });
-          await sleep(220);
-        }
-
-        task.success({
-          title: "Tudo pronto",
-          description: "Escolha uma API e clique em Executar.",
+        const decision = await showConfirmToast({
+          title: descriptor.retryTitle ?? "Try again?",
+          description: toErrorMessage(error),
+          icon: "refresh",
+          duration: 0,
+          dismissValue: "cancel",
+          countdown: { seconds, autoAction: "retry" },
+          details: toErrorDetails(error),
+          rejectOnActionError: false,
+          actions: [
+            { id: "cancel", label: "Cancel", icon: "circle-x", variant: "secondary", value: "cancel" },
+            {
+              id: "details",
+              label: "View details",
+              icon: "eye",
+              variant: "ghost",
+              keepOpen: true,
+              handle: ({ update }) => update({ details: toErrorDetails(error) }),
+            },
+            { id: "retry", label: "Retry now · {seconds}s", icon: "refresh", variant: "primary", value: "retry" },
+          ],
         });
-
-        await sleep(700);
-
-        if (typeof api.picker === "function") {
-          const selected = await api.picker({
-            title: "v4.9 · Media Picker mobile",
-            description: "Selecione algumas mídias para concluir a demo.",
-            items: DEMO_MEDIA,
-            columns: 2,
-            defaultAllSelected: true,
-            virtualizeAfter: 4,
-            downloadLabel: true,
-            confirmLabel: "Continuar",
-            selectAllLabel: "Tudo",
-            clearAllLabel: "Limpar",
-          });
-
-          if (selected) {
-            api.success({
-              title: "Picker funcionando",
-              description: `${selected.length} mídia(s) selecionada(s).`,
-            });
-          }
+        if (decision !== "retry") {
+          externalAbortController.abort(createAbortError("Cancelled"));
+          await task.cancel("cancelled");
+          throw error;
         }
       }
+    }
+    throw new Error("Retry loop ended unexpectedly.");
+  }
 
-      function bindEvents() {
-        document.addEventListener("click", (event) => {
-          const runButton = event.target.closest("[data-run]");
-          const copyButton = event.target.closest("[data-copy]");
-          const actionButton = event.target.closest("[data-action]");
+  function createTaskGroup(descriptor: TaskGroupDescriptor | string = {}): TaskGroup {
+    const options: TaskGroupDescriptor = isPlainObject(descriptor) ? { ...descriptor } as TaskGroupDescriptor : { title: String(descriptor ?? "Group") };
+    const id = String(options.id ?? `group-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    const existing = state.groups.get(id);
+    if (existing) return existing;
+    const children = new Map<string, TaskController>();
+    const weights = new Map<string, number>(Object.entries(options.weights ?? {}).map(([key, value]) => [key, Math.max(0, Number(value) || 0)]));
+    const metrics = new Map<string, { status: TaskStatus; progress: number | null; weight: number; contribution: number; unknown: boolean }>();
+    let totalWeight = 0;
+    let completedWeight = 0;
+    let unknownCount = 0;
+    let errorCount = 0;
+    let cancelledCount = 0;
+    let successCount = 0;
+    let finalized = false;
 
-          if (runButton) {
-            executeDemo(runButton.dataset.run, runButton);
-            return;
-          }
+    const parentTaskId = options.parentTaskId ?? `group:${id}`;
+    const staleParent = state.tasks.get(parentTaskId);
+    if (staleParent && (staleParent.dismissed || isTerminalTaskStatus(staleParent.status))) {
+      staleParent.dismiss("group-reused", true);
+    }
 
-          if (copyButton) {
-            const demo = demos.find(
-              (item) => item.id === copyButton.dataset.copy,
-            );
+    const parent = createTaskController({
+      id: parentTaskId,
+      title: options.title ?? "Task group",
+      description: options.description ?? "Waiting for tasks…",
+      icon: options.icon ?? "folder",
+      status: "queued",
+      scope: options.scope,
+      metadata: { ...(options.metadata ?? {}), groupId: id, groupRoot: true },
+      persist: options.persist,
+    });
+    if (!parent) throw new Error("Could not create task group parent.");
 
-            if (demo) {
-              copy(demo.code, copyButton);
-            }
+    let group!: TaskGroup;
+    const finishGroupRegistration = (): void => {
+      if (finalized) return;
+      finalized = true;
+      group.unsubscribe?.();
+      group.unsubscribe = undefined;
+      if (state.groups.get(id) === group) state.groups.delete(id);
+    };
 
-            return;
-          }
+    const removeMetric = (metric: { status: TaskStatus; progress: number | null; weight: number; contribution: number; unknown: boolean }): void => {
+      totalWeight -= metric.weight;
+      completedWeight -= metric.contribution;
+      if (metric.unknown) unknownCount -= 1;
+      if (metric.status === "error") errorCount -= 1;
+      if (metric.status === "cancelled") cancelledCount -= 1;
+      if (metric.status === "success") successCount -= 1;
+    };
+    const addMetric = (metric: { status: TaskStatus; progress: number | null; weight: number; contribution: number; unknown: boolean }): void => {
+      totalWeight += metric.weight;
+      completedWeight += metric.contribution;
+      if (metric.unknown) unknownCount += 1;
+      if (metric.status === "error") errorCount += 1;
+      if (metric.status === "cancelled") cancelledCount += 1;
+      if (metric.status === "success") successCount += 1;
+    };
+    const createMetric = (key: string, task: TaskController) => {
+      const weight = weights.has(key) ? Number(weights.get(key)) : 1;
+      const status = task.status;
+      const progress = task.progress;
+      const unknown = status !== "success" && progress === null;
+      const contribution = status === "success" ? weight : progress === null ? 0 : weight * progress;
+      return { status, progress, weight, contribution, unknown };
+    };
+    const updateMetric = (key: string, task: TaskController): void => {
+      const old = metrics.get(key);
+      if (old) removeMetric(old);
+      const next = createMetric(key, task);
+      metrics.set(key, next);
+      addMetric(next);
+    };
+    const rebuildMetrics = (): void => {
+      metrics.clear();
+      totalWeight = completedWeight = unknownCount = errorCount = cancelledCount = successCount = 0;
+      for (const [key, task] of children) updateMetric(key, task);
+    };
 
-          if (!actionButton) return;
-
-          const action = actionButton.dataset.action;
-          const api = getToast();
-
-          if (action === "quick-demo") {
-            quickDemo();
-          } else if (action === "copy-install") {
-            copy(INSTALL_CODE, actionButton);
-
-            api?.success?.({
-              title: "Instalação copiada",
-              description: "Cole a tag no seu HTML ou userscript.",
-            });
-          } else if (action === "minimize") {
-            api?.minimize?.();
-          } else if (action === "toggle-theme") {
-            const resolved = api?.toggleTheme?.();
-            if (resolved) {
-              api.info?.({
-                title: `Tema ${resolved}`,
-                description: "Tema do Rod Toaster alterado em runtime.",
-                duration: 2200,
-              });
-            }
-          }
-        });
-
-        search.addEventListener("input", filterDemos);
-
-        window.addEventListener("keydown", (event) => {
-          if (
-            event.key === "/" &&
-            !["INPUT", "TEXTAREA", "SELECT"].includes(
-              document.activeElement?.tagName,
-            )
-          ) {
-            event.preventDefault();
-            search.focus();
-          }
-        });
+    const renderParent = (): void => {
+      if (finalized) return;
+      const count = children.size;
+      if (!count) {
+        parent.update({ status: "queued", progress: null });
+        return;
       }
+      if (errorCount > 0) {
+        parent.error("One or more child tasks failed.", { title: options.errorTitle ?? "Task group failed" });
+        finishGroupRegistration();
+        return;
+      }
+      if (cancelledCount > 0) {
+        parent.update({ status: "cancelled", title: options.title ?? "Task group cancelled", description: "A child task was cancelled." });
+        finishGroupRegistration();
+        return;
+      }
+      if (successCount === count) {
+        parent.success({
+          title: options.successTitle ?? options.title ?? "All tasks completed",
+          description: options.successDescription ?? `${count} tasks completed.`,
+        });
+        finishGroupRegistration();
+        return;
+      }
+      parent.update({
+        status: "running",
+        title: options.title ?? "Task group",
+        description: `${successCount}/${count} tasks completed`,
+        progress: unknownCount > 0 || totalWeight <= 0 ? null : completedWeight / totalWeight,
+      });
+    };
 
-      makeSidebar();
-      makeSections();
-      bindEvents();
-      filterDemos();
-      updateRuntimeStatus();
-      installIntersectionObserver();
+    group = {
+      id,
+      parent,
+      children,
+      weights,
+      task(keyOrDescriptor: string | TaskDescriptor, maybeDescriptor: TaskDescriptor = {}) {
+        if (finalized) return null;
+        const childOptions: TaskDescriptor = typeof keyOrDescriptor === "string"
+          ? { ...maybeDescriptor, key: maybeDescriptor.key ?? keyOrDescriptor, title: maybeDescriptor.title ?? keyOrDescriptor }
+          : { ...keyOrDescriptor };
+        const key = String(childOptions.key ?? childOptions.id ?? `task-${children.size + 1}`);
+        if (children.has(key)) return children.get(key) ?? null;
+        const child = createTaskController({
+          ...childOptions,
+          id: childOptions.id ?? `${id}:${key}`,
+          scope: childOptions.scope ?? options.scope,
+          metadata: { ...(childOptions.metadata ?? {}), groupId: id, groupKey: key },
+          persist: childOptions.persist ?? options.persist,
+        });
+        if (child) {
+          children.set(key, child);
+          updateMetric(key, child);
+          renderParent();
+        }
+        return child;
+      },
+      setWeights(nextWeights: Record<string, number> = {}) {
+        Object.entries(nextWeights).forEach(([key, value]) => weights.set(String(key), Math.max(0, Number(value) || 0)));
+        rebuildMetrics();
+        renderParent();
+        return group;
+      },
+      recompute() {
+        rebuildMetrics();
+        renderParent();
+        return group;
+      },
+      dismissAll(reason = "group-dismiss") {
+        children.forEach((task) => task.dismiss(reason));
+        parent.dismiss(reason);
+        finishGroupRegistration();
+      },
+      complete(next = {}) {
+        if (!finalized) parent.success(next);
+        finishGroupRegistration();
+        return group;
+      },
+    };
 
-      setTimeout(updateRuntimeStatus, 1500);
-    })();
-  </script>
-</body>
-</html>
+    group.unsubscribe = addEventListenerInternal("task:update", (event) => {
+      const candidateTask = event.task;
+      if (!isTaskController(candidateTask) || candidateTask === parent) return;
+      const snapshot = candidateTask.snapshot();
+      if (snapshot.metadata.groupId !== id) return;
+      const key = String(snapshot.metadata.groupKey ?? "");
+      if (!key || !children.has(key)) return;
+      updateMetric(key, candidateTask);
+      renderParent();
+    });
+    state.groups.set(id, group);
+    emitEvent("group:create", { group } as unknown as UnknownRecord);
+    return group;
+  }
+
+  function isTaskController(value: unknown): value is TaskController {
+    return isObject(value) && "snapshot" in value && typeof (value as TaskController).snapshot === "function";
+  }
+
+  function restorePersistedTasks(): TaskController[] {
+    if (state.restoredTasks) return [];
+    state.restoredTasks = true;
+    const now = Date.now();
+    const restored: TaskController[] = [];
+    getPersistedTaskSnapshots().forEach((snapshot) => {
+      const terminal = isTerminalTaskStatus(normalizeTaskStatus(snapshot.status));
+      if (terminal && now - Number(snapshot.updatedAt || 0) > state.config.taskTerminalRetention) return;
+      const wasActive = snapshot.status === "running" || snapshot.status === "queued";
+      const task = createTaskController({
+        ...snapshot,
+        status: wasActive ? "paused" : snapshot.status,
+        description: wasActive
+          ? `${snapshot.description}${snapshot.description ? " · " : ""}Restored after reload. Resume manually.`
+          : snapshot.description,
+        restored: true,
+        orphaned: true,
+        persist: true,
+        pausable: false,
+        cancellable: true,
+      });
+      if (task) restored.push(task);
+    });
+    emitEvent("tasks:restore", { tasks: restored } as unknown as UnknownRecord);
+    return restored;
+  }
+
+  function createScope(name: string, defaults: ToastOptions = {}): ScopeApi {
+    const scopeName = String(name || "default");
+    const enrichDescriptor = <T extends ToastOptions | TaskDescriptor | TaskGroupDescriptor>(descriptor: T | string | undefined): T => {
+      const source: object = isPlainObject(descriptor) ? descriptor : { title: String(descriptor ?? "") };
+      return { ...defaults, ...source, scope: scopeName } as unknown as T;
+    };
+    const withOptions = (inputArgs: unknown[]): unknown[] => {
+      const args = [...inputArgs];
+      let trailing: ToastOptions = {};
+      if (args.length && isOptionsCandidate(args.at(-1))) {
+        trailing = { ...(args.pop() as ToastOptions) };
+        delete trailing[OPTIONS_SYMBOL];
+      }
+      return [...args, getToastApi().options({ ...defaults, ...trailing, scope: scopeName })];
+    };
+    const semantic = (type: ToastType, args: unknown[]): ToastController | null => {
+      if (args.length === 1 && isRichDescriptor(args[0])) return showRichToast(enrichDescriptor(args[0]), type);
+      if (args[0] instanceof Error) {
+        const trailing = isOptionsCandidate(args[1]) ? { ...args[1] } : {};
+        return showSemanticToast(type, [args[0], getToastApi().options({ ...defaults, ...trailing, scope: scopeName })]);
+      }
+      return showSemanticToast(type, withOptions(args));
+    };
+    return {
+      name: scopeName,
+      show: (...args) => getToastApi()(...withOptions(args)),
+      error: (...args) => semantic("error", args),
+      info: (...args) => semantic("info", args),
+      success: (...args) => semantic("success", args),
+      warning: (...args) => semantic("warning", args),
+      loading: (descriptor) => showLoadingToast([enrichDescriptor(descriptor)]),
+      multiLoading: (descriptor) => showMultiLoadingToast(enrichDescriptor(descriptor) as MultiLoadingDescriptor),
+      confirm: (descriptor) => showConfirmToast(enrichDescriptor(descriptor)),
+      prompt: (descriptor) => showPromptToast(enrichDescriptor(descriptor)),
+      select: <T = unknown>(descriptor?: SelectOptions<T>) => showSelectToast<T>({ ...defaults, ...(descriptor ?? {}), scope: scopeName } as SelectOptions<T>),
+      picker: <T extends PickerSource = PickerSource>(descriptor?: PickerOptions<T>) => showPickerToast<T>({ ...defaults, ...(descriptor ?? {}), scope: scopeName } as PickerOptions<T>),
+      undo: (descriptor) => showUndoToast(enrichDescriptor(descriptor)),
+      task: (descriptor) => createTaskController(enrichDescriptor(descriptor)),
+      promise: <T>(input: Promise<T> | ((context: TaskExecutorContext & { toast: ToasterApi }) => Promise<T>), descriptor?: PromiseDescriptor<T>) => showPromiseToast(input, enrichDescriptor(descriptor) as PromiseDescriptor<T>),
+      retry: <T>(descriptor: RetryDescriptor<T>) => showRetryToast(enrichDescriptor(descriptor) as RetryDescriptor<T>),
+      group: (descriptor) => createTaskGroup(enrichDescriptor(descriptor)),
+      dismissAll(immediate = false) {
+        for (let index = state.toasts.length - 1; index >= 0; index -= 1) {
+          const record = state.toasts[index];
+          if (record.options.scope === scopeName) record.dismiss(immediate, null, "scope-dismissAll");
+        }
+      },
+      getTasks: () => [...state.tasks.values()].filter((task) => task.snapshot().scope === scopeName),
+      minimize: () => setManagerMinimized(true),
+      restore: () => setManagerMinimized(false),
+    };
+  }
+
+  function showDebugToast(inputArgs: unknown[]): ToastController | null {
+    const parsed = parseArguments(inputArgs, "debug");
+    if (!shouldRenderDebug(parsed.args)) {
+      runDownloadFallback(parsed.args);
+      return null;
+    }
+    return showToast(inputArgs, "debug");
+  }
+
+  function toast(...args: unknown[]): ToastController | null {
+    return showToast(args, null);
+  }
+
+  const toastApi = toast as ToasterApi;
+
+  toastApi.error = (...args) => showSemanticToast("error", args);
+  toastApi.info = (...args) => showSemanticToast("info", args);
+  toastApi.success = (...args) => showSemanticToast("success", args);
+  toastApi.warning = (...args) => showSemanticToast("warning", args);
+  toastApi.message = (descriptor = {}) => showRichToast(descriptor);
+  toastApi.copyError = (error, options = {}) => showRichToast({
+    ...options,
+    type: "error",
+    title: options.title ?? (error instanceof Error ? error.message : "Error"),
+    description: options.description ?? (error instanceof Error ? error.name : "Error"),
+    error,
+    copyError: true,
+    icon: options.icon ?? "circle-x",
+  }, "error");
+  toastApi.loading = (...args) => showLoadingToast(args);
+  toastApi.multiLoading = (descriptor = {}) => showMultiLoadingToast(descriptor);
+  toastApi.confirm = (descriptor = {}) => showConfirmToast(descriptor);
+  toastApi.prompt = (descriptor = {}) => showPromptToast(descriptor);
+  toastApi.select = <T = unknown>(descriptor: SelectOptions<T> = {}) => showSelectToast<T>(descriptor);
+  toastApi.picker = <T extends PickerSource = PickerSource>(descriptor: PickerOptions<T> = {}) => showPickerToast(descriptor);
+  toastApi.undo = (descriptor = {}) => showUndoToast(descriptor);
+  toastApi.task = (descriptor = {}) => createTaskController(descriptor);
+  toastApi.promise = <T>(input: Promise<T> | ((context: TaskExecutorContext & { toast: ToasterApi }) => Promise<T>), descriptor: PromiseDescriptor<T> = {}) => showPromiseToast(input, descriptor);
+  toastApi.retry = <T>(descriptor: RetryDescriptor<T>) => showRetryToast(descriptor);
+  toastApi.group = (descriptor = {}) => createTaskGroup(descriptor);
+  toastApi.scope = (name, defaults = {}) => createScope(name, defaults);
+  toastApi.debug = (...args) => showDebugToast(args);
+  toastApi.inspect = (...args) => showDebugToast(args);
+
+  toastApi.options = (options = {}) => {
+    const normalized: ToastOptions = { ...options };
+    Object.defineProperty(normalized, OPTIONS_SYMBOL, { value: true, enumerable: false });
+    return normalized;
+  };
+
+  toastApi.with = (options = {}) => {
+    const markedOptions = toastApi.options(options);
+    return (...args: unknown[]) => toastApi(...args, markedOptions);
+  };
+
+  toastApi.update = (id, ...inputArgs) => {
+    const record = state.recordsById.get(String(id));
+    if (!record || record.removed) return null;
+    record.lastSeenAt = Date.now();
+    if (record.externalUpdate && inputArgs.length && isPlainObject(inputArgs[0])) {
+      return record.externalUpdate(inputArgs[0] as ToastOptions);
+    }
+    if (record.options.loading) return record.updateLoading(inputArgs);
+    const parsed = parseArguments(inputArgs, null);
+    return record.update(parsed.args, parsed.options);
+  };
+
+  toastApi.progress = (id, value, next = {}) => {
+    const record = state.recordsById.get(String(id));
+    if (!record || record.removed || !record.options.loading) return null;
+    return record.updateLoading([{ ...next, progress: value, animation: next.animation ?? "progress" }]);
+  };
+
+  toastApi.resolve = (id, type = "success", ...inputArgs) => {
+    const record = state.recordsById.get(String(id));
+    if (!record || record.removed || !record.options.loading) return null;
+    const normalizedType: Exclude<ToastType, "default" | "debug"> =
+      type === "error" || type === "info" || type === "warning" || type === "success" ? type : "success";
+    return record.settleLoading(normalizedType, inputArgs);
+  };
+
+  toastApi.dismiss = (target, reason = "programmatic", immediate = false) => {
+    if (target && typeof target === "object" && "dismiss" in target && typeof target.dismiss === "function") {
+      target.dismiss(reason, immediate);
+      return true;
+    }
+    if (target != null) {
+      const record = state.recordsById.get(String(target));
+      if (record && !record.removed) {
+        record.dismiss(Boolean(immediate), null, String(reason || "programmatic"));
+        return true;
+      }
+    }
+    return false;
+  };
+
+  toastApi.dismissAll = (immediate = false) => {
+    const hostWindow = state.hostWindow ?? initialHostWindow;
+    let delayIndex = 0;
+    for (let index = state.toasts.length - 1; index >= 0; index -= 1) {
+      const record = state.toasts[index];
+      if (immediate) record.dismiss(true, null, "dismissAll");
+      else hostWindow.setTimeout(() => record.dismiss(false, null, "dismissAll"), delayIndex * 28);
+      delayIndex += 1;
+    }
+  };
+
+  toastApi.on = (eventName, listener) => addEventListenerInternal(eventName, listener);
+  toastApi.off = (eventName, listener) => {
+    const bucket = state.listeners.get(String(eventName || "*"));
+    if (!bucket) return false;
+    const removed = bucket.delete(listener);
+    if (!bucket.size) state.listeners.delete(String(eventName || "*"));
+    return removed;
+  };
+  toastApi.once = (eventName, listener) => {
+    const unsubscribe = addEventListenerInternal(eventName, (event) => {
+      unsubscribe();
+      listener(event);
+    });
+    return unsubscribe;
+  };
+  toastApi.emit = (eventName, payload = {}) => emitEvent(eventName, payload);
+  toastApi.getTasks = () => [...state.tasks.values()];
+  toastApi.getTask = (id) => state.tasks.get(String(id)) ?? null;
+  toastApi.restoreTasks = () => restorePersistedTasks();
+  toastApi.clearPersistedTasks = () => {
+    if (state.taskPersistTimer !== null) {
+      (state.hostWindow ?? initialHostWindow).clearTimeout(state.taskPersistTimer);
+      state.taskPersistTimer = null;
+    }
+    const storage = getTaskStorage();
+    safeCall(() => storage?.removeItem(state.config.taskStorageKey), undefined);
+    state.restoredTasks = false;
+  };
+
+  toastApi.expand = () => {
+    setManagerMinimized(false);
+    setStackExpanded(true);
+  };
+  toastApi.collapse = () => setStackExpanded(false);
+  toastApi.minimize = () => setManagerMinimized(true);
+  toastApi.restore = () => setManagerMinimized(false);
+  toastApi.toggleMinimized = () => setManagerMinimized(!state.managerMinimized);
+  toastApi.isMinimized = () => state.managerMinimized;
+  toastApi.toggleStack = () => {
+    setStackExpanded(!state.stackExpanded);
+    return state.stackExpanded;
+  };
+  toastApi.loadInspector = () => loadObjectInspector();
+
+  toastApi.configure = (nextConfig = {}) => {
+    const previousTheme = state.config.theme;
+    const previousSize = state.config.size;
+    const previousPersistTasks = state.config.persistTasks;
+    const previousUseTopLayer = state.config.useTopLayer;
+    const previousHostConfig = {
+      useShadowRoot: state.config.useShadowRoot,
+      shadowRootMode: state.config.shadowRootMode,
+      fallbackToLightDom: state.config.fallbackToLightDom,
+    };
+    const keys = Object.keys(DEFAULT_CONFIG) as Array<keyof ToasterConfig>;
+    for (const key of keys) {
+      if (hasOwn(nextConfig, key)) {
+        (state.config[key] as unknown) = nextConfig[key];
+      }
+    }
+
+    state.config.maxToasts = Math.max(1, Number(state.config.maxToasts) || DEFAULT_CONFIG.maxToasts);
+    state.config.inspectDepth = Math.max(0, Number(state.config.inspectDepth) || 0);
+    state.config.inspectItems = Math.max(0, Number(state.config.inspectItems) || 0);
+    state.config.previewItems = Math.max(0, Number(state.config.previewItems) || 0);
+    state.config.stackVisible = Math.min(3, Math.max(1, Number(state.config.stackVisible) || DEFAULT_CONFIG.stackVisible));
+    state.config.stackMaxHeight = Math.max(180, Number(state.config.stackMaxHeight) || DEFAULT_CONFIG.stackMaxHeight);
+    state.config.stackViewportRatio = clamp(Number(state.config.stackViewportRatio) || DEFAULT_CONFIG.stackViewportRatio, 0.2, 0.5);
+    state.config.stackAutoCollapseThreshold = Math.max(2, Number(state.config.stackAutoCollapseThreshold) || DEFAULT_CONFIG.stackAutoCollapseThreshold);
+    state.config.swipeThreshold = Math.max(24, Number(state.config.swipeThreshold) || DEFAULT_CONFIG.swipeThreshold);
+    state.config.swipeVelocity = Math.max(0.05, Number(state.config.swipeVelocity) || DEFAULT_CONFIG.swipeVelocity);
+    state.config.objectInspectorLoadTimeout = Math.max(1000, Number(state.config.objectInspectorLoadTimeout) || DEFAULT_CONFIG.objectInspectorLoadTimeout);
+    state.config.virtualizeAfter = Math.max(1, Number(state.config.virtualizeAfter) || DEFAULT_CONFIG.virtualizeAfter);
+    state.config.virtualRowHeight = Math.max(16, Number(state.config.virtualRowHeight) || DEFAULT_CONFIG.virtualRowHeight);
+    state.config.virtualOverscan = Math.max(1, Number(state.config.virtualOverscan) || DEFAULT_CONFIG.virtualOverscan);
+    state.config.virtualMaxHeight = Math.max(120, Number(state.config.virtualMaxHeight) || DEFAULT_CONFIG.virtualMaxHeight);
+    state.config.theme = normalizeTheme(state.config.theme);
+    state.config.size = normalizeToastSize(state.config.size);
+    state.config.position = ALLOWED_POSITIONS.has(state.config.position) ? state.config.position : DEFAULT_CONFIG.position;
+    state.config.stacked = Boolean(state.config.stacked);
+    state.config.stackToolbar = Boolean(state.config.stackToolbar);
+    state.config.persistAcrossSpaNavigation = Boolean(state.config.persistAcrossSpaNavigation);
+    state.config.minimizeOnSpaNavigation = Boolean(state.config.minimizeOnSpaNavigation);
+    state.config.useTopLayer = Boolean(state.config.useTopLayer);
+    state.config.idleHostTtl = Number.isFinite(Number(state.config.idleHostTtl)) ? Math.max(0, Number(state.config.idleHostTtl)) : DEFAULT_CONFIG.idleHostTtl;
+    state.config.persistTasks = Boolean(state.config.persistTasks);
+    state.config.taskProgressPersistInterval = Math.max(100, Number(state.config.taskProgressPersistInterval) || DEFAULT_CONFIG.taskProgressPersistInterval);
+    state.config.restoreTasksOnLoad = Boolean(state.config.restoreTasksOnLoad);
+    state.config.taskStorage = state.config.taskStorage === "localStorage" ? "localStorage" : "sessionStorage";
+    state.config.taskStorageKey = String(state.config.taskStorageKey || DEFAULT_CONFIG.taskStorageKey);
+    state.config.maxPersistedTasks = Math.max(1, Number(state.config.maxPersistedTasks) || DEFAULT_CONFIG.maxPersistedTasks);
+    state.config.taskTerminalRetention = Number.isFinite(Number(state.config.taskTerminalRetention))
+      ? Math.max(0, Number(state.config.taskTerminalRetention))
+      : DEFAULT_CONFIG.taskTerminalRetention;
+    state.config.successExitAnimation = Boolean(state.config.successExitAnimation);
+    state.config.successCollapseDuration = Math.max(120, Number(state.config.successCollapseDuration) || DEFAULT_CONFIG.successCollapseDuration);
+    state.config.successExitDuration = Math.max(80, Number(state.config.successExitDuration) || DEFAULT_CONFIG.successExitDuration);
+    state.config.loadingDuration = Number.isFinite(Number(state.config.loadingDuration)) ? Number(state.config.loadingDuration) : DEFAULT_CONFIG.loadingDuration;
+    state.config.loadingAnimation = normalizeLoadingAnimation(state.config.loadingAnimation);
+    state.config.loadingIcon = state.config.loadingIcon === false ? false : hasOwn(SVG_ICONS, state.config.loadingIcon) ? state.config.loadingIcon : DEFAULT_CONFIG.loadingIcon;
+    state.config.loadingSuccessDuration = Math.max(0, Number(state.config.loadingSuccessDuration) || DEFAULT_CONFIG.loadingSuccessDuration);
+    state.config.loadingErrorDuration = Math.max(0, Number(state.config.loadingErrorDuration) || DEFAULT_CONFIG.loadingErrorDuration);
+    state.config.loadingInfoDuration = Math.max(0, Number(state.config.loadingInfoDuration) || DEFAULT_CONFIG.loadingInfoDuration);
+    state.config.loadingWarningDuration = Math.max(0, Number(state.config.loadingWarningDuration) || DEFAULT_CONFIG.loadingWarningDuration);
+    state.config.coalescePersistent = Boolean(state.config.coalescePersistent);
+    state.config.swipeToDismiss = Boolean(state.config.swipeToDismiss);
+    state.config.virtualizeInspector = Boolean(state.config.virtualizeInspector);
+    state.config.unmountInspectorOnCollapse = Boolean(state.config.unmountInspectorOnCollapse);
+    state.config.useShadowRoot = Boolean(state.config.useShadowRoot);
+    state.config.fallbackToLightDom = Boolean(state.config.fallbackToLightDom);
+    state.config.shadowRootMode = state.config.shadowRootMode === "open" ? "open" : "closed";
+
+    if (typeof state.config.shouldDebug !== "boolean" && typeof state.config.shouldDebug !== "function") {
+      state.config.shouldDebug = DEFAULT_CONFIG.shouldDebug;
+    }
+    if (state.config.downloadFallback !== null && typeof state.config.downloadFallback !== "function") {
+      state.config.downloadFallback = DEFAULT_CONFIG.downloadFallback;
+    }
+    if (state.config.objectInspectorSrc !== null && typeof state.config.objectInspectorSrc !== "string") {
+      state.config.objectInspectorSrc = DEFAULT_CONFIG.objectInspectorSrc;
+    }
+
+    if (!state.config.persistAcrossSpaNavigation) state.spaCleanup?.();
+    else if (state.hostWindow && state.hostDocument) installSpaPersistence(state.hostWindow, state.hostDocument);
+
+    if (
+      previousUseTopLayer !== state.config.useTopLayer &&
+      state.hostWindow &&
+      state.hostDocument &&
+      state.hostElement
+    ) {
+      if (state.config.useTopLayer) {
+        installTopLayerGuard(state.hostWindow, state.hostDocument);
+        promoteHostToTopLayer(true);
+      } else {
+        disableHostTopLayer();
+      }
+    }
+
+    const hostModeChanged =
+      previousHostConfig.useShadowRoot !== state.config.useShadowRoot ||
+      previousHostConfig.shadowRootMode !== state.config.shadowRootMode ||
+      previousHostConfig.fallbackToLightDom !== state.config.fallbackToLightDom;
+    if (hostModeChanged && state.hostElement) {
+      destroyHost({ keepPersistence: state.config.persistAcrossSpaNavigation });
+      ensureHost();
+    }
+    while (getNotificationRecords().length > state.config.maxToasts) {
+      const notifications = getNotificationRecords();
+      const candidate = notifications.find((record) => record.options.duration > 0) ?? notifications[0];
+      if (!candidate) break;
+      candidate.dismiss(true, null, "limit");
+    }
+
+    if (previousPersistTasks && !state.config.persistTasks && !hasPersistableTasks() && state.taskPersistTimer !== null) {
+      (state.hostWindow ?? initialHostWindow).clearTimeout(state.taskPersistTimer);
+      state.taskPersistTimer = null;
+    }
+
+    if (previousTheme !== state.config.theme) {
+      installThemeObserver();
+    } else if (state.container && state.container.dataset.theme !== state.resolvedTheme) {
+      syncTheme();
+    }
+
+    if (state.container) {
+      setDataValue(state.container, "position", state.config.position);
+      setDataValue(state.container, "size", state.config.size);
+      syncStackLayout();
+    }
+
+    if (previousSize !== state.config.size && hasEventListeners("size:change")) {
+      emitEvent("size:change", { previousSize, size: state.config.size });
+    }
+
+    return { ...state.config, resolvedTheme: state.resolvedTheme };
+  };
+
+  toastApi.setTheme = (theme) => {
+    const previousTheme = state.config.theme;
+    const previousResolvedTheme = state.resolvedTheme;
+    state.config.theme = normalizeTheme(theme);
+    installThemeObserver();
+    syncTheme();
+    emitEvent("theme:change", {
+      previousTheme,
+      previousResolvedTheme,
+      theme: state.config.theme,
+      resolvedTheme: state.resolvedTheme,
+    });
+    return state.resolvedTheme;
+  };
+  toastApi.getTheme = () => ({ theme: state.config.theme, resolvedTheme: state.resolvedTheme });
+  toastApi.toggleTheme = () => toastApi.setTheme(state.resolvedTheme === "dark" ? "light" : "dark");
+  toastApi.setSize = (size) => {
+    const previousSize = state.config.size;
+    state.config.size = normalizeToastSize(size);
+    if (state.container) {
+      setDataValue(state.container, "size", state.config.size);
+      syncStackLayout();
+    }
+    if (previousSize !== state.config.size && hasEventListeners("size:change")) {
+      emitEvent("size:change", { previousSize, size: state.config.size });
+    }
+    return state.config.size;
+  };
+  toastApi.getSize = () => state.config.size;
+  toastApi.getConfig = () => ({ ...state.config, resolvedTheme: state.resolvedTheme });
+  toastApi.getHostMode = () => state.hostMode;
+  toastApi.bringToFront = () => {
+    ensureHost();
+    return promoteHostToTopLayer(true);
+  };
+  toastApi.isTopLayer = () => isHostInTopLayer();
+  toastApi.destroy = (reason = "destroy") => {
+    // Persist the last coherent task state before teardown. Dismiss callbacks are
+    // suppressed from rewriting storage while the runtime is being destroyed.
+    flushTaskSnapshots();
+    state.destroying = true;
+    const records = [...state.toasts];
+    for (const record of records) record.dismiss(true, null, reason);
+    for (const group of [...state.groups.values()]) group.unsubscribe?.();
+    state.groups.clear();
+    if (state.taskPersistTimer !== null) {
+      (state.hostWindow ?? initialHostWindow).clearTimeout(state.taskPersistTimer);
+      state.taskPersistTimer = null;
+    }
+    state.listeners.clear();
+    state.dialogStack.length = 0;
+    state.failedImageKeys.clear();
+    state.spaCleanup?.();
+    state.spaCleanup = null;
+    state.historyRestore?.();
+    state.historyRestore = null;
+    destroyHost();
+    state.api = null;
+    safeCall(() => {
+      if (typedInitialHostWindow[STATE_SYMBOL] === state) delete typedInitialHostWindow[STATE_SYMBOL];
+    }, undefined);
+  };
+  toastApi.noConflict = () => {
+    if (typedInitialHostWindow[TOAST_GLOBAL] === toastApi) {
+      if (previousRodToaster) typedInitialHostWindow[TOAST_GLOBAL] = previousRodToaster;
+      else safeCall(() => { delete typedInitialHostWindow[TOAST_GLOBAL]; }, undefined);
+    }
+    if (typedInitialHostWindow.toast === toastApi) {
+      if (previousToastGlobal) typedInitialHostWindow.toast = previousToastGlobal;
+      else safeCall(() => { delete typedInitialHostWindow.toast; }, undefined);
+    }
+    if (typedGlobalWindow[TOAST_GLOBAL] === toastApi) {
+      if (previousRodToaster) typedGlobalWindow[TOAST_GLOBAL] = previousRodToaster;
+      else safeCall(() => { delete typedGlobalWindow[TOAST_GLOBAL]; }, undefined);
+    }
+    if (typedGlobalWindow.toast === toastApi) {
+      if (previousToastGlobal) typedGlobalWindow.toast = previousToastGlobal;
+      else safeCall(() => { delete typedGlobalWindow.toast; }, undefined);
+    }
+    return toastApi;
+  };
+  toastApi.repairHost = () => {
+    const host = ensureHost();
+    if (host && state.toasts.length) promoteHostToTopLayer(false);
+    return state.hostElement;
+  };
+
+  Object.defineProperty(toastApi, "version", { value: VERSION, enumerable: true });
+  Object.defineProperty(toastApi, "objectInspector", {
+    configurable: true,
+    enumerable: true,
+    get: () => getObjectInspectorApi(),
+  });
+
+  state.api = toastApi;
+
+  try {
+    Object.defineProperty(typedInitialHostWindow, TOAST_GLOBAL, {
+      value: toastApi,
+      configurable: true,
+      writable: true,
+    });
+  } catch {
+    typedInitialHostWindow[TOAST_GLOBAL] = toastApi;
+  }
+
+  typedGlobalWindow[TOAST_GLOBAL] = toastApi;
+  typedGlobalWindow.toast = toastApi;
+  (globalThis as typeof globalThis & { RodToaster?: ToasterApi }).RodToaster = toastApi;
+
+  if (state.config.restoreTasksOnLoad) {
+    (initialHostWindow.setTimeout ?? globalWindow.setTimeout)(() => {
+      safeCall(() => restorePersistedTasks(), []);
+    }, 0);
+  }
+})(window);
+
+export default {};
