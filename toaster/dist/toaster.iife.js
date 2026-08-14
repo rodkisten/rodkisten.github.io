@@ -1,4 +1,4 @@
-/* Auto-generated from toaster/toaster.ts. at 8/14/2026, 12:06:03 PM Do not edit directly. */
+/* Auto-generated from toaster/toaster.ts. at 8/14/2026, 12:12:55 PM Do not edit directly. */
 var RodToaster = (function() {
 
 //#region \0rolldown/runtime.js
@@ -22,7 +22,7 @@ var RodToaster = (function() {
 	var toaster_exports = /* @__PURE__ */ __exportAll({ default: () => toaster_default });
 	(function installRodToaster(globalWindow) {
 		"use strict";
-		const VERSION = "4.7.2";
+		const VERSION = "4.8.0";
 		const TOAST_GLOBAL = "RodToaster";
 		const INSPECTOR_GLOBAL = "RodObjectInspector";
 		const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -532,13 +532,32 @@ var RodToaster = (function() {
 			const candidate = value;
 			return typeof candidate.loading === "function" && typeof candidate.success === "function" && typeof candidate.error === "function" && typeof candidate.confirm === "function" && typeof candidate.picker === "function" && typeof candidate.multiLoading === "function" && typeof candidate.bringToFront === "function" && typeof candidate.destroy === "function";
 		}
-		if (isValidToaster(existingToaster)) {
+		function compareVersions(left, right) {
+			const parse = (value) => String(value ?? "").trim().split(/[.+-]/, 1)[0].split(".").slice(0, 4).map((part) => {
+				const numeric = Number.parseInt(part, 10);
+				return Number.isFinite(numeric) ? numeric : 0;
+			});
+			const leftParts = parse(left);
+			const rightParts = parse(right);
+			const length = Math.max(leftParts.length, rightParts.length, 3);
+			for (let index = 0; index < length; index += 1) {
+				const leftPart = leftParts[index] ?? 0;
+				const rightPart = rightParts[index] ?? 0;
+				if (leftPart > rightPart) return 1;
+				if (leftPart < rightPart) return -1;
+			}
+			return 0;
+		}
+		function canReuseToaster(value) {
+			return isValidToaster(value) && compareVersions(value.version, VERSION) >= 0;
+		}
+		const existingState = safeCall(() => typedInitialHostWindow[STATE_SYMBOL] ?? null, null);
+		if (canReuseToaster(existingToaster)) {
 			typedGlobalWindow[TOAST_GLOBAL] = existingToaster;
 			typedGlobalWindow.toast = existingToaster;
 			return;
 		}
-		const existingState = safeCall(() => typedInitialHostWindow[STATE_SYMBOL] ?? null, null);
-		if (isValidToaster(existingState?.api)) {
+		if (canReuseToaster(existingState?.api)) {
 			typedGlobalWindow[TOAST_GLOBAL] = existingState.api;
 			typedGlobalWindow.toast = existingState.api;
 			return;
@@ -560,6 +579,9 @@ var RodToaster = (function() {
 			if (legacy.taskPersistTimer != null) safeCall(() => (legacy.hostWindow ?? initialHostWindow).clearTimeout(legacy.taskPersistTimer), void 0);
 			safeCall(() => legacy.hostElement?.remove(), void 0);
 		}
+		const staleExistingToaster = existingToaster;
+		const staleStateApi = safeCall(() => existingState?.api ?? null, null);
+		if (isValidToaster(staleExistingToaster) && staleExistingToaster !== staleStateApi && compareVersions(staleExistingToaster.version, VERSION) < 0) safeCall(() => staleExistingToaster.destroy("upgrade"), void 0);
 		teardownLegacyRuntime(existingState);
 		safeCall(() => initialHostWindow.document.getElementById(TOAST_HOST_ID)?.remove(), void 0);
 		safeCall(() => {
@@ -2578,12 +2600,11 @@ var RodToaster = (function() {
         position: relative;
         isolation: isolate;
         display: block;
+        align-self: start;
         width: 100%;
         height: auto;
         min-width: 0;
         min-height: 0;
-        aspect-ratio: var(--rod-picker-aspect-ratio, 1 / 1);
-        align-self: start;
         padding: 0;
         overflow: hidden;
         border: 1px solid var(--rod-border);
@@ -2591,11 +2612,25 @@ var RodToaster = (function() {
         outline: 0;
         background: linear-gradient(145deg, var(--rod-overlay), transparent), var(--rod-surface-raised);
         color: var(--rod-text);
+        line-height: 0;
         cursor: pointer;
         touch-action: manipulation;
-        content-visibility: visible;
-        contain: none;
+        contain: layout paint style;
         transition: border-color 170ms, box-shadow 220ms, opacity 170ms, transform 300ms var(--rod-ease-spring);
+      }
+
+      /*
+       * Do not depend on CSS aspect-ratio for picker cells. WebKit can resolve
+       * intrinsic replaced-element sizes incorrectly inside a scrollable grid,
+       * producing the tall/overlapping cards seen on iOS. A normal-flow ratio
+       * spacer gives Grid a deterministic block-size before any image decodes.
+       */
+      .rod-toast__picker-item::before {
+        content: "";
+        display: block;
+        width: 100%;
+        padding-block-start: var(--rod-picker-aspect-padding, 100%);
+        pointer-events: none;
       }
 
       .rod-toast__picker-item:hover:not(:disabled),
@@ -2620,17 +2655,13 @@ var RodToaster = (function() {
         filter: grayscale(.35);
       }
 
-      @supports(-webkit-touch-callout:none) {
+      @supports (-webkit-touch-callout: none) {
         .rod-toast__picker-grid {
           grid-auto-flow: row;
         }
+
         .rod-toast__picker-item {
-          transform: none!important;
-          contain: none!important;
-          content-visibility: visible!important;
-        }
-        .rod-toast__picker-media {
-          transform: translateZ(0);
+          transform: none !important;
         }
       }
 
@@ -5803,6 +5834,28 @@ var RodToaster = (function() {
 			}
 			return selected;
 		}
+		function normalizePickerAspectRatio(value) {
+			const fallbackRatio = 1;
+			const source = String(value ?? "").trim();
+			let ratio = fallbackRatio;
+			if (source) {
+				const fraction = source.match(/^([0-9]*\.?[0-9]+)\s*(?:\/|:)\s*([0-9]*\.?[0-9]+)$/);
+				if (fraction) {
+					const width = Number(fraction[1]);
+					const height = Number(fraction[2]);
+					if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) ratio = width / height;
+				} else {
+					const numeric = Number(source);
+					if (Number.isFinite(numeric) && numeric > 0) ratio = numeric;
+				}
+			}
+			ratio = clamp(ratio, .05, 20);
+			const padding = 100 / ratio;
+			return {
+				css: `${ratio} / 1`,
+				paddingPercent: `${Number(padding.toFixed(5))}%`
+			};
+		}
 		function showPickerToast(descriptor = {}) {
 			const options = isPlainObject(descriptor) ? { ...descriptor } : {};
 			const normalized = normalizePickerItems(options.items ?? options.media ?? options.sources ?? [], options);
@@ -5857,14 +5910,17 @@ var RodToaster = (function() {
 					const grid = document.createElement("div");
 					const empty = document.createElement("div");
 					const buttonsById = /* @__PURE__ */ new Map();
-					const mediaObserver = items.length > Math.max(1, Number(options.virtualizeAfter) || 60) && typeof IntersectionObserver === "function" ? new IntersectionObserver((entries, observer) => {
+					const mediaElements = /* @__PURE__ */ new Set();
+					const virtualizeAfter = Math.max(1, Number(options.virtualizeAfter) || 60);
+					const IntersectionObserverCtor = safeCall(() => hostWindow.IntersectionObserver ?? null, null);
+					const mediaObserver = items.length > virtualizeAfter && typeof IntersectionObserverCtor === "function" ? new IntersectionObserverCtor((entries, observer) => {
 						for (const entry of entries) {
 							if (!entry.isIntersecting) continue;
 							const media = entry.target;
 							const source = media.dataset.rodPickerSrc;
-							if (source && !media.getAttribute("src")) media.src = source;
+							if (source && !media.getAttribute("src")) media.setAttribute("src", source);
 							const poster = media.dataset.rodPickerPoster;
-							if (poster && media instanceof HTMLVideoElement) media.poster = poster;
+							if (poster && String(media.tagName).toUpperCase() === "VIDEO") media.setAttribute("poster", poster);
 							observer.unobserve(media);
 						}
 					}, {
@@ -5881,7 +5937,9 @@ var RodToaster = (function() {
 					empty.className = "rod-toast__picker-empty";
 					if (Number.isFinite(Number(options.columns)) && Number(options.columns) > 0) grid.style.gridTemplateColumns = `repeat(${Math.max(1, Math.floor(Number(options.columns)))},minmax(0,1fr))`;
 					if (Number.isFinite(Number(options.itemMinWidth))) grid.style.setProperty("--rod-picker-item-min", `${Math.max(64, Number(options.itemMinWidth))}px`);
-					if (options.aspectRatio) grid.style.setProperty("--rod-picker-aspect-ratio", String(options.aspectRatio));
+					const pickerAspectRatio = normalizePickerAspectRatio(options.aspectRatio ?? "1 / 1");
+					grid.style.setProperty("--rod-picker-aspect-ratio", pickerAspectRatio.css);
+					grid.style.setProperty("--rod-picker-aspect-padding", pickerAspectRatio.paddingPercent);
 					if (Number.isFinite(Number(options.gap))) grid.style.setProperty("--rod-picker-gap", `${Math.max(0, Number(options.gap))}px`);
 					selectAll.type = "button";
 					clearAll.type = "button";
@@ -5915,9 +5973,11 @@ var RodToaster = (function() {
 							default: return selected.map((item) => item.original);
 						}
 					};
+					let cachedConfirmButton = null;
 					const syncConfirmButton = () => {
-						const confirm = node.querySelector("[data-action-id=\"confirm\"]");
+						const confirm = cachedConfirmButton?.isConnected ? cachedConfirmButton : node.querySelector("[data-action-id=\"confirm\"]");
 						if (!confirm) return;
+						cachedConfirmButton = confirm;
 						const label = confirm.querySelector("span");
 						const selectedCount = selectedIds.size;
 						const valid = selectedCount >= minimum && selectedCount <= maximum;
@@ -5991,15 +6051,18 @@ var RodToaster = (function() {
 						if (active && !multiple && minimum > 0) return;
 						setSelected(item, !active);
 					};
+					const isVideoMediaElement = (media) => String(media.tagName).toUpperCase() === "VIDEO";
 					const loadMedia = (media, item) => {
+						const isVideoElement = isVideoMediaElement(media);
+						const source = isVideoElement ? item.src : item.poster ?? item.src;
 						if (mediaObserver) {
-							media.dataset.rodPickerSrc = item.type === "video" ? item.src : item.poster ?? item.src;
-							if (item.type === "video" && item.poster) media.dataset.rodPickerPoster = item.poster;
+							media.dataset.rodPickerSrc = source;
+							if (isVideoElement && item.poster) media.dataset.rodPickerPoster = item.poster;
 							mediaObserver.observe(media);
-						} else if (media instanceof hostWindow.HTMLVideoElement) {
-							media.src = item.src;
-							if (item.poster) media.poster = item.poster;
-						} else media.src = item.poster ?? item.src;
+							return;
+						}
+						media.setAttribute("src", source);
+						if (isVideoElement && item.poster) media.setAttribute("poster", item.poster);
 					};
 					const makeMedia = (item) => {
 						let media;
@@ -6021,6 +6084,7 @@ var RodToaster = (function() {
 						media.className = "rod-toast__picker-media";
 						media.draggable = false;
 						if (options.crossOrigin) media.crossOrigin = options.crossOrigin;
+						mediaElements.add(media);
 						loadMedia(media, item);
 						return media;
 					};
@@ -6041,9 +6105,16 @@ var RodToaster = (function() {
 						button.setAttribute("aria-pressed", String(selectedIds.has(item.id)));
 						button.setAttribute("aria-selected", String(selectedIds.has(item.id)));
 						button.setAttribute("aria-label", item.label || `${item.type} ${item.index + 1}`);
+						let previewFallbackAttempted = false;
 						media.addEventListener("error", () => {
+							if (!previewFallbackAttempted && !isVideoMediaElement(media) && item.type === "image" && item.poster && item.poster !== item.src) {
+								previewFallbackAttempted = true;
+								delete button.dataset.mediaError;
+								media.setAttribute("src", item.src);
+								return;
+							}
 							button.dataset.mediaError = "true";
-						}, { once: true });
+						});
 						shade.className = "rod-toast__picker-shade";
 						check.className = "rod-toast__picker-check";
 						check.append(createSvgIcon(document, "check", 14));
@@ -6156,10 +6227,21 @@ var RodToaster = (function() {
 						cleanup() {
 							mediaObserver?.disconnect();
 							const hostWindow = state.hostWindow ?? initialHostWindow;
-							for (const url of normalized.objectUrls) {
-								if (preservedObjectUrls.has(url)) continue;
-								safeCall(() => hostWindow.URL.revokeObjectURL(url), void 0);
-							}
+							const mediaToRelease = [...mediaElements];
+							const objectUrlsToRelease = normalized.objectUrls.filter((url) => !preservedObjectUrls.has(url));
+							mediaElements.clear();
+							hostWindow.setTimeout(() => {
+								for (const media of mediaToRelease) {
+									if (isVideoMediaElement(media)) {
+										safeCall(() => media.pause(), void 0);
+										media.removeAttribute("poster");
+									}
+									media.removeAttribute("src");
+									delete media.dataset.rodPickerSrc;
+									delete media.dataset.rodPickerPoster;
+								}
+								for (const url of objectUrlsToRelease) safeCall(() => hostWindow.URL.revokeObjectURL(url), void 0);
+							}, 360);
 						}
 					};
 				},
