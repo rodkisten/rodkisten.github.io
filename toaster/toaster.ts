@@ -3,7 +3,7 @@
 
 /*
  * Rod Super Toaster
- * Version 4.8.1
+ * Version 4.8.2
  *
  * Browser-first, bundler-optional TypeScript IIFE.
  * Compile with: tsc --target ES2022 --lib ES2022,DOM --strict
@@ -12,7 +12,7 @@
 (function installRodToaster(globalWindow: Window & typeof globalThis): void {
   "use strict";
 
-  const VERSION = "4.8.1" as const;
+  const VERSION = "4.8.2" as const;
   const TOAST_GLOBAL = "RodToaster" as const;
   const INSPECTOR_GLOBAL = "RodObjectInspector" as const;
   const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -3303,37 +3303,31 @@
         color: rgb(251, 113, 133);
       }
 
-      .rod-multi-loading__item[data-success-morph="true"] {
-        align-self: center;
-        width: 42px;
-        min-width: 42px;
-        max-width: 42px;
-        min-height: 42px;
-        max-height: 42px;
-        margin-block: 5px;
-        padding: 5px;
-        border: 1px solid rgba(74, 222, 128, .25);
-        border-radius: 999px;
-        background: rgba(34, 197, 94, .12);
-        grid-template-columns: 30px 0 0;
-        gap: 0;
-        overflow: hidden;
+      .rod-multi-loading__item[data-status="success"] .rod-multi-loading__lead svg {
+        animation: rod-multi-loading-check-in 260ms var(--rod-ease-spring) both;
       }
 
-      .rod-multi-loading__item[data-success-morph="true"] .rod-multi-loading__lead {
-        width: 30px;
-        height: 30px;
-        border-radius: 999px;
-        transform: scale(1.02);
-      }
-
-      .rod-multi-loading__item[data-success-morph="true"] .rod-multi-loading__copy,
-      .rod-multi-loading__item[data-success-morph="true"] .rod-multi-loading__actions {
-        width: 0;
-        opacity: 0;
-        overflow: hidden;
+      .rod-multi-loading__item[data-success-exit="true"] {
         pointer-events: none;
-        transform: scale(.9);
+        opacity: 0;
+        transform: translate3d(0, -12px, 0);
+      }
+
+      @keyframes rod-multi-loading-check-in {
+        0% {
+          opacity: 0;
+          transform: scale(.55);
+        }
+
+        65% {
+          opacity: 1;
+          transform: scale(1.12);
+        }
+
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
       }
 
       .rod-multi-loading__item[data-removing="true"] {
@@ -6026,11 +6020,23 @@
 
     const completeSuccess = (item: MultiLoadingInternalItem): void => {
       if (item.successTimer !== null) hostWindow.clearTimeout(item.successTimer);
+
+      // The row stays intact. Its leading status icon changes to the green
+      // check in renderItem(), then the whole row gently fades upward.
+      // This intentionally replaces the old "collapse into a green bubble"
+      // animation without changing the public multiLoading API.
+      const holdDuration = Math.max(0, successMorphDelay + successDuration);
+
+      item.node.dataset.successExit = "false";
       item.successTimer = hostWindow.setTimeout(() => {
         if (!item.node.isConnected || item.status !== "success") return;
-        item.node.dataset.successMorph = "true";
-        item.successTimer = hostWindow.setTimeout(() => removeItem(item, false), successDuration);
-      }, successMorphDelay);
+
+        item.node.dataset.successExit = "true";
+        item.successTimer = hostWindow.setTimeout(() => {
+          if (!item.node.isConnected || item.status !== "success") return;
+          removeItem(item, true);
+        }, successFadeDuration);
+      }, holdDuration);
     };
 
     let api!: MultiLoadingController;
