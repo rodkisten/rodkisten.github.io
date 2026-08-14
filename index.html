@@ -1177,6 +1177,551 @@
         color: white;
       }
     }
+  
+    /* ============================================================
+       V2 — HARMONIC COLOR SYSTEM + REAL DARK MODE + MOBILE POLISH
+       ============================================================ */
+
+    :root {
+      /* Structural colors never invert. Borders remain ink. */
+      --ink: #12110f;
+      --cream: #f7f0df;
+      --paper: #f7f0df;
+      --white: #fffaf0;
+      --black: #12110f;
+
+      /* Harmonized saturated palette */
+      --canary: #ffd900;
+      --pink: #ff3d9d;
+      --hot-pink: #ff3d9d;
+      --cobalt: #3155e7;
+      --electric-blue: #3155e7;
+      --mint: #24ddbd;
+      --cyan: #24ddbd;
+      --acid: #b9ef52;
+      --coral: #ff765f;
+      --orange: #ff875c;
+      --violet: #9270df;
+      --purple: #9270df;
+
+      /* Semantic theme tokens */
+      --page-bg: #f7f0df;
+      --page-fg: #12110f;
+      --surface: #fffaf0;
+      --surface-2: #eee5d2;
+      --muted: #5b564d;
+      --soft-line: rgba(18, 17, 15, .16);
+      --glow-pink: rgba(255, 61, 157, .18);
+      --glow-blue: rgba(49, 85, 231, .15);
+      --glow-yellow: rgba(255, 217, 0, .13);
+
+      --shadow: 8px 8px 0 var(--ink);
+      --shadow-big: 12px 12px 0 var(--ink);
+    }
+
+    html {
+      background: var(--page-bg);
+      color: var(--page-fg);
+    }
+
+    body {
+      color: var(--page-fg);
+      background:
+        radial-gradient(circle at 4% 8%, var(--glow-pink), transparent 28rem),
+        radial-gradient(circle at 94% 18%, var(--glow-blue), transparent 31rem),
+        radial-gradient(circle at 52% 92%, var(--glow-yellow), transparent 32rem),
+        var(--page-bg);
+    }
+
+    .noise {
+      opacity: .035;
+      mix-blend-mode: multiply;
+    }
+
+    .topbar__inner {
+      color: var(--ink);
+      background:
+        linear-gradient(
+          135deg,
+          color-mix(in srgb, var(--canary) 92%, white),
+          var(--canary)
+        );
+      border-color: var(--ink);
+      box-shadow: 6px 6px 0 color-mix(in srgb, var(--ink) 92%, transparent);
+    }
+
+    .brand__dot {
+      background: var(--pink);
+      border-color: var(--ink);
+    }
+
+    .hero h1 .shiny-word {
+      color: var(--pink);
+      -webkit-text-stroke-color: var(--ink);
+      text-shadow:
+        4px 4px 0 var(--canary),
+        8px 8px 0 var(--cobalt),
+        12px 12px 0 var(--ink);
+    }
+
+    .hero::before {
+      opacity: .22;
+    }
+
+    .eyebrow {
+      background: var(--mint);
+      color: var(--ink);
+    }
+
+    .portrait-frame {
+      background: var(--canary);
+      border-color: var(--ink);
+      box-shadow:
+        12px 12px 0 var(--ink),
+        22px 22px 0 var(--pink);
+    }
+
+    .portrait-placeholder {
+      color: var(--ink);
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.5), transparent 42%),
+        repeating-linear-gradient(
+          -45deg,
+          #ffdf24 0 20px,
+          #ffe86c 20px 40px
+        );
+    }
+
+    .portrait-sticker {
+      background: var(--pink);
+      color: var(--cream);
+    }
+
+    .portrait-orbit {
+      opacity: .4;
+    }
+
+    .marquee {
+      background: var(--cobalt);
+      color: var(--cream);
+    }
+
+    .marquee__item::after {
+      color: var(--canary);
+    }
+
+    .section-title span {
+      color: var(--cobalt);
+    }
+
+    .section-number {
+      background: var(--acid);
+      color: var(--ink);
+    }
+
+    /*
+     * Cards use curated tones from the same chromatic family.
+     * No random pastel soup, no theme-dependent border inversion.
+     */
+    .project-card {
+      color: var(--ink);
+      border-color: var(--ink);
+      box-shadow: 8px 8px 0 var(--ink);
+      background: var(--card-bg);
+      animation: none !important;
+    }
+
+    .project-card[data-color="yellow"] { --card-bg: #ffe15a; }
+    .project-card[data-color="pink"]   { --card-bg: #ff91c8; }
+    .project-card[data-color="blue"]   { --card-bg: #9eaff7; }
+    .project-card[data-color="acid"]   { --card-bg: #cdef7f; }
+    .project-card[data-color="orange"] { --card-bg: #ffab84; }
+    .project-card[data-color="cyan"]   { --card-bg: #88ead9; }
+    .project-card[data-color="purple"] { --card-bg: #c4b2ef; }
+
+    .project-card::before {
+      opacity: .22;
+    }
+
+    .project-index,
+    .project-type,
+    .chip {
+      color: var(--ink);
+      background: rgba(255, 250, 240, .86);
+      border-color: var(--ink);
+    }
+
+    .project-type {
+      backdrop-filter: blur(8px);
+    }
+
+    .manifesto__card {
+      color: var(--cream);
+      background:
+        radial-gradient(circle at 105% -10%, rgba(255,255,255,.25), transparent 35%),
+        var(--pink);
+    }
+
+    .principle {
+      color: var(--page-fg);
+      background: var(--surface);
+      border-color: var(--ink);
+      box-shadow: 6px 6px 0 var(--ink);
+    }
+
+    .principle__n {
+      color: var(--cobalt);
+    }
+
+    .social-card {
+      color: var(--ink);
+      border-color: var(--ink);
+      box-shadow: 7px 7px 0 var(--ink);
+    }
+
+    .social-card:nth-child(1) {
+      background: var(--ink);
+      color: var(--cream);
+      border-color: var(--ink);
+    }
+
+    .social-card:nth-child(2) {
+      background: var(--canary);
+      color: var(--ink);
+    }
+
+    .social-card:nth-child(3) {
+      background: var(--pink);
+      color: var(--ink);
+    }
+
+    .social-card:nth-child(4) {
+      background: var(--mint);
+      color: var(--ink);
+    }
+
+    .seo-wall {
+      color: var(--page-fg);
+      background:
+        linear-gradient(
+          color-mix(in srgb, var(--surface) 93%, transparent),
+          color-mix(in srgb, var(--surface) 93%, transparent)
+        ),
+        repeating-linear-gradient(
+          0deg,
+          var(--soft-line) 0 1px,
+          transparent 1px 16px
+        );
+    }
+
+    footer {
+      background: var(--ink);
+      color: var(--cream);
+      border-top-color: var(--ink);
+    }
+
+    .footer-title {
+      color: var(--canary);
+      text-shadow:
+        4px 4px 0 var(--pink),
+        8px 8px 0 var(--cobalt);
+    }
+
+    /* Extra depth without expensive permanent blur filters */
+    .project-card,
+    .principle,
+    .social-card,
+    .portrait-frame,
+    .manifesto__card {
+      transform: translateZ(0);
+      backface-visibility: hidden;
+    }
+
+    /*
+     * Scroll-driven animation is progressive enhancement only.
+     * WAAPI remains the reliable baseline.
+     */
+    @supports (animation-timeline: view()) {
+      .section-number {
+        animation: v2BadgeDrift linear both;
+        animation-timeline: view();
+        animation-range: entry 0% cover 55%;
+      }
+
+      .manifesto__card {
+        animation: v2ManifestoTilt linear both;
+        animation-timeline: view();
+        animation-range: entry 5% cover 55%;
+      }
+    }
+
+    @keyframes v2BadgeDrift {
+      from {
+        transform: translate3d(18px, 28px, 0) rotate(8deg);
+        opacity: .35;
+      }
+      to {
+        transform: translate3d(0, 0, 0) rotate(2deg);
+        opacity: 1;
+      }
+    }
+
+    @keyframes v2ManifestoTilt {
+      from {
+        transform: translate3d(0, 45px, 0) rotate(-4deg) scale(.96);
+      }
+      to {
+        transform: translate3d(0, 0, 0) rotate(-2deg) scale(1);
+      }
+    }
+
+    /*
+     * Real dark mode.
+     * --ink stays dark because it is a structural border color.
+     * Only semantic page/surface tokens switch.
+     */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --page-bg: #11110f;
+        --page-fg: #f4eddf;
+        --surface: #1c1b18;
+        --surface-2: #24221e;
+        --muted: #b8b0a0;
+        --soft-line: rgba(244, 237, 223, .14);
+
+        --paper: #11110f;
+        --white: #fffaf0;
+        --black: #12110f;
+
+        --glow-pink: rgba(255, 61, 157, .14);
+        --glow-blue: rgba(49, 85, 231, .16);
+        --glow-yellow: rgba(255, 217, 0, .08);
+      }
+
+      html {
+        background: var(--page-bg);
+        color: var(--page-fg);
+      }
+
+      body {
+        color: var(--page-fg);
+        background:
+          radial-gradient(circle at 3% 10%, var(--glow-pink), transparent 27rem),
+          radial-gradient(circle at 98% 21%, var(--glow-blue), transparent 34rem),
+          radial-gradient(circle at 48% 100%, var(--glow-yellow), transparent 30rem),
+          var(--page-bg);
+      }
+
+      .noise {
+        opacity: .025;
+        mix-blend-mode: screen;
+      }
+
+      .hero__lede,
+      .kicker,
+      .section-title,
+      .footer-bottom {
+        color: var(--page-fg);
+      }
+
+      .hero h1 {
+        color: var(--page-fg);
+      }
+
+      .hero h1 .shiny-word {
+        color: var(--pink);
+      }
+
+      .principle {
+        color: var(--page-fg);
+        background: var(--surface);
+        border-color: #e8dfcf;
+        box-shadow: 7px 7px 0 #e8dfcf;
+      }
+
+      .principle h3,
+      .principle p {
+        color: var(--page-fg);
+      }
+
+      .seo-wall {
+        color: var(--page-fg);
+        border-color: #e8dfcf;
+        box-shadow: 8px 8px 0 #e8dfcf;
+      }
+
+      .seo-wall h2,
+      .seo-wall p {
+        color: var(--page-fg);
+      }
+
+      .btn {
+        color: var(--ink);
+      }
+
+      .social-card:nth-child(1) {
+        border-color: #e8dfcf;
+        box-shadow: 7px 7px 0 #e8dfcf;
+      }
+
+      footer {
+        background: #090908;
+        color: var(--cream);
+        border-top-color: #e8dfcf;
+      }
+
+      .footer-bottom {
+        color: var(--cream);
+      }
+
+      .portrait-orbit {
+        border-color: rgba(244, 237, 223, .58);
+      }
+    }
+
+    /*
+     * Mobile header: one compact row instead of a giant yellow billboard.
+     */
+    @media (max-width: 720px) {
+      .topbar {
+        padding-top: max(7px, env(safe-area-inset-top));
+      }
+
+      .topbar__inner {
+        min-height: 54px;
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
+        margin-top: 6px;
+        padding: 7px 8px;
+        border-width: 2px;
+        border-radius: 999px;
+        box-shadow: 4px 4px 0 var(--ink);
+      }
+
+      .brand {
+        gap: 6px;
+        font-size: .78rem;
+      }
+
+      .brand__dot {
+        width: 14px;
+        border-width: 2px;
+        box-shadow: 2px 2px 0 var(--ink);
+      }
+
+      .brand span:last-child {
+        font-size: 0;
+      }
+
+      .brand span:last-child::after {
+        content: "ROD";
+        font-size: .78rem;
+      }
+
+      .nav {
+        flex: 1;
+        justify-content: flex-end;
+        gap: 1px;
+        min-width: 0;
+      }
+
+      .nav a {
+        padding: 7px 7px;
+        font-size: .68rem;
+        letter-spacing: -.02em;
+      }
+
+      .nav a:nth-child(2) {
+        display: none;
+      }
+
+      .hero {
+        padding-top: 72px;
+      }
+
+      .eyebrow {
+        font-size: .66rem;
+        line-height: 1.25;
+        border-width: 2px;
+        box-shadow: 3px 3px 0 var(--ink);
+      }
+
+      .hero h1 {
+        margin-top: 18px;
+        font-size: clamp(3.3rem, 16.5vw, 5.8rem);
+        line-height: .82;
+      }
+
+      .hero h1 .shiny-word {
+        -webkit-text-stroke-width: 2px;
+        text-shadow:
+          3px 3px 0 var(--canary),
+          6px 6px 0 var(--cobalt),
+          9px 9px 0 var(--ink);
+      }
+
+      .hero__lede {
+        font-size: 1.05rem;
+        line-height: 1.48;
+      }
+
+      .portrait-wrap {
+        width: min(78vw, 390px);
+        margin-top: 24px;
+      }
+
+      .portrait-frame {
+        box-shadow:
+          9px 9px 0 var(--ink),
+          17px 17px 0 var(--pink);
+      }
+
+      .section {
+        padding-block: 78px;
+      }
+
+      .section-title {
+        font-size: clamp(2.75rem, 13vw, 5.2rem);
+      }
+
+      .project-card {
+        min-height: 310px;
+        padding: 24px;
+        border-width: 3px;
+        box-shadow: 6px 6px 0 var(--ink);
+      }
+
+      .project-card h3 {
+        font-size: clamp(2rem, 10vw, 3.8rem);
+      }
+
+      .project-card p {
+        font-size: .96rem;
+      }
+
+      .principle {
+        grid-template-columns: 70px minmax(0, 1fr);
+        padding: 22px;
+      }
+
+      .principle__n {
+        font-size: 2.4rem;
+      }
+
+      .principle h3 {
+        font-size: 1.25rem;
+      }
+
+      .social-card {
+        min-height: 170px;
+      }
+
+      .footer-title {
+        font-size: clamp(4rem, 20vw, 8rem);
+      }
+    }
+
   </style>
 </head>
 
@@ -1717,237 +2262,372 @@
     (() => {
       "use strict";
 
-      const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-      document.querySelector("#year").textContent = String(new Date().getFullYear());
+      const year = document.querySelector("#year");
+      if (year) year.textContent = String(new Date().getFullYear());
+
+      const reduceMotion =
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
       if (reduceMotion) return;
 
-      const qsa = (selector, root = document) => Array.from(root.querySelectorAll(selector));
+      const $ = (selector, root = document) => root.querySelector(selector);
+      const $$ = (selector, root = document) =>
+        Array.from(root.querySelectorAll(selector));
 
-      /*
-       * 1) HERO ENTRANCE — Web Animations API.
-       *    Composite-friendly: transform + opacity only.
-       */
+      const animateSafe = (element, keyframes, options) => {
+        if (!element?.animate) return null;
+
+        try {
+          return element.animate(keyframes, options);
+        } catch (error) {
+          console.warn("[RodLanding] animation skipped:", error);
+          return null;
+        }
+      };
+
+      /* -----------------------------------------------------------
+       * 1. Entrance choreography — Web Animations API baseline.
+       * ----------------------------------------------------------- */
       const intro = [
-        [".eyebrow", { y: 20, delay: 40 }],
-        [".hero h1", { y: 50, delay: 110 }],
-        [".hero__lede", { y: 34, delay: 210 }],
-        [".hero__actions", { y: 28, delay: 300 }],
-        [".portrait-wrap", { y: 45, delay: 180 }]
+        [".eyebrow", 18, 40],
+        [".hero h1", 42, 100],
+        [".hero__lede", 28, 190],
+        [".hero__actions", 24, 270],
+        [".portrait-wrap", 38, 170]
       ];
 
-      for (const [selector, opts] of intro) {
-        const el = document.querySelector(selector);
-        if (!el) continue;
+      for (const [selector, distance, delay] of intro) {
+        const element = $(selector);
+        if (!element) continue;
 
-        el.animate(
+        animateSafe(
+          element,
           [
             {
               opacity: 0,
-              transform: `translate3d(0, ${opts.y}px, 0) scale(.965)`,
-              filter: "blur(7px)"
+              transform: `translate3d(0, ${distance}px, 0) scale(.975)`
             },
             {
               opacity: 1,
-              transform: "translate3d(0, 0, 0) scale(1)",
-              filter: "blur(0)"
+              transform: "translate3d(0, 0, 0) scale(1)"
             }
           ],
           {
-            duration: 900,
-            delay: opts.delay,
+            duration: 760,
+            delay,
             easing: "cubic-bezier(.16,1,.3,1)",
             fill: "both"
           }
         );
       }
 
-      /*
-       * 2) SCROLL-TIMELINE / WAAPI.
-       *    Uses native ScrollTimeline when available.
-       */
-      if ("ScrollTimeline" in window) {
-        const heroTimeline = new ScrollTimeline({
-          source: document.scrollingElement,
-          axis: "block",
-          scrollOffsets: [
-            CSS.percent(0),
-            CSS.px(Math.min(innerHeight * 1.35, 1100))
-          ]
-        });
+      /* -----------------------------------------------------------
+       * 2. Reliable reveal system.
+       *    This runs regardless of CSS scroll-timeline support.
+       * ----------------------------------------------------------- */
+      const revealSelector =
+        ".project-card, .principle, .social-card, .seo-wall";
 
-        const heroTitle = document.querySelector(".hero h1");
-        if (heroTitle) {
-          heroTitle.animate(
-            [
-              { transform: "translate3d(0,0,0) scale(1)", opacity: 1 },
-              { transform: "translate3d(0,-70px,0) scale(.94)", opacity: .18 }
-            ],
-            { timeline: heroTimeline, fill: "both" }
-          );
-        }
-
-        const orbit = document.querySelector(".portrait-orbit");
-        if (orbit) {
-          orbit.animate(
-            [
-              { transform: "rotate(0deg) scale(1)" },
-              { transform: "rotate(130deg) scale(.83)" }
-            ],
-            { timeline: heroTimeline, fill: "both" }
-          );
-        }
-      }
-
-      /*
-       * 3) INTERSECTION FALLBACK.
-       *    Only runs when CSS animation-timeline is not supported.
-       */
-      const cssTimelineSupported =
-        CSS.supports?.("animation-timeline: scroll()") ||
-        CSS.supports?.("animation-timeline", "scroll()");
-
-      if (!cssTimelineSupported) {
-        const revealTargets = qsa(".project-card, .section-title, .principle, .social-card");
-
-        const io = new IntersectionObserver((entries) => {
+      const revealTargets = $$(revealSelector);
+      const revealObserver = new IntersectionObserver(
+        (entries, observer) => {
           for (const entry of entries) {
             if (!entry.isIntersecting) continue;
-            io.unobserve(entry.target);
 
-            entry.target.animate(
+            observer.unobserve(entry.target);
+
+            const index = revealTargets.indexOf(entry.target);
+            const rotate = index % 2 === 0 ? -0.7 : 0.7;
+
+            animateSafe(
+              entry.target,
               [
                 {
                   opacity: 0,
-                  transform: "translate3d(0, 36px, 0) scale(.97)"
+                  transform:
+                    `translate3d(0, 42px, 0) rotate(${rotate}deg) scale(.965)`
                 },
                 {
                   opacity: 1,
-                  transform: "translate3d(0, 0, 0) scale(1)"
+                  transform: "translate3d(0, 0, 0) rotate(0deg) scale(1)"
                 }
               ],
               {
-                duration: 700,
+                duration: 680,
+                delay: Math.min((index % 3) * 55, 110),
                 easing: "cubic-bezier(.16,1,.3,1)",
                 fill: "both"
               }
             );
           }
-        }, {
-          threshold: .08,
-          rootMargin: "0px 0px -6% 0px"
-        });
+        },
+        {
+          threshold: 0.07,
+          rootMargin: "0px 0px -5% 0px"
+        }
+      );
 
-        revealTargets.forEach((el) => io.observe(el));
+      revealTargets.forEach((element) => revealObserver.observe(element));
+
+      /* -----------------------------------------------------------
+       * 3. Native ViewTimeline enhancement.
+       *    No unsupported scrollOffsets / CSS.percent / CSS.px.
+       * ----------------------------------------------------------- */
+      if ("ViewTimeline" in window) {
+        try {
+          $$(".section-title").forEach((title) => {
+            const timeline = new ViewTimeline({
+              subject: title,
+              axis: "block"
+            });
+
+            animateSafe(
+              title,
+              [
+                {
+                  letterSpacing: "-.085em",
+                  transform: "translate3d(-18px, 24px, 0) scaleX(.92)"
+                },
+                {
+                  letterSpacing: "-.065em",
+                  transform: "translate3d(0, 0, 0) scaleX(1)"
+                }
+              ],
+              {
+                timeline,
+                fill: "both"
+              }
+            );
+          });
+        } catch (error) {
+          console.info("[RodLanding] ViewTimeline unavailable in this engine.");
+        }
       }
 
-      /*
-       * 4) CANARY PORTRAIT — low-cost pointer tilt.
-       *    One RAF maximum per frame, transform only.
-       */
-      const tilt = document.querySelector("[data-tilt]");
+      /* -----------------------------------------------------------
+       * 4. ScrollTimeline enhancement for the hero ornament.
+       *    Constructor uses only stable fields.
+       * ----------------------------------------------------------- */
+      if ("ScrollTimeline" in window) {
+        try {
+          const source = document.scrollingElement || document.documentElement;
+          const timeline = new ScrollTimeline({
+            source,
+            axis: "block"
+          });
+
+          const orbit = $(".portrait-orbit");
+          if (orbit) {
+            animateSafe(
+              orbit,
+              [
+                { transform: "rotate(0deg) scale(1)" },
+                { transform: "rotate(220deg) scale(.82)" }
+              ],
+              {
+                timeline,
+                fill: "both"
+              }
+            );
+          }
+        } catch (error) {
+          console.info("[RodLanding] ScrollTimeline enhancement skipped.");
+        }
+      }
+
+      /* -----------------------------------------------------------
+       * 5. Hero parallax fallback.
+       *    RAF-throttled, transform-only, passive listener.
+       * ----------------------------------------------------------- */
+      const heroTitle = $(".hero h1");
+      const heroCopy = $(".hero__copy");
+      let scrollRAF = 0;
+
+      const paintScroll = () => {
+        scrollRAF = 0;
+
+        const y = Math.min(window.scrollY, window.innerHeight * 1.35);
+        const progress = y / Math.max(window.innerHeight, 1);
+
+        if (heroTitle) {
+          heroTitle.style.setProperty(
+            "--hero-shift",
+            `${Math.min(progress * -34, 0)}px`
+          );
+        }
+
+        if (heroCopy) {
+          heroCopy.style.opacity = String(
+            Math.max(0.56, 1 - progress * 0.32)
+          );
+        }
+      };
+
+      window.addEventListener(
+        "scroll",
+        () => {
+          if (!scrollRAF) scrollRAF = requestAnimationFrame(paintScroll);
+        },
+        { passive: true }
+      );
+
+      /* Only apply the transform variable to the title when native
+         scroll-driven transform is not managing it. */
+      if (!("ViewTimeline" in window)) {
+        const style = document.createElement("style");
+        style.textContent = `
+          .hero h1 {
+            transform: translate3d(0, var(--hero-shift, 0px), 0);
+          }
+        `;
+        document.head.appendChild(style);
+      }
+
+      /* -----------------------------------------------------------
+       * 6. Portrait tilt. Pointer-fine only.
+       * ----------------------------------------------------------- */
+      const tilt = $("[data-tilt]");
+
       if (tilt && matchMedia("(pointer: fine)").matches) {
-        let raf = 0;
-        let nextX = 0;
-        let nextY = 0;
+        let tiltRAF = 0;
+        let rx = 0;
+        let ry = 0;
 
         const paintTilt = () => {
-          raf = 0;
+          tiltRAF = 0;
           tilt.style.transform =
-            `rotateX(${nextY}deg) rotateY(${nextX}deg) rotateZ(3deg)`;
+            `rotateX(${ry}deg) rotateY(${rx}deg) rotateZ(3deg)`;
         };
 
-        tilt.addEventListener("pointermove", (event) => {
-          const rect = tilt.getBoundingClientRect();
-          nextX = ((event.clientX - rect.left) / rect.width - .5) * 9;
-          nextY = -((event.clientY - rect.top) / rect.height - .5) * 9;
+        tilt.addEventListener(
+          "pointermove",
+          (event) => {
+            const rect = tilt.getBoundingClientRect();
 
-          if (!raf) raf = requestAnimationFrame(paintTilt);
-        }, { passive: true });
+            rx =
+              ((event.clientX - rect.left) / rect.width - 0.5) * 8;
 
-        tilt.addEventListener("pointerleave", () => {
-          nextX = 0;
-          nextY = 0;
-          if (!raf) raf = requestAnimationFrame(paintTilt);
+            ry =
+              -((event.clientY - rect.top) / rect.height - 0.5) * 8;
 
-          tilt.animate(
-            [
-              { transform: tilt.style.transform },
-              { transform: "rotateX(0deg) rotateY(0deg) rotateZ(3deg)" }
-            ],
-            {
-              duration: 620,
-              easing: "cubic-bezier(.16,1,.3,1)",
-              fill: "forwards"
-            }
-          );
-        }, { passive: true });
+            if (!tiltRAF) tiltRAF = requestAnimationFrame(paintTilt);
+          },
+          { passive: true }
+        );
+
+        tilt.addEventListener(
+          "pointerleave",
+          () => {
+            rx = 0;
+            ry = 0;
+
+            animateSafe(
+              tilt,
+              [
+                { transform: tilt.style.transform },
+                {
+                  transform:
+                    "rotateX(0deg) rotateY(0deg) rotateZ(3deg)"
+                }
+              ],
+              {
+                duration: 520,
+                easing: "cubic-bezier(.16,1,.3,1)",
+                fill: "forwards"
+              }
+            );
+          },
+          { passive: true }
+        );
       }
 
-      /*
-       * 5) MAGNETIC LINKS — pointer-fine only.
-       *    Keeps touch completely clean.
-       */
+      /* -----------------------------------------------------------
+       * 7. Magnetic controls. Desktop only.
+       * ----------------------------------------------------------- */
       if (matchMedia("(pointer: fine)").matches) {
-        qsa(".magnetic").forEach((el) => {
+        $$(".magnetic").forEach((element) => {
           let raf = 0;
           let x = 0;
           let y = 0;
 
-          const render = () => {
+          const paint = () => {
             raf = 0;
-            el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+            element.style.transform =
+              `translate3d(${x}px, ${y}px, 0)`;
           };
 
-          el.addEventListener("pointermove", (event) => {
-            const rect = el.getBoundingClientRect();
-            x = (event.clientX - rect.left - rect.width / 2) * .12;
-            y = (event.clientY - rect.top - rect.height / 2) * .12;
-            if (!raf) raf = requestAnimationFrame(render);
-          }, { passive: true });
+          element.addEventListener(
+            "pointermove",
+            (event) => {
+              const rect = element.getBoundingClientRect();
 
-          el.addEventListener("pointerleave", () => {
-            x = 0;
-            y = 0;
-            if (!raf) raf = requestAnimationFrame(render);
-          }, { passive: true });
+              x =
+                (event.clientX - rect.left - rect.width / 2) * 0.1;
+
+              y =
+                (event.clientY - rect.top - rect.height / 2) * 0.1;
+
+              if (!raf) raf = requestAnimationFrame(paint);
+            },
+            { passive: true }
+          );
+
+          element.addEventListener(
+            "pointerleave",
+            () => {
+              x = 0;
+              y = 0;
+              if (!raf) raf = requestAnimationFrame(paint);
+            },
+            { passive: true }
+          );
         });
       }
 
-      /*
-       * 6) CUSTOM CURSOR BLOB — desktop only, no layout reads.
-       */
-      const cursor = document.querySelector(".cursor-blob");
+      /* -----------------------------------------------------------
+       * 8. Pointer follower. No layout reads.
+       * ----------------------------------------------------------- */
+      const cursor = $(".cursor-blob");
+
       if (cursor && matchMedia("(pointer: fine)").matches) {
-        let cx = -100;
-        let cy = -100;
-        let tx = -100;
-        let ty = -100;
+        let currentX = -100;
+        let currentY = -100;
+        let targetX = -100;
+        let targetY = -100;
         let running = false;
 
         const loop = () => {
-          cx += (tx - cx) * .18;
-          cy += (ty - cy) * .18;
-          cursor.style.transform =
-            `translate3d(${cx - 13}px, ${cy - 13}px, 0)`;
+          currentX += (targetX - currentX) * 0.2;
+          currentY += (targetY - currentY) * 0.2;
 
-          if (Math.abs(tx - cx) + Math.abs(ty - cy) > .25) {
+          cursor.style.transform =
+            `translate3d(${currentX - 13}px, ${currentY - 13}px, 0)`;
+
+          if (
+            Math.abs(targetX - currentX) +
+              Math.abs(targetY - currentY) >
+            0.3
+          ) {
             requestAnimationFrame(loop);
           } else {
             running = false;
           }
         };
 
-        addEventListener("pointermove", (event) => {
-          tx = event.clientX;
-          ty = event.clientY;
-          cursor.style.opacity = "1";
+        window.addEventListener(
+          "pointermove",
+          (event) => {
+            targetX = event.clientX;
+            targetY = event.clientY;
+            cursor.style.opacity = "1";
 
-          if (!running) {
-            running = true;
-            requestAnimationFrame(loop);
-          }
-        }, { passive: true });
+            if (!running) {
+              running = true;
+              requestAnimationFrame(loop);
+            }
+          },
+          { passive: true }
+        );
       }
     })();
   </script>
