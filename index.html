@@ -1,714 +1,1955 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Rod Kisten</title>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 
-    <meta
-      name="description"
-      content="Rod Kisten · frontend engineer, open source creator, and browser tooling enthusiast."
-    />
+  <title>Rod Kisten — Software Engineer, Creative Developer & Open Source Tools</title>
+  <meta
+    name="description"
+    content="Portfólio de Rod Kisten: ferramentas web, bibliotecas TypeScript, DevTools mobile-first, userscripts, runtime reativo, UI systems, media automation e experimentos open source."
+  />
+  <meta
+    name="keywords"
+    content="Rod Kisten, rodkisten, software engineer, frontend engineer, TypeScript, JavaScript, React, Next.js, open source, RodToaster, RodMenu, RodStorage, RodElements, Object Inspector, Broto, Cipó, Fábrica, Rod DevTools, Caipora, userscripts, web development"
+  />
+  <meta name="author" content="Rod Kisten" />
+  <meta name="creator" content="Rod Kisten" />
+  <meta name="publisher" content="Rod Kisten" />
+  <meta name="application-name" content="Rod Kisten — Software, Tools & Experiments" />
+  <meta name="theme-color" content="#ffe500" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+  <meta name="googlebot" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <!-- SEO: ajuste para o domínio final -->
+  <link rel="canonical" href="https://rodkisten.github.io/" />
+  <link rel="author" href="https://github.com/rodkisten" />
 
-    <link
-      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800;900&family=Geist+Mono:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:locale" content="pt_BR" />
+  <meta property="og:site_name" content="Rod Kisten" />
+  <meta property="og:title" content="Rod Kisten — Software Engineer, Tools & Experiments" />
+  <meta
+    property="og:description"
+    content="Brutalist software playground: TypeScript libraries, mobile DevTools, UI systems, userscripts, reactive runtimes and open-source experiments."
+  />
+  <meta property="og:url" content="https://rodkisten.github.io/" />
+  <meta property="og:image" content="https://rodkisten.github.io/og-cover.jpg" />
+  <meta property="og:image:alt" content="Rod Kisten — Software Engineer, Tools & Experiments" />
 
-    <style>
-      :root {
-        --color-page: #050506;
-        --color-page-soft: #09090b;
-        --color-surface: rgba(255, 255, 255, 0.055);
-        --color-surface-strong: rgba(255, 255, 255, 0.095);
-        --color-border: rgba(255, 255, 255, 0.12);
-        --color-border-strong: rgba(255, 255, 255, 0.24);
+  <!-- X / Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Rod Kisten — Software Engineer, Tools & Experiments" />
+  <meta
+    name="twitter:description"
+    content="TypeScript libraries, mobile DevTools, UI systems, userscripts and open-source experiments."
+  />
+  <meta name="twitter:image" content="https://rodkisten.github.io/og-cover.jpg" />
 
-        --color-text: #f8fafc;
-        --color-text-soft: #cbd5e1;
-        --color-text-muted: #71717a;
+  <!-- Performance -->
+  <link rel="dns-prefetch" href="//github.com" />
 
-        --color-pink: #f472b6;
-        --color-violet: #8b5cf6;
-        --color-indigo: #6366f1;
-        --color-cyan: #22d3ee;
-        --color-lime: #a3e635;
-        --color-orange: #fb923c;
+  <!-- Structured data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Person",
+        "@id": "https://rodkisten.github.io/#person",
+        "name": "Rod Kisten",
+        "url": "https://rodkisten.github.io/",
+        "jobTitle": "Software Engineer",
+        "sameAs": [
+          "https://github.com/rodkisten"
+        ],
+        "knowsAbout": [
+          "TypeScript",
+          "JavaScript",
+          "React",
+          "Next.js",
+          "Frontend Engineering",
+          "Open Source Software",
+          "Developer Tools",
+          "Userscripts",
+          "Web Performance",
+          "Browser APIs"
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://rodkisten.github.io/#website",
+        "url": "https://rodkisten.github.io/",
+        "name": "Rod Kisten — Software, Tools & Experiments",
+        "inLanguage": "pt-BR",
+        "author": { "@id": "https://rodkisten.github.io/#person" }
+      },
+      {
+        "@type": "CollectionPage",
+        "@id": "https://rodkisten.github.io/#projects",
+        "url": "https://rodkisten.github.io/#projects",
+        "name": "Projetos de Rod Kisten",
+        "isPartOf": { "@id": "https://rodkisten.github.io/#website" },
+        "about": { "@id": "https://rodkisten.github.io/#person" }
+      }
+    ]
+  }
+  </script>
 
-        --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
-        --font-mono: "Geist Mono", ui-monospace, monospace;
+  <style>
+    :root {
+      --ink: #101010;
+      --paper: #fff9e9;
+      --canary: #ffe500;
+      --hot-pink: #ff2eb2;
+      --electric-blue: #2457ff;
+      --acid: #b9ff35;
+      --orange: #ff6b00;
+      --purple: #8a3ffc;
+      --cyan: #1fffe0;
+      --white: #ffffff;
+      --black: #000000;
+      --shadow: 9px 9px 0 var(--ink);
+      --shadow-big: 14px 14px 0 var(--ink);
+      --radius: 28px;
+      --gutter: clamp(16px, 3vw, 42px);
+      --max: 1600px;
+      --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "SFMono-Regular", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+      --ease-pop: cubic-bezier(.16,1,.3,1);
+      --ease-squish: cubic-bezier(.34,1.56,.64,1);
+    }
 
-        --container: 1160px;
-        --radius-xl: 32px;
-        --radius-lg: 24px;
-        --radius-md: 999px;
+    * {
+      box-sizing: border-box;
+    }
 
-        --blur-glass: blur(24px);
-        --shadow-glow: 0 0 80px rgba(139, 92, 246, 0.28);
-        --shadow-card: 0 24px 80px rgba(0, 0, 0, 0.42);
+    html {
+      scroll-behavior: smooth;
+      background: var(--paper);
+      color: var(--ink);
+      scrollbar-gutter: stable;
+    }
 
-        --gradient-title: linear-gradient(
-          120deg,
-          #ffffff 0%,
-          #d4d4d8 18%,
-          #a78bfa 38%,
-          #22d3ee 58%,
-          #f472b6 78%,
-          #ffffff 100%
+    body {
+      margin: 0;
+      min-width: 320px;
+      overflow-x: clip;
+      font-family: var(--font-sans);
+      background:
+        radial-gradient(circle at 8% 4%, rgba(255,46,178,.26), transparent 22rem),
+        radial-gradient(circle at 92% 16%, rgba(36,87,255,.25), transparent 26rem),
+        linear-gradient(var(--paper), var(--paper));
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+
+    ::selection {
+      background: var(--ink);
+      color: var(--canary);
+    }
+
+    a {
+      color: inherit;
+    }
+
+    img {
+      max-width: 100%;
+    }
+
+    button,
+    a {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :focus-visible {
+      outline: 4px solid var(--electric-blue);
+      outline-offset: 4px;
+    }
+
+    .skip-link {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 9999;
+      transform: translateY(-180%);
+      padding: 12px 16px;
+      border: 3px solid var(--ink);
+      background: var(--canary);
+      box-shadow: 5px 5px 0 var(--ink);
+      font-weight: 900;
+      transition: transform .2s var(--ease-pop);
+    }
+
+    .skip-link:focus {
+      transform: translateY(0);
+    }
+
+    .noise {
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      pointer-events: none;
+      opacity: .055;
+      mix-blend-mode: multiply;
+      background-image:
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 140 140' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+    }
+
+    .page-shell {
+      width: min(100%, var(--max));
+      margin-inline: auto;
+      padding-inline: var(--gutter);
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      padding-top: max(10px, env(safe-area-inset-top));
+      pointer-events: none;
+    }
+
+    .topbar__inner {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-top: 10px;
+      padding: 10px 12px;
+      border: 3px solid var(--ink);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--canary) 88%, white 12%);
+      box-shadow: 6px 6px 0 var(--ink);
+      backdrop-filter: blur(14px) saturate(130%);
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      font-weight: 1000;
+      letter-spacing: -.04em;
+      white-space: nowrap;
+    }
+
+    .brand__dot {
+      width: 17px;
+      aspect-ratio: 1;
+      border: 3px solid var(--ink);
+      border-radius: 50%;
+      background: var(--hot-pink);
+      box-shadow: 3px 3px 0 var(--ink);
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .nav::-webkit-scrollbar { display: none; }
+
+    .nav a {
+      flex: 0 0 auto;
+      padding: 8px 11px;
+      border: 2px solid transparent;
+      border-radius: 999px;
+      text-decoration: none;
+      font-size: .84rem;
+      font-weight: 900;
+      transition:
+        background .18s ease,
+        border-color .18s ease,
+        transform .18s var(--ease-squish);
+    }
+
+    .nav a:hover {
+      border-color: var(--ink);
+      background: var(--white);
+      transform: translateY(-2px) rotate(-1deg);
+    }
+
+    .hero {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(280px, .8fr);
+      align-items: center;
+      gap: clamp(30px, 5vw, 80px);
+      min-height: min(940px, calc(100svh - 40px));
+      padding-block: clamp(80px, 12vh, 150px) 72px;
+      isolation: isolate;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      z-index: -2;
+      top: 13%;
+      left: -10vw;
+      width: 44vw;
+      height: 44vw;
+      max-width: 700px;
+      max-height: 700px;
+      border-radius: 50%;
+      background:
+        repeating-radial-gradient(
+          circle,
+          transparent 0 14px,
+          rgba(16,16,16,.19) 15px 17px
         );
+      mask-image: radial-gradient(circle, black 30%, transparent 70%);
+      opacity: .45;
+    }
 
-        --gradient-hero: radial-gradient(
-            circle at 12% 18%,
-            rgba(139, 92, 246, 0.34),
-            transparent 34rem
-          ),
-          radial-gradient(
-            circle at 82% 22%,
-            rgba(34, 211, 238, 0.22),
-            transparent 32rem
-          ),
-          radial-gradient(
-            circle at 50% 88%,
-            rgba(244, 114, 182, 0.2),
-            transparent 30rem
-          );
+    .eyebrow,
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: fit-content;
+      padding: 8px 12px;
+      border: 3px solid var(--ink);
+      border-radius: 999px;
+      background: var(--cyan);
+      box-shadow: 4px 4px 0 var(--ink);
+      font: 800 .77rem/1 var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
 
-        --gradient-card: linear-gradient(
-          180deg,
-          rgba(255, 255, 255, 0.095),
-          rgba(255, 255, 255, 0.035)
+    .hero h1 {
+      max-width: 12ch;
+      margin: 22px 0 20px;
+      font-size: clamp(4rem, 10.7vw, 10.5rem);
+      line-height: .79;
+      letter-spacing: -.075em;
+      font-weight: 1000;
+      text-wrap: balance;
+      text-transform: uppercase;
+    }
+
+    .hero h1 .shiny-word {
+      position: relative;
+      display: inline-block;
+      color: var(--hot-pink);
+      -webkit-text-stroke: 3px var(--ink);
+      paint-order: stroke fill;
+      text-shadow:
+        4px 4px 0 var(--canary),
+        8px 8px 0 var(--electric-blue),
+        12px 12px 0 var(--ink);
+    }
+
+    .hero h1 .shiny-word::after {
+      content: "";
+      position: absolute;
+      inset: -8%;
+      background: linear-gradient(
+        105deg,
+        transparent 22%,
+        rgba(255,255,255,.88) 35%,
+        transparent 47%
+      );
+      transform: translateX(-125%);
+      mix-blend-mode: screen;
+      pointer-events: none;
+      animation: shineSweep 4.6s ease-in-out infinite;
+    }
+
+    .hero__lede {
+      max-width: 760px;
+      margin: 28px 0 0;
+      font-size: clamp(1.15rem, 2vw, 1.65rem);
+      line-height: 1.35;
+      font-weight: 750;
+      text-wrap: pretty;
+    }
+
+    .hero__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-top: 34px;
+    }
+
+    .btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 52px;
+      padding: 14px 18px;
+      border: 3px solid var(--ink);
+      border-radius: 16px;
+      background: var(--white);
+      box-shadow: 6px 6px 0 var(--ink);
+      color: var(--ink);
+      text-decoration: none;
+      font-weight: 950;
+      transition:
+        transform .18s var(--ease-squish),
+        box-shadow .18s ease,
+        background .18s ease;
+      will-change: transform;
+    }
+
+    .btn--primary {
+      background: var(--canary);
+    }
+
+    .btn--pink {
+      background: var(--hot-pink);
+      color: white;
+    }
+
+    .btn:hover {
+      transform: translate(-3px, -3px);
+      box-shadow: 10px 10px 0 var(--ink);
+    }
+
+    .btn:active {
+      transform: translate(3px, 3px);
+      box-shadow: 2px 2px 0 var(--ink);
+    }
+
+    .portrait-wrap {
+      position: relative;
+      place-self: center;
+      width: min(100%, 480px);
+      perspective: 1200px;
+    }
+
+    .portrait-orbit {
+      position: absolute;
+      inset: -14%;
+      border: 3px dashed var(--ink);
+      border-radius: 50%;
+      opacity: .55;
+      animation: slowSpin 22s linear infinite;
+      pointer-events: none;
+    }
+
+    .portrait-orbit::before,
+    .portrait-orbit::after {
+      content: "";
+      position: absolute;
+      width: 24px;
+      aspect-ratio: 1;
+      border: 3px solid var(--ink);
+      border-radius: 50%;
+      background: var(--hot-pink);
+      box-shadow: 4px 4px 0 var(--ink);
+    }
+
+    .portrait-orbit::before {
+      top: 3%;
+      left: 19%;
+    }
+
+    .portrait-orbit::after {
+      right: 4%;
+      bottom: 20%;
+      background: var(--cyan);
+    }
+
+    .portrait-frame {
+      position: relative;
+      transform: rotate(3deg);
+      aspect-ratio: 4 / 5;
+      border: 5px solid var(--ink);
+      border-radius: 36px 8px 48px 18px;
+      padding: 18px;
+      background: var(--canary);
+      box-shadow:
+        14px 14px 0 var(--ink),
+        25px 25px 0 var(--hot-pink);
+      transform-style: preserve-3d;
+      overflow: hidden;
+    }
+
+    .portrait-frame::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(115deg, transparent 25%, rgba(255,255,255,.85) 43%, transparent 57%);
+      transform: translateX(-130%);
+      animation: shineSweep 5.3s 1s ease-in-out infinite;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .portrait-placeholder {
+      position: relative;
+      display: grid;
+      place-items: center;
+      height: 100%;
+      overflow: hidden;
+      border: 4px solid var(--ink);
+      border-radius: 24px 6px 32px 12px;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.72), transparent 42%),
+        repeating-linear-gradient(
+          -45deg,
+          var(--canary) 0 18px,
+          #ffef61 18px 36px
         );
+      text-align: center;
+      isolation: isolate;
+    }
 
-        --transition-soft: 280ms ease;
-      }
+    .portrait-placeholder::after {
+      content: "YOUR PHOTO";
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%) rotate(-2deg);
+      padding: 7px 10px;
+      border: 3px solid var(--ink);
+      background: var(--white);
+      box-shadow: 4px 4px 0 var(--ink);
+      font: 900 .76rem/1 var(--font-mono);
+      white-space: nowrap;
+    }
 
-      * {
-        box-sizing: border-box;
-      }
+    .portrait-placeholder svg {
+      width: 42%;
+      opacity: .8;
+      filter: drop-shadow(5px 5px 0 rgba(0,0,0,.18));
+    }
 
-      html {
-        scroll-behavior: smooth;
-        background: var(--color-page);
-      }
+    .portrait-sticker {
+      position: absolute;
+      z-index: 4;
+      top: 5%;
+      right: -10%;
+      transform: rotate(10deg);
+      padding: 12px 15px;
+      border: 3px solid var(--ink);
+      background: var(--hot-pink);
+      box-shadow: 5px 5px 0 var(--ink);
+      color: white;
+      font: 950 .82rem/1 var(--font-mono);
+      text-transform: uppercase;
+    }
 
-      body {
-        min-height: 100vh;
-        margin: 0;
-        overflow-x: hidden;
-        font-family: var(--font-sans);
-        color: var(--color-text);
-        background: var(--color-page);
-      }
+    .marquee {
+      position: relative;
+      width: 100vw;
+      margin-left: calc(50% - 50vw);
+      overflow: clip;
+      border-block: 4px solid var(--ink);
+      background: var(--electric-blue);
+      color: white;
+    }
 
-      body::before {
-        content: "";
-        position: fixed;
-        inset: -25%;
-        z-index: -4;
-        background: var(--gradient-hero);
-        filter: blur(80px);
-        animation: aura-drift 18s ease-in-out infinite alternate;
-      }
+    .marquee__track {
+      display: flex;
+      width: max-content;
+      gap: 0;
+      padding-block: 13px;
+      animation: ticker 30s linear infinite;
+      will-change: transform;
+    }
 
-      body::after {
-        content: "";
-        position: fixed;
-        inset: 0;
-        z-index: -3;
-        background-image:
-          linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-        background-size: 72px 72px;
-        mask-image: radial-gradient(circle at center, black, transparent 72%);
-        pointer-events: none;
-      }
+    .marquee__item {
+      display: inline-flex;
+      align-items: center;
+      gap: 18px;
+      padding-inline: 20px;
+      font: 950 clamp(.95rem, 1.8vw, 1.35rem)/1 var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      white-space: nowrap;
+    }
 
-      a {
-        color: inherit;
-        text-decoration: none;
-      }
+    .marquee__item::after {
+      content: "✦";
+      color: var(--canary);
+    }
 
-      .noise {
-        position: fixed;
-        inset: 0;
-        z-index: -2;
-        opacity: 0.085;
-        pointer-events: none;
-        background-image: url("https://grainy-gradients.vercel.app/noise.svg");
-      }
+    .section {
+      position: relative;
+      padding-block: clamp(82px, 10vw, 160px);
+    }
 
-      .orb {
-        position: fixed;
-        z-index: -1;
-        width: var(--orb-size);
-        height: var(--orb-size);
-        border-radius: 999px;
-        opacity: var(--orb-opacity);
-        background: var(--orb-gradient);
-        filter: blur(var(--orb-blur));
-        animation: orb-float var(--orb-speed) ease-in-out infinite alternate;
-      }
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 20px;
+      align-items: end;
+      margin-bottom: clamp(36px, 6vw, 80px);
+    }
 
-      .orb-one {
-        --orb-size: 360px;
-        --orb-opacity: 0.34;
-        --orb-blur: 38px;
-        --orb-speed: 10s;
-        --orb-gradient: var(--color-violet);
-        top: 8%;
-        left: -120px;
-      }
+    .kicker {
+      margin: 0 0 10px;
+      font: 900 .78rem/1 var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: .12em;
+    }
 
-      .orb-two {
-        --orb-size: 420px;
-        --orb-opacity: 0.26;
-        --orb-blur: 48px;
-        --orb-speed: 13s;
-        --orb-gradient: var(--color-cyan);
-        top: 28%;
-        right: -160px;
-      }
+    .section-title {
+      max-width: 12ch;
+      margin: 0;
+      font-size: clamp(3rem, 7vw, 7.2rem);
+      line-height: .86;
+      letter-spacing: -.065em;
+      font-weight: 1000;
+      text-transform: uppercase;
+      text-wrap: balance;
+    }
 
-      .orb-three {
-        --orb-size: 280px;
-        --orb-opacity: 0.24;
-        --orb-blur: 42px;
-        --orb-speed: 16s;
-        --orb-gradient: var(--color-pink);
-        bottom: 8%;
-        left: 32%;
-      }
+    .section-title span {
+      color: var(--electric-blue);
+      -webkit-text-stroke: 2px var(--ink);
+      paint-order: stroke fill;
+    }
 
-      .page {
-        width: min(var(--container), calc(100% - 32px));
-        margin: 0 auto;
-        padding: 24px 0 64px;
-      }
+    .section-number {
+      align-self: start;
+      padding: 12px 14px;
+      border: 3px solid var(--ink);
+      background: var(--acid);
+      box-shadow: 5px 5px 0 var(--ink);
+      font: 950 1rem/1 var(--font-mono);
+      transform: rotate(3deg);
+    }
 
-      .nav {
-        position: sticky;
-        top: 16px;
-        z-index: 10;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 12px;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        background: rgba(5, 5, 6, 0.58);
-        backdrop-filter: var(--blur-glass);
-        box-shadow: var(--shadow-card);
-      }
+    .projects-grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: clamp(18px, 2.4vw, 34px);
+    }
 
-      .brand,
-      .nav-links,
-      .social-pill,
-      .button {
-        display: inline-flex;
-        align-items: center;
-      }
+    .project-card {
+      --card-bg: var(--white);
+      position: relative;
+      grid-column: span 4;
+      min-height: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: clamp(22px, 2.8vw, 34px);
+      border: 4px solid var(--ink);
+      border-radius: 22px;
+      background: var(--card-bg);
+      box-shadow: 9px 9px 0 var(--ink);
+      overflow: hidden;
+      isolation: isolate;
+      transform-origin: center;
+      contain: layout paint;
+      content-visibility: auto;
+      contain-intrinsic-size: 400px;
+      transition:
+        transform .22s var(--ease-squish),
+        box-shadow .22s ease;
+    }
 
-      .brand {
-        gap: 10px;
-        padding: 6px 12px 6px 6px;
-        font-weight: 700;
-      }
+    .project-card::before {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      width: 220px;
+      aspect-ratio: 1;
+      right: -90px;
+      top: -85px;
+      border: 4px solid var(--ink);
+      border-radius: 50%;
+      background:
+        repeating-conic-gradient(
+          from 0deg,
+          rgba(255,255,255,.95) 0 12deg,
+          transparent 12deg 24deg
+        );
+      opacity: .44;
+      transition: transform .7s var(--ease-pop);
+    }
 
-      .brand-mark {
-        display: grid;
-        width: 36px;
-        height: 36px;
-        place-items: center;
-        border-radius: 50%;
-        font-family: var(--font-mono);
-        font-size: 13px;
-        background: var(--gradient-title);
-        color: #050506;
-      }
+    .project-card:hover {
+      z-index: 3;
+      transform: translate(-5px, -7px) rotate(-.4deg);
+      box-shadow: 15px 17px 0 var(--ink);
+    }
 
-      .nav-links {
-        gap: 8px;
-      }
+    .project-card:hover::before {
+      transform: rotate(52deg) scale(1.08);
+    }
 
-      .nav-links a {
-        padding: 10px 14px;
-        border-radius: var(--radius-md);
-        color: var(--color-text-soft);
-        font-size: 14px;
-        transition:
-          background var(--transition-soft),
-          color var(--transition-soft);
-      }
+    .project-card--wide {
+      grid-column: span 8;
+    }
 
-      .nav-links a:hover {
-        color: var(--color-text);
-        background: var(--color-surface);
-      }
+    .project-card--tall {
+      min-height: 520px;
+    }
 
-      .hero {
-        min-height: calc(100vh - 120px);
-        display: grid;
-        align-items: center;
-        padding: 96px 0 64px;
-      }
+    .project-card[data-color="yellow"] { --card-bg: var(--canary); }
+    .project-card[data-color="pink"] { --card-bg: #ffb8e6; }
+    .project-card[data-color="blue"] { --card-bg: #aebcff; }
+    .project-card[data-color="acid"] { --card-bg: #dfff9e; }
+    .project-card[data-color="orange"] { --card-bg: #ffc48f; }
+    .project-card[data-color="cyan"] { --card-bg: #b9fff5; }
+    .project-card[data-color="purple"] { --card-bg: #d3c0ff; }
 
-      .hero-inner {
-        display: grid;
-        gap: 28px;
-      }
+    .project-card__top {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: flex-start;
+    }
 
-      .eyebrow {
-        width: fit-content;
-        margin: 0;
-        padding: 9px 13px;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        color: var(--color-text-soft);
-        font-family: var(--font-mono);
-        font-size: 12px;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        background: rgba(255, 255, 255, 0.045);
-      }
+    .project-index {
+      display: grid;
+      place-items: center;
+      min-width: 46px;
+      height: 46px;
+      border: 3px solid var(--ink);
+      border-radius: 50%;
+      background: var(--white);
+      box-shadow: 4px 4px 0 var(--ink);
+      font: 950 .8rem/1 var(--font-mono);
+    }
 
-      .title {
-        max-width: 980px;
-        margin: 0;
-        font-size: clamp(72px, 15vw, 176px);
-        line-height: 0.82;
-        letter-spacing: -0.095em;
-        font-weight: 900;
-      }
+    .project-type {
+      max-width: 65%;
+      padding: 7px 10px;
+      border: 2px solid var(--ink);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--white) 84%, transparent);
+      font: 900 .68rem/1 var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      text-align: right;
+    }
 
-      .title span {
-        display: block;
-        width: fit-content;
-        background: var(--gradient-title);
-        background-size: 240% 240%;
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
-        animation: gradient-flow 9s linear infinite;
-      }
+    .project-card h3 {
+      margin: auto 0 0;
+      font-size: clamp(2.1rem, 3.6vw, 4.6rem);
+      line-height: .88;
+      letter-spacing: -.055em;
+      font-weight: 1000;
+      text-transform: uppercase;
+      text-wrap: balance;
+    }
 
-      .lead {
-        max-width: 720px;
-        margin: 0;
-        color: var(--color-text-soft);
-        font-size: clamp(20px, 3vw, 32px);
-        line-height: 1.18;
-        letter-spacing: -0.045em;
-      }
+    .project-card p {
+      margin: 0;
+      max-width: 62ch;
+      font-size: 1rem;
+      line-height: 1.45;
+      font-weight: 650;
+    }
 
-      .hero-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-      }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 4px;
+    }
 
-      .button {
-        min-height: 48px;
-        justify-content: center;
-        gap: 10px;
-        padding: 0 18px;
-        border-radius: var(--radius-md);
-        font-weight: 700;
-        transition:
-          transform var(--transition-soft),
-          border-color var(--transition-soft),
-          background var(--transition-soft);
-      }
+    .chip {
+      padding: 6px 9px;
+      border: 2px solid var(--ink);
+      border-radius: 999px;
+      background: var(--white);
+      font: 850 .68rem/1 var(--font-mono);
+    }
 
-      .button:hover {
-        transform: translateY(-2px);
-      }
+    .manifesto {
+      display: grid;
+      grid-template-columns: .9fr 1.1fr;
+      gap: clamp(28px, 7vw, 100px);
+      align-items: start;
+    }
 
-      .button-primary {
-        color: #050506;
-        background: #ffffff;
-      }
+    .manifesto__sticky {
+      position: sticky;
+      top: 120px;
+    }
 
-      .button-ghost {
-        border: 1px solid var(--color-border);
-        background: var(--color-surface);
-      }
+    .manifesto__card {
+      padding: clamp(26px, 4vw, 48px);
+      border: 4px solid var(--ink);
+      border-radius: 26px;
+      background: var(--hot-pink);
+      color: white;
+      box-shadow: var(--shadow-big);
+      transform: rotate(-2deg);
+    }
 
-      .social-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 12px;
-        margin-top: 18px;
-      }
+    .manifesto__card h2 {
+      margin: 0;
+      font-size: clamp(3.2rem, 6.5vw, 7rem);
+      line-height: .85;
+      letter-spacing: -.06em;
+      text-transform: uppercase;
+    }
 
-      .social-pill {
-        min-height: 82px;
-        flex-direction: column;
-        align-items: flex-start;
-        justify-content: center;
-        gap: 6px;
-        padding: 18px;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-lg);
-        background: var(--gradient-card);
-        backdrop-filter: var(--blur-glass);
-        box-shadow: var(--shadow-card);
-        transition:
-          transform var(--transition-soft),
-          border-color var(--transition-soft),
-          background var(--transition-soft);
-      }
+    .manifesto__list {
+      display: grid;
+      gap: 26px;
+    }
 
-      .social-pill:hover {
-        transform: translateY(-4px);
-        border-color: var(--color-border-strong);
-        background: var(--color-surface-strong);
-      }
+    .principle {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 18px;
+      padding: 26px;
+      border: 3px solid var(--ink);
+      border-radius: 18px;
+      background: var(--white);
+      box-shadow: 6px 6px 0 var(--ink);
+    }
 
-      .social-pill span {
-        color: var(--color-text-muted);
-        font-family: var(--font-mono);
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-      }
+    .principle__n {
+      font: 1000 clamp(2rem, 5vw, 4rem)/.9 var(--font-mono);
+      color: var(--electric-blue);
+    }
 
-      .social-pill strong {
-        font-size: 18px;
-      }
+    .principle h3 {
+      margin: 0 0 8px;
+      font-size: 1.45rem;
+      line-height: 1;
+    }
 
-      .section {
-        padding: 64px 0;
-      }
+    .principle p {
+      margin: 0;
+      line-height: 1.55;
+      font-weight: 620;
+    }
 
-      .section-heading {
-        display: grid;
-        gap: 14px;
-        margin-bottom: 24px;
-      }
+    .socials {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+    }
 
-      .section-heading h2 {
-        max-width: 780px;
-        margin: 0;
-        font-size: clamp(42px, 7vw, 88px);
-        line-height: 0.92;
-        letter-spacing: -0.075em;
-      }
+    .social-card {
+      position: relative;
+      min-height: 190px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 24px;
+      border: 4px solid var(--ink);
+      border-radius: 18px;
+      background: var(--white);
+      box-shadow: 7px 7px 0 var(--ink);
+      text-decoration: none;
+      overflow: hidden;
+      transition:
+        transform .2s var(--ease-squish),
+        box-shadow .2s ease;
+    }
 
-      .project-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
+    .social-card:nth-child(1) { background: var(--ink); color: white; }
+    .social-card:nth-child(2) { background: var(--canary); }
+    .social-card:nth-child(3) { background: var(--hot-pink); color: white; }
+    .social-card:nth-child(4) { background: var(--cyan); }
+
+    .social-card:hover {
+      transform: translateY(-6px) rotate(-1deg);
+      box-shadow: 11px 13px 0 var(--ink);
+    }
+
+    .social-card__label {
+      font: 900 .75rem/1 var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: .1em;
+    }
+
+    .social-card__name {
+      font-size: clamp(2rem, 4vw, 4.5rem);
+      line-height: .9;
+      letter-spacing: -.05em;
+      font-weight: 1000;
+    }
+
+    .social-card__arrow {
+      position: absolute;
+      right: 18px;
+      top: 18px;
+      width: 45px;
+      height: 45px;
+      display: grid;
+      place-items: center;
+      border: 3px solid currentColor;
+      border-radius: 50%;
+      font-size: 1.4rem;
+      font-weight: 1000;
+    }
+
+    .seo-wall {
+      margin-top: 50px;
+      padding: clamp(26px, 5vw, 58px);
+      border: 4px solid var(--ink);
+      border-radius: 24px;
+      background:
+        linear-gradient(rgba(255,255,255,.85), rgba(255,255,255,.85)),
+        repeating-linear-gradient(0deg, var(--ink) 0 1px, transparent 1px 16px);
+      box-shadow: var(--shadow);
+    }
+
+    .seo-wall h2 {
+      margin: 0 0 14px;
+      max-width: 13ch;
+      font-size: clamp(2.4rem, 6vw, 6rem);
+      line-height: .88;
+      letter-spacing: -.055em;
+      text-transform: uppercase;
+    }
+
+    .seo-wall p {
+      max-width: 80ch;
+      margin: 0;
+      font-size: 1.03rem;
+      line-height: 1.65;
+      font-weight: 620;
+    }
+
+    footer {
+      position: relative;
+      width: 100vw;
+      margin-left: calc(50% - 50vw);
+      margin-top: 90px;
+      border-top: 4px solid var(--ink);
+      background: var(--ink);
+      color: white;
+      overflow: hidden;
+    }
+
+    .footer-inner {
+      width: min(100%, var(--max));
+      margin-inline: auto;
+      padding: 60px var(--gutter) max(46px, env(safe-area-inset-bottom));
+    }
+
+    .footer-title {
+      margin: 0;
+      font-size: clamp(4rem, 12vw, 13rem);
+      line-height: .74;
+      letter-spacing: -.08em;
+      font-weight: 1000;
+      text-transform: uppercase;
+      color: var(--canary);
+      text-shadow:
+        4px 4px 0 var(--hot-pink),
+        8px 8px 0 var(--electric-blue);
+    }
+
+    .footer-bottom {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 16px 30px;
+      margin-top: 50px;
+      font: 750 .83rem/1.45 var(--font-mono);
+    }
+
+    .cursor-blob {
+      position: fixed;
+      z-index: 999;
+      left: 0;
+      top: 0;
+      width: 26px;
+      aspect-ratio: 1;
+      border: 2px solid var(--ink);
+      border-radius: 50%;
+      background: var(--canary);
+      box-shadow: 3px 3px 0 var(--ink);
+      pointer-events: none;
+      transform: translate3d(-100px, -100px, 0);
+      opacity: 0;
+      mix-blend-mode: multiply;
+      will-change: transform;
+    }
+
+    @keyframes ticker {
+      to { transform: translateX(-50%); }
+    }
+
+    @keyframes shineSweep {
+      0%, 18% { transform: translateX(-130%); }
+      48%, 100% { transform: translateX(140%); }
+    }
+
+    @keyframes slowSpin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Native CSS scroll timeline where supported */
+    @supports (animation-timeline: scroll()) {
+      .section-title {
+        animation: titleStretch linear both;
+        animation-timeline: view();
+        animation-range: entry 15% cover 45%;
       }
 
       .project-card {
+        animation: cardReveal linear both;
+        animation-timeline: view();
+        animation-range: entry 5% cover 32%;
+      }
+
+      .portrait-frame {
+        animation: portraitFloat linear both;
+        animation-timeline: scroll(root block);
+        animation-range: 0 65vh;
+      }
+    }
+
+    @keyframes titleStretch {
+      from {
+        opacity: .25;
+        transform: translateY(40px) scaleX(.82);
+        filter: blur(7px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scaleX(1);
+        filter: blur(0);
+      }
+    }
+
+    @keyframes cardReveal {
+      from {
+        opacity: .12;
+        transform: translateY(70px) rotate(1.6deg) scale(.94);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) rotate(0) scale(1);
+      }
+    }
+
+    @keyframes portraitFloat {
+      from { transform: rotate(3deg) translateY(0) scale(1); }
+      to { transform: rotate(-2deg) translateY(42px) scale(.95); }
+    }
+
+    @media (max-width: 1080px) {
+      .hero {
+        grid-template-columns: 1fr;
+        padding-top: 105px;
+      }
+
+      .hero h1 {
+        max-width: 10ch;
+      }
+
+      .portrait-wrap {
+        width: min(82vw, 450px);
+      }
+
+      .project-card,
+      .project-card--wide {
+        grid-column: span 6;
+      }
+
+      .manifesto {
+        grid-template-columns: 1fr;
+      }
+
+      .manifesto__sticky {
         position: relative;
-        min-height: 280px;
-        overflow: hidden;
-        padding: 24px;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-xl);
-        background: var(--gradient-card);
-        backdrop-filter: var(--blur-glass);
-        box-shadow: var(--shadow-card);
-        transition:
-          transform var(--transition-soft),
-          border-color var(--transition-soft);
+        top: 0;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .topbar__inner {
+        border-radius: 18px;
+        align-items: stretch;
+        flex-direction: column;
       }
 
-      .project-card::before {
-        content: "";
-        position: absolute;
-        inset: -1px;
-        z-index: -1;
-        opacity: 0;
-        background: radial-gradient(
-          circle at var(--card-x, 50%) var(--card-y, 0%),
-          var(--project-color),
-          transparent 55%
-        );
-        transition: opacity var(--transition-soft);
+      .nav {
+        margin-inline: -4px;
       }
 
-      .project-card:hover {
-        transform: translateY(-8px);
-        border-color: var(--color-border-strong);
+      .hero {
+        min-height: auto;
+        padding-top: 72px;
       }
 
-      .project-card:hover::before {
-        opacity: 0.34;
+      .hero h1 {
+        font-size: clamp(3.6rem, 18vw, 6.6rem);
+        -webkit-hyphens: none;
+        hyphens: none;
       }
 
-      .project-card:nth-child(1) {
-        --project-color: rgba(244, 114, 182, 0.75);
+      .section-head {
+        grid-template-columns: 1fr;
       }
 
-      .project-card:nth-child(2) {
-        --project-color: rgba(34, 211, 238, 0.7);
-      }
-
-      .project-card:nth-child(3) {
-        --project-color: rgba(163, 230, 53, 0.62);
-      }
-
-      .project-kicker {
-        display: inline-flex;
+      .section-number {
         width: fit-content;
-        margin-bottom: 72px;
-        padding: 8px 11px;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-md);
-        color: var(--color-text-soft);
-        font-family: var(--font-mono);
-        font-size: 12px;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        background: rgba(0, 0, 0, 0.24);
       }
 
-      .project-card h3 {
-        margin: 0 0 12px;
-        font-size: 38px;
-        line-height: 0.96;
-        letter-spacing: -0.06em;
+      .project-card,
+      .project-card--wide {
+        grid-column: 1 / -1;
       }
 
-      .project-card p {
-        max-width: 300px;
-        margin: 0;
-        color: var(--color-text-soft);
-        font-size: 16px;
-        line-height: 1.55;
+      .project-card {
+        min-height: 330px;
       }
 
-      .project-arrow {
-        position: absolute;
-        right: 22px;
-        top: 22px;
-        display: grid;
-        width: 42px;
-        height: 42px;
-        place-items: center;
-        border: 1px solid var(--color-border);
-        border-radius: 50%;
-        color: var(--color-text);
-        background: rgba(255, 255, 255, 0.055);
+      .socials {
+        grid-template-columns: 1fr;
       }
 
-      .footer {
-        display: flex;
-        justify-content: space-between;
-        gap: 18px;
-        padding: 28px 0 0;
-        border-top: 1px solid var(--color-border);
-        color: var(--color-text-muted);
-        font-family: var(--font-mono);
-        font-size: 13px;
+      .cursor-blob {
+        display: none;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
       }
 
-      @keyframes gradient-flow {
-        0% {
-          background-position: 0% 50%;
-        }
-
-        50% {
-          background-position: 100% 50%;
-        }
-
-        100% {
-          background-position: 0% 50%;
-        }
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .001ms !important;
       }
 
-      @keyframes aura-drift {
-        0% {
-          transform: rotate(0deg) scale(1);
-        }
+      .portrait-frame,
+      .project-card,
+      .section-title {
+        transform: none !important;
+        opacity: 1 !important;
+        filter: none !important;
+      }
+    }
 
-        100% {
-          transform: rotate(8deg) scale(1.12);
-        }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --paper: #181818;
+        --ink: #f7f4e8;
+        --white: #242424;
+        --black: #ffffff;
       }
 
-      @keyframes orb-float {
-        0% {
-          transform: translate3d(0, 0, 0) scale(1);
-        }
-
-        100% {
-          transform: translate3d(42px, -36px, 0) scale(1.08);
-        }
+      body {
+        background:
+          radial-gradient(circle at 8% 4%, rgba(255,46,178,.2), transparent 22rem),
+          radial-gradient(circle at 92% 16%, rgba(36,87,255,.22), transparent 26rem),
+          var(--paper);
       }
 
-      @media (max-width: 820px) {
-        .page {
-          width: min(100% - 24px, var(--container));
-        }
-
-        .nav {
-          align-items: flex-start;
-          border-radius: 28px;
-        }
-
-        .nav-links {
-          display: none;
-        }
-
-        .hero {
-          padding-top: 72px;
-        }
-
-        .social-grid,
-        .project-grid {
-          grid-template-columns: 1fr;
-        }
-
-        .project-card {
-          min-height: 240px;
-        }
-
-        .footer {
-          flex-direction: column;
-        }
+      .noise {
+        mix-blend-mode: soft-light;
       }
 
-      @media (prefers-reduced-motion: reduce) {
-        *,
-        *::before,
-        *::after {
-          animation-duration: 1ms !important;
-          animation-iteration-count: 1 !important;
-          scroll-behavior: auto !important;
-        }
+      .project-card,
+      .principle,
+      .social-card,
+      .seo-wall,
+      .btn {
+        color: #101010;
       }
-    </style>
-  </head>
 
-  <body>
-    <div class="noise"></div>
-    <div class="orb orb-one"></div>
-    <div class="orb orb-two"></div>
-    <div class="orb orb-three"></div>
+      .project-card[data-color],
+      .social-card {
+        border-color: #101010;
+        box-shadow: 9px 9px 0 #f7f4e8;
+      }
 
-    <main class="page">
-      <nav class="nav" aria-label="Main navigation">
-        <a class="brand" href="/" aria-label="Rod Kisten home">
-          <span class="brand-mark">RK</span>
-          <span>Rod Kisten</span>
+      .social-card:nth-child(1),
+      footer {
+        color: white;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <a class="skip-link" href="#main">Pular para o conteúdo</a>
+  <div class="noise" aria-hidden="true"></div>
+  <div class="cursor-blob" aria-hidden="true"></div>
+
+  <header class="topbar page-shell" aria-label="Navegação principal">
+    <div class="topbar__inner">
+      <a class="brand" href="#top" aria-label="Rod Kisten, início">
+        <span class="brand__dot" aria-hidden="true"></span>
+        <span>ROD/KISTEN</span>
+      </a>
+
+      <nav class="nav" aria-label="Seções do site">
+        <a href="#projects">Projetos</a>
+        <a href="#principles">Princípios</a>
+        <a href="#socials">Links</a>
+        <a href="https://github.com/rodkisten" rel="me noopener noreferrer">GitHub ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero page-shell" id="top" aria-labelledby="hero-title">
+      <div class="hero__copy">
+        <div class="eyebrow">Software engineer · creative tooling · open source</div>
+
+        <h1 id="hero-title">
+          I build
+          <span class="shiny-word">weirdly useful</span>
+          software.
+        </h1>
+
+        <p class="hero__lede">
+          Interfaces que parecem brinquedos, runtimes que trabalham como infraestrutura,
+          DevTools para lugares onde DevTools quase não existem e pequenas bibliotecas
+          obcecadas por performance, ergonomia e detalhes.
+        </p>
+
+        <div class="hero__actions">
+          <a class="btn btn--primary magnetic" href="#projects">Explorar projetos ↓</a>
+          <a class="btn btn--pink magnetic" href="https://github.com/rodkisten" rel="me noopener noreferrer">
+            GitHub ↗
+          </a>
+        </div>
+      </div>
+
+      <aside class="portrait-wrap" aria-label="Foto de Rod Kisten">
+        <div class="portrait-orbit" aria-hidden="true"></div>
+        <div class="portrait-sticker">foto aqui ✦</div>
+
+        <div class="portrait-frame" data-tilt>
+          <div class="portrait-placeholder">
+            <!-- Substitua este bloco por:
+              <img src="./rod.jpg" alt="Retrato de Rod Kisten" width="960" height="1200" loading="eager" fetchpriority="high">
+            -->
+            <svg viewBox="0 0 180 180" aria-hidden="true">
+              <circle cx="90" cy="64" r="38" fill="none" stroke="currentColor" stroke-width="8"/>
+              <path d="M28 160c8-38 31-57 62-57s54 19 62 57" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/>
+            </svg>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="marquee" aria-label="Tecnologias e áreas">
+      <div class="marquee__track" aria-hidden="true">
+        <span class="marquee__item">TypeScript</span>
+        <span class="marquee__item">Browser APIs</span>
+        <span class="marquee__item">React</span>
+        <span class="marquee__item">Userscripts</span>
+        <span class="marquee__item">Developer Tools</span>
+        <span class="marquee__item">Performance</span>
+        <span class="marquee__item">UI Systems</span>
+        <span class="marquee__item">Open Source</span>
+        <span class="marquee__item">TypeScript</span>
+        <span class="marquee__item">Browser APIs</span>
+        <span class="marquee__item">React</span>
+        <span class="marquee__item">Userscripts</span>
+        <span class="marquee__item">Developer Tools</span>
+        <span class="marquee__item">Performance</span>
+        <span class="marquee__item">UI Systems</span>
+        <span class="marquee__item">Open Source</span>
+      </div>
+    </section>
+
+    <section class="section page-shell" id="projects" aria-labelledby="projects-title">
+      <header class="section-head">
+        <div>
+          <p class="kicker">Core libraries + interface systems + experiments</p>
+          <h2 class="section-title" id="projects-title">
+            A small <span>universe</span> of tools.
+          </h2>
+        </div>
+        <div class="section-number">01 / PROJECTS</div>
+      </header>
+
+      <div class="projects-grid">
+        <article class="project-card project-card--wide project-card--tall" data-color="yellow">
+          <div class="project-card__top">
+            <span class="project-index">001</span>
+            <span class="project-type">UI / notification system</span>
+          </div>
+          <h3>Rod Toaster</h3>
+          <p>
+            Um sistema de toast que foi ficando perigosamente completo: rich content,
+            ações, confirms, multi-loading, progresso acumulado, retries, cancelamento,
+            expansão scrollable, picker e lifecycle refinado para interfaces móveis.
+          </p>
+          <div class="chips">
+            <span class="chip">TypeScript</span>
+            <span class="chip">IIFE</span>
+            <span class="chip">WAAPI</span>
+            <span class="chip">Mobile-first</span>
+          </div>
+        </article>
+
+        <article class="project-card" data-color="pink">
+          <div class="project-card__top">
+            <span class="project-index">002</span>
+            <span class="project-type">UI / schema-driven</span>
+          </div>
+          <h3>Rod Menu</h3>
+          <p>
+            Menu composável com campos tipados, gestos, persistência opcional,
+            transformação de dados, components override e renderers customizáveis.
+          </p>
+          <div class="chips">
+            <span class="chip">Gestures</span>
+            <span class="chip">Persistence</span>
+            <span class="chip">Extensible</span>
+          </div>
+        </article>
+
+        <article class="project-card" data-color="cyan">
+          <div class="project-card__top">
+            <span class="project-index">003</span>
+            <span class="project-type">inspection / data UI</span>
+          </div>
+          <h3>Object Inspector</h3>
+          <p>
+            Inspector navegável para objetos, arrays, erros, DOM nodes e estruturas
+            complexas. Base visual para debug, logs e ferramentas internas.
+          </p>
+          <div class="chips">
+            <span class="chip">Inspection</span>
+            <span class="chip">Debug UI</span>
+            <span class="chip">Cross-realm</span>
+          </div>
+        </article>
+
+        <article class="project-card" data-color="blue">
+          <div class="project-card__top">
+            <span class="project-index">004</span>
+            <span class="project-type">storage abstraction</span>
+          </div>
+          <h3>RodStorage</h3>
+          <p>
+            Camada central de storage com IndexedDB e localStorage, parsing,
+            versionamento, migrations, serialização e uma API consistente para userscripts.
+          </p>
+          <div class="chips">
+            <span class="chip">IndexedDB</span>
+            <span class="chip">localStorage</span>
+            <span class="chip">Migrations</span>
+          </div>
+        </article>
+
+        <article class="project-card project-card--wide" data-color="acid">
+          <div class="project-card__top">
+            <span class="project-index">005</span>
+            <span class="project-type">DOM factory / runtime utility</span>
+          </div>
+          <h3>RodElements</h3>
+          <p>
+            Tiny DOM factory browser-first com HTML/SVG, parser estilo Emmet,
+            children recursivos, listeners, refs, data, style, cross-realm safety
+            e integração opcional com o runtime de CSS do Cipó.
+          </p>
+          <div class="chips">
+            <span class="chip">DOM</span>
+            <span class="chip">SVG</span>
+            <span class="chip">Strict TS</span>
+            <span class="chip">Tiny API</span>
+          </div>
+        </article>
+
+        <article class="project-card project-card--tall" data-color="orange">
+          <div class="project-card__top">
+            <span class="project-index">006</span>
+            <span class="project-type">reactive runtime</span>
+          </div>
+          <h3>Broto</h3>
+          <p>
+            Runtime reativo com owner scopes, lifecycle, dependency tracking
+            e primitives para construir uma camada declarativa sem carregar um framework inteiro.
+          </p>
+          <div class="chips">
+            <span class="chip">Signals</span>
+            <span class="chip">Owners</span>
+            <span class="chip">Runtime</span>
+          </div>
+        </article>
+
+        <article class="project-card" data-color="yellow">
+          <div class="project-card__top">
+            <span class="project-index">007</span>
+            <span class="project-type">CSS runtime</span>
+          </div>
+          <h3>Cipó</h3>
+          <p>
+            CSS-in-JS/browser runtime focado em composição, tagged templates,
+            escopo previsível e integração com a família de ferramentas Rod.
+          </p>
+          <div class="chips">
+            <span class="chip">CSS</span>
+            <span class="chip">Runtime</span>
+            <span class="chip">Tagged templates</span>
+          </div>
+        </article>
+
+        <article class="project-card" data-color="purple">
+          <div class="project-card__top">
+            <span class="project-index">008</span>
+            <span class="project-type">render pipeline</span>
+          </div>
+          <h3>Fábrica</h3>
+          <p>
+            Camada de componentes e renderização: context providers, artifacts,
+            directives, DOM-special attributes e um pipeline extensível de RenderValue.
+          </p>
+          <div class="chips">
+            <span class="chip">Components</span>
+            <span class="chip">Context</span>
+            <span class="chip">Renderer</span>
+          </div>
+        </article>
+
+        <article class="project-card project-card--wide project-card--tall" data-color="pink">
+          <div class="project-card__top">
+            <span class="project-index">009</span>
+            <span class="project-type">mobile developer tools</span>
+          </div>
+          <h3>Rod DevTools / Caipora</h3>
+          <p>
+            Uma caixa de ferramentas de desenvolvimento para mobile Safari:
+            Console, Elements, Network, Sources, Settings, inspector, highlighter,
+            ingestão de logs, fetch/XHR interception, Eruda integration e experimentos
+            de React Fiber inspection. DevTools onde normalmente só existe sofrimento.
+          </p>
+          <div class="chips">
+            <span class="chip">iOS Safari</span>
+            <span class="chip">Eruda</span>
+            <span class="chip">Fiber</span>
+            <span class="chip">Network</span>
+            <span class="chip">Elements</span>
+          </div>
+        </article>
+
+        <article class="project-card" data-color="cyan">
+          <div class="project-card__top">
+            <span class="project-index">010</span>
+            <span class="project-type">storage devtools</span>
+          </div>
+          <h3>Alerta Storage</h3>
+          <p>
+            Inspector estilo Chrome para Web Storage, cookies, IndexedDB,
+            Cache Storage, OPFS, quota e service workers, pensado para tela pequena.
+          </p>
+          <div class="chips">
+            <span class="chip">IndexedDB</span>
+            <span class="chip">OPFS</span>
+            <span class="chip">Cache Storage</span>
+          </div>
+        </article>
+
+        <article class="project-card" data-color="blue">
+          <div class="project-card__top">
+            <span class="project-index">011</span>
+            <span class="project-type">content blocker</span>
+          </div>
+          <h3>Rod Blocker</h3>
+          <p>
+            Engine de regras para bloquear, esconder, remover e substituir conteúdo,
+            interceptar rede, selecionar elementos e exportar regras no estilo EasyList.
+          </p>
+          <div class="chips">
+            <span class="chip">Userscript</span>
+            <span class="chip">Rules DSL</span>
+            <span class="chip">EasyList</span>
+          </div>
+        </article>
+
+        <article class="project-card project-card--wide" data-color="orange">
+          <div class="project-card__top">
+            <span class="project-index">012</span>
+            <span class="project-type">media automation</span>
+          </div>
+          <h3>All-in-One Media Downloader</h3>
+          <p>
+            Userscript/browser toolkit para descobrir vídeos, fotos, HLS, carrosséis,
+            selecionar mídia e encaminhar conteúdo para pipelines de download e Telegram.
+            Integra browser APIs, Scriptable e um relay server-side.
+          </p>
+          <div class="chips">
+            <span class="chip">Instagram</span>
+            <span class="chip">X / Twitter</span>
+            <span class="chip">HLS</span>
+            <span class="chip">Telegram</span>
+          </div>
+        </article>
+
+        <article class="project-card" data-color="acid">
+          <div class="project-card__top">
+            <span class="project-index">013</span>
+            <span class="project-type">cloud relay / database</span>
+          </div>
+          <h3>Telegram Relay</h3>
+          <p>
+            Worker com deduplicação, delivery claims, D1, batch delivery,
+            media identity, canais múltiplos, force resend e enriquecimento social.
+          </p>
+          <div class="chips">
+            <span class="chip">Cloudflare Workers</span>
+            <span class="chip">D1</span>
+            <span class="chip">Batch</span>
+          </div>
+        </article>
+
+        <article class="project-card" data-color="yellow">
+          <div class="project-card__top">
+            <span class="project-index">014</span>
+            <span class="project-type">browser observability</span>
+          </div>
+          <h3>Network Logger</h3>
+          <p>
+            Interceptação de fetch/XHR com UI de inspeção, logs, detalhes,
+            integração com Object Inspector e ferramentas de bloqueio.
+          </p>
+          <div class="chips">
+            <span class="chip">fetch</span>
+            <span class="chip">XHR</span>
+            <span class="chip">Performance API</span>
+          </div>
+        </article>
+
+        <article class="project-card" data-color="purple">
+          <div class="project-card__top">
+            <span class="project-index">015</span>
+            <span class="project-type">react inspection</span>
+          </div>
+          <h3>React Fiber Panel</h3>
+          <p>
+            Experimento de React DevTools para ambientes hostis: caça Fiber no DOM,
+            hook global, owners, props, state e relações entre componentes.
+          </p>
+          <div class="chips">
+            <span class="chip">React</span>
+            <span class="chip">Fiber</span>
+            <span class="chip">Mobile DevTools</span>
+          </div>
+        </article>
+
+        <article class="project-card project-card--wide" data-color="cyan">
+          <div class="project-card__top">
+            <span class="project-index">016</span>
+            <span class="project-type">social feed experiments</span>
+          </div>
+          <h3>Instagram Feed Tools</h3>
+          <p>
+            Userscripts para suggested feed, navegação infinita em posts/reels,
+            interceptação de fetch, observação de DOM e experiências de interface
+            que tentam reconstruir partes úteis do app nativo dentro da web.
+          </p>
+          <div class="chips">
+            <span class="chip">Instagram</span>
+            <span class="chip">Infinite feed</span>
+            <span class="chip">Fetch interception</span>
+          </div>
+        </article>
+
+        <article class="project-card" data-color="pink">
+          <div class="project-card__top">
+            <span class="project-index">017</span>
+            <span class="project-type">product / civic tech</span>
+          </div>
+          <h3>Politika / Colinha</h3>
+          <p>
+            Produto experimental em TypeScript no espaço de informação política
+            e ferramentas de consulta, com foco em experiência web e organização de dados.
+          </p>
+          <div class="chips">
+            <span class="chip">TypeScript</span>
+            <span class="chip">Product</span>
+            <span class="chip">Civic tech</span>
+          </div>
+        </article>
+
+        <article class="project-card" data-color="blue">
+          <div class="project-card__top">
+            <span class="project-index">018</span>
+            <span class="project-type">developer infrastructure</span>
+          </div>
+          <h3>Build / IIFE Tooling</h3>
+          <p>
+            Pipelines Rolldown, GitHub Actions e convenções browser-first para transformar
+            utilitários TypeScript em artefatos IIFE versionados e publicáveis no Pages.
+          </p>
+          <div class="chips">
+            <span class="chip">Rolldown</span>
+            <span class="chip">GitHub Actions</span>
+            <span class="chip">IIFE</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section page-shell" id="principles" aria-labelledby="principles-title">
+      <div class="manifesto">
+        <div class="manifesto__sticky">
+          <div class="manifesto__card">
+            <p class="kicker">How I like to build</p>
+            <h2 id="principles-title">Useful first. Weird second. Fast always.</h2>
+          </div>
+        </div>
+
+        <div class="manifesto__list">
+          <article class="principle">
+            <div class="principle__n">01</div>
+            <div>
+              <h3>Browser-first</h3>
+              <p>
+                Ferramentas pequenas devem conseguir viver perto da plataforma.
+                Menos ceremony, menos dependência acidental, mais APIs nativas.
+              </p>
+            </div>
+          </article>
+
+          <article class="principle">
+            <div class="principle__n">02</div>
+            <div>
+              <h3>Mobile is not a reduced desktop</h3>
+              <p>
+                Gestos, viewport, foco, scroll, safe areas, performance térmica e
+                ergonomia de polegar mudam o problema inteiro.
+              </p>
+            </div>
+          </article>
+
+          <article class="principle">
+            <div class="principle__n">03</div>
+            <div>
+              <h3>Debugging deserves interface design</h3>
+              <p>
+                Ferramentas internas também merecem hierarquia, feedback,
+                transições legíveis e estados de erro impossíveis de ignorar.
+              </p>
+            </div>
+          </article>
+
+          <article class="principle">
+            <div class="principle__n">04</div>
+            <div>
+              <h3>Performance is part of the interaction</h3>
+              <p>
+                Uma interface não parece rápida apenas porque tem poucos milissegundos.
+                Ela precisa reagir imediatamente e movimentar só o que realmente importa.
+              </p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section page-shell" id="socials" aria-labelledby="socials-title">
+      <header class="section-head">
+        <div>
+          <p class="kicker">Code, experiments, photos, internet debris</p>
+          <h2 class="section-title" id="socials-title">Find me <span>around.</span></h2>
+        </div>
+        <div class="section-number">02 / LINKS</div>
+      </header>
+
+      <div class="socials">
+        <a class="social-card magnetic" href="https://github.com/rodkisten" rel="me noopener noreferrer">
+          <span class="social-card__label">Code / Open source</span>
+          <strong class="social-card__name">GitHub</strong>
+          <span class="social-card__arrow" aria-hidden="true">↗</span>
         </a>
 
-        <div class="nav-links">
-          <a href="https://github.com/oirodolfo">GitHub</a>
-          <a href="https://twitter.com/rodinhocosta">Twitter</a>
-          <a href="https://instagram.com/oirodolfo">Instagram</a>
-          <a href="/bundler">Bundler</a>
-        </div>
-      </nav>
+        <!-- Troque pelos seus links reais -->
+        <a class="social-card magnetic" href="#" aria-label="Instagram — substitua pelo seu URL">
+          <span class="social-card__label">Photos / life / visual scraps</span>
+          <strong class="social-card__name">Instagram</strong>
+          <span class="social-card__arrow" aria-hidden="true">↗</span>
+        </a>
 
-      <section class="hero" aria-labelledby="hero-title">
-        <div class="hero-inner">
-          <p class="eyebrow">frontend systems · open source · browser magic</p>
+        <a class="social-card magnetic" href="#" aria-label="LinkedIn — substitua pelo seu URL">
+          <span class="social-card__label">Work / career / network</span>
+          <strong class="social-card__name">LinkedIn</strong>
+          <span class="social-card__arrow" aria-hidden="true">↗</span>
+        </a>
 
-          <h1 class="title" id="hero-title">
-            <span>Rod</span>
-            <span>Kisten</span>
-          </h1>
+        <a class="social-card magnetic" href="#" aria-label="X / Twitter — substitua pelo seu URL">
+          <span class="social-card__label">Thoughts / code / chaos</span>
+          <strong class="social-card__name">X / Twitter</strong>
+          <span class="social-card__arrow" aria-hidden="true">↗</span>
+        </a>
+      </div>
 
-          <p class="lead">
-            I build tiny runtimes, strange tools, sharp interfaces, and little
-            browser ecosystems with a neon pulse.
-          </p>
+      <div class="seo-wall">
+        <h2>Software engineer building tools for the browser.</h2>
+        <p>
+          Rod Kisten é software engineer com foco em engenharia frontend, TypeScript,
+          JavaScript, React, sistemas de interface, performance web, browser APIs,
+          ferramentas de desenvolvedor e open source. Este portfólio reúne bibliotecas,
+          runtimes, DevTools mobile-first, userscripts, automações de mídia e experimentos
+          de produto construídos para web moderna.
+        </p>
+      </div>
+    </section>
+  </main>
 
-          <div class="hero-actions">
-            <a class="button button-primary" href="https://github.com/oirodolfo">
-              GitHub @oirodolfo
-            </a>
+  <footer>
+    <div class="footer-inner">
+      <p class="footer-title">BUILD<br>ODD<br>THINGS.</p>
 
-            <a class="button button-ghost" href="/bundler">
-              Open /bundler
-            </a>
-          </div>
+      <div class="footer-bottom">
+        <span>© <span id="year">2026</span> Rod Kisten.</span>
+        <span>Made with HTML, CSS, WAAPI, ScrollTimeline & an unreasonable amount of yellow.</span>
+      </div>
+    </div>
+  </footer>
 
-          <div class="social-grid" aria-label="Social links">
-            <a class="social-pill" href="https://github.com/rodkisten">
-              <span>GitHub</span>
-              <strong>@rodkisten</strong>
-            </a>
+  <script>
+    (() => {
+      "use strict";
 
-            <a class="social-pill" href="https://twitter.com/rodinhocosta">
-              <span>Twitter</span>
-              <strong>@rodinhocosta</strong>
-            </a>
+      const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      document.querySelector("#year").textContent = String(new Date().getFullYear());
 
-            <a class="social-pill" href="https://instagram.com/rodkisten">
-              <span>Instagram</span>
-              <strong>@rodkisten</strong>
-            </a>
-          </div>
-        </div>
-      </section>
+      if (reduceMotion) return;
 
-      <section class="section" aria-labelledby="projects-title">
-        <div class="section-heading">
-          <p class="eyebrow">ecosystem</p>
-          <h2 id="projects-title">Fábrica, Seiva and Cipó.</h2>
-        </div>
+      const qsa = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
-        <div class="project-grid">
-          <a class="project-card" href="/bundler">
-            <span class="project-arrow">↗</span>
-            <span class="project-kicker">Runtime</span>
-            <h3>Fábrica</h3>
-            <p>
-              A tiny reactive HTML runtime for building browser-native
-              interfaces without the ceremony.
-            </p>
-          </a>
+      /*
+       * 1) HERO ENTRANCE — Web Animations API.
+       *    Composite-friendly: transform + opacity only.
+       */
+      const intro = [
+        [".eyebrow", { y: 20, delay: 40 }],
+        [".hero h1", { y: 50, delay: 110 }],
+        [".hero__lede", { y: 34, delay: 210 }],
+        [".hero__actions", { y: 28, delay: 300 }],
+        [".portrait-wrap", { y: 45, delay: 180 }]
+      ];
 
-          <a class="project-card" href="/bundler">
-            <span class="project-arrow">↗</span>
-            <span class="project-kicker">State</span>
-            <h3>Seiva</h3>
-            <p>
-              Signal-driven state primitives for interfaces that update with
-              quiet precision.
-            </p>
-          </a>
+      for (const [selector, opts] of intro) {
+        const el = document.querySelector(selector);
+        if (!el) continue;
 
-          <a class="project-card" href="/bundler">
-            <span class="project-arrow">↗</span>
-            <span class="project-kicker">Style</span>
-            <h3>Cipó</h3>
-            <p>
-              Atomic styling vines, design tokens, and expressive utilities for
-              fast visual systems.
-            </p>
-          </a>
-        </div>
-      </section>
+        el.animate(
+          [
+            {
+              opacity: 0,
+              transform: `translate3d(0, ${opts.y}px, 0) scale(.965)`,
+              filter: "blur(7px)"
+            },
+            {
+              opacity: 1,
+              transform: "translate3d(0, 0, 0) scale(1)",
+              filter: "blur(0)"
+            }
+          ],
+          {
+            duration: 900,
+            delay: opts.delay,
+            easing: "cubic-bezier(.16,1,.3,1)",
+            fill: "both"
+          }
+        );
+      }
 
-      <footer class="footer">
-        <span>© Rod Kisten</span>
-        <span>GitHub Pages · /bundler · open source experiments</span>
-      </footer>
-    </main>
+      /*
+       * 2) SCROLL-TIMELINE / WAAPI.
+       *    Uses native ScrollTimeline when available.
+       */
+      if ("ScrollTimeline" in window) {
+        const heroTimeline = new ScrollTimeline({
+          source: document.scrollingElement,
+          axis: "block",
+          scrollOffsets: [
+            CSS.percent(0),
+            CSS.px(Math.min(innerHeight * 1.35, 1100))
+          ]
+        });
 
-    <script>
-      const cards = document.querySelectorAll(".project-card");
+        const heroTitle = document.querySelector(".hero h1");
+        if (heroTitle) {
+          heroTitle.animate(
+            [
+              { transform: "translate3d(0,0,0) scale(1)", opacity: 1 },
+              { transform: "translate3d(0,-70px,0) scale(.94)", opacity: .18 }
+            ],
+            { timeline: heroTimeline, fill: "both" }
+          );
+        }
 
-      for (const card of cards) {
-        card.addEventListener("pointermove", (event) => {
-          const rect = card.getBoundingClientRect();
-          const x = ((event.clientX - rect.left) / rect.width) * 100;
-          const y = ((event.clientY - rect.top) / rect.height) * 100;
+        const orbit = document.querySelector(".portrait-orbit");
+        if (orbit) {
+          orbit.animate(
+            [
+              { transform: "rotate(0deg) scale(1)" },
+              { transform: "rotate(130deg) scale(.83)" }
+            ],
+            { timeline: heroTimeline, fill: "both" }
+          );
+        }
+      }
 
-          card.style.setProperty("--card-x", `${x}%`);
-          card.style.setProperty("--card-y", `${y}%`);
+      /*
+       * 3) INTERSECTION FALLBACK.
+       *    Only runs when CSS animation-timeline is not supported.
+       */
+      const cssTimelineSupported =
+        CSS.supports?.("animation-timeline: scroll()") ||
+        CSS.supports?.("animation-timeline", "scroll()");
+
+      if (!cssTimelineSupported) {
+        const revealTargets = qsa(".project-card, .section-title, .principle, .social-card");
+
+        const io = new IntersectionObserver((entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) continue;
+            io.unobserve(entry.target);
+
+            entry.target.animate(
+              [
+                {
+                  opacity: 0,
+                  transform: "translate3d(0, 36px, 0) scale(.97)"
+                },
+                {
+                  opacity: 1,
+                  transform: "translate3d(0, 0, 0) scale(1)"
+                }
+              ],
+              {
+                duration: 700,
+                easing: "cubic-bezier(.16,1,.3,1)",
+                fill: "both"
+              }
+            );
+          }
+        }, {
+          threshold: .08,
+          rootMargin: "0px 0px -6% 0px"
+        });
+
+        revealTargets.forEach((el) => io.observe(el));
+      }
+
+      /*
+       * 4) CANARY PORTRAIT — low-cost pointer tilt.
+       *    One RAF maximum per frame, transform only.
+       */
+      const tilt = document.querySelector("[data-tilt]");
+      if (tilt && matchMedia("(pointer: fine)").matches) {
+        let raf = 0;
+        let nextX = 0;
+        let nextY = 0;
+
+        const paintTilt = () => {
+          raf = 0;
+          tilt.style.transform =
+            `rotateX(${nextY}deg) rotateY(${nextX}deg) rotateZ(3deg)`;
+        };
+
+        tilt.addEventListener("pointermove", (event) => {
+          const rect = tilt.getBoundingClientRect();
+          nextX = ((event.clientX - rect.left) / rect.width - .5) * 9;
+          nextY = -((event.clientY - rect.top) / rect.height - .5) * 9;
+
+          if (!raf) raf = requestAnimationFrame(paintTilt);
+        }, { passive: true });
+
+        tilt.addEventListener("pointerleave", () => {
+          nextX = 0;
+          nextY = 0;
+          if (!raf) raf = requestAnimationFrame(paintTilt);
+
+          tilt.animate(
+            [
+              { transform: tilt.style.transform },
+              { transform: "rotateX(0deg) rotateY(0deg) rotateZ(3deg)" }
+            ],
+            {
+              duration: 620,
+              easing: "cubic-bezier(.16,1,.3,1)",
+              fill: "forwards"
+            }
+          );
+        }, { passive: true });
+      }
+
+      /*
+       * 5) MAGNETIC LINKS — pointer-fine only.
+       *    Keeps touch completely clean.
+       */
+      if (matchMedia("(pointer: fine)").matches) {
+        qsa(".magnetic").forEach((el) => {
+          let raf = 0;
+          let x = 0;
+          let y = 0;
+
+          const render = () => {
+            raf = 0;
+            el.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+          };
+
+          el.addEventListener("pointermove", (event) => {
+            const rect = el.getBoundingClientRect();
+            x = (event.clientX - rect.left - rect.width / 2) * .12;
+            y = (event.clientY - rect.top - rect.height / 2) * .12;
+            if (!raf) raf = requestAnimationFrame(render);
+          }, { passive: true });
+
+          el.addEventListener("pointerleave", () => {
+            x = 0;
+            y = 0;
+            if (!raf) raf = requestAnimationFrame(render);
+          }, { passive: true });
         });
       }
-    </script>
-  </body>
+
+      /*
+       * 6) CUSTOM CURSOR BLOB — desktop only, no layout reads.
+       */
+      const cursor = document.querySelector(".cursor-blob");
+      if (cursor && matchMedia("(pointer: fine)").matches) {
+        let cx = -100;
+        let cy = -100;
+        let tx = -100;
+        let ty = -100;
+        let running = false;
+
+        const loop = () => {
+          cx += (tx - cx) * .18;
+          cy += (ty - cy) * .18;
+          cursor.style.transform =
+            `translate3d(${cx - 13}px, ${cy - 13}px, 0)`;
+
+          if (Math.abs(tx - cx) + Math.abs(ty - cy) > .25) {
+            requestAnimationFrame(loop);
+          } else {
+            running = false;
+          }
+        };
+
+        addEventListener("pointermove", (event) => {
+          tx = event.clientX;
+          ty = event.clientY;
+          cursor.style.opacity = "1";
+
+          if (!running) {
+            running = true;
+            requestAnimationFrame(loop);
+          }
+        }, { passive: true });
+      }
+    })();
+  </script>
+</body>
 </html>
