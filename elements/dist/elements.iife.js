@@ -1,4 +1,4 @@
-/* Auto-generated from elements/elements.ts. at 8/14/2026, 6:28:29 PM Do not edit directly. */
+/* Auto-generated from elements/elements.ts. at 8/14/2026, 6:34:09 PM Do not edit directly. */
 var RodElements = (function() {
 
 //#region \0rolldown/runtime.js
