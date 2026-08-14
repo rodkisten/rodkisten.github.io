@@ -3,197 +3,1540 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0b0e" />
-  <title>RodMenu v1 — Declarative UI Surfaces</title>
+  <meta name="theme-color" content="#09090b" />
+  <meta name="color-scheme" content="dark" />
+  <title>RodMenu v2.1 — Adaptive UI Runtime</title>
+
   <style>
-    :root { color-scheme: dark; --bg:#09090b; --panel:#121217; --muted:#a4a4b0; --line:rgba(255,255,255,.09); --orange:#ff7a18; --orange2:#ff4d00; }
-    * { box-sizing:border-box }
-    html { scroll-behavior:smooth; background:var(--bg) }
-    body { margin:0; min-height:100vh; color:#fff; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif; background:
-      radial-gradient(circle at 10% 0%, rgba(255,122,24,.16), transparent 28%),
-      radial-gradient(circle at 90% 10%, rgba(115,74,255,.13), transparent 24%),
-      linear-gradient(#0a0a0d,#08080a); overflow-x:hidden }
-    .noise { position:fixed; inset:0; pointer-events:none; opacity:.035; z-index:50; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E") }
-    nav { position:sticky; top:0; z-index:20; backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); background:rgba(9,9,11,.65); border-bottom:1px solid var(--line) }
-    .navin { max-width:1180px; margin:auto; height:66px; display:flex; align-items:center; justify-content:space-between; padding:0 20px }
-    .brand { display:flex; align-items:center; gap:11px; font-weight:800; letter-spacing:-.02em }
-    .mark { width:31px; height:31px; border-radius:10px; display:grid; place-items:center; background:linear-gradient(135deg,var(--orange),var(--orange2)); box-shadow:0 8px 26px rgba(255,105,15,.35) }
-    .pill { border:1px solid var(--line); padding:7px 10px; border-radius:999px; color:#ccc; font-size:12px; background:rgba(255,255,255,.035) }
-    main { max-width:1180px; margin:auto; padding:78px 20px 120px }
-    .hero { display:grid; grid-template-columns:1.1fr .9fr; gap:60px; align-items:center; min-height:72vh }
-    .kicker { display:inline-flex; align-items:center; gap:8px; border:1px solid rgba(255,122,24,.25); color:#ffb075; background:rgba(255,122,24,.08); padding:8px 11px; border-radius:999px; font-weight:700; font-size:12px; letter-spacing:.05em; text-transform:uppercase }
-    h1 { font-size:clamp(54px,8vw,102px); line-height:.88; margin:22px 0 24px; letter-spacing:-.07em; max-width:820px }
-    h1 span { background:linear-gradient(135deg,#fff 12%,#ffb16e 52%,#ff5b00); -webkit-background-clip:text; background-clip:text; color:transparent }
-    .lede { color:var(--muted); max-width:650px; font-size:clamp(17px,2vw,22px); line-height:1.55 }
-    .hero-actions,.demo-row { display:flex; flex-wrap:wrap; gap:11px; margin-top:28px }
-    button.demo { appearance:none; border:0; border-radius:14px; padding:13px 17px; min-height:46px; color:#fff; font-weight:750; cursor:pointer; background:#1a1a20; border:1px solid var(--line); transition:transform .18s ease, border-color .18s ease, background .18s ease }
-    button.demo:hover { transform:translateY(-2px); border-color:rgba(255,122,24,.45); background:#1f1b1a }
-    button.demo.primary { background:linear-gradient(135deg,var(--orange),var(--orange2)); border-color:transparent; box-shadow:0 12px 34px rgba(255,95,0,.24) }
-    .orb-stage { min-height:520px; display:grid; place-items:center; perspective:1200px }
-    .orb { position:relative; width:min(78vw,410px); aspect-ratio:1; border-radius:36%; transform:rotate(-8deg); background:
-      radial-gradient(circle at 30% 28%,rgba(255,255,255,.9),transparent 8%),
-      radial-gradient(circle at 44% 38%,#ffc27f 0 5%,#ff7a18 27%,#ff4d00 58%,#2e0900 100%);
-      box-shadow:0 60px 120px rgba(255,72,0,.18), inset -40px -50px 90px rgba(39,0,0,.44), inset 28px 20px 54px rgba(255,255,255,.2);
-      animation:float 5.4s ease-in-out infinite, morph 8s ease-in-out infinite }
-    .orb::after { content:"MENU"; position:absolute; inset:0; display:grid; place-items:center; font-weight:900; letter-spacing:.18em; font-size:clamp(28px,7vw,58px); mix-blend-mode:overlay; color:#fff }
-    @keyframes float { 50% { transform:translateY(-18px) rotate(5deg) } }
-    @keyframes morph { 0%,100%{border-radius:36% 64% 54% 46%/42% 35% 65% 58%} 50%{border-radius:59% 41% 31% 69%/46% 61% 39% 54%} }
-    .section { padding:88px 0 10px }
-    .section h2 { font-size:clamp(34px,5vw,58px); margin:0 0 16px; letter-spacing:-.045em }
-    .section > p { color:var(--muted); max-width:730px; line-height:1.65; font-size:17px }
-    .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-top:30px }
-    .card { border:1px solid var(--line); background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.025)); border-radius:22px; padding:20px; min-height:180px; position:relative; overflow:hidden; transition:transform .22s ease,border-color .22s ease }
-    .card:hover { transform:translateY(-5px); border-color:rgba(255,122,24,.3) }
-    .card::after { content:""; position:absolute; width:130px; height:130px; border-radius:50%; right:-60px; bottom:-70px; background:radial-gradient(circle,rgba(255,122,24,.18),transparent 70%) }
-    .card .num { color:#ff9c55; font:800 12px/1 monospace; margin-bottom:34px }
-    .card h3 { margin:0 0 8px; font-size:18px }
-    .card p { margin:0; color:var(--muted); line-height:1.55; font-size:14px }
-    pre { margin:32px 0 0; border:1px solid var(--line); border-radius:22px; padding:22px; overflow:auto; background:#0d0d11; color:#ddd; line-height:1.55; box-shadow:inset 0 1px rgba(255,255,255,.03) }
-    .playground { border:1px solid var(--line); border-radius:28px; background:rgba(255,255,255,.025); padding:24px; margin-top:34px; position:relative; overflow:hidden }
-    .playground::before { content:""; position:absolute; inset:-30%; background:conic-gradient(from 0deg, transparent, rgba(255,122,24,.07), transparent 25%); animation:spinbg 12s linear infinite; pointer-events:none }
-    @keyframes spinbg { to{transform:rotate(360deg)} }
-    .playground > * { position:relative }
-    .status { margin-top:14px; color:#b6b6c2; font:500 13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap }
-    footer { border-top:1px solid var(--line); color:#777; padding:30px 20px 60px; text-align:center }
-    @media(max-width:820px){ .hero{grid-template-columns:1fr;gap:20px;padding-top:10px}.orb-stage{min-height:390px}.grid{grid-template-columns:1fr}.section{padding-top:68px} main{padding-top:42px} }
+    :root {
+      color-scheme: dark;
+      --bg: #08080a;
+      --panel: #101014;
+      --panel-2: #15151b;
+      --text: #f7f7f8;
+      --muted: #9d9daa;
+      --line: rgba(255, 255, 255, 0.09);
+      --line-strong: rgba(255, 255, 255, 0.15);
+      --orange: #ff7a18;
+      --orange-2: #ff4d00;
+      --green: #31d158;
+      --blue: #0a84ff;
+      --violet: #8b5cf6;
+      --radius: 24px;
+      --shadow: 0 30px 90px rgba(0, 0, 0, 0.42);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-height: 100%;
+      scroll-behavior: smooth;
+      background: var(--bg);
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      overflow-x: hidden;
+      color: var(--text);
+      font-family:
+        Inter,
+        ui-sans-serif,
+        -apple-system,
+        BlinkMacSystemFont,
+        "SF Pro Display",
+        "Segoe UI",
+        sans-serif;
+      background:
+        radial-gradient(circle at 8% 0%, rgba(255, 122, 24, 0.16), transparent 28%),
+        radial-gradient(circle at 92% 10%, rgba(139, 92, 246, 0.12), transparent 24%),
+        radial-gradient(circle at 48% 80%, rgba(10, 132, 255, 0.07), transparent 28%),
+        linear-gradient(180deg, #0a0a0d 0%, #070709 100%);
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .noise {
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      pointer-events: none;
+      opacity: 0.025;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E");
+    }
+
+    .ambient {
+      position: fixed;
+      width: 34rem;
+      aspect-ratio: 1;
+      border-radius: 999px;
+      filter: blur(90px);
+      pointer-events: none;
+      opacity: 0.11;
+      animation: ambientDrift 14s ease-in-out infinite alternate;
+    }
+
+    .ambient.one {
+      top: 12vh;
+      left: -18rem;
+      background: var(--orange);
+    }
+
+    .ambient.two {
+      right: -20rem;
+      top: 48vh;
+      background: var(--violet);
+      animation-delay: -5s;
+    }
+
+    @keyframes ambientDrift {
+      to {
+        transform: translate3d(4rem, 3rem, 0) scale(1.08);
+      }
+    }
+
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 30;
+      border-bottom: 1px solid var(--line);
+      background: rgba(8, 8, 10, 0.66);
+      backdrop-filter: blur(22px) saturate(145%);
+      -webkit-backdrop-filter: blur(22px) saturate(145%);
+    }
+
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: min(1200px, calc(100% - 32px));
+      min-height: 68px;
+      margin: 0 auto;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      font-weight: 850;
+      letter-spacing: -0.025em;
+    }
+
+    .logo {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      border-radius: 11px;
+      background: linear-gradient(135deg, var(--orange), var(--orange-2));
+      box-shadow: 0 10px 28px rgba(255, 97, 0, 0.26);
+    }
+
+    .nav-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 30px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: #c8c8d0;
+      background: rgba(255, 255, 255, 0.035);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .pill .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #777;
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.04);
+    }
+
+    .pill.ready .dot {
+      background: var(--green);
+      box-shadow: 0 0 14px rgba(49, 209, 88, 0.7);
+    }
+
+    main {
+      width: min(1200px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 72px 0 120px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
+      gap: clamp(40px, 6vw, 88px);
+      align-items: center;
+      min-height: 72vh;
+    }
+
+    .kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 11px;
+      border: 1px solid rgba(255, 122, 24, 0.25);
+      border-radius: 999px;
+      color: #ffb477;
+      background: rgba(255, 122, 24, 0.075);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.055em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      max-width: 850px;
+      margin: 22px 0 24px;
+      font-size: clamp(55px, 8vw, 105px);
+      line-height: 0.87;
+      letter-spacing: -0.075em;
+    }
+
+    h1 .gradient {
+      color: transparent;
+      background: linear-gradient(135deg, #fff 4%, #ffc490 48%, #ff6a00 100%);
+      background-clip: text;
+      -webkit-background-clip: text;
+    }
+
+    .lede {
+      max-width: 700px;
+      margin: 0;
+      color: var(--muted);
+      font-size: clamp(17px, 2vw, 22px);
+      line-height: 1.58;
+    }
+
+    .hero-actions,
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 28px;
+    }
+
+    .demo-button {
+      position: relative;
+      appearance: none;
+      min-height: 46px;
+      padding: 12px 16px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      color: #fff;
+      background: #17171d;
+      cursor: pointer;
+      font-weight: 780;
+      letter-spacing: -0.01em;
+      transition:
+        transform 180ms ease,
+        border-color 180ms ease,
+        background 180ms ease,
+        box-shadow 180ms ease;
+    }
+
+    .demo-button:hover {
+      transform: translateY(-2px);
+      border-color: rgba(255, 122, 24, 0.42);
+      background: #1e1a19;
+    }
+
+    .demo-button:active {
+      transform: translateY(0) scale(0.985);
+    }
+
+    .demo-button.primary {
+      border-color: transparent;
+      background: linear-gradient(135deg, var(--orange), var(--orange-2));
+      box-shadow: 0 14px 36px rgba(255, 88, 0, 0.22);
+    }
+
+    .demo-button.success {
+      border-color: rgba(49, 209, 88, 0.2);
+      background: rgba(49, 209, 88, 0.09);
+      color: #a8f2ba;
+    }
+
+    .demo-button .kbd {
+      margin-left: 8px;
+      padding: 2px 6px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      color: #aaaab5;
+      background: rgba(0, 0, 0, 0.18);
+      font-size: 10px;
+    }
+
+    .stage {
+      position: relative;
+      display: grid;
+      min-height: 520px;
+      place-items: center;
+      perspective: 1000px;
+    }
+
+    .phone {
+      position: relative;
+      width: min(360px, 88vw);
+      aspect-ratio: 0.56;
+      padding: 11px;
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      border-radius: 48px;
+      background: linear-gradient(160deg, #28282f, #0c0c0f 58%);
+      box-shadow:
+        0 60px 120px rgba(0, 0, 0, 0.5),
+        inset 0 1px rgba(255, 255, 255, 0.15);
+      transform: rotate(3deg);
+      animation: phoneFloat 6s ease-in-out infinite;
+    }
+
+    @keyframes phoneFloat {
+      50% {
+        transform: translateY(-15px) rotate(-1.5deg);
+      }
+    }
+
+    .phone-screen {
+      position: relative;
+      height: 100%;
+      overflow: hidden;
+      border-radius: 39px;
+      background:
+        radial-gradient(circle at 75% 5%, rgba(139, 92, 246, 0.16), transparent 25%),
+        radial-gradient(circle at 20% 18%, rgba(255, 122, 24, 0.16), transparent 28%),
+        #0c0c0f;
+    }
+
+    .dynamic-island {
+      position: absolute;
+      z-index: 3;
+      top: 12px;
+      left: 50%;
+      width: 92px;
+      height: 27px;
+      border-radius: 999px;
+      background: #000;
+      transform: translateX(-50%);
+    }
+
+    .fake-content {
+      display: grid;
+      gap: 12px;
+      padding: 72px 18px 170px;
+    }
+
+    .fake-line,
+    .fake-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.045);
+    }
+
+    .fake-line {
+      width: 64%;
+      height: 12px;
+    }
+
+    .fake-card {
+      height: 92px;
+    }
+
+    .fake-sheet {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      min-height: 210px;
+      padding: 10px 16px 22px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 26px 26px 0 0;
+      background: rgba(24, 24, 29, 0.96);
+      box-shadow: 0 -26px 60px rgba(0, 0, 0, 0.32);
+      animation: fakeSheet 4.4s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+    }
+
+    @keyframes fakeSheet {
+      0%,
+      15% {
+        transform: translateY(78%);
+      }
+      34%,
+      78% {
+        transform: translateY(0);
+      }
+      100% {
+        transform: translateY(78%);
+      }
+    }
+
+    .fake-handle {
+      width: 38px;
+      height: 4px;
+      margin: 0 auto 16px;
+      border-radius: 999px;
+      background: #66666f;
+    }
+
+    .fake-sheet-title {
+      width: 52%;
+      height: 14px;
+      margin-bottom: 15px;
+      border-radius: 8px;
+      background: #f2f2f3;
+    }
+
+    .fake-input {
+      height: 44px;
+      margin-top: 9px;
+      border: 1px solid var(--line-strong);
+      border-radius: 12px;
+      background: #101014;
+    }
+
+    .section {
+      padding-top: 96px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+
+    .section h2 {
+      margin: 0 0 12px;
+      font-size: clamp(35px, 5vw, 60px);
+      line-height: 0.96;
+      letter-spacing: -0.055em;
+    }
+
+    .section-head p,
+    .section > p {
+      max-width: 760px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.66;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .card {
+      position: relative;
+      min-height: 190px;
+      padding: 21px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.052), rgba(255, 255, 255, 0.025));
+      transition:
+        transform 220ms ease,
+        border-color 220ms ease,
+        background 220ms ease;
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+      border-color: rgba(255, 122, 24, 0.27);
+      background: linear-gradient(180deg, rgba(255, 122, 24, 0.07), rgba(255, 255, 255, 0.025));
+    }
+
+    .card::after {
+      position: absolute;
+      right: -55px;
+      bottom: -65px;
+      width: 130px;
+      height: 130px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255, 122, 24, 0.15), transparent 70%);
+      content: "";
+    }
+
+    .card-number {
+      margin-bottom: 38px;
+      color: #ff9b53;
+      font: 800 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .card h3 {
+      margin: 0 0 8px;
+      font-size: 18px;
+      letter-spacing: -0.025em;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.56;
+    }
+
+    .runtime-panel,
+    .playground {
+      position: relative;
+      overflow: hidden;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: rgba(255, 255, 255, 0.025);
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.03);
+    }
+
+    .runtime-panel::before,
+    .playground::before {
+      position: absolute;
+      inset: -45%;
+      pointer-events: none;
+      background: conic-gradient(from 0deg, transparent, rgba(255, 122, 24, 0.055), transparent 20%);
+      content: "";
+      animation: spin 15s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .runtime-panel > *,
+    .playground > * {
+      position: relative;
+    }
+
+    .runtime-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .runtime-item {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: rgba(5, 5, 7, 0.44);
+    }
+
+    .runtime-name {
+      margin-bottom: 6px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: capitalize;
+    }
+
+    .runtime-state {
+      color: var(--muted);
+      font: 600 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      overflow-wrap: anywhere;
+    }
+
+    .runtime-state strong {
+      color: #9af0af;
+    }
+
+    .demo-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 24px;
+    }
+
+    .demo-card {
+      display: flex;
+      min-height: 190px;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: rgba(12, 12, 16, 0.7);
+    }
+
+    .demo-card h3 {
+      margin: 0 0 7px;
+      font-size: 19px;
+      letter-spacing: -0.03em;
+    }
+
+    .demo-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .status {
+      min-height: 74px;
+      margin-top: 18px;
+      padding: 14px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      color: #b9b9c3;
+      background: rgba(0, 0, 0, 0.2);
+      font: 500 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: pre-wrap;
+    }
+
+    pre {
+      margin: 28px 0 0;
+      padding: 21px;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      color: #dedee3;
+      background: #0b0b0f;
+      font: 500 13px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+      tab-size: 2;
+    }
+
+    .anchor-zone {
+      display: flex;
+      min-height: 210px;
+      align-items: center;
+      justify-content: center;
+      margin-top: 24px;
+      border: 1px dashed rgba(255, 255, 255, 0.13);
+      border-radius: 22px;
+      background:
+        radial-gradient(circle at center, rgba(255, 122, 24, 0.08), transparent 35%),
+        rgba(255, 255, 255, 0.018);
+    }
+
+    footer {
+      padding: 34px 20px calc(54px + env(safe-area-inset-bottom));
+      border-top: 1px solid var(--line);
+      color: #777781;
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .hero {
+        grid-template-columns: 1fr;
+        min-height: auto;
+      }
+
+      .stage {
+        min-height: 460px;
+      }
+
+      .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .runtime-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 620px) {
+      main {
+        padding-top: 46px;
+      }
+
+      .nav-meta .pill:not(:first-child) {
+        display: none;
+      }
+
+      .stage {
+        min-height: 430px;
+      }
+
+      .grid,
+      .demo-grid,
+      .runtime-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .section {
+        padding-top: 74px;
+      }
+
+      .runtime-panel,
+      .playground {
+        padding: 17px;
+        border-radius: 22px;
+      }
+
+      .section-head {
+        align-items: start;
+        flex-direction: column;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
   </style>
 </head>
+
 <body>
-<div class="noise"></div>
-<nav><div class="navin"><div class="brand"><div class="mark">R</div> RodMenu</div><div class="pill">v1.0.0 · IIFE · Shadow DOM</div></div></nav>
-<main>
-  <section class="hero">
-    <div>
-      <div class="kicker">Declarative UI surface engine</div>
-      <h1>Um schema.<br><span>Qualquer menu.</span></h1>
-      <p class="lede">Bottom sheets, modais, drawers, action sheets e formulários completos, sem framework. O mesmo schema muda de forma sem virar um ninho de componentes.</p>
-      <div class="hero-actions">
-        <button class="demo primary" id="openKitchen">Abrir kitchen sink</button>
-        <button class="demo" id="openConfirm">Testar confirm()</button>
-        <button class="demo" id="openActions">Action sheet</button>
+  <div class="noise"></div>
+  <div class="ambient one"></div>
+  <div class="ambient two"></div>
+
+  <nav>
+    <div class="nav-inner">
+      <div class="brand">
+        <div class="logo">R</div>
+        <span>RodMenu</span>
+      </div>
+
+      <div class="nav-meta">
+        <div class="pill" id="runtimePill">
+          <span class="dot"></span>
+          <span id="runtimeLabel">runtime carregando</span>
+        </div>
+        <div class="pill">v2.1.0</div>
+        <div class="pill">IIFE · Shadow DOM</div>
       </div>
     </div>
-    <div class="orb-stage"><div class="orb"></div></div>
-  </section>
+  </nav>
 
-  <section class="section">
-    <h2>Uma engine, muitas superfícies.</h2>
-    <p>RodMenu mantém schema, estado, validação e actions independentes da apresentação. No iPhone ele pode ser um bottom sheet; no desktop, um modal. Troque uma string, não uma arquitetura.</p>
-    <div class="grid">
-      <article class="card"><div class="num">01</div><h3>Shadow DOM por padrão</h3><p>CSS isolado da página hospedeira e tokens próprios, ideal para userscripts, ferramentas e páginas de terceiros.</p></article>
-      <article class="card"><div class="num">02</div><h3>Mobile-first de verdade</h3><p>Safe areas, Visual Viewport, swipe-to-dismiss, scroll lock, focus restore e bottom sheet como comportamento padrão.</p></article>
-      <article class="card"><div class="num">03</div><h3>Schema completo</h3><p>Inputs textuais, select, multi-select, radio, checkbox groups, switch, range, datas, cor, upload, segmented, rating e custom fields.</p></article>
-      <article class="card"><div class="num">04</div><h3>Actions assíncronas</h3><p>Loading por botão, validação automática, prevenção de double-submit e retorno por Promise.</p></article>
-      <article class="card"><div class="num">05</div><h3>Cross-window best effort</h3><p>Publicação em window, parent, top, frames e opener quando same-origin permitir. Cross-origin continua respeitando o sandbox do navegador.</p></article>
-      <article class="card"><div class="num">06</div><h3>API imperativa opcional</h3><p>setValue, setValues, validate, update, close e result sem sacrificar o modelo declarativo.</p></article>
-    </div>
-  </section>
+  <main>
+    <section class="hero">
+      <div>
+        <div class="kicker">Adaptive UI Runtime · v2.1</div>
+        <h1>
+          Um schema.<br />
+          <span class="gradient">Agora com memória.</span>
+        </h1>
+        <p class="lede">
+          Bottom sheet, modal, drawer e popover com store por formulário, persistência opcional,
+          transforms, Broto, RodElements, Cipó, RodToaster e fallbacks internos. O AIO ganhou cockpit.
+        </p>
 
-  <section class="section">
-    <h2>Playground</h2>
-    <p>Os botões abaixo abrem exatamente o mesmo formulário em apresentações diferentes. A saída aparece logo abaixo.</p>
-    <div class="playground">
-      <div class="demo-row">
-        <button class="demo primary" data-presentation="bottom-sheet">Bottom sheet</button>
-        <button class="demo" data-presentation="modal">Modal</button>
-        <button class="demo" data-presentation="drawer">Drawer</button>
-        <button class="demo" data-presentation="popover">Popover</button>
+        <div class="hero-actions">
+          <button class="demo-button primary" id="openMedia">Abrir AIO Media</button>
+          <button class="demo-button" id="openSettings">Settings persistente</button>
+          <button class="demo-button" id="openDebug">Debug cockpit</button>
+        </div>
       </div>
-      <div class="status" id="status">Nenhum resultado ainda.</div>
-    </div>
-    <pre><code>const menu = RodMenu.open({
-  title: "Criar publicação",
-  presentation: "bottom-sheet",
-  fields: [
-    { type: "text", name: "title", label: "Título", required: true },
-    { type: "switch", name: "public", label: "Público", value: true }
-  ],
-  actions: [
-    { id: "cancel", label: "Cancelar", role: "cancel" },
-    { id: "save", label: "Salvar", role: "submit" }
-  ]
-});
 
-const result = await menu.result;</code></pre>
-  </section>
-</main>
-<footer>RodMenu v1 · tiny surfaces, large ambitions 🧩</footer>
+      <div class="stage" aria-hidden="true">
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="dynamic-island"></div>
+            <div class="fake-content">
+              <div class="fake-line"></div>
+              <div class="fake-card"></div>
+              <div class="fake-card"></div>
+              <div class="fake-line" style="width: 43%"></div>
+            </div>
+            <div class="fake-sheet">
+              <div class="fake-handle"></div>
+              <div class="fake-sheet-title"></div>
+              <div class="fake-input"></div>
+              <div class="fake-input"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
-<script src="./dist/menu.js"></script>
-<script>
-  const status = document.querySelector('#status');
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>Runtime adaptativo.</h2>
+          <p>
+            A v2.1 tenta usar o ecossistema Rod quando disponível e continua funcional se cada peça faltar.
+            O painel abaixo mostra o runtime encontrado nesta página.
+          </p>
+        </div>
+        <button class="demo-button" id="reloadDeps">Resolver dependências</button>
+      </div>
 
-  const schema = presentation => ({
-    eyebrow: 'RodMenu Playground',
-    title: 'Kitchen sink form',
-    description: 'Um exemplo com os principais tipos de campo e regras dinâmicas.',
-    presentation,
-    drawerSide: 'right',
-    showHandle: true,
-    fields: [
-      { type: 'text', name: 'name', label: 'Nome', placeholder: 'Rodolfo', required: true },
-      { type: 'email', name: 'email', label: 'Email', placeholder: 'rod@example.com', required: true,
-        validate: value => /.+@.+\..+/.test(String(value)) ? null : 'Digite um email válido.' },
-      { type: 'textarea', name: 'bio', label: 'Bio', rows: 3, placeholder: 'Conte um pouco...' },
-      { type: 'select', name: 'role', label: 'Perfil', value: 'dev', options: [
-        { label: 'Developer', value: 'dev' }, { label: 'Designer', value: 'design' }, { label: 'Product', value: 'product' }
-      ]},
-      { type: 'segmented', name: 'theme', label: 'Tema', value: 'dark', options: [
-        { label: 'Light', value: 'light' }, { label: 'Dark', value: 'dark' }, { label: 'Auto', value: 'auto' }
-      ]},
-      { type: 'multiselect', name: 'skills', label: 'Skills', value: ['ts'], options: [
-        { label: 'TypeScript', value: 'ts' }, { label: 'React', value: 'react' }, { label: 'Next.js', value: 'next' }, { label: 'Node', value: 'node' }
-      ]},
-      { type: 'radio', name: 'level', label: 'Senioridade', value: 'senior', direction: 'horizontal', options: [
-        { label: 'Mid', value: 'mid' }, { label: 'Senior', value: 'senior' }, { label: 'Staff', value: 'staff' }
-      ]},
-      { type: 'checkbox-group', name: 'channels', label: 'Notificações', value: ['email'], options: [
-        { label: 'Email', value: 'email' }, { label: 'Push', value: 'push' }, { label: 'Telegram', value: 'telegram' }
-      ]},
-      { type: 'switch', name: 'advanced', label: 'Modo avançado', description: 'Exibe opções extras.' },
-      { type: 'number', name: 'retries', label: 'Retries', min: 0, max: 10, value: 3,
-        visibleWhen: values => values.advanced === true },
-      { type: 'range', name: 'quality', label: 'Qualidade', min: 1, max: 100, value: 82, showValue: true },
-      { type: 'color', name: 'accent', label: 'Accent color', value: '#ff7a18', presets: ['#ff7a18','#ff453a','#30d158','#0a84ff','#bf5af2'] },
-      { type: 'date', name: 'date', label: 'Data' },
-      { type: 'time', name: 'time', label: 'Horário' },
-      { type: 'rating', name: 'rating', label: 'Nota', value: 4 },
-      { type: 'file', name: 'files', label: 'Arquivos', multiple: true },
-      { type: 'switch', name: 'agree', label: 'Aceito salvar essas configurações', required: true }
-    ],
-    actions: [
-      { id: 'cancel', label: 'Cancelar', role: 'cancel', variant: 'secondary' },
-      { id: 'preview', label: 'Preview', role: 'custom', variant: 'ghost', validate: false,
-        handler(ctx) { ctx.set('bio', `Preview em ${new Date().toLocaleTimeString()}`); } },
-      { id: 'save', label: 'Salvar', role: 'submit', variant: 'primary', async handler(ctx) {
-        await sleep(850);
-        return { savedAt: new Date().toISOString(), fieldCount: Object.keys(ctx.values).length };
-      }}
-    ]
-  });
+      <div class="runtime-panel">
+        <div class="runtime-grid" id="runtimeGrid"></div>
+        <div class="status" id="runtimeStatus">Aguardando RodMenu.ready…</div>
+      </div>
+    </section>
 
-  async function openDemo(presentation) {
-    const handle = RodMenu.open(schema(presentation));
-    const result = await handle.result;
-    status.textContent = JSON.stringify({ action: result.action, reason: result.reason, values: result.values, data: result.data }, (k,v) => v instanceof File ? `[File ${v.name}]` : v, 2);
-  }
+    <section class="section">
+      <h2>O que entrou na 2.1.</h2>
+      <p>
+        Store e persistência viraram primitives do form, enquanto as peças de AIO continuam sendo schemas
+        especializados sobre a mesma engine.
+      </p>
 
-  document.querySelectorAll('[data-presentation]').forEach(button => {
-    button.addEventListener('click', () => openDemo(button.dataset.presentation));
-  });
+      <div class="grid" style="margin-top: 28px">
+        <article class="card">
+          <div class="card-number">01</div>
+          <h3>Store por form</h3>
+          <p>Broto quando disponível, fallback interno rápido quando não. Todos os fields escrevem pelo mesmo caminho.</p>
+        </article>
+        <article class="card">
+          <div class="card-number">02</div>
+          <h3>Persistência transformável</h3>
+          <p>localStorage, sessionStorage, GM ou adapter próprio, com hydrate, debounce e transform bidirecional.</p>
+        </article>
+        <article class="card">
+          <div class="card-number">03</div>
+          <h3>AIO presets</h3>
+          <p>Media picker, settings, history, debug e channel picker sem duplicar a engine de UI.</p>
+        </article>
+        <article class="card">
+          <div class="card-number">04</div>
+          <h3>Actions condicionais</h3>
+          <p>visibleWhen, disabledWhen, badges dinâmicos, shortcuts, icons e loading assíncrono.</p>
+        </article>
+        <article class="card">
+          <div class="card-number">05</div>
+          <h3>Fields mais ricos</h3>
+          <p>Trailing actions, media preview, provider status, request log, debug JSON e channel picker.</p>
+        </article>
+        <article class="card">
+          <div class="card-number">06</div>
+          <h3>Anchor + auto</h3>
+          <p>No desktop, um anchor pode virar popover. No telefone, a mesma chamada continua confortável como bottom sheet.</p>
+        </article>
+      </div>
+    </section>
 
-  document.querySelector('#openKitchen').addEventListener('click', () => openDemo('bottom-sheet'));
-  document.querySelector('#openConfirm').addEventListener('click', async () => {
-    const ok = await RodMenu.confirm({ title: 'Apagar esta demo?', description: 'Só uma demonstração, nenhum pixel será ferido.', confirmLabel: 'Apagar', danger: true });
-    status.textContent = `confirm() => ${ok}`;
-  });
-  document.querySelector('#openActions').addEventListener('click', async () => {
-    const action = await RodMenu.actions({ title: 'Compartilhar com…', items: [
-      { label: 'Telegram', value: 'telegram' }, { label: 'Copiar link', value: 'copy' }, { label: 'Salvar arquivo', value: 'save' }
-    ]});
-    status.textContent = `actions() => ${action}`;
-  });
-</script>
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>AIO playground.</h2>
+          <p>Essas demos usam as APIs novas da v2.1 e escrevem o resultado abaixo.</p>
+        </div>
+      </div>
+
+      <div class="playground">
+        <div class="demo-grid">
+          <article class="demo-card">
+            <div>
+              <h3>Media picker</h3>
+              <p>Preview da origem, seleção de mídias, badge dinâmico e channel picker no mesmo surface.</p>
+            </div>
+            <button class="demo-button primary" id="demoMedia">RodMenu.aio.media()</button>
+          </article>
+
+          <article class="demo-card">
+            <div>
+              <h3>Settings + store</h3>
+              <p>Persistência local com transform para armazenar apenas os campos relevantes do exemplo.</p>
+            </div>
+            <button class="demo-button" id="demoSettings">RodMenu.aio.settings()</button>
+          </article>
+
+          <article class="demo-card">
+            <div>
+              <h3>Debug tabs</h3>
+              <p>Resumo, mídia, providers, requests, relay e logs organizados automaticamente.</p>
+            </div>
+            <button class="demo-button" id="demoDebug">RodMenu.aio.debug()</button>
+          </article>
+
+          <article class="demo-card">
+            <div>
+              <h3>History</h3>
+              <p>Histórico renderizado por callback sem criar um componente paralelo.</p>
+            </div>
+            <button class="demo-button" id="demoHistory">RodMenu.aio.history()</button>
+          </article>
+
+          <article class="demo-card">
+            <div>
+              <h3>Channel picker</h3>
+              <p>Picker pesquisável com retorno via Promise.</p>
+            </div>
+            <button class="demo-button" id="demoChannels">RodMenu.aio.channelPicker()</button>
+          </article>
+
+          <article class="demo-card">
+            <div>
+              <h3>Kitchen sink v2.1</h3>
+              <p>Tabs, sections, trailing action, shortcut, action condicional e persistence handle.</p>
+            </div>
+            <button class="demo-button" id="demoKitchen">Abrir form completo</button>
+          </article>
+        </div>
+
+        <div class="status" id="resultStatus">Nenhum resultado ainda.</div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Auto presentation com anchor.</h2>
+      <p>
+        Em viewport larga, a engine pode resolver para popover usando o botão como anchor. Em viewport pequena,
+        continua com uma superfície mobile-friendly.
+      </p>
+
+      <div class="anchor-zone">
+        <button class="demo-button primary" id="anchorButton">
+          Abrir menu ancorado
+          <span class="kbd">⌘ K</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Persistência sem aprisionar seu estado.</h2>
+      <p>Você pode armazenar o snapshot inteiro ou transformar os dados antes e depois do storage.</p>
+      <pre><code>RodMenu.aio.settings({
+  id: "aio-settings",
+  store: {
+    persist: {
+      key: "aio:settings:v1",
+      storage: "local",
+      debounceMs: 120,
+      persistOn: ["change", "submit"],
+      transform: {
+        toStorage(values) {
+          return {
+            telegram: values.telegram,
+            download: values.download,
+            quality: values.quality
+          };
+        },
+        fromStorage(stored) {
+          return stored;
+        }
+      }
+    }
+  },
+  fields: [/* ... */]
+});</code></pre>
+    </section>
+  </main>
+
+  <footer>RodMenu v2.1.0 · schemas, surfaces e uma pequena memória persistente 🧩</footer>
+
+  <script src="./dist/menu.js"></script>
+  <script>
+    (() => {
+      "use strict";
+
+      const $ = (selector) => document.querySelector(selector);
+      const resultStatus = $("#resultStatus");
+      const runtimeStatus = $("#runtimeStatus");
+      const runtimeGrid = $("#runtimeGrid");
+      const runtimePill = $("#runtimePill");
+      const runtimeLabel = $("#runtimeLabel");
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      const svgThumb = (label, a, b) => {
+        const svg = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000">
+            <defs>
+              <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+                <stop stop-color="${a}"/>
+                <stop offset="1" stop-color="${b}"/>
+              </linearGradient>
+            </defs>
+            <rect width="800" height="1000" rx="80" fill="url(#g)"/>
+            <circle cx="620" cy="210" r="170" fill="rgba(255,255,255,.12)"/>
+            <circle cx="170" cy="760" r="240" fill="rgba(0,0,0,.12)"/>
+            <text x="56" y="900" fill="white" font-size="74" font-family="system-ui" font-weight="800">${label}</text>
+          </svg>`;
+        return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+      };
+
+      const media = [
+        {
+          id: "reel-1080",
+          title: "Reel principal",
+          description: "H.264 · 12.4 s",
+          thumbnail: svgThumb("1080p", "#ff7a18", "#7a2200"),
+          type: "video",
+          quality: "1080p",
+          width: 1080,
+          height: 1920,
+          duration: 12.4,
+          size: 18400000,
+          provider: "ZoraaHub",
+          source: "@rodkisten"
+        },
+        {
+          id: "photo-1",
+          title: "Foto 1",
+          description: "JPEG",
+          thumbnail: svgThumb("PHOTO", "#8b5cf6", "#25105c"),
+          type: "photo",
+          quality: "Original",
+          width: 1080,
+          height: 1350,
+          size: 2400000,
+          provider: "Instagram",
+          source: "@rodkisten"
+        },
+        {
+          id: "reel-720",
+          title: "Fallback",
+          description: "H.264 · menor bitrate",
+          thumbnail: svgThumb("720p", "#0a84ff", "#072b61"),
+          type: "video",
+          quality: "720p",
+          width: 720,
+          height: 1280,
+          duration: 12.4,
+          size: 9200000,
+          provider: "Fallback CDN",
+          source: "@rodkisten"
+        }
+      ];
+
+      const sourcePreview = {
+        id: "source-post",
+        title: "@rodkisten",
+        description: "Caption enriquecida do post. Origem, autor e mídia podem viajar juntos para o relay.",
+        thumbnail: media[0].thumbnail,
+        type: "video",
+        provider: "Instagram",
+        source: "instagram.com"
+      };
+
+      const channels = [
+        { label: "Geral", value: "GENERAL", description: "Canal principal do relay" },
+        { label: "Privado", value: "PORN", description: "Rota privada" },
+        { label: "Arquivo", value: "ARCHIVE", description: "Somente armazenamento" }
+      ];
+
+      const providers = [
+        { id: "instagram", label: "Instagram metadata", state: "success", durationMs: 182, description: "Caption e @ resolvidos" },
+        { id: "zoraa", label: "ZoraaHub", state: "success", durationMs: 643, description: "3 mídias encontradas" },
+        { id: "twirrl", label: "Twirrl", state: "skipped", durationMs: 0, description: "URL não é Twitter" },
+        { id: "fallback", label: "Webpage fallback", state: "idle", description: "Não foi necessário" }
+      ];
+
+      const requests = [
+        { id: "r1", method: "GET", url: "https://www.instagram.com/p/demo/", status: 200, durationMs: 171, time: "16:01:12", detail: { kind: "metadata" } },
+        { id: "r2", method: "POST", url: "https://api.zoraahub.com/fetch.php", status: 200, durationMs: 643, time: "16:01:13", detail: { media: 3 } },
+        { id: "r3", method: "POST", url: "https://relay.example.test/media", status: 202, durationMs: 812, time: "16:01:14", detail: { channel: "GENERAL" } }
+      ];
+
+      const safeJson = (value) => JSON.stringify(
+        value,
+        (key, item) => item instanceof File ? `[File ${item.name}]` : item,
+        2
+      );
+
+      const setResult = (label, value) => {
+        resultStatus.textContent = `${label}\n${typeof value === "string" ? value : safeJson(value)}`;
+      };
+
+      const runtimeSnapshot = () => {
+        if (!window.RodMenu) return null;
+        return window.RodMenu.runtime;
+      };
+
+      const renderRuntime = (runtime) => {
+        if (!runtime) {
+          runtimeStatus.textContent = "RodMenu não foi encontrado em window.";
+          runtimeGrid.innerHTML = "";
+          return;
+        }
+
+        runtimeGrid.innerHTML = Object.entries(runtime).map(([name, info]) => `
+          <div class="runtime-item">
+            <div class="runtime-name">${name}</div>
+            <div class="runtime-state">
+              <strong>${info.state}</strong><br />
+              ${info.source || "fallback interno"}
+            </div>
+          </div>
+        `).join("");
+
+        runtimeStatus.textContent = safeJson(runtime);
+        runtimePill.classList.add("ready");
+        runtimeLabel.textContent = `RodMenu ${window.RodMenu.version}`;
+      };
+
+      const openMedia = async () => {
+        const handle = RodMenu.aio.media({
+          title: "Enviar mídia",
+          description: "Escolha os itens e a rota do relay.",
+          source: sourcePreview,
+          media,
+          channels,
+          store: {
+            persist: {
+              key: "rod-menu-demo:media",
+              storage: "session",
+              debounceMs: 80,
+              persistOn: "change"
+            }
+          },
+          extraFields: [
+            {
+              type: "switch",
+              name: "silent",
+              label: "Enviar silenciosamente",
+              value: false
+            },
+            {
+              type: "textarea",
+              name: "caption",
+              label: "Caption",
+              value: "Caption enriquecida do post.",
+              rows: 3,
+              trailingAction: {
+                id: "clear-caption",
+                label: "Limpar",
+                title: "Limpar caption",
+                variant: "ghost",
+                handler(ctx) {
+                  ctx.set("caption", "");
+                }
+              }
+            }
+          ],
+          actions: [
+            { id: "cancel", label: "Cancelar", role: "cancel", variant: "ghost" },
+            {
+              id: "copy",
+              label: "Copiar",
+              role: "custom",
+              variant: "secondary",
+              close: false,
+              shortcut: "Mod+C",
+              disabledWhen(values) {
+                return !Array.isArray(values.selectedMedia) || values.selectedMedia.length === 0;
+              },
+              async handler(ctx) {
+                await navigator.clipboard?.writeText?.(safeJson(ctx.values));
+              }
+            },
+            {
+              id: "send",
+              label: "Enviar",
+              role: "submit",
+              variant: "primary",
+              badge(ctx) {
+                return Array.isArray(ctx.values.selectedMedia) ? ctx.values.selectedMedia.length : null;
+              },
+              async handler(ctx) {
+                await sleep(650);
+                return { delivered: ctx.values.selectedMedia, channel: ctx.values.channel };
+              }
+            }
+          ]
+        });
+
+        await handle.ready;
+        const result = await handle.result;
+        setResult("AIO media result", result);
+      };
+
+      const openSettings = async () => {
+        const handle = RodMenu.aio.settings({
+          id: "aio-demo-settings",
+          title: "AIO Settings",
+          description: "Feche e abra de novo: os valores persistem.",
+          presentation: "bottom-sheet",
+          store: {
+            persist: {
+              key: "aio:landing:settings:v1",
+              storage: "local",
+              debounceMs: 120,
+              persistOn: ["change", "submit"],
+              version: 1,
+              transform: {
+                toStorage(values) {
+                  return {
+                    telegram: values.telegram,
+                    download: values.download,
+                    quality: values.quality,
+                    defaultChannel: values.defaultChannel,
+                    debug: values.debug
+                  };
+                },
+                fromStorage(stored) {
+                  return stored;
+                }
+              }
+            }
+          },
+          tabs: [
+            {
+              id: "actions",
+              label: "Ações",
+              fields: [
+                { type: "switch", name: "telegram", label: "Telegram", value: true },
+                { type: "switch", name: "download", label: "Download", value: false },
+                {
+                  type: "segmented",
+                  name: "quality",
+                  label: "Qualidade padrão",
+                  value: "best",
+                  options: [
+                    { label: "Best", value: "best" },
+                    { label: "1080p", value: "1080" },
+                    { label: "720p", value: "720" }
+                  ]
+                }
+              ]
+            },
+            {
+              id: "telegram",
+              label: "Telegram",
+              fields: [
+                {
+                  type: "channel-picker",
+                  name: "defaultChannel",
+                  label: "Canal padrão",
+                  options: channels,
+                  searchable: true,
+                  value: "GENERAL"
+                },
+                { type: "switch", name: "silent", label: "Silent mode", value: false }
+              ]
+            },
+            {
+              id: "advanced",
+              label: "Avançado",
+              badge: "new",
+              sections: [
+                {
+                  title: "Diagnóstico",
+                  description: "Opções de instrumentação.",
+                  fields: [
+                    { type: "switch", name: "debug", label: "Debug", value: true },
+                    { type: "range", name: "logLimit", label: "Limite de logs", min: 100, max: 2000, step: 100, value: 800, showValue: true }
+                  ]
+                },
+                {
+                  title: "Resolver",
+                  collapsible: true,
+                  collapsed: true,
+                  fields: [
+                    { type: "switch", name: "fallbacks", label: "Providers fallback", value: true },
+                    { type: "number", name: "timeout", label: "Timeout (s)", min: 5, max: 120, value: 30 }
+                  ]
+                }
+              ]
+            }
+          ]
+        });
+
+        await handle.ready;
+        setResult("Settings store", {
+          backend: handle.store.backend,
+          persistence: handle.store.persistence,
+          snapshot: handle.store.snapshot()
+        });
+
+        const result = await handle.result;
+        setResult("Settings result", {
+          result,
+          store: {
+            backend: handle.store.backend,
+            persistence: handle.store.persistence
+          }
+        });
+      };
+
+      const openDebug = async () => {
+        const handle = RodMenu.aio.debug({
+          title: "AIO Debug",
+          description: "Um cockpit para entender resolver, rede e relay.",
+          summary: {
+            source: "instagram",
+            sourceUrl: "https://www.instagram.com/p/demo/",
+            selectedProvider: "ZoraaHub",
+            mediaFound: media.length,
+            channel: "GENERAL",
+            elapsedMs: 1808
+          },
+          media,
+          providers,
+          requests,
+          relay: {
+            endpoint: "https://relay.example.test/media",
+            strategy: "url-first",
+            fallback: "multipart",
+            status: "accepted",
+            deliveries: 3
+          },
+          logs: [
+            { level: "info", message: "Detected Instagram URL" },
+            { level: "debug", message: "Metadata enriched" },
+            { level: "info", message: "Resolved 3 media items" },
+            { level: "success", message: "Relay accepted payload" }
+          ]
+        });
+        const result = await handle.result;
+        setResult("Debug result", result);
+      };
+
+      const openHistory = async () => {
+        const items = [
+          { site: "Instagram", action: "Telegram", detail: "3 mídias → GENERAL", at: "16:01" },
+          { site: "X", action: "Download", detail: "1080p · 22 MB", at: "15:42" },
+          { site: "Instagram", action: "Copy", detail: "URL copiada", at: "15:21" }
+        ];
+
+        const handle = RodMenu.aio.history({
+          title: "Histórico do AIO",
+          description: "Últimas ações da sessão.",
+          items,
+          renderItem(item) {
+            const row = document.createElement("div");
+            row.style.display = "grid";
+            row.style.gridTemplateColumns = "1fr auto";
+            row.style.gap = "8px";
+            row.innerHTML = `<strong>${item.site} · ${item.action}</strong><span>${item.at}</span><small style="grid-column:1/-1;opacity:.68">${item.detail}</small>`;
+            return row;
+          }
+        });
+
+        const result = await handle.result;
+        setResult("History result", result);
+      };
+
+      const openChannels = async (anchor) => {
+        const value = await RodMenu.aio.channelPicker({
+          title: "Enviar para…",
+          description: "Selecione uma ou mais rotas.",
+          channels,
+          multiple: true,
+          searchable: true,
+          value: ["GENERAL"],
+          presentation: "auto",
+          anchor
+        });
+        setResult("Channel picker", value);
+      };
+
+      const openKitchen = async () => {
+        const handle = RodMenu.open({
+          id: "landing-kitchen-v21",
+          eyebrow: "RodMenu 2.1",
+          title: "Kitchen sink",
+          description: "Tabs, sections, trailing actions, store e actions condicionais.",
+          presentation: "bottom-sheet",
+          store: {
+            persist: {
+              key: "rodmenu:landing:kitchen",
+              storage: "session",
+              debounceMs: 80,
+              persistOn: "change"
+            }
+          },
+          tabs: [
+            {
+              id: "identity",
+              label: "Identidade",
+              fields: [
+                {
+                  type: "text",
+                  name: "name",
+                  label: "Nome",
+                  value: "Rod",
+                  required: true,
+                  trailingAction: {
+                    label: "Limpar",
+                    variant: "ghost",
+                    handler(ctx) {
+                      ctx.set("name", "");
+                    }
+                  }
+                },
+                { type: "email", name: "email", label: "Email", placeholder: "rod@example.com" },
+                { type: "textarea", name: "bio", label: "Bio", rows: 3, placeholder: "Escreva alguma coisa…" },
+                { type: "rating", name: "rating", label: "Nota", value: 5 }
+              ]
+            },
+            {
+              id: "controls",
+              label: "Controles",
+              sections: [
+                {
+                  title: "Preferências",
+                  fields: [
+                    { type: "switch", name: "advanced", label: "Modo avançado", value: false },
+                    {
+                      type: "segmented",
+                      name: "mode",
+                      label: "Modo",
+                      value: "auto",
+                      options: [
+                        { label: "Auto", value: "auto" },
+                        { label: "Fast", value: "fast" },
+                        { label: "Safe", value: "safe" }
+                      ]
+                    },
+                    { type: "range", name: "quality", label: "Qualidade", min: 1, max: 100, value: 86, showValue: true },
+                    {
+                      type: "number",
+                      name: "retries",
+                      label: "Retries",
+                      min: 0,
+                      max: 12,
+                      value: 3,
+                      visibleWhen(values) {
+                        return values.advanced === true;
+                      }
+                    }
+                  ]
+                },
+                {
+                  title: "Mais campos",
+                  collapsible: true,
+                  collapsed: true,
+                  fields: [
+                    { type: "color", name: "accent", label: "Accent", value: "#ff7a18", presets: ["#ff7a18", "#30d158", "#0a84ff", "#8b5cf6"] },
+                    { type: "date", name: "date", label: "Data" },
+                    { type: "time", name: "time", label: "Hora" },
+                    { type: "file", name: "files", label: "Arquivos", multiple: true }
+                  ]
+                }
+              ]
+            },
+            {
+              id: "diagnostics",
+              label: "Store",
+              fields: [
+                {
+                  type: "debug-json",
+                  name: "storeSnapshot",
+                  label: "Snapshot ao renderizar",
+                  data(ctx) {
+                    return {
+                      backend: ctx.store.backend,
+                      persistence: ctx.store.persistence,
+                      values: ctx.values
+                    };
+                  },
+                  maxHeight: 320
+                }
+              ]
+            }
+          ],
+          actions: [
+            { id: "cancel", label: "Cancelar", role: "cancel", variant: "ghost" },
+            {
+              id: "persist",
+              label: "Persistir",
+              role: "custom",
+              variant: "secondary",
+              close: false,
+              shortcut: "Mod+S",
+              async handler(ctx) {
+                await ctx.persist();
+              }
+            },
+            {
+              id: "save",
+              label: "Salvar",
+              role: "submit",
+              variant: "primary",
+              badge(ctx) {
+                return Object.keys(ctx.values).length;
+              },
+              disabledWhen(values) {
+                return !String(values.name || "").trim();
+              },
+              async handler(ctx) {
+                await sleep(500);
+                return { persisted: true, backend: ctx.store.backend };
+              }
+            }
+          ]
+        });
+
+        await handle.ready;
+        const result = await handle.result;
+        setResult("Kitchen sink result", result);
+      };
+
+      const openAnchored = async () => {
+        const anchor = $("#anchorButton");
+        const choice = await RodMenu.actions({
+          title: "Ação rápida",
+          description: "presentation: auto + anchor",
+          presentation: "auto",
+          anchor,
+          items: [
+            { label: "Enviar Telegram", value: "telegram", badge: 3, shortcut: "T" },
+            { label: "Copiar link", value: "copy", shortcut: "C" },
+            { label: "Abrir debug", value: "debug", shortcut: "D" }
+          ]
+        });
+        setResult("Anchored action", choice);
+      };
+
+      const bind = (selector, handler) => {
+        const element = $(selector);
+        if (!element) return;
+        element.addEventListener("click", () => {
+          Promise.resolve(handler()).catch((error) => {
+            console.error(error);
+            setResult("Erro", error instanceof Error ? error.stack || error.message : String(error));
+          });
+        });
+      };
+
+      if (!window.RodMenu) {
+        runtimeStatus.textContent = "dist/menu.js não carregou. Confira o caminho ./dist/menu.js";
+        runtimeLabel.textContent = "RodMenu ausente";
+        return;
+      }
+
+      renderRuntime(runtimeSnapshot());
+      RodMenu.ready.then(renderRuntime).catch((error) => {
+        runtimeStatus.textContent = error instanceof Error ? error.stack || error.message : String(error);
+      });
+
+      bind("#reloadDeps", async () => renderRuntime(await RodMenu.loadDependencies()));
+      bind("#openMedia", openMedia);
+      bind("#openSettings", openSettings);
+      bind("#openDebug", openDebug);
+      bind("#demoMedia", openMedia);
+      bind("#demoSettings", openSettings);
+      bind("#demoDebug", openDebug);
+      bind("#demoHistory", openHistory);
+      bind("#demoChannels", () => openChannels($("#demoChannels")));
+      bind("#demoKitchen", openKitchen);
+      bind("#anchorButton", openAnchored);
+
+      document.addEventListener("keydown", (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+          event.preventDefault();
+          openAnchored().catch(console.error);
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
