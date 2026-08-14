@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="color-scheme" content="dark light" />
   <title>RodStorage · Storage infrastructure for userscripts</title>
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/styles/github-dark-dimmed.min.css"
+  />
   <style>
     :root {
       color-scheme: dark;
@@ -61,8 +65,29 @@
     .hero-card { padding:18px; transform:rotate(1.2deg); }
     .window-bar { display:flex; align-items:center; gap:7px; padding-bottom:14px; color:var(--muted); font-size:.8rem; }
     .dot { width:9px; height:9px; border-radius:50%; background:#394151; }
-    pre { margin:0; overflow:auto; tab-size:2; }
+    pre {
+      margin: 0;
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      tab-size: 2;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-inline: contain;
+    }
     code { font-family:var(--mono); font-size:.88rem; }
+    pre > code {
+      display: block;
+      width: max-content;
+      min-width: 100%;
+      max-width: none;
+    }
+    .hljs {
+      padding: 0;
+      background: transparent;
+      color: #adbac7;
+    }
     .hero-card pre, .code-card pre { padding:18px; border-radius:16px; background:#080a0f; border:1px solid rgba(255,255,255,.06); }
     .k { color:#9db7ff; } .s { color:#8ef0c6; } .n { color:#ffc77d; } .c { color:#6e7a90; }
     .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin:24px 0 74px; }
@@ -82,8 +107,9 @@
     .toc { position:sticky; top:82px; border:1px solid var(--line); border-radius:18px; padding:10px; background:rgba(16,19,26,.82); }
     .toc a { display:block; padding:9px 10px; border-radius:10px; color:var(--muted); font-size:.9rem; }
     .toc a:hover { background:rgba(255,255,255,.05); color:var(--text); }
-    .doc-stack { display:grid; gap:18px; }
-    .code-card { padding:18px; box-shadow:none; }
+    .doc-stack { display:grid; gap:18px; min-width:0; }
+    .code-card { padding:18px; box-shadow:none; min-width:0; overflow:hidden; }
+    .split, .split > *, .docs, .docs > * { min-width:0; }
     .code-card h3 { margin:0 0 6px; font-size:1.3rem; }
     .code-card > p { color:var(--muted); margin:0 0 16px; }
     .split { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
@@ -133,21 +159,21 @@
       </div>
       <div class="hero-card">
         <div class="window-bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span style="margin-left:6px">userscript.ts</span></div>
-<pre><code><span class="k">const</span> storage = RodStorage.create({
-  namespace: <span class="s">"instagram-tools"</span>,
-  version: <span class="n">4</span>,
-  backend: <span class="s">"auto"</span>,
-  sync: <span class="k">true</span>,
-  cache: { enabled: <span class="k">true</span>, maxEntries: <span class="n">500</span> },
+<pre><code class="language-typescript">const storage = RodStorage.create({
+  namespace: "instagram-tools",
+  version: 4,
+  backend: "auto",
+  sync: true,
+  cache: { enabled: true, maxEntries: 500 },
 });
 
-<span class="k">await</span> storage.ready();
+await storage.ready();
 
-<span class="k">const</span> settings = storage.store(<span class="s">"settings"</span>, {
-  default: { debug: <span class="k">false</span>, theme: <span class="s">"auto"</span> },
+const settings = storage.store("settings", {
+  default: { debug: false, theme: "auto" },
 });
 
-<span class="k">await</span> settings.patch({ debug: <span class="k">true</span> });</code></pre>
+await settings.patch({ debug: true });</code></pre>
       </div>
     </header>
 
@@ -180,7 +206,7 @@
           <a href="#quickstart">Quick start</a><a href="#typed-schema">Typed schema</a><a href="#backends">Backends</a><a href="#crud">CRUD</a><a href="#stores">Stores</a><a href="#ttl">TTL</a><a href="#migrations">Migrations</a><a href="#transforms">Transforms</a><a href="#sync">Sync</a><a href="#locks">Locks</a><a href="#namespaces">Namespaces</a><a href="#backup">Import/export</a><a href="#diagnostics">Diagnostics</a><a href="#errors">Errors</a><a href="#single-file">Single-file IIFE</a><a href="#userscript">Userscript</a>
         </aside>
         <div class="doc-stack">
-          <article class="code-card" id="quickstart"><h3>Quick start</h3><p>Create one instance per logical namespace, await readiness once, and use it everywhere.</p><pre><code>const storage = RodStorage.create({
+          <article class="code-card" id="quickstart"><h3>Quick start</h3><p>Create one instance per logical namespace, await readiness once, and use it everywhere.</p><pre><code class="language-typescript">const storage = RodStorage.create({
   namespace: "aio-downloader",
   version: 1,
   backend: "auto",
@@ -192,7 +218,7 @@ await storage.ready();
 await storage.set("settings", { debug: true });
 const settings = await storage.get("settings");</code></pre></article>
 
-          <article class="code-card" id="typed-schema"><h3>Typed schema</h3><p>Pass your storage shape as the generic parameter. Keys and values remain coupled through TypeScript.</p><pre><code>interface AppStorage {
+          <article class="code-card" id="typed-schema"><h3>Typed schema</h3><p>Pass your storage shape as the generic parameter. Keys and values remain coupled through TypeScript.</p><pre><code class="language-typescript">interface AppStorage {
   settings: {
     debug: boolean;
     theme: "auto" | "light" | "dark";
@@ -208,10 +234,10 @@ const storage = RodStorage.create&lt;AppStorage&gt;({
 await storage.set("settings", { debug: false, theme: "auto" });
 // storage.set("settings", { banana: true }) // TypeScript error</code></pre></article>
 
-          <article class="code-card" id="backends"><h3>Backend selection</h3><p><code>auto</code> tries IndexedDB → GM → localStorage → memory. You can choose a backend or control the fallback chain.</p><div class="split"><pre><code>const storage = RodStorage.create({
+          <article class="code-card" id="backends"><h3>Backend selection</h3><p><code>auto</code> tries IndexedDB → GM → localStorage → memory. You can choose a backend or control the fallback chain.</p><div class="split"><pre><code class="language-typescript">const storage = RodStorage.create({
   namespace: "app",
   backend: "indexeddb",
-});</code></pre><pre><code>const storage = RodStorage.create({
+});</code></pre><pre><code class="language-typescript">const storage = RodStorage.create({
   namespace: "app",
   backend: {
     preferred: "gm",
@@ -219,7 +245,7 @@ await storage.set("settings", { debug: false, theme: "auto" });
   },
 });</code></pre></div><div class="callout">GM supports both modern <code>GM.*</code> methods and legacy <code>GM_*</code> functions when available globally.</div></article>
 
-          <article class="code-card" id="crud"><h3>CRUD + atomic update</h3><p>The simple API is enough for most keys. <code>update</code>/<code>atomic</code> serialize modifications per key.</p><pre><code>await storage.set("settings", { debug: false, theme: "auto" });
+          <article class="code-card" id="crud"><h3>CRUD + atomic update</h3><p>The simple API is enough for most keys. <code>update</code>/<code>atomic</code> serialize modifications per key.</p><pre><code class="language-typescript">await storage.set("settings", { debug: false, theme: "auto" });
 const value = await storage.get("settings");
 const exists = await storage.has("settings");
 const keys = await storage.keys();
@@ -232,7 +258,7 @@ await storage.update("settings", current => ({
 await storage.delete("settings");
 await storage.clear();</code></pre></article>
 
-          <article class="code-card" id="stores"><h3>Reactive stores</h3><p>Stores wrap one key with defaults, validation, TTL, transforms and subscriptions.</p><pre><code>const settings = storage.store("settings", {
+          <article class="code-card" id="stores"><h3>Reactive stores</h3><p>Stores wrap one key with defaults, validation, TTL, transforms and subscriptions.</p><pre><code class="language-typescript">const settings = storage.store("settings", {
   default: { debug: false, theme: "auto" },
   validate(value): value is AppStorage["settings"] {
     return !!value && typeof value === "object" && "debug" in value;
@@ -253,7 +279,7 @@ const stopDebug = settings.select(
   { immediate: true },
 );</code></pre></article>
 
-          <article class="code-card" id="ttl"><h3>TTL and cleanup</h3><p>TTL can be milliseconds or a compact duration. Expired values disappear on read and can be garbage-collected proactively.</p><pre><code>await storage.set("metadata", cache, { ttl: "24h" });
+          <article class="code-card" id="ttl"><h3>TTL and cleanup</h3><p>TTL can be milliseconds or a compact duration. Expired values disappear on read and can be garbage-collected proactively.</p><pre><code class="language-typescript">await storage.set("metadata", cache, { ttl: "24h" });
 await storage.set("temporary", value, { ttl: 15_000 });
 
 const removed = await storage.cleanup();
@@ -263,7 +289,7 @@ const storage = RodStorage.create({
   cleanupIntervalMs: 5 * 60_000,
 });</code></pre></article>
 
-          <article class="code-card" id="migrations"><h3>Sequential migrations</h3><p>Version N runs after N−1. A failed migration restores a namespace snapshot and preserves the previous schema version.</p><pre><code>const storage = RodStorage.create&lt;AppStorage&gt;({
+          <article class="code-card" id="migrations"><h3>Sequential migrations</h3><p>Version N runs after N−1. A failed migration restores a namespace snapshot and preserves the previous schema version.</p><pre><code class="language-typescript">const storage = RodStorage.create&lt;AppStorage&gt;({
   namespace: "app",
   version: 4,
   migrations: {
@@ -281,7 +307,7 @@ const storage = RodStorage.create({
   },
 });</code></pre></article>
 
-          <article class="code-card" id="transforms"><h3>Transform pipeline</h3><p>Transforms run after serialization on write and in reverse order before deserialization on read.</p><pre><code>const xorTransform = {
+          <article class="code-card" id="transforms"><h3>Transform pipeline</h3><p>Transforms run after serialization on write and in reverse order before deserialization on read.</p><pre><code class="language-typescript">const xorTransform = {
   name: "demo-xor",
   write(value) {
     return encrypt(JSON.stringify(value));
@@ -309,7 +335,7 @@ const secure = RodStorage.create({
   ],
 });</code></pre><div class="callout">Built-in compression uses CompressionStream. Encryption uses PBKDF2 + AES-GCM via Web Crypto. Key management remains application-specific.</div></article>
 
-          <article class="code-card" id="sync"><h3>Subscriptions + cross-tab sync</h3><p>Listen to one key or every change. Remote BroadcastChannel messages are marked with <code>source: "external"</code>.</p><pre><code>const stopSettings = storage.subscribe("settings", event => {
+          <article class="code-card" id="sync"><h3>Subscriptions + cross-tab sync</h3><p>Listen to one key or every change. Remote BroadcastChannel messages are marked with <code>source: "external"</code>.</p><pre><code class="language-typescript">const stopSettings = storage.subscribe("settings", event => {
   console.log(event.operation, event.value, event.source);
 });
 
@@ -320,7 +346,7 @@ const stopAll = storage.subscribe("*", event => {
 stopSettings();
 stopAll();</code></pre></article>
 
-          <article class="code-card" id="locks"><h3>Transactions, atomic updates and locks</h3><p>Use named locks for multi-step workflows. <code>transaction</code> snapshots the namespace and rolls it back if the callback throws.</p><pre><code>await storage.atomic("counter", value => (value ?? 0) + 1);
+          <article class="code-card" id="locks"><h3>Transactions, atomic updates and locks</h3><p>Use named locks for multi-step workflows. <code>transaction</code> snapshots the namespace and rolls it back if the callback throws.</p><pre><code class="language-typescript">await storage.atomic("counter", value => (value ?? 0) + 1);
 
 await storage.lock("media-delivery", async () => {
   await deliverMedia();
@@ -333,21 +359,21 @@ await storage.transaction(async () => {
   // throw -> namespace snapshot is restored
 });</code></pre></article>
 
-          <article class="code-card" id="namespaces"><h3>Child namespaces</h3><p>Build isolated storage trees without inventing key prefixes in application code.</p><pre><code>const root = RodStorage.create({ namespace: "rod-devtools" });
+          <article class="code-card" id="namespaces"><h3>Child namespaces</h3><p>Build isolated storage trees without inventing key prefixes in application code.</p><pre><code class="language-typescript">const root = RodStorage.create({ namespace: "rod-devtools" });
 const consoleStorage = root.namespace("console");
 const networkStorage = root.namespace("network");
 
 await consoleStorage.set("settings", consoleSettings);
 await networkStorage.set("history", requests);</code></pre></article>
 
-          <article class="code-card" id="backup"><h3>Import / export</h3><p>Exports contain a format marker, namespace, schema version and decoded records. Imports support merge, overwrite and skip-existing strategies.</p><pre><code>const backup = await storage.export();
+          <article class="code-card" id="backup"><h3>Import / export</h3><p>Exports contain a format marker, namespace, schema version and decoded records. Imports support merge, overwrite and skip-existing strategies.</p><pre><code class="language-typescript">const backup = await storage.export();
 const json = JSON.stringify(backup, null, 2);
 
 await storage.import(backup, { strategy: "merge" });
 await storage.import(backup, { strategy: "overwrite" });
 await storage.import(backup, { strategy: "skip-existing" });</code></pre></article>
 
-          <article class="code-card" id="diagnostics"><h3>Diagnostics + healthcheck</h3><p>Useful for settings panels and debug toasts.</p><pre><code>const diagnostics = await storage.diagnostics();
+          <article class="code-card" id="diagnostics"><h3>Diagnostics + healthcheck</h3><p>Useful for settings panels and debug toasts.</p><pre><code class="language-typescript">const diagnostics = await storage.diagnostics();
 // {
 //   backend: "indexeddb",
 //   namespace: "app",
@@ -362,7 +388,7 @@ await storage.import(backup, { strategy: "skip-existing" });</code></pre></artic
 const health = await storage.healthcheck();
 // write → read → compare → delete</code></pre></article>
 
-          <article class="code-card" id="errors"><h3>Typed errors</h3><p>Use the exported error classes for precise handling and UI feedback.</p><pre><code>const {
+          <article class="code-card" id="errors"><h3>Typed errors</h3><p>Use the exported error classes for precise handling and UI feedback.</p><pre><code class="language-typescript">const {
   StorageError,
   StorageUnavailableError,
   StorageQuotaError,
@@ -380,14 +406,14 @@ try {
   }
 }</code></pre></article>
 
-          <article class="code-card" id="single-file"><h3>Single-file TypeScript IIFE</h3><p><code>rod-storage.ts</code> is self-contained: no imports, no package runtime and no bundler requirement. Compile it directly with TypeScript.</p><pre><code>tsc rod-storage.ts \
+          <article class="code-card" id="single-file"><h3>Single-file TypeScript IIFE</h3><p><code>rod-storage.ts</code> is self-contained: no imports, no package runtime and no bundler requirement. Compile it directly with TypeScript.</p><pre><code class="language-bash">tsc rod-storage.ts \
   --target ES2022 \
   --lib ES2022,DOM \
   --strict \
   --module none \
   --outFile rod-storage.js</code></pre><div class="callout">The generated <code>rod-storage.js</code> immediately publishes <code>window.RodStorage</code>. You can still run it through Rolldown/esbuild if your repository already has a build pipeline, but it is not required.</div></article>
 
-          <article class="code-card" id="userscript"><h3>Userscript integration</h3><p>The source is already a single TypeScript IIFE with no runtime imports. Compile that one file to JavaScript, host it, and load the generated IIFE with <code>@require</code>. It publishes itself on <code>globalThis/window</code>.</p><pre><code>// ==UserScript==
+          <article class="code-card" id="userscript"><h3>Userscript integration</h3><p>The source is already a single TypeScript IIFE with no runtime imports. Compile that one file to JavaScript, host it, and load the generated IIFE with <code>@require</code>. It publishes itself on <code>globalThis/window</code>.</p><pre><code class="language-typescript">// ==UserScript==
 // @name         My Userscript
 // @match        https://*/*
 // @require      https://example.com/rod-storage.js
@@ -422,7 +448,11 @@ try {
 
   <footer><div class="shell">RodStorage v1.0.0 · TypeScript · browser-first · userscript-friendly.</div></footer>
 
-  <script src="../dist/storage.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/lib/common.min.js"></script>
+  <script>
+    if (window.hljs) hljs.highlightAll();
+  </script>
+  <script src="../rod-storage.js"></script>
   <script>
     const output = document.querySelector('#output');
     const status = document.querySelector('#status');
