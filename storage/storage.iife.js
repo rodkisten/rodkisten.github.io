@@ -1,5 +1,5 @@
-/* Auto-generated from userscripts/alerta.utils.ts. at 8/14/2026, 6:11:35 PM Do not edit directly. */
-var AlertaUtils = (function() {
+/* Auto-generated from storage/storage.ts. at 8/14/2026, 6:11:35 PM Do not edit directly. */
+var Storage = (function() {
 
 //#region \0rolldown/runtime.js
 	var __defProp = Object.defineProperty;
@@ -18,60 +18,12 @@ var AlertaUtils = (function() {
 	};
 
 //#endregion
-//#region userscripts/alerta.utils.ts
-	var alerta_utils_exports = /* @__PURE__ */ __exportAll({});
-	[
-		{
-			escapeHtml,
-			trimText,
-			dedent,
-			formatHtml,
-			formatCss,
-			formatElement,
-			normalizeHighlightLanguage,
-			highlightCode,
-			prettySource,
-			stringifyPreview
-		},
-		{
-			isObjectLike,
-			isPlainObject,
-			isNodeListLike,
-			safeCall,
-			hashText,
-			getNodeLabel,
-			getObjectPreview,
-			getRichCode,
-			getCodeLanguage,
-			formatValue,
-			clonePlainObject
-		},
-		{
-			clampNumber,
-			getViewportRect,
-			clampPanelRect,
-			copyText,
-			fallbackCopyText,
-			getElementFromObject,
-			isReactElement,
-			getReactOwnerInfo,
-			flashElement
-		},
-		{
-			createFallbackIconClass,
-			createIconFallbackText
-		},
-		{
-			readStorageValue,
-			writeStorageValue,
-			createStorageDriver
-		},
-		{ createEventBus }
-	].forEach((util) => window.RodUtils[util] = util);
+//#region storage/storage.ts
+	var storage_exports = /* @__PURE__ */ __exportAll({});
 
 //#endregion
-//#region \0rod-iife-entry:browser:/home/runner/work/rodkisten.github.io/rodkisten.github.io/userscripts/alerta.utils.ts
-	const __globalName = "AlertaUtils";
+//#region \0rod-iife-entry:browser:/home/runner/work/rodkisten.github.io/rodkisten.github.io/storage/storage.ts
+	const __globalName = "Storage";
 	const __roots = [];
 	function __addRoot(value) {
 		if (!value || typeof value !== "object" && typeof value !== "function") return;
@@ -101,8 +53,8 @@ var AlertaUtils = (function() {
 			break;
 		}
 	} catch {}
-	const __hasExports = Object.keys(alerta_utils_exports).length > 0;
-	const __value = Object.prototype.hasOwnProperty.call(alerta_utils_exports, "default") ? void 0 : Object.prototype.hasOwnProperty.call(alerta_utils_exports, __globalName) ? alerta_utils_exports[__globalName] : __hasExports ? alerta_utils_exports : __existing;
+	const __hasExports = Object.keys(storage_exports).length > 0;
+	const __value = Object.prototype.hasOwnProperty.call(storage_exports, "default") ? void 0 : Object.prototype.hasOwnProperty.call(storage_exports, __globalName) ? storage_exports[__globalName] : __hasExports ? storage_exports : __existing;
 	function __publish(__root) {
 		if (__value === void 0) return;
 		try {
