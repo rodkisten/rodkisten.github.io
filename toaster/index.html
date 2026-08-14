@@ -8,7 +8,7 @@
   <title>Rod Toaster · Playground e documentação</title>
   <meta
     name="description"
-    content="Landing page interativa do Rod Toaster v4.7.0: mensagens, image icons, loading, multi loading, confirmações, picker de imagens e vídeos, tarefas, grupos, retry, undo, scopes, eventos, temas e persistência."
+    content="Landing page interativa do Rod Toaster v4.9.0: mensagens, conteúdo expansível e scrollável, image icons, loading, multi loading com progresso agregado, confirmações, picker robusto no Safari/iPhone, tarefas, grupos, retry, undo, scopes, eventos, temas e persistência."
   >
 
   <style>
@@ -1295,16 +1295,17 @@
   <main id="top" class="shell">
     <section class="hero">
       <div class="hero-copy">
-        <span class="eyebrow">v4.7 · runtime de operações</span>
+        <span class="eyebrow">v4.9 · runtime de operações</span>
         <h1>
           Feedback visual que
           <span class="hero-gradient">trabalha com você.</span>
         </h1>
         <p class="hero-description">
-          Mensagens, image icons, dialogs com ownership de foco, picker mobile de
-          imagens e vídeos, tasks com state machine real, retries, persistência segura
-          e grupos ponderados. A v4.7 separa interação, tarefas e notificações em lanes
-          próprias e corta trabalho dos hot paths para aguentar operações intensas.
+          Mensagens, image icons, conteúdo expansível com scroll interno, dialogs com
+          ownership de foco, picker mobile robusto no Safari/iPhone, tasks com state
+          machine real, retries, persistência segura e grupos ponderados. A v4.9 também
+          traz progresso agregado no multi loading e mantém o timeout pausado enquanto
+          o conteúdo expandido estiver aberto ou focado.
         </p>
 
         <div class="hero-actions">
@@ -1465,13 +1466,14 @@
                   <tr><td><code>toast(...args)</code></td><td>Controller</td><td>Mensagem padrão com valores primitivos ou objetos.</td></tr>
                   <tr><td><code>toast.success/info/warning/error()</code></td><td>Controller</td><td>Mensagens semânticas, descritores ricos e erros copiáveis.</td></tr>
                   <tr><td><code>ToastOptions.icon</code></td><td>SVG | URL | Image descriptor | Node</td><td>Ícone vetorial ou imagem real forçada para uma caixa quadrada 1:1, com cover/contain e fallback semântico.</td></tr>
+                  <tr><td><code>ToastOptions.expanded</code></td><td>unknown | Expanded descriptor</td><td>Adiciona um chevron lateral e uma área interna expansível/scrollável. Aceita <code>content</code>, <code>title</code>, <code>defaultOpen</code> e <code>maxHeight</code>; o timeout pausa enquanto a área está aberta ou focada.</td></tr>
                   <tr><td><code>toast.message()</code></td><td>Controller</td><td>Toast rico com título, detalhes e ações assíncronas.</td></tr>
                   <tr><td><code>toast.loading()</code></td><td>Loading controller</td><td>Spinner, pulse, progresso e transição para estado terminal.</td></tr>
-                  <tr><td><code>toast.multiLoading()</code></td><td>MultiLoadingController</td><td>Lote compacto com itens independentes, progresso, morph de sucesso, retry, cancel individual/todos e scroll interno limitado a 50dvh.</td></tr>
+                  <tr><td><code>toast.multiLoading()</code></td><td>MultiLoadingController</td><td>Lote compacto com itens independentes, progresso agregado do lote, “% concluído · x de x itens”, sucesso que transforma somente o indicador em check verde e sai em fade-up, retry, cancel individual/todos e scroll interno limitado.</td></tr>
                   <tr><td><code>toast.confirm()</code></td><td>Promise&lt;T&gt;</td><td>Confirmação na interaction lane. Apenas o dialog do topo recebe foco, Enter e Escape; dismissible:false bloqueia dismiss implícito.</td></tr>
                   <tr><td><code>toast.prompt()</code></td><td>Promise&lt;string|null&gt;</td><td>Entrada de texto simples ou multiline com validação.</td></tr>
                   <tr><td><code>toast.select&lt;T&gt;()</code></td><td>Promise&lt;T|T[]|null&gt;</td><td>Seleção textual sem stringificar number/object; tokens internos preservam o valor original.</td></tr>
-                  <tr><td><code>toast.picker&lt;T&gt;()</code></td><td>Promise&lt;PickerResult&lt;T&gt;&gt;</td><td>Grid visual para imagens e vídeos, Blob/File, seleção múltipla e retorno por item, ID, index ou descriptor.</td></tr>
+                  <tr><td><code>toast.picker&lt;T&gt;()</code></td><td>Promise&lt;PickerResult&lt;T&gt;&gt;</td><td>Grid visual para imagens e vídeos com células de proporção estável inclusive no WebKit/iPhone, Blob/File, seleção múltipla e retorno por item, ID, index ou descriptor.</td></tr>
                   <tr><td><code>toast.undo()</code></td><td>Promise&lt;boolean&gt;</td><td>Janela temporária para desfazer uma ação.</td></tr>
                   <tr><td><code>toast.promise()</code></td><td>Promise&lt;T&gt;</td><td>Mapeia uma Promise para loading, success e error.</td></tr>
                   <tr><td><code>toast.task()</code></td><td>Task controller</td><td>State machine com queued/running/paused e estados terminais success/error/cancelled; cancel races não ressuscitam a task.</td></tr>
@@ -1495,7 +1497,7 @@
         <footer class="footer">
           <div>
             <strong>Rod Toaster</strong><br>
-            v4.7: interaction lane, multi loading, task state machine, media picker e runtime quente de alta performance.
+            v4.9: conteúdo expansível, timer com pause reasons, multi loading com agregado, picker estável no WebKit, interaction lane e runtime quente de alta performance.
           </div>
           <div>
             Pressione <span class="kbd">Esc</span> para fechar dialogs ou recolher a pilha.
@@ -1643,7 +1645,7 @@
         },
         {
           id: "runtime",
-          title: "Runtime v4.7",
+          title: "Runtime v4.9",
           kicker: "Invariantes & performance",
           description:
             "Dialog stack isolada, state machine terminal, lifecycle seguro, persistência throttled e host ocioso reutilizável.",
@@ -1745,6 +1747,92 @@ toast.error("Não foi possível concluir.");`,
             toast.warning("A conexão está instável.");
             await sleep(140);
             toast.error("Não foi possível concluir.");
+          },
+        },
+
+        {
+          id: "expanded-content",
+          section: "messages",
+          title: "Conteúdo expansível e scrollável",
+          description:
+            "Adicione expanded sem mudar o fluxo do toast. O chevron abre uma área interna com scroll e congela o timeout enquanto estiver aberta ou com foco.",
+          tags: "expanded expandable scroll details chevron focus timer pause content v4.9",
+          code: `toast.info("Sincronização concluída com avisos", {
+  duration: 8000,
+  expanded: {
+    title: "Detalhes da execução",
+    maxHeight: 260,
+    content: {
+      sent: 18,
+      skipped: 4,
+      failed: 1,
+      notes: [
+        "Os itens já enviados foram ignorados.",
+        "O item com erro pode ser reenviado individualmente.",
+      ],
+    },
+  },
+});`,
+          run() {
+            toast.info("Sincronização concluída com avisos", {
+              duration: 8000,
+              expanded: {
+                title: "Detalhes da execução",
+                maxHeight: 260,
+                content: {
+                  sent: 18,
+                  skipped: 4,
+                  failed: 1,
+                  notes: [
+                    "Os itens já enviados foram ignorados.",
+                    "O item com erro pode ser reenviado individualmente.",
+                    "Enquanto este painel estiver aberto, o timeout fica pausado.",
+                    "Ao fechar, o toast continua contando apenas o tempo restante.",
+                  ],
+                },
+              },
+            });
+          },
+        },
+
+        {
+          id: "expanded-default-open",
+          section: "messages",
+          title: "Expanded aberto por padrão",
+          description:
+            "defaultOpen já monta o painel aberto. Também é possível passar qualquer valor diretamente em expanded como shorthand para { content }.",
+          tags: "expanded defaultOpen shorthand content maxHeight v4.9",
+          code: `toast("Resposta do worker", {
+  expanded: {
+    title: "Payload",
+    defaultOpen: true,
+    maxHeight: "32dvh",
+    content: response,
+  },
+});
+
+// shorthand:
+toast("Debug", {
+  expanded: response,
+});`,
+          run() {
+            toast("Resposta do worker", {
+              duration: 9000,
+              expanded: {
+                title: "Payload",
+                defaultOpen: true,
+                maxHeight: "32dvh",
+                content: {
+                  ok: true,
+                  provider: "instagram",
+                  media: [
+                    { id: "C1", status: "sent" },
+                    { id: "C2", status: "already_sent" },
+                    { id: "C3", status: "pending" },
+                  ],
+                },
+              },
+            });
           },
         },
 
@@ -2815,8 +2903,8 @@ toast.resolve("upload:post:123", "success", {
           requires: "multiLoading",
           title: "Multi loading de envios",
           description:
-            "Um único toaster acompanha o lote inteiro. Cada linha tem progresso e X próprio; sucessos viram uma bolinha verde e desaparecem suavemente.",
-          tags: "multi loading batch upload progress success morph cancel scroll",
+            "Um único toaster acompanha o lote inteiro com % agregado e x de x itens sob o header. Cada linha tem progresso e X próprio; no sucesso apenas o indicador vira check verde e a linha sai em fade-up.",
+          tags: "multi loading batch upload aggregate progress percent completed items success check fade up cancel scroll v4.9",
           code: `const batch = toast.multiLoading({
   title: "Enviando mídias",
   viewportRatio: 0.5,
@@ -3495,7 +3583,7 @@ toast.repairHost();`,
           title: "Dialog stack com ownership",
           description:
             "Confirm, prompt, select e picker vivem numa lane de interação separada. Só o dialog do topo recebe teclado e foco.",
-          tags: "v4.7 dialog stack focus keyboard dismissible interaction lane",
+          tags: "v4.9 dialog stack focus keyboard dismissible interaction lane",
           code: `const first = toast.confirm({
   id: "first-dialog",
   title: "Primeira decisão",
@@ -3543,7 +3631,7 @@ const second = toast.confirm({
           title: "Task state machine terminal",
           description:
             "success, error e cancelled são terminais. Updates tardios e executors que ignoram AbortSignal não ressuscitam uma tarefa.",
-          tags: "v4.7 task state machine terminal cancelled success race abort",
+          tags: "v4.9 task state machine terminal cancelled success race abort",
           code: `const job = toast.task({
   id: "download:123",
   title: "Download",
@@ -3558,7 +3646,7 @@ console.log(job.status); // "cancelled"`,
           async run() {
             const task = toast.task({
               id: `terminal:${Date.now()}`,
-              title: "State machine v4.7",
+              title: "State machine v4.9",
               description: "A tarefa será concluída e receberá updates tardios.",
             });
 
@@ -3581,7 +3669,7 @@ console.log(job.status); // "cancelled"`,
           title: "select<T>() preserva valores",
           description:
             "A option usa tokens internos. Números e objetos não são mais convertidos para string pelo elemento <select>.",
-          tags: "v4.7 select generic typed number object token",
+          tags: "v4.9 select generic typed number object token",
           code: `const channel = await toast.select<number>({
   title: "Escolha um canal",
   value: 42,
@@ -3617,7 +3705,7 @@ console.log(typeof channel); // "number"`,
           title: "Retry sem dead zone",
           description:
             "backoff: 0 significa tentar imediatamente. Delays reais usam countdown vivo e podem ser antecipados pelo usuário.",
-          tags: "v4.7 retry backoff zero countdown immediate",
+          tags: "v4.9 retry backoff zero countdown immediate",
           code: `await toast.retry({
   title: "Worker",
   maxAttempts: 3,
@@ -3658,7 +3746,7 @@ console.log(typeof channel); // "number"`,
           title: "Persistência segura e throttled",
           description:
             "Metadata circular/BigInt é sanitizada; progresso é persistido em lote, enquanto mudanças de status são flush imediato.",
-          tags: "v4.7 persistence performance throttle circular bigint storage",
+          tags: "v4.9 persistence performance throttle circular bigint storage",
           code: `toast.configure({
   persistTasks: false,
   taskProgressPersistInterval: 900,
@@ -3703,7 +3791,7 @@ const task = toast.task({
           title: "Lifecycle e host quente",
           description:
             "O stylesheet permanece parseado entre bursts. destroy/noConflict dão teardown real para upgrades e repairHost independe da política SPA.",
-          tags: "v4.7 destroy noConflict repairHost idleHostTtl hot host performance upgrade",
+          tags: "v4.9 destroy noConflict repairHost idleHostTtl hot host performance upgrade",
           code: `toast.configure({
   idleHostTtl: 0, // mantém host/CSS prontos
   useTopLayer: true,
@@ -4088,7 +4176,7 @@ toast.toggleTheme();`,
             description:
               `${missingMethod} não existe na API carregada ` +
               `(v${diagnostic.version || "?"}, global ${diagnostic.source}). ` +
-              "Publique/carregue o toaster.js v4.7.0 antes de executar esta demo.",
+              "Publique/carregue o toaster.js v4.9.0 antes de executar esta demo.",
             icon: "triangle-alert",
             duration: 9000,
             details: diagnostic,
@@ -4156,7 +4244,7 @@ toast.toggleTheme();`,
 
           runtimeStatus.dataset.state = hasV47 ? "ready" : "error";
           statusLabel.textContent = hasV47
-            ? `API pronta · v${api.version || "?"} · runtime v4.7`
+            ? `API pronta · v${api.version || "?"} · runtime v4.9`
             : `API incompatível · v${api.version || "?"} · falta multiLoading`;
 
           document.querySelectorAll("[data-version]").forEach((node) => {
@@ -4261,7 +4349,7 @@ toast.toggleTheme();`,
 
         if (typeof api.picker === "function") {
           const selected = await api.picker({
-            title: "v4.7 · Media Picker mobile",
+            title: "v4.9 · Media Picker mobile",
             description: "Selecione algumas mídias para concluir a demo.",
             items: DEMO_MEDIA,
             columns: 2,
