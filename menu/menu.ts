@@ -2,7 +2,7 @@
 // @outfile dist/menu.js
 
 /**
- * RodMenu v2.2.0
+ * RodMenu v2.2.1
  * Browser-first declarative menu + form surface engine with adaptive Rod ecosystem integrations.
  *
  * Compile:
@@ -51,13 +51,13 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
 (function installRodMenu(rootWindow: Window & typeof globalThis): void {
   "use strict";
 
-  const VERSION = "2.2.0" as const;
+  const VERSION = "2.2.1" as const;
   const GLOBAL_NAME = "RodMenu" as const;
   const ROOT_ATTR = "data-rod-menu-host";
   const ACTIVE_ATTR = "data-rod-menu-active";
   const ID_PREFIX = "rod-menu";
   const DEFAULT_Z_INDEX = 2147482500;
-  const STYLE_VERSION = "v2.2";
+  const STYLE_VERSION = "v2.2.1";
 
   type Awaitable<T> = T | Promise<T>;
   type AnyRecord = Record<string, unknown>;
@@ -1428,7 +1428,7 @@ button {
   overflow: hidden;
   opacity: 0;
   transform: translate3d(0, 30px, 0) scale(.985);
-  transition: transform 280ms var(--rm-ease), opacity 220ms ease;
+  transition: transform 220ms var(--rm-ease), opacity 180ms ease;
   will-change: transform, opacity;
   overscroll-behavior: contain;
 }
@@ -1446,11 +1446,11 @@ button {
   --rm-sheet-x: 0px;
   --rm-drag-y: 0px;
   opacity: 0;
-  transform: translate3d(var(--rm-sheet-x), calc(100% + 24px + var(--rm-drag-y)), 0);
+  transform: translate3d(var(--rm-sheet-x), calc(18px + var(--rm-drag-y)), 0) scale(.992);
 }
 .rm-root[data-presentation="bottom-sheet"][data-open="true"] .rm-shell {
   opacity: 1;
-  transform: translate3d(var(--rm-sheet-x), var(--rm-drag-y), 0);
+  transform: translate3d(var(--rm-sheet-x), var(--rm-drag-y), 0) scale(1);
 }
 .rm-root[data-presentation="modal"] .rm-shell {
   left: 50%;
@@ -2063,6 +2063,22 @@ button {
 }
 .rm-tab-panel {
   min-width: 0;
+  transform-origin: center center;
+}
+.rm-tab-panel[data-entering="true"] {
+  animation: rm-tab-panel-enter 170ms cubic-bezier(.2,.75,.25,1) both;
+}
+@keyframes rm-tab-panel-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(10px, 0, 0);
+    filter: blur(1.5px);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    filter: blur(0);
+  }
 }
 .rm-media-preview {
   display: grid;
@@ -2865,6 +2881,7 @@ button {
         button.type = "button";
         button.className = "rm-tab";
         button.dataset.active = String(tab.id === this.activeTabId);
+        button.dataset.tabId = tab.id;
         button.setAttribute("role", "tab");
         button.setAttribute("aria-selected", String(tab.id === this.activeTabId));
         if (tab.icon) {
@@ -4026,12 +4043,69 @@ button {
     }
 
     private setActiveTab(tabId: string): void {
-      if (!this.schemaValue.tabs?.some((tab) => tab.id === tabId)) return;
-      if (this.activeTabId === tabId) return;
+      const tabs = this.schemaValue.tabs || [];
+      const nextTab = tabs.find((tab) => tab.id === tabId);
+      if (!nextTab || this.activeTabId === tabId || this.destroyed) return;
+
+      const root = this.getRootElement();
+      const shell = root.querySelector<HTMLElement>(".rm-shell");
+      const wrapper = root.querySelector<HTMLElement>(".rm-tabs-wrap");
+      const oldPanel = wrapper?.querySelector<HTMLElement>(".rm-tab-panel");
+      if (!shell || !wrapper || !oldPanel) {
+        this.activeTabId = tabId;
+        this.render();
+        requestAnimationFrame(() => {
+          if (!this.destroyed) this.getRootElement().dataset.open = "true";
+        });
+        return;
+      }
+
+      // Once the user starts navigating tabs, keep the surface height stable.
+      // This prevents the bottom sheet from visually collapsing and reopening
+      // when tabs contain very different amounts of content.
+      const currentHeight = shell.getBoundingClientRect().height;
+      if (currentHeight > 0) {
+        shell.style.height = `${Math.round(currentHeight)}px`;
+        shell.style.maxHeight = `min(92dvh, calc(var(--rm-vvh, 100vh) - 8px))`;
+      }
+
+      for (const tab of tabs) {
+        for (const field of tab.fields || []) {
+          this.fieldNodes.delete(field.name);
+          this.inputNodes.delete(field.name);
+          this.customNodes.delete(field.name);
+        }
+        for (const section of tab.sections || []) {
+          for (const field of section.fields || []) {
+            this.fieldNodes.delete(field.name);
+            this.inputNodes.delete(field.name);
+            this.customNodes.delete(field.name);
+          }
+        }
+      }
+
       this.activeTabId = tabId;
-      this.render();
+
+      for (const button of Array.from(wrapper.querySelectorAll<HTMLElement>(".rm-tab"))) {
+        const isActive = button.getAttribute("data-tab-id") === tabId;
+        button.dataset.active = String(isActive);
+        button.setAttribute("aria-selected", String(isActive));
+      }
+
+      const panel = createElement(this.doc, "div");
+      panel.className = "rm-tab-panel";
+      panel.dataset.tabPanel = nextTab.id;
+      panel.dataset.entering = "true";
+      panel.setAttribute("role", "tabpanel");
+      if (nextTab.fields?.length) panel.append(this.renderSection({ fields: nextTab.fields }));
+      for (const section of nextTab.sections || []) panel.append(this.renderSection(section));
+
+      oldPanel.replaceWith(panel);
+      this.refreshDynamicState();
+
       requestAnimationFrame(() => {
-        if (!this.destroyed) this.getRootElement().dataset.open = "true";
+        if (this.destroyed) return;
+        panel.addEventListener("animationend", () => panel.removeAttribute("data-entering"), { once: true });
       });
     }
 
