@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+
+<html class="scroll-smooth" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>LAW_TIMELINE - TIMELINE DE TRAMITAÇÃO</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Anton&amp;family=Archivo+Narrow:wght@400;500&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "outline-variant": "#c8c8ab",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed": "#1b1b1b",
+                        "surface": "#f9f9f9",
+                        "secondary-fixed-dim": "#c6c6c6",
+                        "surface-container-highest": "#e2e2e2",
+                        "on-error-container": "#93000a",
+                        "surface-container-high": "#e8e8e8",
+                        "inverse-primary": "#c3d000",
+                        "on-primary-fixed-variant": "#454a00",
+                        "on-primary-container": "#6d7400",
+                        "secondary": "#5e5e5e",
+                        "primary": "#5c6300",
+                        "on-tertiary-container": "#6d6f6f",
+                        "on-error": "#ffffff",
+                        "surface-bright": "#f9f9f9",
+                        "background": "#f9f9f9",
+                        "tertiary-container": "#f3f3f3",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "on-background": "#1a1c1c",
+                        "surface-container": "#eeeeee",
+                        "on-secondary-container": "#646464",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed": "#e2e2e2",
+                        "surface-container-lowest": "#ffffff",
+                        "inverse-on-surface": "#f1f1f1",
+                        "outline": "#78795f",
+                        "on-surface": "#1a1c1c",
+                        "error-container": "#ffdad6",
+                        "surface-tint": "#5c6300",
+                        "on-secondary-fixed-variant": "#474747",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "on-surface-variant": "#474832",
+                        "tertiary": "#5d5f5f",
+                        "primary-fixed-dim": "#c3d000",
+                        "surface-dim": "#dadada",
+                        "secondary-fixed": "#e2e2e2",
+                        "primary-container": "#efff00",
+                        "error": "#ba1a1a",
+                        "on-primary-fixed": "#1b1d00",
+                        "surface-container-low": "#f3f3f3",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "on-primary": "#ffffff",
+                        "primary-fixed": "#deed00",
+                        "inverse-surface": "#2f3131",
+                        "secondary-container": "#e2e2e2",
+                        "surface-variant": "#e2e2e2"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "card-padding": "20px",
+                        "stack-gap": "24px",
+                        "shadow-offset": "6px",
+                        "section-padding": "32px",
+                        "border-width": "4px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Archivo Narrow"],
+                        "display-lg": ["Anton"],
+                        "headline-lg-mobile": ["Anton"],
+                        "label-md": ["JetBrains Mono"],
+                        "label-sm": ["JetBrains Mono"],
+                        "body-md": ["Archivo Narrow"],
+                        "headline-lg": ["Anton"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["18px", { "lineHeight": "1.5", "fontWeight": "500" }],
+                        "display-lg": ["48px", { "lineHeight": "1.1", "letterSpacing": "0.02em", "fontWeight": "400" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "1.2", "fontWeight": "400" }],
+                        "label-md": ["14px", { "lineHeight": "1.2", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "label-sm": ["12px", { "lineHeight": "1.2", "fontWeight": "400" }],
+                        "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "headline-lg": ["32px", { "lineHeight": "1.2", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .neo-shadow { box-shadow: 6px 6px 0px 0px rgba(0,0,0,1); }
+        .neo-shadow-sm { box-shadow: 2px 2px 0px 0px rgba(0,0,0,1); }
+        .neo-shadow-hover:hover { box-shadow: 2px 2px 0px 0px rgba(0,0,0,1); transform: translate(4px, 4px); }
+        
+        .fade-in-up {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+        .fade-in-up.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        /* Stacked list layout for mobile priority */
+        .timeline-item { position: relative; z-index: 10; margin-left: 0 !important; margin-right: 0 !important; margin-top: 0 !important; }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center px-4 md:px-section-padding py-4 w-full bg-background dark:bg-on-background sticky top-0 z-50 border-b-4 border-on-background shadow-[0px_6px_0px_0px_rgba(0,0,0,1)]">
+<div class="font-display-lg text-[32px] md:text-display-lg text-on-background dark:text-background italic">LAW_TIMELINE</div>
+<div class="flex items-center gap-2 md:gap-4">
+<div class="relative hidden md:block">
+<input class="border-4 border-on-background bg-surface px-4 py-2 font-label-md text-label-md focus:outline-none focus:ring-4 focus:ring-primary-container w-64 placeholder-on-surface-variant" placeholder="Search events..." type="text"/>
+<span class="material-symbols-outlined absolute right-3 top-2.5 text-on-background">search</span>
+</div>
+<button class="border-4 border-on-background bg-surface p-2 neo-shadow neo-shadow-hover transition-all">
+<span class="material-symbols-outlined">filter_list</span>
+</button>
+<button class="border-4 border-on-background bg-surface p-2 neo-shadow neo-shadow-hover transition-all">
+<span class="material-symbols-outlined">account_circle</span>
+</button>
+</div>
+</header>
+<div class="flex flex-col md:flex-row w-full min-h-screen">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col p-6 gap-stack-gap fixed left-0 top-[88px] h-[calc(100vh-88px)] w-64 border-r-4 border-on-background bg-background dark:bg-on-background z-40 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+<div class="mb-8">
+<div class="w-16 h-16 border-4 border-on-background bg-primary-container mb-4 flex items-center justify-center neo-shadow">
+<span aria-label="Law Timeline Logo" class="material-symbols-outlined text-3xl text-on-primary-container">account_balance</span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-primary dark:text-primary-fixed uppercase">LEGAL SPINE</h1>
+<p class="font-label-sm text-label-sm mt-1">V.1.0 JUSTICE</p>
+</div>
+<div class="flex flex-col gap-2 flex-grow">
+<a class="flex items-center gap-3 bg-primary text-on-primary border-4 border-on-background shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] translate-x-1 translate-y-1 font-label-md p-4" href="#">
+<span class="material-symbols-outlined">event_note</span>
+                    2024
+                </a>
+<a class="flex items-center gap-3 text-on-background dark:text-background font-label-md p-4 hover:bg-primary-container hover:text-on-primary-container transition-all" href="#">
+<span class="material-symbols-outlined">history</span>
+                    2023
+                </a>
+<a class="flex items-center gap-3 text-on-background dark:text-background font-label-md p-4 hover:bg-primary-container hover:text-on-primary-container transition-all" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+                    2022
+                </a>
+<a class="flex items-center gap-3 text-on-background dark:text-background font-label-md p-4 hover:bg-primary-container hover:text-on-primary-container transition-all" href="#">
+<span class="material-symbols-outlined">schedule</span>
+                    2021
+                </a>
+<a class="flex items-center gap-3 text-on-background dark:text-background font-label-md p-4 mt-auto hover:bg-primary-container hover:text-on-primary-container transition-all" href="#">
+<span class="material-symbols-outlined">archive</span>
+                    ARCHIVE
+                </a>
+</div>
+<button class="mt-4 border-4 border-on-background py-3 px-4 font-label-md text-label-md neo-shadow neo-shadow-hover w-full bg-primary-container text-on-primary-container">
+                SUBMIT CASE
+            </button>
+</nav>
+<!-- Main Content -->
+<main class="w-full md:ml-64 p-4 md:p-section-padding pt-6 bg-surface-container-lowest">
+<div class="max-w-2xl mx-auto border-4 border-on-background bg-surface min-h-[80vh] p-4 md:p-8 relative">
+<div class="mb-8 pb-4">
+<h2 class="font-headline-lg text-headline-lg md:text-[32px] text-on-background uppercase leading-none break-words">TIMELINE DE TRAMITAÇÃO <br class="md:hidden"/><span class="text-xl md:text-2xl">(57 EVENTOS)</span></h2>
+</div>
+<!-- Timeline Container -->
+<div class="relative pl-12">
+<!-- The Spine -->
+<div class="absolute left-[16px] top-0 bottom-0 w-1 bg-on-background z-0"></div>
+<div class="flex flex-col gap-8 pb-12">
+<!-- Event 1 -->
+<div class="timeline-item fade-in-up w-full relative group">
+<div class="absolute -left-[44px] top-4 w-8 h-8 bg-primary-container border-4 border-on-background rounded-full z-20 flex items-center justify-center neo-shadow-sm group-hover:bg-primary transition-colors">
+<span class="material-symbols-outlined text-[16px] text-on-background">gavel</span>
+</div>
+<div class="bg-surface border-4 border-on-background p-4 md:p-6 neo-shadow transition-all duration-300">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-sm text-label-sm uppercase">NOV 2023</span>
+<button class="expand-btn font-label-md text-label-md font-bold hover:text-primary transition-colors flex items-center gap-1 cursor-pointer">
+                                Ver detalhes
+                            </button>
+</div>
+<h3 class="font-headline-lg-mobile text-headline-lg-mobile uppercase leading-tight mb-4 border-b-2 border-on-background pb-4">Lei de Diretrizes Orçamentárias</h3>
+<p class="font-body-md text-body-md mb-2">Aprovação preliminar na câmara dos deputados com emendas relativas à educação e saúde.</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Comissão: CCJ</p>
+<div class="details-content hidden mt-6 border-t-4 border-on-background pt-4 bg-surface-container-low p-4 border-l-4">
+<ul class="space-y-4">
+<li class="flex items-start gap-3">
+<span class="material-symbols-outlined mt-1 text-primary">done</span>
+<div>
+<p class="font-label-md text-label-md">15 NOV - Leitura do Parecer</p>
+<p class="font-body-md text-body-md text-on-surface-variant">Leitura concluída pelo relator principal.</p>
+</div>
+</li>
+<li class="flex items-start gap-3">
+<span class="material-symbols-outlined mt-1 text-primary">done_all</span>
+<div>
+<p class="font-label-md text-label-md">20 NOV - Votação em Comissão</p>
+<p class="font-body-md text-body-md text-on-surface-variant">Aprovado por maioria simples na CCJ.</p>
+</div>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<!-- Event 2 -->
+<div class="timeline-item fade-in-up w-full relative group">
+<div class="absolute -left-[44px] top-4 w-8 h-8 bg-surface border-4 border-on-background rounded-full z-20 flex items-center justify-center neo-shadow-sm group-hover:bg-primary transition-colors">
+<span class="material-symbols-outlined text-[16px] text-on-background">receipt_long</span>
+</div>
+<div class="bg-surface border-4 border-on-background p-4 md:p-6 neo-shadow transition-all duration-300">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-sm text-label-sm uppercase">OUT 2023</span>
+<button class="expand-btn font-label-md text-label-md font-bold hover:text-primary transition-colors flex items-center gap-1 cursor-pointer">
+                                Ver detalhes
+                            </button>
+</div>
+<h3 class="font-headline-lg-mobile text-headline-lg-mobile uppercase leading-tight mb-4 border-b-2 border-on-background pb-4">Reforma Tributária</h3>
+<p class="font-body-md text-body-md mb-2">Discussão no senado sobre a unificação de impostos federais e estaduais.</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Comissão: CAE</p>
+<div class="details-content hidden mt-6 border-t-4 border-on-background pt-4 bg-surface-container-low p-4 border-l-4">
+<ul class="space-y-4">
+<li class="flex items-start gap-3">
+<span class="material-symbols-outlined mt-1 text-primary">pending</span>
+<div>
+<p class="font-label-md text-label-md">05 OUT - Audiência Pública</p>
+<p class="font-body-md text-body-md text-on-surface-variant">Debate com setores industriais.</p>
+</div>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<!-- Event 3 -->
+<div class="timeline-item fade-in-up w-full relative group">
+<div class="absolute -left-[44px] top-4 w-8 h-8 bg-surface border-4 border-on-background rounded-full z-20 flex items-center justify-center neo-shadow-sm group-hover:bg-primary transition-colors">
+<span class="material-symbols-outlined text-[16px] text-on-background">terrain</span>
+</div>
+<div class="bg-surface border-4 border-on-background p-4 md:p-6 neo-shadow transition-all duration-300">
+<div class="flex justify-between items-start mb-2">
+<span class="font-label-sm text-label-sm uppercase">SET 2023</span>
+<button class="expand-btn font-label-md text-label-md font-bold hover:text-primary transition-colors flex items-center gap-1 cursor-pointer">
+                                Ver detalhes
+                            </button>
+</div>
+<h3 class="font-headline-lg-mobile text-headline-lg-mobile uppercase leading-tight mb-4 border-b-2 border-on-background pb-4">Marco Temporal</h3>
+<p class="font-body-md text-body-md mb-2">Julgamento no STF e votação de projeto de lei no Congresso Nacional.</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Comissão: Plenário</p>
+<div class="details-content hidden mt-6 border-t-4 border-on-background pt-4 bg-surface-container-low p-4 border-l-4">
+<ul class="space-y-4">
+<li class="flex items-start gap-3">
+<span class="material-symbols-outlined mt-1">article</span>
+<div>
+<p class="font-label-md text-label-md">20 SET - Publicação Acórdão</p>
+<p class="font-body-md text-body-md text-on-surface-variant">Publicado no Diário Oficial da União.</p>
+</div>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Footer -->
+<footer class="w-full border-t-4 border-on-background flex flex-col md:flex-row justify-between items-center px-4 md:px-section-padding py-8 gap-4 bg-on-background dark:bg-surface-container-lowest z-50 relative">
+<div class="font-label-md text-label-md text-primary">LAW_TIMELINE</div>
+<div class="font-label-sm text-label-sm text-primary-fixed dark:text-primary text-center">
+            © 2024 JURIS-DICTO. BRUTALIST LEGAL ARCHIVE.
+        </div>
+<div class="flex gap-4 font-label-sm text-label-sm">
+<a class="text-background dark:text-on-background hover:text-primary-fixed-dim transition-colors" href="#">TERMS</a>
+<a class="text-background dark:text-on-background hover:text-primary-fixed-dim transition-colors" href="#">PRIVACY</a>
+<a class="text-background dark:text-on-background hover:text-primary-fixed-dim transition-colors" href="#">CONTACT</a>
+</div>
+</footer>
+<script>
+        // Expand/Collapse Logic
+        document.querySelectorAll('.expand-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const card = this.closest('.bg-surface');
+                const details = card.querySelector('.details-content');
+                
+                if (details.classList.contains('hidden')) {
+                    details.classList.remove('hidden');
+                    this.textContent = 'Menos detalhes';
+                    card.classList.add('bg-surface-container');
+                } else {
+                    details.classList.add('hidden');
+                    this.textContent = 'Ver detalhes';
+                    card.classList.remove('bg-surface-container');
+                }
+            });
+        });
+
+        // Intersection Observer for scroll animations
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, {
+            threshold: 0.1
+        });
+
+        document.querySelectorAll('.fade-in-up').forEach((el) => {
+            observer.observe(el);
+        });
+    </script>
+</body></html>
