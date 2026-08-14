@@ -1,5 +1,5 @@
 // @global RodMenu
-// @outfile dist/menu.js
+// @outfile dist/rod-menu.js
 
 /**
  * RodMenu v1.0.0
