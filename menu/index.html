@@ -1,1 +1,199 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0b0e" />
+  <title>RodMenu v1 — Declarative UI Surfaces</title>
+  <style>
+    :root { color-scheme: dark; --bg:#09090b; --panel:#121217; --muted:#a4a4b0; --line:rgba(255,255,255,.09); --orange:#ff7a18; --orange2:#ff4d00; }
+    * { box-sizing:border-box }
+    html { scroll-behavior:smooth; background:var(--bg) }
+    body { margin:0; min-height:100vh; color:#fff; font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif; background:
+      radial-gradient(circle at 10% 0%, rgba(255,122,24,.16), transparent 28%),
+      radial-gradient(circle at 90% 10%, rgba(115,74,255,.13), transparent 24%),
+      linear-gradient(#0a0a0d,#08080a); overflow-x:hidden }
+    .noise { position:fixed; inset:0; pointer-events:none; opacity:.035; z-index:50; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.95' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E") }
+    nav { position:sticky; top:0; z-index:20; backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px); background:rgba(9,9,11,.65); border-bottom:1px solid var(--line) }
+    .navin { max-width:1180px; margin:auto; height:66px; display:flex; align-items:center; justify-content:space-between; padding:0 20px }
+    .brand { display:flex; align-items:center; gap:11px; font-weight:800; letter-spacing:-.02em }
+    .mark { width:31px; height:31px; border-radius:10px; display:grid; place-items:center; background:linear-gradient(135deg,var(--orange),var(--orange2)); box-shadow:0 8px 26px rgba(255,105,15,.35) }
+    .pill { border:1px solid var(--line); padding:7px 10px; border-radius:999px; color:#ccc; font-size:12px; background:rgba(255,255,255,.035) }
+    main { max-width:1180px; margin:auto; padding:78px 20px 120px }
+    .hero { display:grid; grid-template-columns:1.1fr .9fr; gap:60px; align-items:center; min-height:72vh }
+    .kicker { display:inline-flex; align-items:center; gap:8px; border:1px solid rgba(255,122,24,.25); color:#ffb075; background:rgba(255,122,24,.08); padding:8px 11px; border-radius:999px; font-weight:700; font-size:12px; letter-spacing:.05em; text-transform:uppercase }
+    h1 { font-size:clamp(54px,8vw,102px); line-height:.88; margin:22px 0 24px; letter-spacing:-.07em; max-width:820px }
+    h1 span { background:linear-gradient(135deg,#fff 12%,#ffb16e 52%,#ff5b00); -webkit-background-clip:text; background-clip:text; color:transparent }
+    .lede { color:var(--muted); max-width:650px; font-size:clamp(17px,2vw,22px); line-height:1.55 }
+    .hero-actions,.demo-row { display:flex; flex-wrap:wrap; gap:11px; margin-top:28px }
+    button.demo { appearance:none; border:0; border-radius:14px; padding:13px 17px; min-height:46px; color:#fff; font-weight:750; cursor:pointer; background:#1a1a20; border:1px solid var(--line); transition:transform .18s ease, border-color .18s ease, background .18s ease }
+    button.demo:hover { transform:translateY(-2px); border-color:rgba(255,122,24,.45); background:#1f1b1a }
+    button.demo.primary { background:linear-gradient(135deg,var(--orange),var(--orange2)); border-color:transparent; box-shadow:0 12px 34px rgba(255,95,0,.24) }
+    .orb-stage { min-height:520px; display:grid; place-items:center; perspective:1200px }
+    .orb { position:relative; width:min(78vw,410px); aspect-ratio:1; border-radius:36%; transform:rotate(-8deg); background:
+      radial-gradient(circle at 30% 28%,rgba(255,255,255,.9),transparent 8%),
+      radial-gradient(circle at 44% 38%,#ffc27f 0 5%,#ff7a18 27%,#ff4d00 58%,#2e0900 100%);
+      box-shadow:0 60px 120px rgba(255,72,0,.18), inset -40px -50px 90px rgba(39,0,0,.44), inset 28px 20px 54px rgba(255,255,255,.2);
+      animation:float 5.4s ease-in-out infinite, morph 8s ease-in-out infinite }
+    .orb::after { content:"MENU"; position:absolute; inset:0; display:grid; place-items:center; font-weight:900; letter-spacing:.18em; font-size:clamp(28px,7vw,58px); mix-blend-mode:overlay; color:#fff }
+    @keyframes float { 50% { transform:translateY(-18px) rotate(5deg) } }
+    @keyframes morph { 0%,100%{border-radius:36% 64% 54% 46%/42% 35% 65% 58%} 50%{border-radius:59% 41% 31% 69%/46% 61% 39% 54%} }
+    .section { padding:88px 0 10px }
+    .section h2 { font-size:clamp(34px,5vw,58px); margin:0 0 16px; letter-spacing:-.045em }
+    .section > p { color:var(--muted); max-width:730px; line-height:1.65; font-size:17px }
+    .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin-top:30px }
+    .card { border:1px solid var(--line); background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.025)); border-radius:22px; padding:20px; min-height:180px; position:relative; overflow:hidden; transition:transform .22s ease,border-color .22s ease }
+    .card:hover { transform:translateY(-5px); border-color:rgba(255,122,24,.3) }
+    .card::after { content:""; position:absolute; width:130px; height:130px; border-radius:50%; right:-60px; bottom:-70px; background:radial-gradient(circle,rgba(255,122,24,.18),transparent 70%) }
+    .card .num { color:#ff9c55; font:800 12px/1 monospace; margin-bottom:34px }
+    .card h3 { margin:0 0 8px; font-size:18px }
+    .card p { margin:0; color:var(--muted); line-height:1.55; font-size:14px }
+    pre { margin:32px 0 0; border:1px solid var(--line); border-radius:22px; padding:22px; overflow:auto; background:#0d0d11; color:#ddd; line-height:1.55; box-shadow:inset 0 1px rgba(255,255,255,.03) }
+    .playground { border:1px solid var(--line); border-radius:28px; background:rgba(255,255,255,.025); padding:24px; margin-top:34px; position:relative; overflow:hidden }
+    .playground::before { content:""; position:absolute; inset:-30%; background:conic-gradient(from 0deg, transparent, rgba(255,122,24,.07), transparent 25%); animation:spinbg 12s linear infinite; pointer-events:none }
+    @keyframes spinbg { to{transform:rotate(360deg)} }
+    .playground > * { position:relative }
+    .status { margin-top:14px; color:#b6b6c2; font:500 13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; white-space:pre-wrap }
+    footer { border-top:1px solid var(--line); color:#777; padding:30px 20px 60px; text-align:center }
+    @media(max-width:820px){ .hero{grid-template-columns:1fr;gap:20px;padding-top:10px}.orb-stage{min-height:390px}.grid{grid-template-columns:1fr}.section{padding-top:68px} main{padding-top:42px} }
+  </style>
+</head>
+<body>
+<div class="noise"></div>
+<nav><div class="navin"><div class="brand"><div class="mark">R</div> RodMenu</div><div class="pill">v1.0.0 · IIFE · Shadow DOM</div></div></nav>
+<main>
+  <section class="hero">
+    <div>
+      <div class="kicker">Declarative UI surface engine</div>
+      <h1>Um schema.<br><span>Qualquer menu.</span></h1>
+      <p class="lede">Bottom sheets, modais, drawers, action sheets e formulários completos, sem framework. O mesmo schema muda de forma sem virar um ninho de componentes.</p>
+      <div class="hero-actions">
+        <button class="demo primary" id="openKitchen">Abrir kitchen sink</button>
+        <button class="demo" id="openConfirm">Testar confirm()</button>
+        <button class="demo" id="openActions">Action sheet</button>
+      </div>
+    </div>
+    <div class="orb-stage"><div class="orb"></div></div>
+  </section>
 
+  <section class="section">
+    <h2>Uma engine, muitas superfícies.</h2>
+    <p>RodMenu mantém schema, estado, validação e actions independentes da apresentação. No iPhone ele pode ser um bottom sheet; no desktop, um modal. Troque uma string, não uma arquitetura.</p>
+    <div class="grid">
+      <article class="card"><div class="num">01</div><h3>Shadow DOM por padrão</h3><p>CSS isolado da página hospedeira e tokens próprios, ideal para userscripts, ferramentas e páginas de terceiros.</p></article>
+      <article class="card"><div class="num">02</div><h3>Mobile-first de verdade</h3><p>Safe areas, Visual Viewport, swipe-to-dismiss, scroll lock, focus restore e bottom sheet como comportamento padrão.</p></article>
+      <article class="card"><div class="num">03</div><h3>Schema completo</h3><p>Inputs textuais, select, multi-select, radio, checkbox groups, switch, range, datas, cor, upload, segmented, rating e custom fields.</p></article>
+      <article class="card"><div class="num">04</div><h3>Actions assíncronas</h3><p>Loading por botão, validação automática, prevenção de double-submit e retorno por Promise.</p></article>
+      <article class="card"><div class="num">05</div><h3>Cross-window best effort</h3><p>Publicação em window, parent, top, frames e opener quando same-origin permitir. Cross-origin continua respeitando o sandbox do navegador.</p></article>
+      <article class="card"><div class="num">06</div><h3>API imperativa opcional</h3><p>setValue, setValues, validate, update, close e result sem sacrificar o modelo declarativo.</p></article>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Playground</h2>
+    <p>Os botões abaixo abrem exatamente o mesmo formulário em apresentações diferentes. A saída aparece logo abaixo.</p>
+    <div class="playground">
+      <div class="demo-row">
+        <button class="demo primary" data-presentation="bottom-sheet">Bottom sheet</button>
+        <button class="demo" data-presentation="modal">Modal</button>
+        <button class="demo" data-presentation="drawer">Drawer</button>
+        <button class="demo" data-presentation="popover">Popover</button>
+      </div>
+      <div class="status" id="status">Nenhum resultado ainda.</div>
+    </div>
+    <pre><code>const menu = RodMenu.open({
+  title: "Criar publicação",
+  presentation: "bottom-sheet",
+  fields: [
+    { type: "text", name: "title", label: "Título", required: true },
+    { type: "switch", name: "public", label: "Público", value: true }
+  ],
+  actions: [
+    { id: "cancel", label: "Cancelar", role: "cancel" },
+    { id: "save", label: "Salvar", role: "submit" }
+  ]
+});
+
+const result = await menu.result;</code></pre>
+  </section>
+</main>
+<footer>RodMenu v1 · tiny surfaces, large ambitions 🧩</footer>
+
+<script src="./menu.js"></script>
+<script>
+  const status = document.querySelector('#status');
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  const schema = presentation => ({
+    eyebrow: 'RodMenu Playground',
+    title: 'Kitchen sink form',
+    description: 'Um exemplo com os principais tipos de campo e regras dinâmicas.',
+    presentation,
+    drawerSide: 'right',
+    showHandle: true,
+    fields: [
+      { type: 'text', name: 'name', label: 'Nome', placeholder: 'Rodolfo', required: true },
+      { type: 'email', name: 'email', label: 'Email', placeholder: 'rod@example.com', required: true,
+        validate: value => /.+@.+\..+/.test(String(value)) ? null : 'Digite um email válido.' },
+      { type: 'textarea', name: 'bio', label: 'Bio', rows: 3, placeholder: 'Conte um pouco...' },
+      { type: 'select', name: 'role', label: 'Perfil', value: 'dev', options: [
+        { label: 'Developer', value: 'dev' }, { label: 'Designer', value: 'design' }, { label: 'Product', value: 'product' }
+      ]},
+      { type: 'segmented', name: 'theme', label: 'Tema', value: 'dark', options: [
+        { label: 'Light', value: 'light' }, { label: 'Dark', value: 'dark' }, { label: 'Auto', value: 'auto' }
+      ]},
+      { type: 'multiselect', name: 'skills', label: 'Skills', value: ['ts'], options: [
+        { label: 'TypeScript', value: 'ts' }, { label: 'React', value: 'react' }, { label: 'Next.js', value: 'next' }, { label: 'Node', value: 'node' }
+      ]},
+      { type: 'radio', name: 'level', label: 'Senioridade', value: 'senior', direction: 'horizontal', options: [
+        { label: 'Mid', value: 'mid' }, { label: 'Senior', value: 'senior' }, { label: 'Staff', value: 'staff' }
+      ]},
+      { type: 'checkbox-group', name: 'channels', label: 'Notificações', value: ['email'], options: [
+        { label: 'Email', value: 'email' }, { label: 'Push', value: 'push' }, { label: 'Telegram', value: 'telegram' }
+      ]},
+      { type: 'switch', name: 'advanced', label: 'Modo avançado', description: 'Exibe opções extras.' },
+      { type: 'number', name: 'retries', label: 'Retries', min: 0, max: 10, value: 3,
+        visibleWhen: values => values.advanced === true },
+      { type: 'range', name: 'quality', label: 'Qualidade', min: 1, max: 100, value: 82, showValue: true },
+      { type: 'color', name: 'accent', label: 'Accent color', value: '#ff7a18', presets: ['#ff7a18','#ff453a','#30d158','#0a84ff','#bf5af2'] },
+      { type: 'date', name: 'date', label: 'Data' },
+      { type: 'time', name: 'time', label: 'Horário' },
+      { type: 'rating', name: 'rating', label: 'Nota', value: 4 },
+      { type: 'file', name: 'files', label: 'Arquivos', multiple: true },
+      { type: 'switch', name: 'agree', label: 'Aceito salvar essas configurações', required: true }
+    ],
+    actions: [
+      { id: 'cancel', label: 'Cancelar', role: 'cancel', variant: 'secondary' },
+      { id: 'preview', label: 'Preview', role: 'custom', variant: 'ghost', validate: false,
+        handler(ctx) { ctx.set('bio', `Preview em ${new Date().toLocaleTimeString()}`); } },
+      { id: 'save', label: 'Salvar', role: 'submit', variant: 'primary', async handler(ctx) {
+        await sleep(850);
+        return { savedAt: new Date().toISOString(), fieldCount: Object.keys(ctx.values).length };
+      }}
+    ]
+  });
+
+  async function openDemo(presentation) {
+    const handle = RodMenu.open(schema(presentation));
+    const result = await handle.result;
+    status.textContent = JSON.stringify({ action: result.action, reason: result.reason, values: result.values, data: result.data }, (k,v) => v instanceof File ? `[File ${v.name}]` : v, 2);
+  }
+
+  document.querySelectorAll('[data-presentation]').forEach(button => {
+    button.addEventListener('click', () => openDemo(button.dataset.presentation));
+  });
+
+  document.querySelector('#openKitchen').addEventListener('click', () => openDemo('bottom-sheet'));
+  document.querySelector('#openConfirm').addEventListener('click', async () => {
+    const ok = await RodMenu.confirm({ title: 'Apagar esta demo?', description: 'Só uma demonstração, nenhum pixel será ferido.', confirmLabel: 'Apagar', danger: true });
+    status.textContent = `confirm() => ${ok}`;
+  });
+  document.querySelector('#openActions').addEventListener('click', async () => {
+    const action = await RodMenu.actions({ title: 'Compartilhar com…', items: [
+      { label: 'Telegram', value: 'telegram' }, { label: 'Copiar link', value: 'copy' }, { label: 'Salvar arquivo', value: 'save' }
+    ]});
+    status.textContent = `actions() => ${action}`;
+  });
+</script>
+</body>
+</html>
