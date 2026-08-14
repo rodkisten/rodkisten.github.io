@@ -97,9 +97,9 @@
         }
     </script>
 <style>
-        .neo-shadow { box-shadow: 6px 6px 0px 0px rgba(0,0,0,1); }
-        .neo-shadow-sm { box-shadow: 2px 2px 0px 0px rgba(0,0,0,1); }
-        .neo-shadow-hover:hover { box-shadow: 2px 2px 0px 0px rgba(0,0,0,1); transform: translate(4px, 4px); }
+        .neo-shadow { box-shadow: 8px 8px 0px 0px rgba(0,0,0,1); }
+        .neo-shadow-sm { box-shadow: 4px 4px 0px 0px rgba(0,0,0,1); }
+        .neo-shadow-hover:hover { box-shadow: 2px 2px 0px 0px rgba(0,0,0,1); transform: translate(6px, 6px); }
         
         .fade-in-up {
             opacity: 0;
@@ -111,103 +111,85 @@
             transform: translateY(0);
         }
         
-        /* Stacked list layout for mobile priority */
-        .timeline-item { position: relative; z-index: 10; margin-left: 0 !important; margin-right: 0 !important; margin-top: 0 !important; }
+        @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+        .animate-marquee {
+            display: inline-block;
+            white-space: nowrap;
+            animation: marquee 15s linear infinite;
+        }
+        
+        /* Bouncy expansion */
+        .card-expand {
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
     </style>
 </head>
-<body class="bg-background text-on-background font-body-md overflow-x-hidden selection:bg-primary-container selection:text-on-primary-container">
+<body class="bg-primary-container text-on-background font-body-md overflow-x-hidden selection:bg-on-background selection:text-primary-container">
 <!-- TopAppBar -->
-<header class="flex justify-between items-center px-4 md:px-section-padding py-4 w-full bg-background dark:bg-on-background sticky top-0 z-50 border-b-4 border-on-background shadow-[0px_6px_0px_0px_rgba(0,0,0,1)]">
-<div class="font-display-lg text-[32px] md:text-display-lg text-on-background dark:text-background italic">LAW_TIMELINE</div>
-<div class="flex items-center gap-2 md:gap-4">
-<div class="relative hidden md:block">
-<input class="border-4 border-on-background bg-surface px-4 py-2 font-label-md text-label-md focus:outline-none focus:ring-4 focus:ring-primary-container w-64 placeholder-on-surface-variant" placeholder="Search events..." type="text"/>
-<span class="material-symbols-outlined absolute right-3 top-2.5 text-on-background">search</span>
-</div>
-<button class="border-4 border-on-background bg-surface p-2 neo-shadow neo-shadow-hover transition-all">
-<span class="material-symbols-outlined">filter_list</span>
+<header class="flex justify-between items-center px-4 py-4 w-full bg-primary-container sticky top-0 z-50 border-b-8 border-on-background shadow-[0px_8px_0px_0px_rgba(0,0,0,1)]">
+<div class="font-display-lg text-headline-lg text-on-background italic leading-none">LAW_TIMELINE</div>
+<div class="flex items-center gap-2">
+<button class="border-4 border-on-background bg-surface p-2 neo-shadow-sm neo-shadow-hover transition-all">
+<span class="material-symbols-outlined font-bold">search</span>
 </button>
-<button class="border-4 border-on-background bg-surface p-2 neo-shadow neo-shadow-hover transition-all">
-<span class="material-symbols-outlined">account_circle</span>
+<button class="border-4 border-on-background bg-surface p-2 neo-shadow-sm neo-shadow-hover transition-all">
+<span class="material-symbols-outlined font-bold">menu</span>
 </button>
 </div>
 </header>
-<div class="flex flex-col md:flex-row w-full min-h-screen">
-<!-- SideNavBar -->
-<nav class="hidden md:flex flex-col p-6 gap-stack-gap fixed left-0 top-[88px] h-[calc(100vh-88px)] w-64 border-r-4 border-on-background bg-background dark:bg-on-background z-40 shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-<div class="mb-8">
-<div class="w-16 h-16 border-4 border-on-background bg-primary-container mb-4 flex items-center justify-center neo-shadow">
-<span aria-label="Law Timeline Logo" class="material-symbols-outlined text-3xl text-on-primary-container">account_balance</span>
-</div>
-<h1 class="font-headline-lg text-headline-lg text-primary dark:text-primary-fixed uppercase">LEGAL SPINE</h1>
-<p class="font-label-sm text-label-sm mt-1">V.1.0 JUSTICE</p>
-</div>
-<div class="flex flex-col gap-2 flex-grow">
-<a class="flex items-center gap-3 bg-primary text-on-primary border-4 border-on-background shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] translate-x-1 translate-y-1 font-label-md p-4" href="#">
-<span class="material-symbols-outlined">event_note</span>
-                    2024
-                </a>
-<a class="flex items-center gap-3 text-on-background dark:text-background font-label-md p-4 hover:bg-primary-container hover:text-on-primary-container transition-all" href="#">
-<span class="material-symbols-outlined">history</span>
-                    2023
-                </a>
-<a class="flex items-center gap-3 text-on-background dark:text-background font-label-md p-4 hover:bg-primary-container hover:text-on-primary-container transition-all" href="#">
-<span class="material-symbols-outlined">calendar_today</span>
-                    2022
-                </a>
-<a class="flex items-center gap-3 text-on-background dark:text-background font-label-md p-4 hover:bg-primary-container hover:text-on-primary-container transition-all" href="#">
-<span class="material-symbols-outlined">schedule</span>
-                    2021
-                </a>
-<a class="flex items-center gap-3 text-on-background dark:text-background font-label-md p-4 mt-auto hover:bg-primary-container hover:text-on-primary-container transition-all" href="#">
-<span class="material-symbols-outlined">archive</span>
-                    ARCHIVE
-                </a>
-</div>
-<button class="mt-4 border-4 border-on-background py-3 px-4 font-label-md text-label-md neo-shadow neo-shadow-hover w-full bg-primary-container text-on-primary-container">
-                SUBMIT CASE
-            </button>
-</nav>
+<div class="flex flex-col w-full min-h-screen">
 <!-- Main Content -->
-<main class="w-full md:ml-64 p-4 md:p-section-padding pt-6 bg-surface-container-lowest">
-<div class="max-w-2xl mx-auto border-4 border-on-background bg-surface min-h-[80vh] p-4 md:p-8 relative">
-<div class="mb-8 pb-4">
-<h2 class="font-headline-lg text-headline-lg md:text-[32px] text-on-background uppercase leading-none break-words">TIMELINE DE TRAMITAÇÃO <br class="md:hidden"/><span class="text-xl md:text-2xl">(57 EVENTOS)</span></h2>
+<main class="w-full px-4 pt-6 pb-24 bg-primary-container">
+<div class="max-w-md mx-auto">
+<!-- Scrolling Ticker Title -->
+<div class="mb-8 border-y-8 border-on-background bg-surface py-3 overflow-hidden -mx-4 flex items-center shadow-[0px_8px_0px_0px_rgba(0,0,0,1)] rotate-[-1deg] scale-105">
+<div class="animate-marquee font-display-lg text-headline-lg text-on-background uppercase tracking-widest flex gap-8">
+<span>TIMELINE DE TRAMITAÇÃO</span>
+<span>•</span>
+<span>ATIVO</span>
+<span>•</span>
+<span>TIMELINE DE TRAMITAÇÃO</span>
+<span>•</span>
+<span>ATIVO</span>
+<span>•</span>
+</div>
 </div>
 <!-- Timeline Container -->
-<div class="relative pl-12">
-<!-- The Spine -->
-<div class="absolute left-[16px] top-0 bottom-0 w-1 bg-on-background z-0"></div>
-<div class="flex flex-col gap-8 pb-12">
+<div class="relative">
+<div class="flex flex-col gap-6">
 <!-- Event 1 -->
-<div class="timeline-item fade-in-up w-full relative group">
-<div class="absolute -left-[44px] top-4 w-8 h-8 bg-primary-container border-4 border-on-background rounded-full z-20 flex items-center justify-center neo-shadow-sm group-hover:bg-primary transition-colors">
-<span class="material-symbols-outlined text-[16px] text-on-background">gavel</span>
+<div class="timeline-item fade-in-up w-full relative group cursor-pointer card-expand">
+<div class="bg-surface border-8 border-on-background p-5 neo-shadow transition-all duration-300 group-hover:-translate-y-1">
+<div class="flex justify-between items-start mb-4 border-b-8 border-on-background pb-4">
+<div class="flex-1">
+<span class="font-label-md text-label-md bg-primary-container px-3 py-1 border-4 border-on-background inline-block mb-3 font-bold text-on-background shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">NOV 2023</span>
+<h3 class="font-display-lg text-headline-lg uppercase leading-none mb-2">Lei de Diretrizes Orçamentárias</h3>
 </div>
-<div class="bg-surface border-4 border-on-background p-4 md:p-6 neo-shadow transition-all duration-300">
-<div class="flex justify-between items-start mb-2">
-<span class="font-label-sm text-label-sm uppercase">NOV 2023</span>
-<button class="expand-btn font-label-md text-label-md font-bold hover:text-primary transition-colors flex items-center gap-1 cursor-pointer">
-                                Ver detalhes
-                            </button>
+<div class="bg-primary-container p-2 border-4 border-on-background shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ml-4 shrink-0">
+<span class="material-symbols-outlined text-4xl block">gavel</span>
 </div>
-<h3 class="font-headline-lg-mobile text-headline-lg-mobile uppercase leading-tight mb-4 border-b-2 border-on-background pb-4">Lei de Diretrizes Orçamentárias</h3>
-<p class="font-body-md text-body-md mb-2">Aprovação preliminar na câmara dos deputados com emendas relativas à educação e saúde.</p>
-<p class="font-label-sm text-label-sm text-on-surface-variant">Comissão: CCJ</p>
-<div class="details-content hidden mt-6 border-t-4 border-on-background pt-4 bg-surface-container-low p-4 border-l-4">
-<ul class="space-y-4">
-<li class="flex items-start gap-3">
-<span class="material-symbols-outlined mt-1 text-primary">done</span>
+</div>
+<p class="font-body-lg text-body-lg mb-4 font-bold text-xl">Aprovação preliminar na câmara dos deputados com emendas relativas à educação e saúde.</p>
+<div class="expand-btn border-4 border-on-background bg-primary-container px-4 py-3 font-label-md text-label-md font-bold neo-shadow-sm transition-all flex justify-center items-center gap-2 uppercase w-full">
+<span class="material-symbols-outlined">add</span> Ver Detalhes
+                                </div>
+<div class="details-content hidden mt-6 border-t-8 border-on-background pt-6 bg-surface-container-highest p-4 border-4 border-on-background shadow-inner">
+<ul class="space-y-6">
+<li class="flex items-start gap-4 bg-surface p-3 border-4 border-on-background shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<span class="material-symbols-outlined text-3xl text-on-background bg-primary-container rounded-full p-1 border-2 border-on-background">done</span>
 <div>
-<p class="font-label-md text-label-md">15 NOV - Leitura do Parecer</p>
-<p class="font-body-md text-body-md text-on-surface-variant">Leitura concluída pelo relator principal.</p>
+<p class="font-label-md text-label-md font-bold text-lg mb-1">15 NOV - Leitura do Parecer</p>
+<p class="font-body-md text-body-md text-on-surface-variant font-bold">Leitura concluída pelo relator principal.</p>
 </div>
 </li>
-<li class="flex items-start gap-3">
-<span class="material-symbols-outlined mt-1 text-primary">done_all</span>
+<li class="flex items-start gap-4 bg-surface p-3 border-4 border-on-background shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<span class="material-symbols-outlined text-3xl text-on-background bg-primary-container rounded-full p-1 border-2 border-on-background">done_all</span>
 <div>
-<p class="font-label-md text-label-md">20 NOV - Votação em Comissão</p>
-<p class="font-body-md text-body-md text-on-surface-variant">Aprovado por maioria simples na CCJ.</p>
+<p class="font-label-md text-label-md font-bold text-lg mb-1">20 NOV - Votação em Comissão</p>
+<p class="font-body-md text-body-md text-on-surface-variant font-bold">Aprovado por maioria simples na CCJ.</p>
 </div>
 </li>
 </ul>
@@ -215,27 +197,28 @@
 </div>
 </div>
 <!-- Event 2 -->
-<div class="timeline-item fade-in-up w-full relative group">
-<div class="absolute -left-[44px] top-4 w-8 h-8 bg-surface border-4 border-on-background rounded-full z-20 flex items-center justify-center neo-shadow-sm group-hover:bg-primary transition-colors">
-<span class="material-symbols-outlined text-[16px] text-on-background">receipt_long</span>
+<div class="timeline-item fade-in-up w-full relative group cursor-pointer card-expand">
+<div class="bg-surface border-8 border-on-background p-5 neo-shadow transition-all duration-300 group-hover:-translate-y-1">
+<div class="flex justify-between items-start mb-4 border-b-8 border-on-background pb-4">
+<div class="flex-1">
+<span class="font-label-md text-label-md bg-surface px-3 py-1 border-4 border-on-background inline-block mb-3 font-bold text-on-background shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">OUT 2023</span>
+<h3 class="font-display-lg text-headline-lg uppercase leading-none mb-2">Reforma Tributária</h3>
 </div>
-<div class="bg-surface border-4 border-on-background p-4 md:p-6 neo-shadow transition-all duration-300">
-<div class="flex justify-between items-start mb-2">
-<span class="font-label-sm text-label-sm uppercase">OUT 2023</span>
-<button class="expand-btn font-label-md text-label-md font-bold hover:text-primary transition-colors flex items-center gap-1 cursor-pointer">
-                                Ver detalhes
-                            </button>
+<div class="bg-surface p-2 border-4 border-on-background shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ml-4 shrink-0">
+<span class="material-symbols-outlined text-4xl block">receipt_long</span>
 </div>
-<h3 class="font-headline-lg-mobile text-headline-lg-mobile uppercase leading-tight mb-4 border-b-2 border-on-background pb-4">Reforma Tributária</h3>
-<p class="font-body-md text-body-md mb-2">Discussão no senado sobre a unificação de impostos federais e estaduais.</p>
-<p class="font-label-sm text-label-sm text-on-surface-variant">Comissão: CAE</p>
-<div class="details-content hidden mt-6 border-t-4 border-on-background pt-4 bg-surface-container-low p-4 border-l-4">
-<ul class="space-y-4">
-<li class="flex items-start gap-3">
-<span class="material-symbols-outlined mt-1 text-primary">pending</span>
+</div>
+<p class="font-body-lg text-body-lg mb-4 font-bold text-xl">Discussão no senado sobre a unificação de impostos federais e estaduais.</p>
+<div class="expand-btn border-4 border-on-background bg-primary-container px-4 py-3 font-label-md text-label-md font-bold neo-shadow-sm transition-all flex justify-center items-center gap-2 uppercase w-full">
+<span class="material-symbols-outlined">add</span> Ver Detalhes
+                                </div>
+<div class="details-content hidden mt-6 border-t-8 border-on-background pt-6 bg-surface-container-highest p-4 border-4 border-on-background shadow-inner">
+<ul class="space-y-6">
+<li class="flex items-start gap-4 bg-surface p-3 border-4 border-on-background shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<span class="material-symbols-outlined text-3xl text-on-background bg-surface-container-highest rounded-full p-1 border-2 border-on-background">pending</span>
 <div>
-<p class="font-label-md text-label-md">05 OUT - Audiência Pública</p>
-<p class="font-body-md text-body-md text-on-surface-variant">Debate com setores industriais.</p>
+<p class="font-label-md text-label-md font-bold text-lg mb-1">05 OUT - Audiência Pública</p>
+<p class="font-body-md text-body-md text-on-surface-variant font-bold">Debate com setores industriais.</p>
 </div>
 </li>
 </ul>
@@ -243,27 +226,28 @@
 </div>
 </div>
 <!-- Event 3 -->
-<div class="timeline-item fade-in-up w-full relative group">
-<div class="absolute -left-[44px] top-4 w-8 h-8 bg-surface border-4 border-on-background rounded-full z-20 flex items-center justify-center neo-shadow-sm group-hover:bg-primary transition-colors">
-<span class="material-symbols-outlined text-[16px] text-on-background">terrain</span>
+<div class="timeline-item fade-in-up w-full relative group cursor-pointer card-expand">
+<div class="bg-surface border-8 border-on-background p-5 neo-shadow transition-all duration-300 group-hover:-translate-y-1">
+<div class="flex justify-between items-start mb-4 border-b-8 border-on-background pb-4">
+<div class="flex-1">
+<span class="font-label-md text-label-md bg-surface px-3 py-1 border-4 border-on-background inline-block mb-3 font-bold text-on-background shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">SET 2023</span>
+<h3 class="font-display-lg text-headline-lg uppercase leading-none mb-2">Marco Temporal</h3>
 </div>
-<div class="bg-surface border-4 border-on-background p-4 md:p-6 neo-shadow transition-all duration-300">
-<div class="flex justify-between items-start mb-2">
-<span class="font-label-sm text-label-sm uppercase">SET 2023</span>
-<button class="expand-btn font-label-md text-label-md font-bold hover:text-primary transition-colors flex items-center gap-1 cursor-pointer">
-                                Ver detalhes
-                            </button>
+<div class="bg-surface p-2 border-4 border-on-background shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ml-4 shrink-0">
+<span class="material-symbols-outlined text-4xl block">terrain</span>
 </div>
-<h3 class="font-headline-lg-mobile text-headline-lg-mobile uppercase leading-tight mb-4 border-b-2 border-on-background pb-4">Marco Temporal</h3>
-<p class="font-body-md text-body-md mb-2">Julgamento no STF e votação de projeto de lei no Congresso Nacional.</p>
-<p class="font-label-sm text-label-sm text-on-surface-variant">Comissão: Plenário</p>
-<div class="details-content hidden mt-6 border-t-4 border-on-background pt-4 bg-surface-container-low p-4 border-l-4">
-<ul class="space-y-4">
-<li class="flex items-start gap-3">
-<span class="material-symbols-outlined mt-1">article</span>
+</div>
+<p class="font-body-lg text-body-lg mb-4 font-bold text-xl">Julgamento no STF e votação de projeto de lei no Congresso Nacional.</p>
+<div class="expand-btn border-4 border-on-background bg-primary-container px-4 py-3 font-label-md text-label-md font-bold neo-shadow-sm transition-all flex justify-center items-center gap-2 uppercase w-full">
+<span class="material-symbols-outlined">add</span> Ver Detalhes
+                                </div>
+<div class="details-content hidden mt-6 border-t-8 border-on-background pt-6 bg-surface-container-highest p-4 border-4 border-on-background shadow-inner">
+<ul class="space-y-6">
+<li class="flex items-start gap-4 bg-surface p-3 border-4 border-on-background shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<span class="material-symbols-outlined text-3xl text-on-background bg-surface-container-highest rounded-full p-1 border-2 border-on-background">article</span>
 <div>
-<p class="font-label-md text-label-md">20 SET - Publicação Acórdão</p>
-<p class="font-body-md text-body-md text-on-surface-variant">Publicado no Diário Oficial da União.</p>
+<p class="font-label-md text-label-md font-bold text-lg mb-1">20 SET - Publicação Acórdão</p>
+<p class="font-body-md text-body-md text-on-surface-variant font-bold">Publicado no Diário Oficial da União.</p>
 </div>
 </li>
 </ul>
@@ -275,33 +259,38 @@
 </div>
 </main>
 </div>
-<!-- Footer -->
-<footer class="w-full border-t-4 border-on-background flex flex-col md:flex-row justify-between items-center px-4 md:px-section-padding py-8 gap-4 bg-on-background dark:bg-surface-container-lowest z-50 relative">
-<div class="font-label-md text-label-md text-primary">LAW_TIMELINE</div>
-<div class="font-label-sm text-label-sm text-primary-fixed dark:text-primary text-center">
-            © 2024 JURIS-DICTO. BRUTALIST LEGAL ARCHIVE.
-        </div>
-<div class="flex gap-4 font-label-sm text-label-sm">
-<a class="text-background dark:text-on-background hover:text-primary-fixed-dim transition-colors" href="#">TERMS</a>
-<a class="text-background dark:text-on-background hover:text-primary-fixed-dim transition-colors" href="#">PRIVACY</a>
-<a class="text-background dark:text-on-background hover:text-primary-fixed-dim transition-colors" href="#">CONTACT</a>
-</div>
-</footer>
 <script>
-        // Expand/Collapse Logic
-        document.querySelectorAll('.expand-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const card = this.closest('.bg-surface');
-                const details = card.querySelector('.details-content');
+        // Expand/Collapse Logic for entire card
+        document.querySelectorAll('.timeline-item').forEach(item => {
+            item.addEventListener('click', function(e) {
+                // Prevent bubbling if clicking links or specific elements inside if needed
+                const details = this.querySelector('.details-content');
+                const btn = this.querySelector('.expand-btn');
+                const icon = btn.querySelector('.material-symbols-outlined');
                 
-                if (details.classList.contains('hidden')) {
+                // Toggle state
+                const isHidden = details.classList.contains('hidden');
+                
+                // Close all others (optional accordion behavior)
+                // document.querySelectorAll('.details-content').forEach(d => {
+                //     if(d !== details) d.classList.add('hidden');
+                // });
+                // document.querySelectorAll('.expand-btn .material-symbols-outlined').forEach(i => i.textContent = 'add');
+                
+                if (isHidden) {
                     details.classList.remove('hidden');
-                    this.textContent = 'Menos detalhes';
-                    card.classList.add('bg-surface-container');
+                    icon.textContent = 'remove';
+                    btn.classList.add('bg-surface-container-highest');
+                    btn.classList.remove('bg-primary-container');
+                    this.querySelector('.bg-surface').classList.add('bg-primary-container');
+                    this.querySelector('.bg-surface').classList.remove('bg-surface');
                 } else {
                     details.classList.add('hidden');
-                    this.textContent = 'Ver detalhes';
-                    card.classList.remove('bg-surface-container');
+                    icon.textContent = 'add';
+                    btn.classList.remove('bg-surface-container-highest');
+                    btn.classList.add('bg-primary-container');
+                    this.querySelector('.bg-primary-container.border-8').classList.add('bg-surface');
+                    this.querySelector('.bg-surface.border-8').classList.remove('bg-primary-container');
                 }
             });
         });
