@@ -3,7 +3,7 @@
 
 /*
  * Rod Super Toaster
- * Version 4.8.2
+ * Version 4.9.0
  *
  * Browser-first, bundler-optional TypeScript IIFE.
  * Compile with: tsc --target ES2022 --lib ES2022,DOM --strict
@@ -12,7 +12,7 @@
 (function installRodToaster(globalWindow: Window & typeof globalThis): void {
   "use strict";
 
-  const VERSION = "4.8.2" as const;
+  const VERSION = "4.9.0" as const;
   const TOAST_GLOBAL = "RodToaster" as const;
   const INSPECTOR_GLOBAL = "RodObjectInspector" as const;
   const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -325,6 +325,17 @@
     autoAction?: string;
   }
 
+  interface ToastExpandedDescriptor {
+    /** Content rendered inside the expandable, scrollable area. */
+    content?: unknown;
+    /** Optional heading shown above the expanded content. */
+    title?: unknown;
+    /** Opens the expanded area immediately when the toast is created. */
+    defaultOpen?: boolean;
+    /** Maximum height of the inner scroll area. Defaults to min(42dvh, 360px). */
+    maxHeight?: number | string;
+  }
+
   interface ToastOptions {
     [OPTIONS_SYMBOL]?: true;
     duration?: number;
@@ -366,6 +377,14 @@
     metadata?: UnknownRecord | null;
     details?: unknown;
     detailsLabel?: string;
+    /**
+     * Adds a side chevron that opens a scrollable content area inside the toast.
+     * The timeout is paused while this area is open or focused.
+     *
+     * Runtime shorthand is also accepted: passing any non-descriptor value is
+     * treated as `{ content: value }`.
+     */
+    expanded?: ToastExpandedDescriptor | unknown;
     onDismiss?: ((event: ToastDismissEvent) => void) | null;
     checkbox?: CheckboxDescriptor | string | Array<CheckboxDescriptor | string>;
     countdown?: number | CountdownDescriptor;
@@ -451,6 +470,7 @@
     progressLabel: string | null;
     scope: string | null;
     metadata: UnknownRecord | null;
+    expanded: ToastExpandedDescriptor | null;
     onDismiss: ((event: ToastDismissEvent) => void) | null;
   }
 
@@ -1053,7 +1073,7 @@
     "virtualOverscan", "virtualMaxHeight", "unmountInspectorOnCollapse", "loading",
     "loadingState", "title", "description", "icon", "animation", "loadingAnimation",
     "progress", "progressLabel", "dismissible", "actions", "scope", "metadata", "details",
-    "detailsLabel", "onDismiss", "checkbox", "countdown", "shortcuts", "dismissValue",
+    "detailsLabel", "expanded", "onDismiss", "checkbox", "countdown", "shortcuts", "dismissValue",
     "returnMeta", "validation", "validationMessage", "rejectOnActionError", "copyError",
     "copyLabel", "error", "inputLabel", "inputType", "value", "placeholder", "autocomplete",
     "spellcheck", "minLength", "maxLength", "required", "requiredMessage", "multiline",
@@ -1139,6 +1159,26 @@
     if (!isUnknownRecord(value)) return false;
     const prototype = safeCall(() => Object.getPrototypeOf(value), null);
     return prototype === Object.prototype || prototype === null;
+  }
+
+  function normalizeExpandedDescriptor(value: unknown): ToastExpandedDescriptor | null {
+    if (value === undefined || value === null || value === false) return null;
+
+    if (isPlainObject(value)) {
+      const descriptorKeys = ["content", "title", "defaultOpen", "maxHeight"] as const;
+      if (descriptorKeys.some((key) => hasOwn(value, key))) {
+        return {
+          content: value.content,
+          title: value.title,
+          defaultOpen: Boolean(value.defaultOpen),
+          maxHeight: typeof value.maxHeight === "number" || typeof value.maxHeight === "string"
+            ? value.maxHeight
+            : undefined,
+        };
+      }
+    }
+
+    return { content: value };
   }
 
   function isBlobLike(value: unknown): value is Blob {
@@ -1834,6 +1874,7 @@
       .rod-toast-stack__toolbar-button,
       .rod-toast__close,
       .rod-toast__expand,
+      .rod-toast__content-expand,
       .rod-toast__minimize {
         appearance: none;
         border: 1px solid transparent;
@@ -2112,6 +2153,7 @@
 
       .rod-toast__close,
       .rod-toast__expand,
+      .rod-toast__content-expand,
       .rod-toast__minimize {
         display: grid;
         place-items: center;
@@ -2126,9 +2168,11 @@
 
       .rod-toast__close:hover,
       .rod-toast__expand:hover,
+      .rod-toast__content-expand:hover,
       .rod-toast__minimize:hover,
       .rod-toast__close:focus-visible,
       .rod-toast__expand:focus-visible,
+      .rod-toast__content-expand:focus-visible,
       .rod-toast__minimize:focus-visible {
         border-color: var(--rod-border);
         background: var(--rod-hover);
@@ -2137,8 +2181,17 @@
       }
 
       .rod-toast__expand,
+      .rod-toast__content-expand,
       .rod-toast__minimize {
         display: none;
+      }
+
+      .rod-toast[data-has-expanded-content="true"] .rod-toast__content-expand {
+        display: grid;
+      }
+
+      .rod-toast[data-content-expanded="true"] .rod-toast__content-expand svg {
+        transform: rotate(180deg);
       }
 
       .rod-toast[data-loading="true"] .rod-toast__minimize,
@@ -2148,6 +2201,74 @@
 
       .rod-toast[data-item-expanded="true"] .rod-toast__expand svg {
         transform: rotate(180deg);
+      }
+
+      .rod-toast__expanded-panel {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-rows: 0fr;
+        min-width: 0;
+        max-height: 0;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        border-top: 0 solid transparent;
+        opacity: 0;
+        transform: translateY(-5px);
+        transition:
+          grid-template-rows 260ms var(--rod-ease-spring),
+          max-height 260ms var(--rod-ease-spring),
+          margin 220ms var(--rod-ease-soft),
+          padding 220ms var(--rod-ease-soft),
+          border-color 180ms,
+          opacity 160ms,
+          transform 260ms var(--rod-ease-spring);
+      }
+
+      .rod-toast__expanded-inner {
+        min-height: 0;
+        min-width: 0;
+        overflow: hidden;
+      }
+
+      .rod-toast[data-content-expanded="true"] .rod-toast__expanded-panel {
+        grid-template-rows: 1fr;
+        max-height: calc(var(--rod-expanded-max-height, min(42dvh, 360px)) + 18px);
+        margin-top: 2px;
+        padding-top: 10px;
+        border-top-width: 1px;
+        border-top-color: var(--rod-border);
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .rod-toast__expanded-heading {
+        margin: 0 0 8px;
+        color: var(--rod-text-strong);
+        font: 650 11px/1.3 system-ui, sans-serif;
+        letter-spacing: -0.01em;
+      }
+
+      .rod-toast__expanded-scroll {
+        min-width: 0;
+        max-height: var(--rod-expanded-max-height, min(42dvh, 360px));
+        overflow-x: hidden;
+        overflow-y: auto;
+        padding: 1px 4px 3px 1px;
+        color: var(--rod-text);
+        font-size: 12px;
+        line-height: 1.48;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+        scrollbar-color: var(--rod-border-strong) transparent;
+        touch-action: pan-y;
+      }
+
+      .rod-toast__expanded-value + .rod-toast__expanded-value {
+        margin-top: 8px;
       }
 
       .rod-token--null {
@@ -2769,6 +2890,7 @@
 
       .rod-toast-stack[data-size="compact"] .rod-toast__close,
       .rod-toast-stack[data-size="compact"] .rod-toast__expand,
+      .rod-toast-stack[data-size="compact"] .rod-toast__content-expand,
       .rod-toast-stack[data-size="compact"] .rod-toast__minimize {
         width: 31px;
         min-width: 31px;
@@ -2846,6 +2968,7 @@
 
       .rod-toast-stack[data-size="comfortable"] .rod-toast__close,
       .rod-toast-stack[data-size="comfortable"] .rod-toast__expand,
+      .rod-toast-stack[data-size="comfortable"] .rod-toast__content-expand,
       .rod-toast-stack[data-size="comfortable"] .rod-toast__minimize {
         width: 36px;
         min-width: 36px;
@@ -2903,6 +3026,7 @@
 
       .rod-toast-stack[data-size="large"] .rod-toast__close,
       .rod-toast-stack[data-size="large"] .rod-toast__expand,
+      .rod-toast-stack[data-size="large"] .rod-toast__content-expand,
       .rod-toast-stack[data-size="large"] .rod-toast__minimize {
         width: 44px;
         min-width: 44px;
@@ -3850,6 +3974,8 @@
         .rod-toast__actions,
         .rod-toast__icon,
         .rod-toast__expand svg,
+        .rod-toast__content-expand svg,
+        .rod-toast__expanded-panel,
         .rod-toast-stack__list::before,
         .rod-toast-stack__list::after,
         .rod-toast__picker-item,
@@ -5020,6 +5146,7 @@
       progressLabel: options.progressLabel == null ? null : String(options.progressLabel),
       scope: options.scope == null ? null : String(options.scope),
       metadata: isUnknownRecord(options.metadata) ? options.metadata : null,
+      expanded: normalizeExpandedDescriptor(options.expanded),
       onDismiss: typeof options.onDismiss === "function" ? options.onDismiss : null,
     };
   }
@@ -5109,6 +5236,25 @@
       event.preventDefault();
       event.stopPropagation();
       toggleExpandedToast(getRecord());
+    });
+    return button;
+  }
+
+  function createContentExpandButton(
+    documentRef: Document,
+    toggle: () => void,
+  ): HTMLButtonElement {
+    const button = documentRef.createElement("button");
+    button.type = "button";
+    button.className = "rod-toast__content-expand";
+    button.append(createSvgIcon(documentRef, "chevron-down", 16));
+    button.setAttribute("aria-label", "Expand toast content");
+    button.setAttribute("aria-expanded", "false");
+    button.title = "Expand content";
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggle();
     });
     return button;
   }
@@ -5324,6 +5470,12 @@
     let loadingDescription: HTMLDivElement | null = null;
     let progressMeta: HTMLDivElement | null = null;
     let progressBar: HTMLDivElement | null = null;
+    let expandedPanel: HTMLDivElement | null = null;
+    let expandedInner: HTMLDivElement | null = null;
+    let expandedHeading: HTMLDivElement | null = null;
+    let expandedScroll: HTMLDivElement | null = null;
+    let expandedButton: HTMLButtonElement | null = null;
+    let contentExpanded = false;
 
     node.className = "rod-toast";
     node.setAttribute("role", options.role);
@@ -5341,6 +5493,8 @@
     node.dataset.lane = options.lane;
     node.dataset.completing = "false";
     node.dataset.successExit = "false";
+    node.dataset.hasExpandedContent = String(Boolean(options.expanded));
+    node.dataset.contentExpanded = "false";
     actions.append(count);
     node.append(icon, content, actions);
 
@@ -5348,7 +5502,7 @@
     let removalTimer: TimerHandle = null;
     let timerStartedAt = 0;
     let remainingDuration = options.duration;
-    let paused = false;
+    const pauseReasons = new Set<string>();
     let duplicateCount = 1;
     let completing = false;
     let dismissReason = "programmatic";
@@ -5528,25 +5682,117 @@
 
     const scheduleTimer = (): void => {
       clearTimer();
-      if (removed || paused || !Number.isFinite(remainingDuration) || remainingDuration <= 0) return;
+      if (removed || pauseReasons.size > 0 || !Number.isFinite(remainingDuration) || remainingDuration <= 0) return;
       timerStartedAt = Date.now();
       removalTimer = host.window.setTimeout(() => dismiss(false, null, "timeout"), remainingDuration);
     };
-    const pauseTimer = (): void => {
-      if (paused || removalTimer === null || !Number.isFinite(remainingDuration) || remainingDuration <= 0) return;
-      paused = true;
-      remainingDuration = Math.max(0, remainingDuration - (Date.now() - timerStartedAt));
+    const pauseTimer = (reason = "interaction"): void => {
+      if (pauseReasons.has(reason)) return;
+      const wasPaused = pauseReasons.size > 0;
+      pauseReasons.add(reason);
+      if (wasPaused) return;
+      if (removalTimer !== null && Number.isFinite(remainingDuration) && remainingDuration > 0) {
+        remainingDuration = Math.max(0, remainingDuration - (Date.now() - timerStartedAt));
+      }
       clearTimer();
     };
-    const resumeTimer = (): void => {
-      if (!paused) return;
-      paused = false;
+    const resumeTimer = (reason = "interaction"): void => {
+      if (!pauseReasons.delete(reason) || pauseReasons.size > 0) return;
       scheduleTimer();
     };
     const resetTimer = (duration = options.duration): void => {
       remainingDuration = duration;
-      paused = false;
-      scheduleTimer();
+      clearTimer();
+      if (pauseReasons.size === 0) scheduleTimer();
+    };
+
+    const ensureExpandedNodes = (): {
+      panel: HTMLDivElement;
+      inner: HTMLDivElement;
+      heading: HTMLDivElement;
+      scroll: HTMLDivElement;
+    } => {
+      if (expandedPanel && expandedInner && expandedHeading && expandedScroll) {
+        return { panel: expandedPanel, inner: expandedInner, heading: expandedHeading, scroll: expandedScroll };
+      }
+
+      expandedPanel = host.document.createElement("div");
+      expandedInner = host.document.createElement("div");
+      expandedHeading = host.document.createElement("div");
+      expandedScroll = host.document.createElement("div");
+      expandedPanel.className = "rod-toast__expanded-panel";
+      expandedInner.className = "rod-toast__expanded-inner";
+      expandedHeading.className = "rod-toast__expanded-heading";
+      expandedScroll.className = "rod-toast__expanded-scroll";
+      expandedScroll.tabIndex = 0;
+      expandedScroll.setAttribute("role", "region");
+      expandedScroll.setAttribute("aria-label", "Expanded toast content");
+      expandedInner.append(expandedHeading, expandedScroll);
+      expandedPanel.append(expandedInner);
+      node.append(expandedPanel);
+      return { panel: expandedPanel, inner: expandedInner, heading: expandedHeading, scroll: expandedScroll };
+    };
+
+    const setContentExpanded = (open: boolean): void => {
+      const canExpand = Boolean(options.expanded);
+      contentExpanded = canExpand && Boolean(open);
+      setDataValue(node, "contentExpanded", String(contentExpanded));
+      expandedButton?.setAttribute("aria-expanded", String(contentExpanded));
+      if (expandedButton) expandedButton.title = contentExpanded ? "Collapse content" : "Expand content";
+
+      if (contentExpanded) {
+        pauseTimer("expanded");
+        if (state.stackExpanded && getStackRecords().length > 1 && record && !record.removed) {
+          setExpandedToast(record, true);
+        }
+      } else {
+        resumeTimer("expanded");
+      }
+    };
+
+    const renderExpandedContent = (descriptor: ToastExpandedDescriptor | null): void => {
+      setDataValue(node, "hasExpandedContent", String(Boolean(descriptor)));
+      if (!descriptor) {
+        setContentExpanded(false);
+        expandedPanel?.remove();
+        expandedPanel = expandedInner = expandedHeading = expandedScroll = null;
+        if (expandedButton) {
+          expandedButton.remove();
+          expandedButton = null;
+        }
+        return;
+      }
+
+      const expandedUi = ensureExpandedNodes();
+      const rawMaxHeight = descriptor.maxHeight;
+      const maxHeight = typeof rawMaxHeight === "number"
+        ? `${Math.max(80, rawMaxHeight)}px`
+        : typeof rawMaxHeight === "string" && rawMaxHeight.trim()
+          ? rawMaxHeight.trim()
+          : "min(42dvh, 360px)";
+      node.style.setProperty("--rod-expanded-max-height", maxHeight);
+
+      expandedUi.heading.textContent = descriptor.title == null ? "" : String(descriptor.title);
+      expandedUi.heading.hidden = !expandedUi.heading.textContent;
+      expandedUi.scroll.replaceChildren();
+
+      const appendValue = (value: unknown): void => {
+        const wrapper = host.document.createElement("div");
+        wrapper.className = "rod-toast__expanded-value";
+        if (isDomNode(value)) wrapper.append(value.cloneNode(true));
+        else wrapper.append(renderToastValue(value, host.document, options));
+        expandedUi.scroll.append(wrapper);
+      };
+
+      if (Array.isArray(descriptor.content)) descriptor.content.forEach(appendValue);
+      else appendValue(descriptor.content ?? "");
+
+      if (!expandedButton) {
+        expandedButton = createContentExpandButton(host.document, () => setContentExpanded(!contentExpanded));
+        actions.append(expandedButton);
+      }
+
+      if (!contentExpanded && descriptor.defaultOpen) setContentExpanded(true);
     };
 
     const update = (nextArgs: unknown[], nextRawOptions: ToastOptions = {}): ToastController => {
@@ -5564,6 +5810,7 @@
       applyToastPalette(node, nextOptions.type);
       if (node.getAttribute("role") !== nextOptions.role) node.setAttribute("role", nextOptions.role);
       renderArgs(nextArgs, nextOptions);
+      renderExpandedContent(nextOptions.expanded);
       resetTimer(nextOptions.duration);
 
       if (shouldEmitUpdate && previous) {
@@ -5658,22 +5905,34 @@
 
     if (options.lane !== "interaction") {
       actions.append(createMinimizeButton(host.document));
-      actions.append(createExpandButton(host.document, () => record));
+      if (!options.expanded) actions.append(createExpandButton(host.document, () => record));
     }
+    renderExpandedContent(options.expanded);
     if (options.closeButton) actions.append(createCloseButton(host.document, () => dismiss(false, null, "close")));
 
     if (options.pauseOnInteraction) {
-      node.addEventListener("pointerenter", pauseTimer);
-      node.addEventListener("pointerleave", resumeTimer);
-      node.addEventListener("focusin", pauseTimer);
+      node.addEventListener("pointerenter", () => pauseTimer("pointer"));
+      node.addEventListener("pointerleave", () => resumeTimer("pointer"));
+      node.addEventListener("focusin", () => pauseTimer("focus"));
       node.addEventListener("focusout", (event) => {
-        if (!isDomNode(event.relatedTarget) || !node.contains(event.relatedTarget)) resumeTimer();
+        if (!isDomNode(event.relatedTarget) || !node.contains(event.relatedTarget)) resumeTimer("focus");
+      });
+    } else {
+      // Expanded content is explicitly interactive even when generic interaction
+      // pausing was disabled by the caller. Focus must never race the timeout.
+      node.addEventListener("focusin", () => pauseTimer("expanded-focus"));
+      node.addEventListener("focusout", (event) => {
+        if (!isDomNode(event.relatedTarget) || !node.contains(event.relatedTarget)) resumeTimer("expanded-focus");
       });
     }
 
     node.addEventListener("keydown", (event) => {
       if (options.lane === "interaction" || event.key !== "Escape") return;
-      if (state.stackExpanded) {
+      if (contentExpanded) {
+        event.preventDefault();
+        event.stopPropagation();
+        setContentExpanded(false);
+      } else if (state.stackExpanded) {
         event.preventDefault();
         event.stopPropagation();
         setStackExpanded(false);
