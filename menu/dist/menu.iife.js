@@ -1,4 +1,4 @@
-/* Auto-generated from menu/menu.ts. at 8/14/2026, 3:26:09 PM Do not edit directly. */
+/* Auto-generated from menu/menu.ts. at 8/14/2026, 3:37:25 PM Do not edit directly. */
 var RodMenu = (function() {
 
 //#region \0rolldown/runtime.js
@@ -21,11 +21,11 @@ var RodMenu = (function() {
 //#region menu/menu.ts
 	var menu_exports = /* @__PURE__ */ __exportAll({});
 	/**
-	* RodMenu v1.0.0
+	* RodMenu v1.0.2
 	* Framework-free, browser-first declarative menu + form surface engine.
 	*
 	* Compile:
-	*   tsc rod-menu.ts --target ES2022 --lib ES2022,DOM --strict --module none --outFile rod-menu.js
+	*   tsc rod-menu.ts --target ES2022 --lib ES2022,DOM --strict --module none --outFile dist/menu.js
 	*
 	* Default behavior:
 	* - bottom-sheet presentation
@@ -37,7 +37,7 @@ var RodMenu = (function() {
 	*/
 	(function installRodMenu(rootWindow) {
 		"use strict";
-		const VERSION = "1.0.0";
+		const VERSION = "1.0.2";
 		const GLOBAL_NAME = "RodMenu";
 		const ROOT_ATTR = "data-rod-menu-host";
 		const ACTIVE_ATTR = "data-rod-menu-active";
@@ -113,12 +113,20 @@ button { -webkit-tap-highlight-color: transparent; }
   transform: translate3d(0, 0, 0) scale(1);
 }
 .rm-root[data-presentation="bottom-sheet"] .rm-shell {
-  left: max(8px, env(safe-area-inset-left));
-  right: max(8px, env(safe-area-inset-right));
-  bottom: max(8px, env(safe-area-inset-bottom));
-  max-height: min(88dvh, calc(var(--rm-vvh, 100vh) - 16px));
-  border-radius: var(--rm-radius);
-  transform: translate3d(0, 110%, 0);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-height: min(92dvh, calc(var(--rm-vvh, 100vh) - 8px));
+  border-radius: var(--rm-radius) var(--rm-radius) 0 0;
+  --rm-sheet-x: 0px;
+  --rm-drag-y: 0px;
+  opacity: 0;
+  transform: translate3d(var(--rm-sheet-x), calc(100% + 24px + var(--rm-drag-y)), 0);
+}
+.rm-root[data-presentation="bottom-sheet"][data-open="true"] .rm-shell {
+  opacity: 1;
+  transform: translate3d(var(--rm-sheet-x), var(--rm-drag-y), 0);
 }
 .rm-root[data-presentation="modal"] .rm-shell {
   left: 50%;
@@ -155,7 +163,8 @@ button { -webkit-tap-highlight-color: transparent; }
   transform: translate3d(-50%, calc(-50% + 18px), 0) scale(.96);
 }
 .rm-root[data-presentation="popover"][data-open="true"] .rm-shell { transform: translate3d(-50%,-50%,0) scale(1); }
-.rm-handle-wrap { display: flex; justify-content: center; padding: 10px 12px 0; touch-action: none; }
+.rm-handle-wrap { display: flex; justify-content: center; padding: 10px 12px 0; touch-action: none; cursor: grab; user-select: none; -webkit-user-select: none; }
+.rm-handle-wrap:active { cursor: grabbing; }
 .rm-handle { width: 42px; height: 5px; border-radius: 99px; background: var(--rm-border); }
 .rm-header { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 16px; align-items: start; padding: 18px 20px 14px; }
 .rm-heading { min-width: 0; }
@@ -237,8 +246,14 @@ button { -webkit-tap-highlight-color: transparent; }
   .rm-backdrop, .rm-shell, .rm-action, .rm-close, .rm-switch, .rm-switch::after { transition-duration:.001ms !important; animation-duration:.001ms !important; }
 }
 @media (min-width: 760px) {
-  .rm-root[data-presentation="bottom-sheet"] .rm-shell { left:50%; right:auto; width:min(calc(100vw - 40px), 720px); transform:translate3d(-50%,110%,0); }
-  .rm-root[data-presentation="bottom-sheet"][data-open="true"] .rm-shell { transform:translate3d(-50%,0,0); }
+  .rm-root[data-presentation="bottom-sheet"] .rm-shell {
+    left: 50%;
+    right: auto;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    width: min(calc(100vw - 40px), 720px);
+    border-radius: var(--rm-radius);
+    --rm-sheet-x: -50%;
+  }
 }
 `;
 		function isObject(value) {
@@ -1387,14 +1402,14 @@ button { -webkit-tap-highlight-color: transparent; }
 				const move = (event) => {
 					if (!dragging || event.pointerId !== pointerId) return;
 					currentY = Math.max(0, event.clientY - startY);
-					shell.style.transform = `translate3d(0, ${currentY}px, 0)`;
+					shell.style.setProperty("--rm-drag-y", `${currentY}px`);
 				};
 				const up = (event) => {
 					if (!dragging || event.pointerId !== pointerId) return;
 					dragging = false;
 					shell.style.transition = "";
 					if (currentY > Math.min(140, shell.getBoundingClientRect().height * .22) && this.schemaValue.swipeToDismiss !== false && this.schemaValue.dismissible !== false) this.finish("dismiss", void 0, "swipe");
-					else shell.style.transform = "";
+					else shell.style.removeProperty("--rm-drag-y");
 				};
 				handle.addEventListener("pointerdown", down);
 				handle.addEventListener("pointermove", move);
