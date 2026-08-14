@@ -3,7 +3,7 @@
 
 /*
  * Rod Super Toaster
- * Version 4.8.0
+ * Version 4.8.1
  *
  * Browser-first, bundler-optional TypeScript IIFE.
  * Compile with: tsc --target ES2022 --lib ES2022,DOM --strict
@@ -12,7 +12,7 @@
 (function installRodToaster(globalWindow: Window & typeof globalThis): void {
   "use strict";
 
-  const VERSION = "4.8.0" as const;
+  const VERSION = "4.8.1" as const;
   const TOAST_GLOBAL = "RodToaster" as const;
   const INSPECTOR_GLOBAL = "RodObjectInspector" as const;
   const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -2985,7 +2985,7 @@
 
       .rod-multi-loading {
         display: grid;
-        grid-template-rows: auto minmax(0, 1fr);
+        grid-template-rows: auto auto minmax(0, 1fr);
         width: 100%;
         min-width: 0;
         max-height: var(--rod-multi-max-height, min(50dvh, 520px));
@@ -3024,6 +3024,54 @@
         font: 600 10px/1.2 system-ui, sans-serif;
         text-overflow: ellipsis;
         white-space: nowrap;
+      }
+
+      .rod-multi-loading__aggregate {
+        display: grid;
+        gap: 7px;
+        padding: 9px 14px 10px;
+        border-bottom: 1px solid var(--rod-border);
+        background: var(--rod-surface);
+      }
+
+      .rod-multi-loading__aggregate-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-width: 0;
+        color: var(--rod-muted);
+        font: 650 10px/1.2 system-ui, sans-serif;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .rod-multi-loading__aggregate-percent {
+        color: var(--rod-text-strong);
+        font-weight: 720;
+      }
+
+      .rod-multi-loading__aggregate-count {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .rod-multi-loading__aggregate-track {
+        position: relative;
+        width: 100%;
+        height: 4px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--rod-overlay);
+      }
+
+      .rod-multi-loading__aggregate-bar {
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: var(--rod-multi-aggregate-progress, 0%);
+        border-radius: inherit;
+        background: var(--rod-text-strong);
+        transition: width 320ms var(--rod-ease-soft);
       }
 
       .rod-multi-loading__header-actions {
@@ -3310,6 +3358,10 @@
         }
         .rod-multi-loading__header {
           padding: 11px 9px 9px 12px;
+        }
+        .rod-multi-loading__aggregate {
+          gap: 6px;
+          padding: 8px 11px 9px;
         }
         .rod-multi-loading__header-button span {
           display: none;
@@ -5773,12 +5825,20 @@
     const heading = documentRef.createElement("div");
     const titleNode = documentRef.createElement("div");
     const summaryNode = documentRef.createElement("div");
+    const aggregate = documentRef.createElement("div");
+    const aggregateMeta = documentRef.createElement("div");
+    const aggregatePercent = documentRef.createElement("span");
+    const aggregateCount = documentRef.createElement("span");
+    const aggregateTrack = documentRef.createElement("div");
+    const aggregateBar = documentRef.createElement("div");
     const headerActions = documentRef.createElement("div");
     const clearButton = documentRef.createElement("button");
     const cancelAllButton = documentRef.createElement("button");
     const list = documentRef.createElement("div");
     const empty = documentRef.createElement("div");
     const items = new Map<string, MultiLoadingInternalItem>();
+    const aggregateProgressById = new Map<string, number>();
+    const aggregateCompletedIds = new Set<string>();
     let nextId = 1;
     let dismissed = false;
 
@@ -5788,6 +5848,12 @@
     heading.className = "rod-multi-loading__heading";
     titleNode.className = "rod-multi-loading__title";
     summaryNode.className = "rod-multi-loading__summary";
+    aggregate.className = "rod-multi-loading__aggregate";
+    aggregateMeta.className = "rod-multi-loading__aggregate-meta";
+    aggregatePercent.className = "rod-multi-loading__aggregate-percent";
+    aggregateCount.className = "rod-multi-loading__aggregate-count";
+    aggregateTrack.className = "rod-multi-loading__aggregate-track";
+    aggregateBar.className = "rod-multi-loading__aggregate-bar";
     headerActions.className = "rod-multi-loading__header-actions";
     list.className = "rod-multi-loading__list";
     empty.className = "rod-multi-loading__empty";
@@ -5810,7 +5876,10 @@
     configureHeaderButton(cancelAllButton, "x-circle", String(options.cancelAllLabel ?? "Cancel all"), "cancel-all");
     headerActions.append(clearButton, cancelAllButton);
     header.append(heading, headerActions);
-    root.append(header, list);
+    aggregateMeta.append(aggregatePercent, aggregateCount);
+    aggregateTrack.append(aggregateBar);
+    aggregate.append(aggregateMeta, aggregateTrack);
+    root.append(header, aggregate, list);
     content.replaceChildren(root);
 
     const viewportRatio = clamp(Number(options.viewportRatio) || 0.5, 0.2, 0.5);
@@ -5855,8 +5924,26 @@
       return { active, success, error, cancelled, total: items.size };
     };
 
+    const syncAggregate = (): void => {
+      const total = aggregateProgressById.size;
+      let contribution = 0;
+      for (const progress of aggregateProgressById.values()) contribution += progress;
+      const normalized = total > 0 ? clamp(contribution / total, 0, 1) : 0;
+      const percent = Math.round(normalized * 100);
+      const completed = aggregateCompletedIds.size;
+      aggregate.style.setProperty("--rod-multi-aggregate-progress", `${percent}%`);
+      aggregatePercent.textContent = `${percent}% concluído`;
+      aggregateCount.textContent = `${completed} de ${total} ${total === 1 ? "item" : "itens"}`;
+      aggregateTrack.setAttribute("aria-valuemin", "0");
+      aggregateTrack.setAttribute("aria-valuemax", "100");
+      aggregateTrack.setAttribute("aria-valuenow", String(percent));
+      aggregateTrack.setAttribute("role", "progressbar");
+      aggregateTrack.setAttribute("aria-label", `Progresso total: ${percent}%`);
+    };
+
     const syncSummary = (): void => {
       const current = counts();
+      syncAggregate();
       if (options.showSummary === false) {
         summaryNode.hidden = true;
       } else {
@@ -6032,6 +6119,8 @@
       });
 
       items.set(id, item);
+      aggregateProgressById.set(id, item.status === "success" ? 1 : item.progress ?? 0);
+      if (item.status === "success") aggregateCompletedIds.add(id);
       list.append(itemNode);
       renderItem(item);
       return item;
@@ -6046,6 +6135,14 @@
       if (hasOwn(next, "progressLabel")) item.progressLabel = next.progressLabel == null ? null : String(next.progressLabel);
       if (hasOwn(next, "error")) item.error = next.error;
       if (isUnknownRecord(next.metadata)) item.metadata = { ...item.metadata, ...next.metadata };
+
+      const aggregateProgress = item.status === "success"
+        ? 1
+        : item.progress ?? 0;
+      aggregateProgressById.set(item.id, clamp(aggregateProgress, 0, 1));
+      if (item.status === "success") aggregateCompletedIds.add(item.id);
+      else aggregateCompletedIds.delete(item.id);
+
       renderItem(item);
     };
 
