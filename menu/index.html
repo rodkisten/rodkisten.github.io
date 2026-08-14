@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <meta name="theme-color" content="#09090b" />
   <meta name="color-scheme" content="dark" />
-  <title>RodMenu v2.1 — Adaptive UI Runtime</title>
+  <title>RodMenu v2.2 — Configurable UI Runtime</title>
 
   <style>
     :root {
@@ -726,7 +726,7 @@
           <span class="dot"></span>
           <span id="runtimeLabel">runtime carregando</span>
         </div>
-        <div class="pill">v2.1.0</div>
+        <div class="pill">v2.2.0</div>
         <div class="pill">IIFE · Shadow DOM</div>
       </div>
     </div>
@@ -735,7 +735,7 @@
   <main>
     <section class="hero">
       <div>
-        <div class="kicker">Adaptive UI Runtime · v2.1</div>
+        <div class="kicker">Configurable UI Runtime · v2.2</div>
         <h1>
           Um schema.<br />
           <span class="gradient">Agora com memória.</span>
@@ -778,7 +778,7 @@
         <div>
           <h2>Runtime adaptativo.</h2>
           <p>
-            A v2.1 tenta usar o ecossistema Rod quando disponível e continua funcional se cada peça faltar.
+            A v2.2 tenta usar o ecossistema Rod quando disponível, bloqueia o pull-to-refresh durante o drag do sheet e continua funcional se cada peça faltar.
             O painel abaixo mostra o runtime encontrado nesta página.
           </p>
         </div>
@@ -792,42 +792,41 @@
     </section>
 
     <section class="section">
-      <h2>O que entrou na 2.1.</h2>
+      <h2>O que entrou na 2.2.</h2>
       <p>
-        Store e persistência viraram primitives do form, enquanto as peças de AIO continuam sendo schemas
-        especializados sobre a mesma engine.
+        A engine agora também é configurável e extensível em runtime. Gestures, theme, CSS, components e field types podem ser alterados sem recriar a biblioteca.
       </p>
 
       <div class="grid" style="margin-top: 28px">
         <article class="card">
           <div class="card-number">01</div>
-          <h3>Store por form</h3>
-          <p>Broto quando disponível, fallback interno rápido quando não. Todos os fields escrevem pelo mesmo caminho.</p>
+          <h3>iOS gesture lock</h3>
+          <p>O sheet captura o gesto no topo do conteúdo e evita que Safari transforme o drag em pull-to-refresh.</p>
         </article>
         <article class="card">
           <div class="card-number">02</div>
-          <h3>Persistência transformável</h3>
-          <p>localStorage, sessionStorage, GM ou adapter próprio, com hydrate, debounce e transform bidirecional.</p>
+          <h3>Configuração ao vivo</h3>
+          <p>configure(), getConfig(), resetConfig() e refreshAll() permitem alterar o runtime a qualquer momento.</p>
         </article>
         <article class="card">
           <div class="card-number">03</div>
-          <h3>AIO presets</h3>
-          <p>Media picker, settings, history, debug e channel picker sem duplicar a engine de UI.</p>
+          <h3>Component registry</h3>
+          <p>Substitua header, action, footer, field e outros slots, ou registre componentes novos reutilizáveis.</p>
         </article>
         <article class="card">
           <div class="card-number">04</div>
-          <h3>Actions condicionais</h3>
-          <p>visibleWhen, disabledWhen, badges dinâmicos, shortcuts, icons e loading assíncrono.</p>
+          <h3>Field registry</h3>
+          <p>registerFieldType() adiciona novos tipos declarativos sem tocar no switch interno da engine.</p>
         </article>
         <article class="card">
           <div class="card-number">05</div>
-          <h3>Fields mais ricos</h3>
-          <p>Trailing actions, media preview, provider status, request log, debug JSON e channel picker.</p>
+          <h3>Store + persistência</h3>
+          <p>Broto ou fallback, storage opcional, hydrate, debounce e transform bidirecional continuam no núcleo.</p>
         </article>
         <article class="card">
           <div class="card-number">06</div>
-          <h3>Anchor + auto</h3>
-          <p>No desktop, um anchor pode virar popover. No telefone, a mesma chamada continua confortável como bottom sheet.</p>
+          <h3>AIO presets</h3>
+          <p>Media, settings, history, debug e channel picker continuam como schemas especializados da mesma engine.</p>
         </article>
       </div>
     </section>
@@ -836,7 +835,7 @@
       <div class="section-head">
         <div>
           <h2>AIO playground.</h2>
-          <p>Essas demos usam as APIs novas da v2.1 e escrevem o resultado abaixo.</p>
+          <p>Essas demos usam as APIs da v2.2 e escrevem o resultado abaixo.</p>
         </div>
       </div>
 
@@ -884,7 +883,7 @@
 
           <article class="demo-card">
             <div>
-              <h3>Kitchen sink v2.1</h3>
+              <h3>Kitchen sink v2.2</h3>
               <p>Tabs, sections, trailing action, shortcut, action condicional e persistence handle.</p>
             </div>
             <button class="demo-button" id="demoKitchen">Abrir form completo</button>
@@ -892,6 +891,67 @@
         </div>
 
         <div class="status" id="resultStatus">Nenhum resultado ainda.</div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <h2>Runtime configurável.</h2>
+          <p>Troque comportamento, componentes e fields em tempo real. Os menus ativos podem acompanhar a mudança.</p>
+        </div>
+      </div>
+
+      <div class="playground">
+        <div class="demo-grid">
+          <article class="demo-card">
+            <div>
+              <h3>configure() ao vivo</h3>
+              <p>Muda theme, radius, gesture thresholds e CSS global, depois abre um menu usando a nova configuração.</p>
+            </div>
+            <button class="demo-button primary" id="demoConfigure">Aplicar configuração v2.2</button>
+          </article>
+
+          <article class="demo-card">
+            <div>
+              <h3>Override de componente</h3>
+              <p>Substitui o renderer de header globalmente usando defaultRender() como base.</p>
+            </div>
+            <button class="demo-button" id="demoComponent">Registrar header custom</button>
+          </article>
+
+          <article class="demo-card">
+            <div>
+              <h3>Novo field type</h3>
+              <p>Registra tone-picker em runtime e usa RodMenu.field() para adicioná-lo ao schema.</p>
+            </div>
+            <button class="demo-button" id="demoFieldType">Registrar + abrir</button>
+          </article>
+
+          <article class="demo-card">
+            <div>
+              <h3>Gesture stress test</h3>
+              <p>Conteúdo propositalmente alto. Role até o topo e puxe para baixo: o gesto deve mover o sheet, não a página.</p>
+            </div>
+            <button class="demo-button" id="demoGesture">Testar drag no iPhone</button>
+          </article>
+
+          <article class="demo-card">
+            <div>
+              <h3>Config snapshot</h3>
+              <p>Inspeciona a configuração corrente do runtime, incluindo gestures e registries.</p>
+            </div>
+            <button class="demo-button" id="demoGetConfig">RodMenu.getConfig()</button>
+          </article>
+
+          <article class="demo-card">
+            <div>
+              <h3>Reset</h3>
+              <p>Remove overrides globais e retorna aos defaults da v2.2.</p>
+            </div>
+            <button class="demo-button" id="demoResetConfig">RodMenu.resetConfig()</button>
+          </article>
+        </div>
       </div>
     </section>
 
@@ -940,7 +1000,7 @@
     </section>
   </main>
 
-  <footer>RodMenu v2.1.0 · schemas, surfaces e uma pequena memória persistente 🧩</footer>
+  <footer>RodMenu v2.2.0 · gestures, schemas, stores e runtime extensível 🧩</footer>
 
   <script src="./dist/menu.js"></script>
   <script>
@@ -1340,8 +1400,8 @@
 
       const openKitchen = async () => {
         const handle = RodMenu.open({
-          id: "landing-kitchen-v21",
-          eyebrow: "RodMenu 2.1",
+          id: "landing-kitchen-v22",
+          eyebrow: "RodMenu 2.2",
           title: "Kitchen sink",
           description: "Tabs, sections, trailing actions, store e actions condicionais.",
           presentation: "bottom-sheet",
@@ -1480,6 +1540,139 @@
         setResult("Kitchen sink result", result);
       };
 
+      const applyLiveConfig = async () => {
+        RodMenu.configure({
+          theme: {
+            accent: "#ff7a18",
+            radius: "30px"
+          },
+          gestures: {
+            preventPullToRefresh: true,
+            dragFromContent: true,
+            dismissThresholdPx: 120,
+            dismissThresholdRatio: 0.18,
+            velocityThresholdPxMs: 0.6,
+            activationDistancePx: 4
+          },
+          css: `
+            .rm-title {
+              letter-spacing: -0.045em;
+            }
+
+            .rm-action[data-variant="primary"] {
+              min-height: 52px;
+            }
+          `
+        });
+
+        const result = await RodMenu.form({
+          title: "Config aplicada ao vivo",
+          description: "Este menu já nasceu com a configuração global atualizada.",
+          fields: [
+            { type: "switch", name: "pullToRefresh", label: "Prevent pull-to-refresh", value: true },
+            { type: "range", name: "threshold", label: "Dismiss threshold", min: 60, max: 240, value: 120, showValue: true }
+          ]
+        });
+        setResult("configure()", { config: RodMenu.getConfig(), result });
+      };
+
+      const registerHeaderOverride = async () => {
+        RodMenu.registerComponent("header", (ctx) => {
+          const header = ctx.defaultRender();
+          header.dataset.demoOverride = "true";
+          header.style.background = "linear-gradient(180deg, rgba(255,122,24,.12), transparent)";
+          header.style.borderBottom = "1px solid rgba(255,122,24,.2)";
+          return header;
+        });
+        RodMenu.refreshAll();
+        const result = await RodMenu.confirm({
+          title: "Header sobrescrito",
+          description: "Este header veio do component registry global da v2.2.",
+          confirmLabel: "Funcionou",
+          cancelLabel: "Fechar"
+        });
+        setResult("Component registry", { registered: Boolean(RodMenu.getComponent("header")), result });
+      };
+
+      const registerTonePicker = async () => {
+        RodMenu.registerFieldType("tone-picker", (ctx) => {
+          const root = ctx.create("div", "landing-tone-picker");
+          root.style.display = "grid";
+          root.style.gridTemplateColumns = "repeat(3, minmax(0, 1fr))";
+          root.style.gap = "8px";
+
+          for (const tone of ["Calmo", "Direto", "Elétrico"]) {
+            const button = ctx.create("button");
+            button.type = "button";
+            button.textContent = tone;
+            button.style.cssText = `
+              appearance: none;
+              border: 1px solid rgba(255,255,255,.12);
+              border-radius: 14px;
+              padding: 12px 8px;
+              background: ${ctx.value === tone ? "rgba(255,122,24,.18)" : "rgba(255,255,255,.05)"};
+              color: inherit;
+              font: inherit;
+              font-weight: 700;
+            `;
+            button.addEventListener("click", () => ctx.commit(tone));
+            root.append(button);
+          }
+          return root;
+        });
+
+        const handle = RodMenu.open({
+          title: "Field registrado em runtime",
+          description: "tone-picker não existe no core do RodMenu.",
+          fields: [
+            RodMenu.field("tone-picker", {
+              name: "tone",
+              label: "Tom",
+              value: "Direto"
+            })
+          ],
+          actions: [
+            { id: "cancel", label: "Cancelar", role: "cancel", variant: "ghost" },
+            { id: "save", label: "Salvar", role: "submit", variant: "primary" }
+          ]
+        });
+        setResult("Custom field type", await handle.result);
+      };
+
+      const openGestureStressTest = async () => {
+        const fields = Array.from({ length: 16 }, (_, index) => ({
+          type: "text",
+          name: `item${index + 1}`,
+          label: `Campo ${index + 1}`,
+          value: `Conteúdo ${index + 1}`
+        }));
+
+        const handle = RodMenu.open({
+          title: "Gesture stress test",
+          description: "Role o conteúdo, volte ao topo e arraste para baixo. O Safari não deve puxar refresh.",
+          presentation: "bottom-sheet",
+          gestures: {
+            preventPullToRefresh: true,
+            dragFromContent: true
+          },
+          fields,
+          actions: [
+            { id: "done", label: "Concluir", role: "submit", variant: "primary" }
+          ]
+        });
+        setResult("Gesture test", await handle.result);
+      };
+
+      const showConfig = () => {
+        setResult("RodMenu.getConfig()", RodMenu.getConfig());
+      };
+
+      const resetConfig = () => {
+        RodMenu.resetConfig();
+        RodMenu.refreshAll();
+        setResult("Config reset", RodMenu.getConfig());
+      };
+
       const openAnchored = async () => {
         const anchor = $("#anchorButton");
         const choice = await RodMenu.actions({
@@ -1528,6 +1721,12 @@
       bind("#demoHistory", openHistory);
       bind("#demoChannels", () => openChannels($("#demoChannels")));
       bind("#demoKitchen", openKitchen);
+      bind("#demoConfigure", applyLiveConfig);
+      bind("#demoComponent", registerHeaderOverride);
+      bind("#demoFieldType", registerTonePicker);
+      bind("#demoGesture", openGestureStressTest);
+      bind("#demoGetConfig", showConfig);
+      bind("#demoResetConfig", resetConfig);
       bind("#anchorButton", openAnchored);
 
       document.addEventListener("keydown", (event) => {
