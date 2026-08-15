@@ -2,7 +2,7 @@
 // @outfile dist/menu.js
 
 /**
- * RodMenu v2.2.3
+ * RodMenu v2.2.4
  * Browser-first declarative menu + form surface engine with adaptive Rod ecosystem integrations.
  *
  * Compile:
@@ -51,13 +51,13 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
 (function installRodMenu(rootWindow: Window & typeof globalThis): void {
   "use strict";
 
-  const VERSION = "2.2.3" as const;
+  const VERSION = "2.2.4" as const;
   const GLOBAL_NAME = "RodMenu" as const;
   const ROOT_ATTR = "data-rod-menu-host";
   const ACTIVE_ATTR = "data-rod-menu-active";
   const ID_PREFIX = "rod-menu";
   const DEFAULT_Z_INDEX = 2147482500;
-  const STYLE_VERSION = "v2.2.3";
+  const STYLE_VERSION = "v2.2.4";
 
   type Awaitable<T> = T | Promise<T>;
   type AnyRecord = Record<string, unknown>;
@@ -2117,6 +2117,11 @@ button {
     filter: blur(0);
   }
 }
+.rm-saved-sync {
+  display: grid;
+  gap: 12px;
+}
+
 .rm-media-preview {
   display: grid;
   grid-template-columns: minmax(90px, 34%) minmax(0, 1fr);
