@@ -2,7 +2,7 @@
 // @outfile dist/menu.js
 
 /**
- * RodMenu v2.2.6
+ * RodMenu v2.2.7
  * Browser-first declarative menu + form surface engine with adaptive Rod ecosystem integrations.
  *
  * Compile:
@@ -51,13 +51,13 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
 (function installRodMenu(rootWindow: Window & typeof globalThis): void {
   "use strict";
 
-  const VERSION = "2.2.6" as const;
+  const VERSION = "2.2.7" as const;
   const GLOBAL_NAME = "RodMenu" as const;
   const ROOT_ATTR = "data-rod-menu-host";
   const ACTIVE_ATTR = "data-rod-menu-active";
   const ID_PREFIX = "rod-menu";
   const DEFAULT_Z_INDEX = 2147482500;
-  const STYLE_VERSION = "v2.2.6";
+  const STYLE_VERSION = "v2.2.7";
 
   type Awaitable<T> = T | Promise<T>;
   type AnyRecord = Record<string, unknown>;
@@ -1638,7 +1638,7 @@ button {
   -webkit-overflow-scrolling: touch;
   padding: 0 16px 8px;
   scrollbar-width: thin;
-  touch-action: pan-y;
+  touch-action: pan-x pan-y;
   overscroll-behavior-y: contain;
   -webkit-user-select: auto;
 }
@@ -2092,10 +2092,23 @@ button {
   z-index: 3;
   display: flex;
   gap: 6px;
+  max-width: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
   padding: 4px 2px 8px;
   scrollbar-width: none;
   background: linear-gradient(var(--rm-panel) 72%, transparent);
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  scroll-snap-type: x proximity;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.rm-tabs[data-dragging="true"] {
+  scroll-behavior: auto;
 }
 .rm-tabs::-webkit-scrollbar {
   display: none;
@@ -2113,6 +2126,9 @@ button {
   white-space: nowrap;
   cursor: pointer;
   font: 650 12px/1 var(--rm-font);
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  touch-action: pan-x;
 }
 .rm-tab[data-active="true"] {
   background: color-mix(in srgb, var(--rm-accent) 16%, Canvas 84%);
@@ -3049,7 +3065,35 @@ button {
       if (active.fields?.length) panel.append(this.renderSection({ fields: active.fields }));
       for (const section of active.sections || []) panel.append(this.renderSection(section));
       wrapper.append(panel);
+
+      // The active tab may be outside the horizontal viewport when the menu is
+      // opened directly on a deep tab (initialTab / external link / API).
+      // Reveal it after the nodes are mounted, aligned to the leading edge.
+      this.win.requestAnimationFrame(() => {
+        if (!this.destroyed) this.revealActiveTab(nav, "auto");
+      });
       return wrapper;
+    }
+
+    private revealActiveTab(nav?: HTMLElement | null, behavior: ScrollBehavior = "smooth"): void {
+      const tabs = nav || this.root.querySelector<HTMLElement>(".rm-tabs");
+      if (!tabs || !this.activeTabId) return;
+      const escaped = typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(this.activeTabId)
+        : this.activeTabId.replace(/["\\]/g, "\\$&");
+      const active = tabs.querySelector<HTMLElement>(`.rm-tab[data-tab-id="${escaped}"]`);
+      if (!active) return;
+
+      const maxScroll = Math.max(0, tabs.scrollWidth - tabs.clientWidth);
+      const leadingInset = 2;
+      const desired = Math.max(0, Math.min(maxScroll, active.offsetLeft - leadingInset));
+      if (Math.abs(tabs.scrollLeft - desired) < 1) return;
+
+      try {
+        tabs.scrollTo({ left: desired, behavior });
+      } catch {
+        tabs.scrollLeft = desired;
+      }
     }
 
     private resolveAnchorRect(): DOMRect | null {
@@ -4250,6 +4294,8 @@ button {
 
       requestAnimationFrame(() => {
         if (this.destroyed) return;
+        const nav = wrapper.querySelector<HTMLElement>(".rm-tabs");
+        this.revealActiveTab(nav, "smooth");
         panel.addEventListener("animationend", () => panel.removeAttribute("data-entering"), { once: true });
       });
     }
@@ -4460,7 +4506,9 @@ button {
 
     private setupScrollIsolation(): void {
       if (this.schemaValue.scrollIsolation === false || globalConfig.scrollIsolation === false) return;
+      let lastTouchX: number | null = null;
       let lastTouchY: number | null = null;
+      let touchStartedInHorizontalScroller = false;
 
       const pathHasHost = (event: Event): boolean => event.composedPath().includes(this.host);
       const findScrollableFromPath = (event: Event): HTMLElement | null => {
@@ -4480,7 +4528,12 @@ button {
 
       const onTouchStart = (event: TouchEvent) => {
         if (!pathHasHost(event) || event.touches.length !== 1) return;
-        lastTouchY = event.touches[0].clientY;
+        const touch = event.touches[0];
+        lastTouchX = touch.clientX;
+        lastTouchY = touch.clientY;
+        touchStartedInHorizontalScroller = event.composedPath().some((item) =>
+          item instanceof this.win.Element && !!item.closest?.(".rm-tabs")
+        );
       };
 
       const onTouchMove = (event: TouchEvent) => {
@@ -4490,10 +4543,19 @@ button {
           event.stopPropagation();
           return;
         }
-        const y = event.touches[0].clientY;
+        const touch = event.touches[0];
+        const x = touch.clientX;
+        const y = touch.clientY;
+        const previousX = lastTouchX ?? x;
         const previousY = lastTouchY ?? y;
+        const fingerDeltaX = x - previousX;
         const fingerDelta = y - previousY;
+        lastTouchX = x;
         lastTouchY = y;
+
+        // Horizontal tab swipes must stay native. Preventing this move in the
+        // document capture listener cancels momentum scrolling on iOS Safari.
+        if (touchStartedInHorizontalScroller && Math.abs(fingerDeltaX) >= Math.abs(fingerDelta)) return;
         const scrollable = findScrollableFromPath(event);
         if (!scrollable) {
           event.preventDefault();
@@ -4506,7 +4568,11 @@ button {
         if ((pullingDown && atTop) || (pushingUp && atBottom)) event.preventDefault();
       };
 
-      const onTouchEnd = () => { lastTouchY = null; };
+      const onTouchEnd = () => {
+        lastTouchX = null;
+        lastTouchY = null;
+        touchStartedInHorizontalScroller = false;
+      };
 
       const onWheel = (event: WheelEvent) => {
         if (!event.cancelable) return;
@@ -4589,6 +4655,7 @@ button {
       let scrollable: HTMLElement | null = null;
       let directionLocked = false;
       let verticalGesture = false;
+      let startedInTabStrip = false;
 
       const clearDragVisual = () => {
         shell.style.transition = "";
@@ -4605,6 +4672,7 @@ button {
         scrollable = null;
         directionLocked = false;
         verticalGesture = false;
+        startedInTabStrip = false;
         recentVelocity = 0;
         shell.style.transition = "";
       };
@@ -4628,12 +4696,14 @@ button {
         const target = event.composedPath()[0] as EventTarget | undefined;
         const element = target instanceof this.win.Element ? target : null;
         startedOnHandle = !!element?.closest?.(".rm-handle-wrap");
+        startedInTabStrip = !!element?.closest?.(".rm-tabs");
         scrollable = this.findScrollableAncestor(target || event.target, shell);
         startedAtTop = !scrollable || scrollable.scrollTop <= 1;
       };
 
       const touchMove = (event: TouchEvent) => {
         if (!tracking || event.touches.length !== 1) return;
+        if (startedInTabStrip) return;
         const touch = event.touches[0];
         const now = performance.now();
         const dx = touch.clientX - startX;
