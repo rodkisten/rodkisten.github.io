@@ -1,4 +1,4 @@
-/* Auto-generated from toaster/toaster.ts. at 8/15/2026, 12:40:51 PM Do not edit directly. */
+/* Auto-generated from toaster/toaster.ts. at 8/15/2026, 12:45:19 PM Do not edit directly. */
 var RodToaster = (function() {
 
 //#region \0rolldown/runtime.js
@@ -22,7 +22,7 @@ var RodToaster = (function() {
 	var toaster_exports = /* @__PURE__ */ __exportAll({ default: () => toaster_default });
 	(function installRodToaster(globalWindow) {
 		"use strict";
-		const VERSION = "4.9.1";
+		const VERSION = "4.9.2";
 		const TOAST_GLOBAL = "RodToaster";
 		const INSPECTOR_GLOBAL = "RodObjectInspector";
 		const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -2324,18 +2324,51 @@ var RodToaster = (function() {
       }
 
       .rod-multi-loading__list {
-        display: flex;
-        flex-direction: column;
-        gap: 0;
+        position: relative;
+        display: block;
         min-height: 0;
+        height: var(--rod-multi-list-height, min(42dvh, 440px));
         max-height: var(--rod-multi-list-height, min(42dvh, 440px));
         overflow-x: hidden;
-        overflow-y: auto;
+        overflow-y: scroll;
         overscroll-behavior: contain;
+        touch-action: pan-y;
+        pointer-events: auto;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: thin;
         scrollbar-color: var(--rod-border-strong) transparent;
         scrollbar-gutter: stable;
+        contain: layout paint;
+      }
+
+      .rod-multi-loading__virtual-space {
+        position: relative;
+        display: block;
+        width: 100%;
+        min-width: 0;
+        min-height: 100%;
+      }
+
+      .rod-multi-loading__virtual-space[data-virtualized="true"] {
+        contain: layout size style;
+      }
+
+      .rod-multi-loading__item[data-virtualized="true"] {
+        position: absolute;
+        top: var(--rod-multi-virtual-top, 0);
+        right: 0;
+        left: 0;
+        width: 100%;
+        min-height: 0;
+        max-height: none;
+        contain: layout paint style;
+      }
+
+
+      .rod-multi-loading__list[data-empty="true"] {
+        height: auto;
+        min-height: 90px;
+        overflow-y: hidden;
       }
 
       .rod-multi-loading__empty {
@@ -2608,6 +2641,7 @@ var RodToaster = (function() {
           padding: 0;
         }
         .rod-multi-loading__list {
+          height: min(41dvh, 350px);
           max-height: min(41dvh, 350px);
         }
         .rod-multi-loading__item {
@@ -4902,13 +4936,29 @@ var RodToaster = (function() {
 			const clearButton = documentRef.createElement("button");
 			const cancelAllButton = documentRef.createElement("button");
 			const list = documentRef.createElement("div");
+			const virtualSpace = documentRef.createElement("div");
 			const empty = documentRef.createElement("div");
 			const items = /* @__PURE__ */ new Map();
+			let order = [];
 			const aggregateProgressById = /* @__PURE__ */ new Map();
 			const aggregateCompletedIds = /* @__PURE__ */ new Set();
 			const aggregateCancelledIds = /* @__PURE__ */ new Set();
+			let aggregateContribution = 0;
+			let aggregateTotal = 0;
+			let activeCount = 0;
+			let successCount = 0;
+			let errorCount = 0;
+			let cancelledCount = 0;
+			let clearableCount = 0;
 			let nextId = 1;
 			let dismissed = false;
+			let virtualFrame = null;
+			let compactFrame = null;
+			let autoDismissTimer = null;
+			let lastVirtualStart = -1;
+			let lastVirtualEnd = -1;
+			let lastVirtualCount = -1;
+			let batchDepth = 0;
 			node.dataset.multiLoading = "true";
 			root.className = "rod-multi-loading";
 			header.className = "rod-multi-loading__header";
@@ -4923,6 +4973,7 @@ var RodToaster = (function() {
 			aggregateBar.className = "rod-multi-loading__aggregate-bar";
 			headerActions.className = "rod-multi-loading__header-actions";
 			list.className = "rod-multi-loading__list";
+			virtualSpace.className = "rod-multi-loading__virtual-space";
 			empty.className = "rod-multi-loading__empty";
 			empty.textContent = String(options.emptyLabel ?? "No active operations.");
 			titleNode.textContent = String(options.title ?? "Processing items");
@@ -4943,6 +4994,7 @@ var RodToaster = (function() {
 			aggregateMeta.append(aggregatePercent, aggregateCount);
 			aggregateTrack.append(aggregateBar);
 			aggregate.append(aggregateMeta, aggregateTrack);
+			list.append(virtualSpace);
 			root.append(header, aggregate, list);
 			content.replaceChildren(root);
 			const viewportRatio = clamp(Number(options.viewportRatio) || .5, .2, .5);
@@ -4955,6 +5007,11 @@ var RodToaster = (function() {
 			const successFadeDuration = Math.max(180, Number(options.successFadeDuration) || 420);
 			const cancelledDuration = Math.max(120, Number(options.cancelledDuration) || 650);
 			const globalCancellable = options.cancellable !== false;
+			const virtualizeAfter = Math.max(1, Number(options.virtualizeAfter) || 60);
+			const overscanRows = Math.max(2, Math.floor(Number(options.virtualOverscan) || 8));
+			const getRowHeight = () => {
+				return safeCall(() => hostWindow.matchMedia?.("(max-width: 560px)")?.matches === true, false) ? 54 : 58;
+			};
 			const snapshot = (item) => ({
 				id: item.id,
 				title: item.title,
@@ -4965,136 +5022,109 @@ var RodToaster = (function() {
 				metadata: { ...item.metadata },
 				error: item.error
 			});
-			const counts = () => {
-				let active = 0;
-				let success = 0;
-				let error = 0;
-				let cancelled = 0;
-				for (const item of items.values()) {
-					if (item.removing) continue;
-					if (item.status === "success") success += 1;
-					else if (item.status === "error") error += 1;
-					else if (item.status === "cancelled") cancelled += 1;
-					else active += 1;
+			const statusBucket = (status) => {
+				if (status === "success") return "success";
+				if (status === "error") return "error";
+				if (status === "cancelled") return "cancelled";
+				return "active";
+			};
+			const adjustBucket = (status, delta) => {
+				switch (statusBucket(status)) {
+					case "active":
+						activeCount += delta;
+						break;
+					case "success":
+						successCount += delta;
+						break;
+					case "error":
+						errorCount += delta;
+						break;
+					case "cancelled": cancelledCount += delta;
 				}
-				return {
-					active,
-					success,
-					error,
-					cancelled,
-					total: items.size
-				};
+				if (status === "success" || status === "cancelled") clearableCount += delta;
 			};
 			const syncAggregate = () => {
-				const total = aggregateProgressById.size;
-				let contribution = 0;
-				for (const progress of aggregateProgressById.values()) contribution += progress;
-				const normalized = total > 0 ? clamp(contribution / total, 0, 1) : 0;
+				const normalized = aggregateTotal > 0 ? clamp(aggregateContribution / aggregateTotal, 0, 1) : 0;
 				const percent = Math.round(normalized * 100);
 				const completed = aggregateCompletedIds.size;
 				aggregate.style.setProperty("--rod-multi-aggregate-progress", `${percent}%`);
 				aggregatePercent.textContent = `${percent}% concluído`;
-				aggregateCount.textContent = `${completed} de ${total} ${total === 1 ? "item" : "itens"}`;
+				aggregateCount.textContent = `${completed} de ${aggregateTotal} ${aggregateTotal === 1 ? "item" : "itens"}`;
 				aggregateTrack.setAttribute("aria-valuemin", "0");
 				aggregateTrack.setAttribute("aria-valuemax", "100");
 				aggregateTrack.setAttribute("aria-valuenow", String(percent));
 				aggregateTrack.setAttribute("role", "progressbar");
 				aggregateTrack.setAttribute("aria-label", `Progresso total: ${percent}%`);
 			};
+			const maybeScheduleAutoDismiss = () => {
+				if (autoDismissTimer !== null) {
+					hostWindow.clearTimeout(autoDismissTimer);
+					autoDismissTimer = null;
+				}
+				if (options.autoDismiss === false || items.size === 0 || activeCount > 0 || errorCount > 0) return;
+				autoDismissTimer = hostWindow.setTimeout(() => {
+					autoDismissTimer = null;
+					if (!dismissed && items.size > 0 && activeCount === 0 && errorCount === 0) toastController.dismiss("multi-complete");
+				}, successDuration + successFadeDuration + 120);
+			};
 			const syncSummary = () => {
-				const current = counts();
 				syncAggregate();
-				const cumulativeDone = aggregateCompletedIds.size;
-				const cumulativeCancelled = aggregateCancelledIds.size;
 				if (options.showSummary === false) summaryNode.hidden = true;
 				else {
 					summaryNode.hidden = false;
 					const parts = [];
-					if (current.active) parts.push(`${current.active} active`);
-					if (current.error) parts.push(`${current.error} failed`);
-					if (cumulativeDone) parts.push(`${cumulativeDone} done`);
-					if (cumulativeCancelled) parts.push(`${cumulativeCancelled} cancelled`);
+					if (activeCount) parts.push(`${activeCount} active`);
+					if (errorCount) parts.push(`${errorCount} failed`);
+					if (aggregateCompletedIds.size) parts.push(`${aggregateCompletedIds.size} done`);
+					if (aggregateCancelledIds.size) parts.push(`${aggregateCancelledIds.size} cancelled`);
 					summaryNode.textContent = parts.length ? parts.join(" · ") : "All operations completed";
 				}
-				const hasClearableRows = [...items.values()].some((item) => !item.removing && (item.status === "success" || item.status === "cancelled"));
-				clearButton.hidden = !hasClearableRows;
-				clearButton.disabled = !hasClearableRows;
-				cancelAllButton.hidden = current.active === 0;
-				cancelAllButton.disabled = current.active === 0;
+				clearButton.hidden = clearableCount <= 0;
+				clearButton.disabled = clearableCount <= 0;
+				cancelAllButton.hidden = activeCount <= 0;
+				cancelAllButton.disabled = activeCount <= 0;
 				list.dataset.empty = String(items.size === 0);
-				if (!items.size) {
-					if (!empty.isConnected) list.append(empty);
-				} else empty.remove();
-				if (options.autoDismiss !== false && current.total > 0 && current.active === 0 && current.error === 0) hostWindow.setTimeout(() => {
-					if (!dismissed && counts().active === 0 && counts().error === 0) toastController.dismiss("multi-complete");
-				}, successDuration + successFadeDuration + 120);
+				if (items.size === 0) {
+					virtualSpace.replaceChildren(empty);
+					virtualSpace.style.height = "auto";
+				} else if (empty.isConnected) empty.remove();
+				maybeScheduleAutoDismiss();
 			};
-			const setLead = (item, icon, spin = false) => {
-				item.lead.dataset.spin = "false";
-				item.lead.replaceChildren();
+			const setLead = (view, icon, spin = false) => {
+				view.lead.dataset.spin = "false";
+				view.lead.replaceChildren();
 				const imageDescriptor = getImageIconDescriptor(icon);
-				if (imageDescriptor) item.lead.append(createImageIcon(documentRef, imageDescriptor));
+				if (imageDescriptor) view.lead.append(createImageIcon(documentRef, imageDescriptor));
 				else {
 					const name = typeof icon === "string" && hasOwn(SVG_ICONS, icon) ? icon : "circle";
-					item.lead.append(createSvgIcon(documentRef, name, 15));
+					view.lead.append(createSvgIcon(documentRef, name, 15));
 				}
-				item.lead.dataset.spin = String(spin && !imageDescriptor);
+				view.lead.dataset.spin = String(spin && !imageDescriptor);
 			};
-			const renderItem = (item) => {
-				item.node.dataset.status = item.status;
-				item.titleNode.textContent = item.title;
-				item.descriptionNode.textContent = item.description;
-				item.descriptionNode.hidden = !item.description;
+			const renderItemView = (item) => {
+				const view = item.view;
+				if (!view) return;
+				view.node.dataset.status = item.status;
+				view.titleNode.textContent = item.title;
+				view.descriptionNode.textContent = item.description;
+				view.descriptionNode.hidden = !item.description;
 				const percent = item.progress === null ? 0 : Math.round(item.progress * 100);
-				item.node.style.setProperty("--rod-multi-progress", `${percent}%`);
-				item.progressLabelNode.textContent = item.progressLabel ?? (item.progress === null ? "" : `${percent}%`);
-				item.progressNode.hidden = item.progress === null || item.status === "success" || item.status === "error" || item.status === "cancelled";
-				item.retryButton.hidden = item.status !== "error" || typeof item.descriptor.retry !== "function";
-				item.cancelButton.hidden = !globalCancellable || item.descriptor.cancellable === false || item.status === "success" || item.status === "cancelled";
-				if (item.status === "success") setLead(item, "check", false);
-				else if (item.status === "error") setLead(item, "circle-x", false);
-				else if (item.status === "cancelled") setLead(item, "x", false);
+				view.node.style.setProperty("--rod-multi-progress", `${percent}%`);
+				view.progressLabelNode.textContent = item.progressLabel ?? (item.progress === null ? "" : `${percent}%`);
+				view.progressNode.hidden = item.progress === null || item.status === "success" || item.status === "error" || item.status === "cancelled";
+				view.retryButton.hidden = item.status !== "error" || typeof item.descriptor.retry !== "function";
+				view.retryButton.disabled = item.running;
+				view.cancelButton.hidden = !globalCancellable || item.descriptor.cancellable === false || item.status === "success" || item.status === "cancelled";
+				if (item.status === "success") setLead(view, "check", false);
+				else if (item.status === "error") setLead(view, "circle-x", false);
+				else if (item.status === "cancelled") setLead(view, "x", false);
 				else {
 					const persistentIcon = item.descriptor.icon ?? "loader-circle";
-					setLead(item, persistentIcon, item.status === "loading" && !getImageIconDescriptor(persistentIcon));
+					setLead(view, persistentIcon, item.status === "loading" && !getImageIconDescriptor(persistentIcon));
 				}
-				syncSummary();
-			};
-			const removeItem = (item, immediate = false) => {
-				if (item.removing) return;
-				item.removing = true;
-				if (item.successTimer !== null) hostWindow.clearTimeout(item.successTimer);
-				if (immediate) {
-					item.node.remove();
-					items.delete(item.id);
-					syncSummary();
-					return;
-				}
-				item.node.dataset.removing = "true";
-				hostWindow.setTimeout(() => {
-					item.node.remove();
-					items.delete(item.id);
-					syncSummary();
-				}, successFadeDuration + 40);
-			};
-			const completeSuccess = (item) => {
-				if (item.successTimer !== null) hostWindow.clearTimeout(item.successTimer);
-				const holdDuration = Math.max(0, successMorphDelay + successDuration);
-				item.node.dataset.successExit = "false";
-				item.successTimer = hostWindow.setTimeout(() => {
-					if (!item.node.isConnected || item.status !== "success") return;
-					item.node.dataset.successExit = "true";
-					item.successTimer = hostWindow.setTimeout(() => {
-						if (!item.node.isConnected || item.status !== "success") return;
-						removeItem(item, true);
-					}, successFadeDuration);
-				}, holdDuration);
 			};
 			let api;
-			const makeItem = (source = {}) => {
-				const id = String(source.id ?? `item-${nextId++}`);
-				const existing = items.get(id);
-				if (existing) return existing;
+			const createItemView = (item) => {
 				const itemNode = documentRef.createElement("div");
 				const lead = documentRef.createElement("div");
 				const copy = documentRef.createElement("div");
@@ -5108,7 +5138,7 @@ var RodToaster = (function() {
 				const retry = documentRef.createElement("button");
 				const cancel = documentRef.createElement("button");
 				itemNode.className = "rod-multi-loading__item";
-				itemNode.dataset.multiItemId = id;
+				itemNode.dataset.multiItemId = item.id;
 				lead.className = "rod-multi-loading__lead";
 				copy.className = "rod-multi-loading__copy";
 				itemTitle.className = "rod-multi-loading__item-title";
@@ -5128,13 +5158,144 @@ var RodToaster = (function() {
 				retryLabel.textContent = "Retry";
 				retry.append(retryLabel);
 				cancel.append(createSvgIcon(documentRef, "x", 14));
-				cancel.setAttribute("aria-label", `Cancel ${id}`);
+				cancel.setAttribute("aria-label", `Cancel ${item.id}`);
 				cancel.title = "Cancel";
 				track.append(bar);
 				progress.append(track, progressLabel);
 				copy.append(itemTitle, description, progress);
 				actions.append(retry, cancel);
 				itemNode.append(lead, copy, actions);
+				retry.addEventListener("click", (event) => {
+					event.preventDefault();
+					event.stopPropagation();
+					api.retry(item.id);
+				});
+				cancel.addEventListener("click", (event) => {
+					event.preventDefault();
+					event.stopPropagation();
+					api.cancel(item.id, "user");
+				});
+				const view = {
+					node: itemNode,
+					lead,
+					copy,
+					titleNode: itemTitle,
+					descriptionNode: description,
+					progressNode: progress,
+					progressLabelNode: progressLabel,
+					actionsNode: actions,
+					retryButton: retry,
+					cancelButton: cancel
+				};
+				item.view = view;
+				renderItemView(item);
+				return view;
+			};
+			const destroyItemView = (item) => {
+				if (!item.view) return;
+				item.view.node.remove();
+				item.view = null;
+			};
+			const shouldVirtualize = () => order.length >= virtualizeAfter;
+			const renderVirtualWindow = (force = false) => {
+				virtualFrame = null;
+				if (dismissed || !list.isConnected) return;
+				if (items.size === 0) {
+					for (const item of order) destroyItemView(item);
+					virtualSpace.replaceChildren(empty);
+					virtualSpace.style.height = "auto";
+					lastVirtualStart = lastVirtualEnd = lastVirtualCount = -1;
+					return;
+				}
+				const virtualized = shouldVirtualize();
+				const rowHeight = getRowHeight();
+				const total = order.length;
+				let start = 0;
+				let end = total;
+				if (virtualized) {
+					const viewportHeight = Math.max(rowHeight, list.clientHeight || Math.min(rowHeight * 7, 440));
+					start = Math.max(0, Math.floor(list.scrollTop / rowHeight) - overscanRows);
+					end = Math.min(total, Math.ceil((list.scrollTop + viewportHeight) / rowHeight) + overscanRows);
+				}
+				if (!force && start === lastVirtualStart && end === lastVirtualEnd && total === lastVirtualCount) return;
+				lastVirtualStart = start;
+				lastVirtualEnd = end;
+				lastVirtualCount = total;
+				virtualSpace.dataset.virtualized = String(virtualized);
+				virtualSpace.style.height = virtualized ? `${total * rowHeight}px` : "auto";
+				for (let index = 0; index < total; index += 1) {
+					const item = order[index];
+					if (!(!item.removing && index >= start && index < end)) {
+						destroyItemView(item);
+						continue;
+					}
+					const view = item.view ?? createItemView(item);
+					if (virtualized) {
+						view.node.dataset.virtualized = "true";
+						view.node.style.setProperty("--rod-multi-virtual-top", `${index * rowHeight}px`);
+						view.node.style.height = `${rowHeight}px`;
+					} else {
+						delete view.node.dataset.virtualized;
+						view.node.style.removeProperty("--rod-multi-virtual-top");
+						view.node.style.removeProperty("height");
+					}
+					if (view.node.parentNode !== virtualSpace) virtualSpace.append(view.node);
+					renderItemView(item);
+				}
+			};
+			const scheduleVirtualRender = (force = false) => {
+				if (force) {
+					if (virtualFrame !== null) {
+						hostWindow.cancelAnimationFrame?.(virtualFrame);
+						virtualFrame = null;
+					}
+					renderVirtualWindow(true);
+					return;
+				}
+				if (virtualFrame !== null) return;
+				virtualFrame = (hostWindow.requestAnimationFrame?.bind(hostWindow) ?? ((callback) => hostWindow.setTimeout(() => callback(performance.now()), 16)))(() => renderVirtualWindow(false));
+			};
+			const scheduleOrderCompaction = () => {
+				if (compactFrame !== null) return;
+				compactFrame = (hostWindow.requestAnimationFrame?.bind(hostWindow) ?? ((callback) => hostWindow.setTimeout(() => callback(performance.now()), 16)))(() => {
+					compactFrame = null;
+					order = order.filter((item) => !item.removing && items.get(item.id) === item);
+					lastVirtualStart = lastVirtualEnd = lastVirtualCount = -1;
+					scheduleVirtualRender(true);
+				});
+			};
+			list.addEventListener("scroll", () => scheduleVirtualRender(false), { passive: true });
+			const resizeObserver = typeof hostWindow.ResizeObserver === "function" ? new hostWindow.ResizeObserver(() => {
+				lastVirtualStart = lastVirtualEnd = lastVirtualCount = -1;
+				scheduleVirtualRender(false);
+			}) : null;
+			resizeObserver?.observe(list);
+			const registerAggregateItem = (item) => {
+				if (aggregateProgressById.has(item.id)) return;
+				const initial = item.status === "success" ? 1 : clamp(item.progress ?? 0, 0, 1);
+				aggregateProgressById.set(item.id, initial);
+				aggregateContribution += initial;
+				aggregateTotal += 1;
+				if (item.status === "success") aggregateCompletedIds.add(item.id);
+				if (item.status === "cancelled") aggregateCancelledIds.add(item.id);
+			};
+			const updateAggregateItem = (item) => {
+				const previous = aggregateProgressById.get(item.id) ?? 0;
+				const reported = item.status === "success" ? 1 : item.progress ?? previous;
+				const next = Math.max(previous, clamp(reported, 0, 1));
+				if (next !== previous) {
+					aggregateProgressById.set(item.id, next);
+					aggregateContribution += next - previous;
+				}
+				if (item.status === "success") {
+					aggregateCompletedIds.add(item.id);
+					aggregateCancelledIds.delete(item.id);
+				} else if (item.status === "cancelled") aggregateCancelledIds.add(item.id);
+			};
+			const makeItem = (source = {}) => {
+				const id = String(source.id ?? `item-${nextId++}`);
+				const existing = items.get(id);
+				if (existing) return existing;
 				const item = {
 					descriptor: { ...source },
 					id,
@@ -5146,40 +5307,23 @@ var RodToaster = (function() {
 					metadata: isUnknownRecord(source.metadata) ? { ...source.metadata } : {},
 					error: source.error ?? null,
 					abortController: new AbortController(),
-					node: itemNode,
-					lead,
-					copy,
-					titleNode: itemTitle,
-					descriptionNode: description,
-					progressNode: progress,
-					progressLabelNode: progressLabel,
-					actionsNode: actions,
-					retryButton: retry,
-					cancelButton: cancel,
 					successTimer: null,
 					removing: false,
-					running: false
+					running: false,
+					view: null
 				};
-				retry.addEventListener("click", (event) => {
-					event.preventDefault();
-					event.stopPropagation();
-					api.retry(id);
-				});
-				cancel.addEventListener("click", (event) => {
-					event.preventDefault();
-					event.stopPropagation();
-					api.cancel(id, "user");
-				});
 				items.set(id, item);
-				if (!aggregateProgressById.has(id)) aggregateProgressById.set(id, item.status === "success" ? 1 : item.progress ?? 0);
-				else if (item.status === "success") aggregateProgressById.set(id, 1);
-				if (item.status === "success") aggregateCompletedIds.add(id);
-				if (item.status === "cancelled") aggregateCancelledIds.add(id);
-				list.append(itemNode);
-				renderItem(item);
+				order.push(item);
+				adjustBucket(item.status, 1);
+				registerAggregateItem(item);
+				if (batchDepth === 0) {
+					syncSummary();
+					scheduleVirtualRender(false);
+				}
 				return item;
 			};
 			const patchItem = (item, next = {}) => {
+				const previousStatus = item.status;
 				item.descriptor = {
 					...item.descriptor,
 					...next
@@ -5194,14 +5338,52 @@ var RodToaster = (function() {
 					...item.metadata,
 					...next.metadata
 				};
-				const previousAggregateProgress = aggregateProgressById.get(item.id) ?? 0;
-				const reportedAggregateProgress = item.status === "success" ? 1 : item.progress ?? previousAggregateProgress;
-				aggregateProgressById.set(item.id, Math.max(previousAggregateProgress, clamp(reportedAggregateProgress, 0, 1)));
-				if (item.status === "success") {
-					aggregateCompletedIds.add(item.id);
-					aggregateCancelledIds.delete(item.id);
-				} else if (item.status === "cancelled") aggregateCancelledIds.add(item.id);
-				renderItem(item);
+				if (previousStatus !== item.status) {
+					adjustBucket(previousStatus, -1);
+					adjustBucket(item.status, 1);
+				}
+				updateAggregateItem(item);
+				renderItemView(item);
+				syncSummary();
+			};
+			const finalizeRemoval = (item) => {
+				if (!items.has(item.id)) return;
+				adjustBucket(item.status, -1);
+				items.delete(item.id);
+				destroyItemView(item);
+				syncSummary();
+				scheduleOrderCompaction();
+			};
+			const removeItem = (item, immediate = false) => {
+				if (item.removing) return;
+				item.removing = true;
+				if (item.successTimer !== null) {
+					hostWindow.clearTimeout(item.successTimer);
+					item.successTimer = null;
+				}
+				const view = item.view;
+				if (immediate || !view?.node.isConnected) {
+					finalizeRemoval(item);
+					return;
+				}
+				view.node.dataset.removing = "true";
+				hostWindow.setTimeout(() => finalizeRemoval(item), successFadeDuration + 40);
+			};
+			const completeSuccess = (item) => {
+				if (item.successTimer !== null) hostWindow.clearTimeout(item.successTimer);
+				const holdDuration = Math.max(0, successMorphDelay + successDuration);
+				if (item.view) item.view.node.dataset.successExit = "false";
+				item.successTimer = hostWindow.setTimeout(() => {
+					if (!items.has(item.id) || item.status !== "success") return;
+					const view = item.view;
+					if (view?.node.isConnected) {
+						view.node.dataset.successExit = "true";
+						item.successTimer = hostWindow.setTimeout(() => {
+							if (!items.has(item.id) || item.status !== "success") return;
+							removeItem(item, true);
+						}, successFadeDuration);
+					} else removeItem(item, true);
+				}, holdDuration);
 			};
 			api = {
 				get id() {
@@ -5214,17 +5396,16 @@ var RodToaster = (function() {
 					return items.size;
 				},
 				get activeCount() {
-					return counts().active;
+					return Math.max(0, activeCount);
 				},
 				get errorCount() {
-					return counts().error;
+					return Math.max(0, errorCount);
 				},
 				get successCount() {
-					return counts().success;
+					return Math.max(0, successCount);
 				},
 				add(source = {}) {
 					makeItem(source);
-					syncSummary();
 					return api;
 				},
 				update(id, next = {}) {
@@ -5272,7 +5453,7 @@ var RodToaster = (function() {
 					const item = items.get(String(id));
 					if (!item || item.removing || typeof item.descriptor.retry !== "function" || item.running) return api;
 					item.running = true;
-					item.retryButton.disabled = true;
+					renderItemView(item);
 					item.abortController = new AbortController();
 					patchItem(item, {
 						status: "loading",
@@ -5296,7 +5477,7 @@ var RodToaster = (function() {
 						return api;
 					} finally {
 						item.running = false;
-						item.retryButton.disabled = false;
+						renderItemView(item);
 					}
 				},
 				async cancel(id, reason = "cancelled") {
@@ -5340,7 +5521,7 @@ var RodToaster = (function() {
 					return item ? snapshot(item) : null;
 				},
 				getItems() {
-					return [...items.values()].map(snapshot);
+					return order.filter((item) => !item.removing && items.get(item.id) === item).map(snapshot);
 				},
 				async run(id, executor) {
 					const key = String(id);
@@ -5375,13 +5556,28 @@ var RodToaster = (function() {
 						throw error;
 					} finally {
 						item.running = false;
+						renderItemView(item);
 					}
 				},
 				dismiss(reason = "programmatic", immediate = false) {
 					dismissed = true;
+					resizeObserver?.disconnect();
+					if (virtualFrame !== null) {
+						hostWindow.cancelAnimationFrame?.(virtualFrame);
+						virtualFrame = null;
+					}
+					if (compactFrame !== null) {
+						hostWindow.cancelAnimationFrame?.(compactFrame);
+						compactFrame = null;
+					}
+					if (autoDismissTimer !== null) {
+						hostWindow.clearTimeout(autoDismissTimer);
+						autoDismissTimer = null;
+					}
 					for (const item of items.values()) {
 						if (!item.abortController.signal.aborted && item.status !== "success" && item.status !== "cancelled") item.abortController.abort(reason);
 						if (item.successTimer !== null) hostWindow.clearTimeout(item.successTimer);
+						destroyItemView(item);
 					}
 					toastController.dismiss(reason, immediate);
 				}
@@ -5396,8 +5592,14 @@ var RodToaster = (function() {
 				event.stopPropagation();
 				api.cancelAll("user-all");
 			});
-			for (const item of options.items ?? []) api.add(item);
+			batchDepth += 1;
+			try {
+				for (const item of options.items ?? []) makeItem(item);
+			} finally {
+				batchDepth -= 1;
+			}
 			syncSummary();
+			scheduleVirtualRender(true);
 			record.externalUpdate = (next) => {
 				if (hasOwn(next, "title")) titleNode.textContent = String(next.title ?? "");
 				return toastController;
