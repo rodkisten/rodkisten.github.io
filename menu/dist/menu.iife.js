@@ -1,4 +1,4 @@
-/* Auto-generated from menu/menu.ts. at 8/15/2026, 11:45:24 AM Do not edit directly. */
+/* Auto-generated from menu/menu.ts. at 8/15/2026, 12:21:38 PM Do not edit directly. */
 var RodMenu = (function() {
 
 //#region \0rolldown/runtime.js
@@ -44,19 +44,30 @@ var RodMenu = (function() {
 			dragFromContent: true,
 			dismissThresholdPx: 140,
 			dismissThresholdRatio: .22,
-			velocityThresholdPxMs: .65,
-			activationDistancePx: 5
+			velocityThresholdPxMs: .9,
+			activationDistancePx: 7,
+			contentDragActivationPx: 22,
+			velocityMinDragPx: 64,
+			minDismissDistancePx: 96
+		};
+		const defaultKeyboardConfig = {
+			visualViewport: true,
+			preserveFocusOnHydrate: true,
+			keepFocusedFieldVisible: true,
+			focusScrollPaddingPx: 16,
+			autoFocus: "desktop"
 		};
 		const defaultConfig = {
 			shadowRoot: true,
 			defaultPresentation: "bottom-sheet",
 			zIndex: DEFAULT_Z_INDEX,
 			autoLoadDependencies: true,
-			strictDependencies: false,
 			dependencyTimeoutMs: 8e3,
 			dependencyUrls: defaultDependencyUrls,
 			toasterErrors: true,
 			gestures: defaultGestureConfig,
+			keyboard: defaultKeyboardConfig,
+			scrollIsolation: true,
 			defaultSchema: {},
 			theme: {},
 			css: "",
@@ -68,6 +79,7 @@ var RodMenu = (function() {
 			...defaultConfig,
 			dependencyUrls: { ...defaultDependencyUrls },
 			gestures: { ...defaultGestureConfig },
+			keyboard: { ...defaultKeyboardConfig },
 			defaultSchema: {},
 			theme: {},
 			components: {},
@@ -300,10 +312,6 @@ var RodMenu = (function() {
 				markDependency(name, "native", "window");
 				return existing;
 			}
-			if (globalConfig.strictDependencies) {
-				markDependency(name, "failed", void 0, /* @__PURE__ */ new Error(`RodMenu strictDependencies: runtime obrigatório ausente: ${name}.`));
-				return null;
-			}
 			const pending = dependencyPromises.get(name);
 			if (pending) return pending;
 			const promise = (async () => {
@@ -387,7 +395,6 @@ var RodMenu = (function() {
 				const node = facade.el(tag, { $document: doc });
 				if (node && node.ownerDocument === doc) return node;
 			} catch {}
-			if (globalConfig.strictDependencies) throw new Error(`RodMenu strictDependencies: RodElements falhou ao criar <${tag}>.`);
 			return doc.createElement(tag);
 		}
 		function artifactCssText(value) {
@@ -414,10 +421,7 @@ var RodMenu = (function() {
 		}
 		function compileStylesheet(source) {
 			const cipo = resolveCipo();
-			if (!cipo) {
-				if (globalConfig.strictDependencies) throw new Error("RodMenu strictDependencies: Cipó não está disponível.");
-				return source;
-			}
+			if (!cipo) return source;
 			try {
 				const tag = cipo.sheet?.css;
 				if (typeof tag === "function") {
@@ -434,7 +438,6 @@ var RodMenu = (function() {
 					if (cssText) return cssText;
 				} catch {}
 			}
-			if (globalConfig.strictDependencies) throw new Error("RodMenu strictDependencies: Cipó não conseguiu compilar o stylesheet.");
 			return source;
 		}
 		function setBrotoLeaf(store, name, value) {
@@ -453,7 +456,6 @@ var RodMenu = (function() {
 			if (broto?.store) try {
 				brotoStore = broto.store({ ...snapshot });
 			} catch {}
-			if (!brotoStore && globalConfig.strictDependencies) throw new Error("RodMenu strictDependencies: Broto.store() não está disponível ou falhou.");
 			const run = (fn) => {
 				if (broto?.batch) try {
 					broto.batch(fn);
@@ -761,14 +763,19 @@ button {
 .rm-root[data-open="true"] {
   pointer-events: auto;
 }
+.rm-root[data-visual-viewport="true"] {
+  inset: auto;
+  top: var(--rm-vv-top, 0px);
+  left: var(--rm-vv-left, 0px);
+  width: var(--rm-vvw, 100vw);
+  height: var(--rm-vvh, 100vh);
+}
 .rm-backdrop {
   position: absolute;
   inset: 0;
   background: rgba(0,0,0,.38);
-  backdrop-filter: blur(10px) saturate(130%);
-  -webkit-backdrop-filter: blur(10px) saturate(130%);
   opacity: 0;
-  transition: opacity 240ms var(--rm-ease);
+  transition: opacity 130ms linear;
   touch-action: none;
   overscroll-behavior: none;
 }
@@ -786,8 +793,8 @@ button {
   overflow: hidden;
   opacity: 0;
   transform: translate3d(0, 30px, 0) scale(.985);
-  transition: transform 220ms var(--rm-ease), opacity 180ms ease;
-  will-change: transform, opacity;
+  transition: transform 150ms var(--rm-ease), opacity 110ms linear;
+  will-change: transform;
   overscroll-behavior: contain;
 }
 .rm-root[data-open="true"] .rm-shell {
@@ -950,6 +957,7 @@ button {
   transform: scale(.92);
 }
 .rm-body {
+  min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -957,6 +965,10 @@ button {
   scrollbar-width: thin;
   touch-action: pan-y;
   overscroll-behavior-y: contain;
+  -webkit-user-select: auto;
+}
+.rm-root[data-keyboard="true"] .rm-shell {
+  max-height: calc(var(--rm-vvh, 100vh) - 8px);
 }
 .rm-section {
   margin: 0 0 14px;
@@ -1243,9 +1255,7 @@ button {
   gap:9px;
   padding:12px 16px calc(12px + env(safe-area-inset-bottom));
   border-top:1px solid var(--rm-border);
-  background:color-mix(in srgb, var(--rm-panel) 88%, transparent);
-  backdrop-filter:blur(12px);
-  -webkit-backdrop-filter:blur(12px);
+  background:var(--rm-panel);
 }
 .rm-action {
   position:relative;
@@ -1695,18 +1705,6 @@ button {
   color: var(--rm-muted);
   font: 500 10px/1.2 var(--rm-font);
 }
-.rm-saved-sync { display:grid; gap:12px; }
-.rm-saved-sync-summary { display:grid; gap:4px; padding:12px; border:1px solid var(--rm-border); border-radius:14px; background:var(--rm-elevated); }
-.rm-saved-sync-summary strong { font:750 14px/1.25 var(--rm-font); color:var(--rm-text); }
-.rm-saved-sync-summary small { font:500 11px/1.45 var(--rm-font); color:var(--rm-muted); }
-.rm-saved-sync-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
-.rm-saved-sync-stat { display:grid; gap:2px; min-width:0; padding:9px 8px; border:1px solid var(--rm-border); border-radius:12px; background:var(--rm-panel); }
-.rm-saved-sync-stat b { font:800 13px/1 var(--rm-font); color:var(--rm-text); }
-.rm-saved-sync-stat span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:600 9px/1.2 var(--rm-font); color:var(--rm-muted); text-transform:uppercase; letter-spacing:.04em; }
-.rm-saved-sync-commands { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
-.rm-saved-sync-command { width:100%; min-height:42px; }
-@media (max-width:420px) { .rm-saved-sync-commands { grid-template-columns:1fr; } }
-
 .rm-history-list {
   display: grid;
   gap: 7px;
@@ -1811,12 +1809,24 @@ button {
 				} catch {}
 			}
 		}
+		const stylesheetCache = /* @__PURE__ */ new Map();
+		function resolveCompiledStylesheet(source) {
+			const cached = stylesheetCache.get(source);
+			if (cached !== void 0) return cached;
+			const compiled = compileStylesheet(source);
+			if (stylesheetCache.size >= 8) {
+				const oldest = stylesheetCache.keys().next().value;
+				if (oldest !== void 0) stylesheetCache.delete(oldest);
+			}
+			stylesheetCache.set(source, compiled);
+			return compiled;
+		}
 		function appendStyle(root, instanceCss = "") {
 			const doc = root.ownerDocument;
 			const style = createElement(doc, "style");
 			style.dataset.rodMenuStyle = STYLE_VERSION;
 			const extra = [globalConfig.css, instanceCss].filter(Boolean).join("\n\n");
-			style.textContent = compileStylesheet(extra ? `${css}\n\n${extra}` : css);
+			style.textContent = resolveCompiledStylesheet(extra ? `${css}\n\n${extra}` : css);
 			root.append(style);
 		}
 		function applyAttributes(element, attributes) {
@@ -2053,12 +2063,7 @@ button {
 				};
 				this.persistenceManager = createPersistenceManager(this.stateStore, this.schemaValue.store, this.id, this.win, (values) => {
 					this.valuesValue = values;
-					if (!this.destroyed) {
-						this.render();
-						requestAnimationFrame(() => {
-							if (!this.destroyed) this.getRootElement().dataset.open = "true";
-						});
-					}
+					if (!this.destroyed) this.applyHydratedValues(values);
 					try {
 						this.schemaValue.onHydrate?.(this.context);
 					} catch (error) {
@@ -2088,7 +2093,6 @@ button {
 					destroy: () => this.destroy()
 				};
 				this.mount();
-				this.persistenceManager.start();
 			}
 			buildInitialValues(schema) {
 				const result = { ...schema.initialValues || {} };
@@ -2147,18 +2151,24 @@ button {
 				activeHandles.set(this.id, this.handle);
 				if (this.schemaValue.scrollLock !== false) lockDocumentScroll(this.doc);
 				this.bindGlobalEvents();
+				this.setupScrollIsolation();
 				this.setupVisualViewport();
 				this.setupAnchorTracking();
 				requestAnimationFrame(() => {
+					if (this.destroyed) return;
 					const root = this.getRootElement();
 					root.dataset.open = "true";
 					this.host.setAttribute(ACTIVE_ATTR, "true");
-					this.focusInitial();
 					try {
 						this.schemaValue.onOpen?.(this.context);
 					} catch (error) {
 						this.reportError(error);
 					}
+					requestAnimationFrame(() => {
+						if (this.destroyed) return;
+						this.focusInitial();
+						this.persistenceManager.start();
+					});
 				});
 			}
 			render() {
@@ -3379,7 +3389,7 @@ button {
 					this.reportError(error);
 				}
 			}
-			writeValueToControl(name, value) {
+			writeValueToControl(name, value, allowRender = true) {
 				const field = this.getAllFields().find((item) => item.name === name);
 				if (!field) return;
 				if (field.type === "custom" && field.write) {
@@ -3392,7 +3402,7 @@ button {
 				if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement || input instanceof HTMLSelectElement) {
 					if (input instanceof HTMLInputElement && ["checkbox", "radio"].includes(input.type)) input.checked = Boolean(value);
 					else if (!(input instanceof HTMLInputElement && input.type === "file")) input.value = String(value ?? "");
-				} else {
+				} else if (allowRender) {
 					this.render();
 					requestAnimationFrame(() => {
 						const root = this.getRootElement();
@@ -3545,19 +3555,209 @@ button {
 			getFocusable() {
 				return Array.from(this.root.querySelectorAll("button:not([disabled]):not([hidden]), input:not([disabled]):not([type=\"hidden\"]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex=\"-1\"])")).filter((node) => !node.hidden && node.offsetParent !== null);
 			}
+			getKeyboardConfig() {
+				return {
+					...globalConfig.keyboard,
+					...this.schemaValue.keyboard || {}
+				};
+			}
+			getDeepActiveElement() {
+				let active = this.doc.activeElement;
+				while (active && active.shadowRoot?.activeElement) active = active.shadowRoot.activeElement;
+				return active;
+			}
+			isEditableElement(node) {
+				if (!(node instanceof this.win.HTMLElement)) return false;
+				if (node instanceof this.win.HTMLInputElement) return node.type !== "button" && node.type !== "submit" && node.type !== "reset" && node.type !== "checkbox" && node.type !== "radio";
+				return node instanceof this.win.HTMLTextAreaElement || node instanceof this.win.HTMLSelectElement || node.isContentEditable;
+			}
 			focusInitial() {
-				(this.root.querySelector("[autofocus]") || this.getFocusable()[0])?.focus({ preventScroll: true });
+				const config = this.getKeyboardConfig();
+				if (config.autoFocus === "never") return;
+				const explicit = this.root.querySelector("[autofocus]");
+				if (explicit) {
+					explicit.focus({ preventScroll: true });
+					return;
+				}
+				if (config.autoFocus === "explicit") return;
+				if (config.autoFocus === "desktop") {
+					if (this.win.matchMedia?.("(pointer: coarse)")?.matches ?? false) return;
+				}
+				this.getFocusable()[0]?.focus({ preventScroll: true });
+			}
+			keepFocusedFieldVisible() {
+				const config = this.getKeyboardConfig();
+				if (!config.keepFocusedFieldVisible) return;
+				const active = this.getDeepActiveElement();
+				if (!this.isEditableElement(active) || !this.root.contains(active)) return;
+				const body = this.root.querySelector(".rm-body");
+				if (!body) return;
+				const bodyRect = body.getBoundingClientRect();
+				const activeRect = active.getBoundingClientRect();
+				const pad = Math.max(0, config.focusScrollPaddingPx);
+				if (activeRect.bottom > bodyRect.bottom - pad) body.scrollTop += activeRect.bottom - bodyRect.bottom + pad;
+				else if (activeRect.top < bodyRect.top + pad) body.scrollTop -= bodyRect.top + pad - activeRect.top;
 			}
 			setupVisualViewport() {
+				const config = this.getKeyboardConfig();
 				const viewport = this.win.visualViewport;
-				if (!viewport) return;
-				const sync = () => this.getRootElement().style.setProperty("--rm-vvh", `${viewport.height}px`);
-				sync();
-				viewport.addEventListener("resize", sync);
-				viewport.addEventListener("scroll", sync);
+				if (!viewport || !config.visualViewport) return;
+				let raf = 0;
+				const syncNow = () => {
+					raf = 0;
+					if (this.destroyed) return;
+					const root = this.root.querySelector(".rm-root");
+					if (!root) return;
+					root.dataset.visualViewport = "true";
+					root.style.setProperty("--rm-vvh", `${Math.round(viewport.height)}px`);
+					root.style.setProperty("--rm-vvw", `${Math.round(viewport.width)}px`);
+					root.style.setProperty("--rm-vv-top", `${Math.round(viewport.offsetTop)}px`);
+					root.style.setProperty("--rm-vv-left", `${Math.round(viewport.offsetLeft)}px`);
+					const keyboardOpen = viewport.height < this.win.innerHeight - 96;
+					root.dataset.keyboard = String(keyboardOpen);
+					if (keyboardOpen) this.keepFocusedFieldVisible();
+				};
+				const sync = () => {
+					if (raf) return;
+					raf = this.win.requestAnimationFrame(syncNow);
+				};
+				syncNow();
+				viewport.addEventListener("resize", sync, { passive: true });
+				viewport.addEventListener("scroll", sync, { passive: true });
+				const onFocusIn = () => {
+					this.win.setTimeout(() => {
+						sync();
+						this.keepFocusedFieldVisible();
+					}, 0);
+					this.win.setTimeout(() => {
+						sync();
+						this.keepFocusedFieldVisible();
+					}, 180);
+				};
+				this.host.addEventListener("focusin", onFocusIn);
 				this.listeners.push(() => {
+					if (raf) this.win.cancelAnimationFrame(raf);
 					viewport.removeEventListener("resize", sync);
 					viewport.removeEventListener("scroll", sync);
+					this.host.removeEventListener("focusin", onFocusIn);
+				});
+			}
+			applyHydratedValues(values) {
+				const config = this.getKeyboardConfig();
+				const active = this.getDeepActiveElement();
+				const preserve = config.preserveFocusOnHydrate && this.isEditableElement(active) && this.root.contains(active);
+				for (const [name, value] of Object.entries(values)) {
+					if (!this.getAllFields().find((item) => item.name === name)) continue;
+					const input = this.inputNodes.get(name);
+					if (preserve && input && (input === active || input.contains(active))) continue;
+					this.writeValueToControl(name, value, false);
+				}
+				this.refreshDynamicState();
+				if (preserve) {
+					const reconcile = () => {
+						this.host.removeEventListener("focusout", reconcile, true);
+						this.win.setTimeout(() => {
+							if (this.destroyed) return;
+							const nextActive = this.getDeepActiveElement();
+							if (this.isEditableElement(nextActive) && this.root.contains(nextActive)) return;
+							const wasOpen = this.root.querySelector(".rm-root")?.dataset.open === "true";
+							const bodyScroll = this.root.querySelector(".rm-body")?.scrollTop ?? 0;
+							this.render();
+							const nextRoot = this.root.querySelector(".rm-root");
+							if (wasOpen && nextRoot) nextRoot.dataset.open = "true";
+							const nextBody = this.root.querySelector(".rm-body");
+							if (nextBody) nextBody.scrollTop = bodyScroll;
+						}, 0);
+					};
+					this.host.addEventListener("focusout", reconcile, true);
+					this.listeners.push(() => this.host.removeEventListener("focusout", reconcile, true));
+				}
+			}
+			setupScrollIsolation() {
+				if (this.schemaValue.scrollIsolation === false || globalConfig.scrollIsolation === false) return;
+				let lastTouchY = null;
+				const pathHasHost = (event) => event.composedPath().includes(this.host);
+				const findScrollableFromPath = (event) => {
+					const path = event.composedPath();
+					const shell = this.root.querySelector(".rm-shell");
+					if (!shell) return null;
+					for (const item of path) {
+						if (item === shell) break;
+						if (!(item instanceof this.win.HTMLElement)) continue;
+						const overflowY = this.win.getComputedStyle(item).overflowY;
+						if ((overflowY === "auto" || overflowY === "scroll") && item.scrollHeight > item.clientHeight + 1) return item;
+					}
+					const body = this.root.querySelector(".rm-body");
+					return body && body.scrollHeight > body.clientHeight + 1 ? body : null;
+				};
+				const onTouchStart = (event) => {
+					if (!pathHasHost(event) || event.touches.length !== 1) return;
+					lastTouchY = event.touches[0].clientY;
+				};
+				const onTouchMove = (event) => {
+					if (!event.cancelable || event.touches.length !== 1) return;
+					if (!pathHasHost(event)) {
+						event.preventDefault();
+						event.stopPropagation();
+						return;
+					}
+					const y = event.touches[0].clientY;
+					const fingerDelta = y - (lastTouchY ?? y);
+					lastTouchY = y;
+					const scrollable = findScrollableFromPath(event);
+					if (!scrollable) {
+						event.preventDefault();
+						return;
+					}
+					const atTop = scrollable.scrollTop <= 0;
+					const atBottom = scrollable.scrollTop + scrollable.clientHeight >= scrollable.scrollHeight - 1;
+					if (fingerDelta > 0 && atTop || fingerDelta < 0 && atBottom) event.preventDefault();
+				};
+				const onTouchEnd = () => {
+					lastTouchY = null;
+				};
+				const onWheel = (event) => {
+					if (!event.cancelable) return;
+					if (!pathHasHost(event)) {
+						event.preventDefault();
+						event.stopPropagation();
+						return;
+					}
+					const scrollable = findScrollableFromPath(event);
+					if (!scrollable) {
+						event.preventDefault();
+						return;
+					}
+					const atTop = scrollable.scrollTop <= 0;
+					const atBottom = scrollable.scrollTop + scrollable.clientHeight >= scrollable.scrollHeight - 1;
+					if (event.deltaY < 0 && atTop || event.deltaY > 0 && atBottom) event.preventDefault();
+				};
+				this.doc.addEventListener("touchstart", onTouchStart, {
+					passive: true,
+					capture: true
+				});
+				this.doc.addEventListener("touchmove", onTouchMove, {
+					passive: false,
+					capture: true
+				});
+				this.doc.addEventListener("touchend", onTouchEnd, {
+					passive: true,
+					capture: true
+				});
+				this.doc.addEventListener("touchcancel", onTouchEnd, {
+					passive: true,
+					capture: true
+				});
+				this.doc.addEventListener("wheel", onWheel, {
+					passive: false,
+					capture: true
+				});
+				this.listeners.push(() => {
+					this.doc.removeEventListener("touchstart", onTouchStart, true);
+					this.doc.removeEventListener("touchmove", onTouchMove, true);
+					this.doc.removeEventListener("touchend", onTouchEnd, true);
+					this.doc.removeEventListener("touchcancel", onTouchEnd, true);
+					this.doc.removeEventListener("wheel", onWheel, true);
 				});
 			}
 			setupAnchorTracking() {
@@ -3602,22 +3802,32 @@ button {
 				let tracking = false;
 				let dragging = false;
 				let startedOnHandle = false;
+				let startedAtTop = false;
+				let scrollGesture = false;
 				let startX = 0;
 				let startY = 0;
-				let lastY = 0;
-				let startTime = 0;
+				let lastMoveY = 0;
+				let lastMoveTime = 0;
+				let recentVelocity = 0;
 				let currentY = 0;
 				let scrollable = null;
 				let directionLocked = false;
 				let verticalGesture = false;
+				const clearDragVisual = () => {
+					shell.style.transition = "";
+					shell.style.removeProperty("--rm-drag-y");
+				};
 				const reset = () => {
 					tracking = false;
 					dragging = false;
 					startedOnHandle = false;
+					startedAtTop = false;
+					scrollGesture = false;
 					currentY = 0;
 					scrollable = null;
 					directionLocked = false;
 					verticalGesture = false;
+					recentVelocity = 0;
 					shell.style.transition = "";
 				};
 				const touchStart = (event) => {
@@ -3627,30 +3837,41 @@ button {
 					dragging = false;
 					startX = touch.clientX;
 					startY = touch.clientY;
-					lastY = touch.clientY;
-					startTime = performance.now();
+					touch.clientY;
+					lastMoveY = touch.clientY;
+					lastMoveTime = performance.now();
 					currentY = 0;
+					recentVelocity = 0;
 					directionLocked = false;
 					verticalGesture = false;
+					scrollGesture = false;
 					const target = event.composedPath()[0];
 					startedOnHandle = !!(target instanceof this.win.Element ? target : null)?.closest?.(".rm-handle-wrap");
 					scrollable = this.findScrollableAncestor(target || event.target, shell);
+					startedAtTop = !scrollable || scrollable.scrollTop <= 1;
 				};
 				const touchMove = (event) => {
 					if (!tracking || event.touches.length !== 1) return;
 					const touch = event.touches[0];
+					const now = performance.now();
 					const dx = touch.clientX - startX;
 					const dy = touch.clientY - startY;
-					lastY = touch.clientY;
+					const moveDt = Math.max(1, now - lastMoveTime);
+					recentVelocity = (touch.clientY - lastMoveY) / moveDt;
+					lastMoveY = touch.clientY;
+					lastMoveTime = now;
+					touch.clientY;
 					if (!directionLocked && Math.max(Math.abs(dx), Math.abs(dy)) >= config.activationDistancePx) {
 						directionLocked = true;
-						verticalGesture = Math.abs(dy) >= Math.abs(dx);
+						verticalGesture = Math.abs(dy) > Math.abs(dx) * 1.12;
+						if (verticalGesture && !startedOnHandle && !startedAtTop) scrollGesture = true;
 					}
 					if (!directionLocked || !verticalGesture) return;
-					const contentAtTop = !scrollable || scrollable.scrollTop <= 0;
-					const canDrag = this.schemaValue.draggable !== false && (startedOnHandle || config.dragFromContent);
 					const pullingDown = dy > 0;
-					if (pullingDown && contentAtTop) {
+					const canDragFromContent = config.dragFromContent && startedAtTop && !scrollGesture && dy >= config.contentDragActivationPx;
+					const canDrag = this.schemaValue.draggable !== false && (startedOnHandle || canDragFromContent);
+					if (scrollGesture) return;
+					if (pullingDown && startedAtTop) {
 						if (event.cancelable && config.preventPullToRefresh) event.preventDefault();
 						event.stopPropagation();
 						if (canDrag) {
@@ -3658,7 +3879,8 @@ button {
 								dragging = true;
 								shell.style.transition = "none";
 							}
-							currentY = Math.max(0, dy);
+							const activationOffset = startedOnHandle ? 0 : config.contentDragActivationPx;
+							currentY = Math.max(0, dy - activationOffset);
 							shell.style.setProperty("--rm-drag-y", `${currentY}px`);
 						}
 						return;
@@ -3667,29 +3889,35 @@ button {
 						if (event.cancelable) event.preventDefault();
 						currentY = Math.max(0, dy);
 						shell.style.setProperty("--rm-drag-y", `${currentY}px`);
-						return;
 					}
-					if (pullingDown && !scrollable && config.preventPullToRefresh && event.cancelable) {
-						event.preventDefault();
-						event.stopPropagation();
-					}
+				};
+				const dismissDistance = () => {
+					const ratioDistance = (shell.offsetHeight || 1) * config.dismissThresholdRatio;
+					return Math.max(config.minDismissDistancePx, Math.min(config.dismissThresholdPx, ratioDistance));
 				};
 				const finishGesture = () => {
 					if (!tracking) return;
-					const elapsed = Math.max(1, performance.now() - startTime);
-					const velocity = Math.max(0, (lastY - startY) / elapsed);
-					const threshold = Math.min(config.dismissThresholdPx, shell.getBoundingClientRect().height * config.dismissThresholdRatio);
-					const shouldDismiss = dragging && this.schemaValue.swipeToDismiss !== false && this.schemaValue.dismissible !== false && (currentY >= threshold || currentY > config.activationDistancePx * 2 && velocity >= config.velocityThresholdPxMs);
-					shell.style.transition = "";
-					if (shouldDismiss) this.finish("dismiss", void 0, "swipe");
-					else shell.style.removeProperty("--rm-drag-y");
+					const enoughDistance = currentY >= dismissDistance();
+					const enoughVelocity = currentY >= config.velocityMinDragPx && recentVelocity >= config.velocityThresholdPxMs;
+					if (dragging && this.schemaValue.swipeToDismiss !== false && this.schemaValue.dismissible !== false && (enoughDistance || enoughVelocity)) {
+						shell.style.transition = "";
+						this.finish("dismiss", void 0, "swipe");
+					} else if (dragging) {
+						shell.style.transition = "transform 170ms var(--rm-ease)";
+						shell.style.setProperty("--rm-drag-y", "0px");
+						this.win.setTimeout(() => {
+							if (!this.destroyed) clearDragVisual();
+						}, 180);
+					}
 					reset();
 				};
 				let pointerDragging = false;
 				let pointerId = -1;
 				let pointerStartY = 0;
 				let pointerCurrentY = 0;
-				let pointerStartTime = 0;
+				let pointerLastY = 0;
+				let pointerLastTime = 0;
+				let pointerVelocity = 0;
 				const handle = shell.querySelector(".rm-handle-wrap");
 				const pointerDown = (event) => {
 					if (!handle || event.pointerType === "touch" || event.button !== 0 || this.schemaValue.draggable === false) return;
@@ -3697,26 +3925,39 @@ button {
 					pointerId = event.pointerId;
 					pointerStartY = event.clientY;
 					pointerCurrentY = 0;
-					pointerStartTime = performance.now();
+					pointerLastY = event.clientY;
+					pointerLastTime = performance.now();
+					pointerVelocity = 0;
 					handle.setPointerCapture?.(pointerId);
 					shell.style.transition = "none";
 					event.preventDefault();
 				};
 				const pointerMove = (event) => {
 					if (!pointerDragging || event.pointerId !== pointerId) return;
+					const now = performance.now();
+					const dt = Math.max(1, now - pointerLastTime);
+					pointerVelocity = (event.clientY - pointerLastY) / dt;
+					pointerLastY = event.clientY;
+					pointerLastTime = now;
 					pointerCurrentY = Math.max(0, event.clientY - pointerStartY);
 					shell.style.setProperty("--rm-drag-y", `${pointerCurrentY}px`);
 					event.preventDefault();
 				};
 				const pointerUp = (event) => {
 					if (!pointerDragging || event.pointerId !== pointerId) return;
-					const elapsed = Math.max(1, performance.now() - pointerStartTime);
-					const velocity = pointerCurrentY / elapsed;
-					const threshold = Math.min(config.dismissThresholdPx, shell.getBoundingClientRect().height * config.dismissThresholdRatio);
+					const enoughDistance = pointerCurrentY >= dismissDistance();
+					const enoughVelocity = pointerCurrentY >= config.velocityMinDragPx && pointerVelocity >= config.velocityThresholdPxMs;
 					pointerDragging = false;
-					shell.style.transition = "";
-					if (this.schemaValue.swipeToDismiss !== false && this.schemaValue.dismissible !== false && (pointerCurrentY >= threshold || velocity >= config.velocityThresholdPxMs)) this.finish("dismiss", void 0, "swipe");
-					else shell.style.removeProperty("--rm-drag-y");
+					if (this.schemaValue.swipeToDismiss !== false && this.schemaValue.dismissible !== false && (enoughDistance || enoughVelocity)) {
+						shell.style.transition = "";
+						this.finish("dismiss", void 0, "swipe");
+					} else {
+						shell.style.transition = "transform 170ms var(--rm-ease)";
+						shell.style.setProperty("--rm-drag-y", "0px");
+						this.win.setTimeout(() => {
+							if (!this.destroyed) clearDragVisual();
+						}, 180);
+					}
 				};
 				const rootTouchMove = (event) => {
 					if (!config.preventPullToRefresh || !event.cancelable) return;
@@ -3989,144 +4230,6 @@ button {
 					}]
 				});
 			},
-			savedSync(options) {
-				let refreshImpl = () => void 0;
-				let destroyed = false;
-				const handle = api.open({
-					title: options.title || "Saved / Bookmarks",
-					description: options.description || "Selecione, confira e sincronize suas mídias.",
-					presentation: options.presentation || "bottom-sheet",
-					size: options.size || "md",
-					store: { persist: false },
-					fields: [{
-						type: "custom",
-						name: "savedSync",
-						render(context) {
-							const doc = context.host.ownerDocument;
-							const root = createElement(doc, "div");
-							root.className = "rm-saved-sync";
-							const summary = createElement(doc, "div");
-							summary.className = "rm-saved-sync-summary";
-							const summaryTitle = createElement(doc, "strong");
-							const summaryDescription = createElement(doc, "small");
-							summary.append(summaryTitle, summaryDescription);
-							const stats = createElement(doc, "div");
-							stats.className = "rm-saved-sync-stats";
-							const statNodes = /* @__PURE__ */ new Map();
-							for (const [key, label] of [
-								["pending", "Pendentes"],
-								["selected", "Selecionados"],
-								["sent", "Enviados"],
-								["unknown", "Sem check"],
-								["visible", "Na tela"],
-								["total", "Vistos"]
-							]) {
-								const card = createElement(doc, "div");
-								card.className = "rm-saved-sync-stat";
-								const value = createElement(doc, "b");
-								const copy = createElement(doc, "span");
-								copy.textContent = label;
-								card.append(value, copy);
-								stats.append(card);
-								statNodes.set(key, value);
-							}
-							const commands = createElement(doc, "div");
-							commands.className = "rm-saved-sync-commands";
-							const commandButtons = /* @__PURE__ */ new Map();
-							for (const command of options.commands) {
-								const button = createElement(doc, "button");
-								button.type = "button";
-								button.className = "rm-field-button rm-action rm-saved-sync-command";
-								button.dataset.variant = command.variant || "secondary";
-								button.dataset.command = command.id;
-								button.addEventListener("click", async () => {
-									if (button.disabled || destroyed) return;
-									button.dataset.loading = "true";
-									refreshImpl();
-									try {
-										await command.run({
-											snapshot: options.getSnapshot(),
-											refresh: refreshImpl
-										});
-									} catch (error) {
-										try {
-											globalConfig.onError?.(error);
-										} catch {}
-										try {
-											notifyToaster("error", options.title || "Saved / Bookmarks", error instanceof Error ? error.message : String(error));
-										} catch {}
-									} finally {
-										button.dataset.loading = "false";
-										refreshImpl();
-									}
-								});
-								commandButtons.set(command.id, button);
-								commands.append(button);
-							}
-							root.append(summary, stats, commands);
-							refreshImpl = () => {
-								if (destroyed || !root.isConnected) return;
-								let snapshot;
-								try {
-									snapshot = options.getSnapshot();
-								} catch (error) {
-									try {
-										globalConfig.onError?.(error);
-									} catch {}
-									try {
-										notifyToaster("error", options.title || "Saved / Bookmarks", error instanceof Error ? error.message : String(error));
-									} catch {}
-									return;
-								}
-								summaryTitle.textContent = snapshot.title || options.title || "Saved / Bookmarks";
-								summaryDescription.textContent = snapshot.description || options.description || "";
-								for (const key of [
-									"pending",
-									"selected",
-									"sent",
-									"unknown",
-									"visible",
-									"total"
-								]) {
-									const node = statNodes.get(key);
-									if (node) node.textContent = String(Number(snapshot[key] ?? 0));
-								}
-								for (const command of options.commands) {
-									const button = commandButtons.get(command.id);
-									if (!button) continue;
-									button.textContent = typeof command.label === "function" ? command.label(snapshot) : command.label;
-									const busy = button.dataset.loading === "true";
-									const disabled = typeof command.disabled === "function" ? command.disabled(snapshot) : Boolean(command.disabled);
-									button.disabled = busy || Boolean(snapshot.syncing) || disabled;
-								}
-							};
-							requestAnimationFrame(refreshImpl);
-							return root;
-						}
-					}],
-					actions: [{
-						id: "close",
-						label: "Fechar",
-						role: "cancel",
-						variant: "secondary"
-					}],
-					onClose(result) {
-						destroyed = true;
-						try {
-							options.onClose?.(result);
-						} catch (error) {
-							try {
-								globalConfig.onError?.(error);
-							} catch {}
-						}
-					}
-				});
-				Object.defineProperty(handle, "refresh", {
-					value: () => refreshImpl(),
-					enumerable: true
-				});
-				return handle;
-			},
 			debug(options) {
 				const tabs = [];
 				if (options.summary !== void 0) tabs.push({
@@ -4336,6 +4439,10 @@ button {
 						...globalConfig.gestures,
 						...config.gestures
 					} : globalConfig.gestures,
+					keyboard: config.keyboard ? {
+						...globalConfig.keyboard,
+						...config.keyboard
+					} : globalConfig.keyboard,
 					defaultSchema: config.defaultSchema ? {
 						...globalConfig.defaultSchema,
 						...config.defaultSchema
@@ -4353,20 +4460,7 @@ button {
 						...config.fieldTypes
 					} : globalConfig.fieldTypes
 				};
-				if (globalConfig.strictDependencies) for (const name of [
-					"elements",
-					"toaster",
-					"cipo",
-					"broto"
-				]) {
-					if (!dependencyPresent(name)) {
-						const error = /* @__PURE__ */ new Error(`RodMenu strictDependencies: runtime obrigatório ausente: ${name}.`);
-						markDependency(name, "failed", void 0, error);
-						throw error;
-					}
-					markDependency(name, "native", "window");
-				}
-				if (config.autoLoadDependencies === true && !globalConfig.strictDependencies) loadDependencies();
+				if (config.autoLoadDependencies === true) loadDependencies();
 				if (globalConfig.refreshActiveOnConfigure) api.refreshAll();
 				return api;
 			},
@@ -4375,6 +4469,7 @@ button {
 					...globalConfig,
 					dependencyUrls: Object.freeze({ ...globalConfig.dependencyUrls }),
 					gestures: Object.freeze({ ...globalConfig.gestures }),
+					keyboard: Object.freeze({ ...globalConfig.keyboard }),
 					defaultSchema: Object.freeze({ ...globalConfig.defaultSchema }),
 					theme: Object.freeze({ ...globalConfig.theme }),
 					components: Object.freeze({ ...globalConfig.components }),
@@ -4386,6 +4481,7 @@ button {
 					...defaultConfig,
 					dependencyUrls: { ...defaultDependencyUrls },
 					gestures: { ...defaultGestureConfig },
+					keyboard: { ...defaultKeyboardConfig },
 					defaultSchema: {},
 					theme: {},
 					components: {},
