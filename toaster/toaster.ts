@@ -3,7 +3,7 @@
 
 /*
  * Rod Super Toaster
- * Version 4.9.0
+ * Version 4.9.1
  *
  * Browser-first, bundler-optional TypeScript IIFE.
  * Compile with: tsc --target ES2022 --lib ES2022,DOM --strict
@@ -12,7 +12,7 @@
 (function installRodToaster(globalWindow: Window & typeof globalThis): void {
   "use strict";
 
-  const VERSION = "4.9.0" as const;
+  const VERSION = "4.9.1" as const;
   const TOAST_GLOBAL = "RodToaster" as const;
   const INSPECTOR_GLOBAL = "RodObjectInspector" as const;
   const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -3121,23 +3121,26 @@
         z-index: 2;
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
-        align-items: center;
-        gap: 12px;
-        padding: 13px 13px 11px 15px;
-        border-bottom: 1px solid var(--rod-border);
+        align-items: start;
+        gap: 10px;
+        padding: 12px 12px 10px 14px;
+        border-bottom: 0;
         background: var(--rod-surface);
       }
 
       .rod-multi-loading__heading {
         display: grid;
-        gap: 4px;
+        align-content: start;
+        gap: 3px;
         min-width: 0;
+        padding-top: 1px;
       }
 
       .rod-multi-loading__title {
         overflow: hidden;
         color: var(--rod-text-strong);
-        font: 700 13px/1.2 system-ui, sans-serif;
+        font: 720 13px/1.22 system-ui, sans-serif;
+        letter-spacing: -.012em;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
@@ -3145,7 +3148,8 @@
       .rod-multi-loading__summary {
         overflow: hidden;
         color: var(--rod-muted);
-        font: 600 10px/1.2 system-ui, sans-serif;
+        font: 590 10px/1.25 system-ui, sans-serif;
+        font-variant-numeric: tabular-nums;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
@@ -3153,7 +3157,8 @@
       .rod-multi-loading__aggregate {
         display: grid;
         gap: 7px;
-        padding: 9px 14px 10px;
+        padding: 8px 14px 10px;
+        border-top: 1px solid color-mix(in srgb, var(--rod-border) 72%, transparent);
         border-bottom: 1px solid var(--rod-border);
         background: var(--rod-surface);
       }
@@ -3200,7 +3205,9 @@
 
       .rod-multi-loading__header-actions {
         display: flex;
+        flex: 0 0 auto;
         align-items: center;
+        justify-content: flex-end;
         gap: 5px;
       }
 
@@ -3210,15 +3217,22 @@
         align-items: center;
         justify-content: center;
         gap: 6px;
-        min-height: 31px;
+        min-width: 32px;
+        min-height: 32px;
         padding: 0 9px;
         border: 1px solid var(--rod-border);
-        border-radius: 9px;
+        border-radius: 10px;
         background: var(--rod-overlay);
         color: var(--rod-muted);
         font: 650 10px/1 system-ui, sans-serif;
         cursor: pointer;
         touch-action: manipulation;
+      }
+
+
+      .rod-multi-loading__header-button[hidden],
+      .rod-multi-loading__button[hidden] {
+        display: none !important;
       }
 
       .rod-multi-loading__header-button:hover {
@@ -3475,7 +3489,27 @@
           max-height: min(50dvh, 430px);
         }
         .rod-multi-loading__header {
-          padding: 11px 9px 9px 12px;
+          gap: 8px;
+          padding: 10px 9px 8px 12px;
+        }
+
+        .rod-multi-loading__heading {
+          gap: 2px;
+        }
+
+        .rod-multi-loading__title {
+          font-size: 12px;
+          line-height: 1.22;
+        }
+
+        .rod-multi-loading__summary {
+          font-size: 9.5px;
+          line-height: 1.25;
+        }
+
+        .rod-multi-loading__aggregate {
+          gap: 6px;
+          padding: 7px 12px 9px;
         }
         .rod-multi-loading__aggregate {
           gap: 6px;
@@ -3485,7 +3519,10 @@
           display: none;
         }
         .rod-multi-loading__header-button {
-          width: 31px;
+          width: 32px;
+          min-width: 32px;
+          height: 32px;
+          min-height: 32px;
           padding: 0;
         }
         .rod-multi-loading__list {
@@ -6090,8 +6127,12 @@
     const list = documentRef.createElement("div");
     const empty = documentRef.createElement("div");
     const items = new Map<string, MultiLoadingInternalItem>();
+
+    // Aggregate state is independent from live DOM rows. Rows are allowed to
+    // fade out, but the batch header keeps the work already accounted for.
     const aggregateProgressById = new Map<string, number>();
     const aggregateCompletedIds = new Set<string>();
+    const aggregateCancelledIds = new Set<string>();
     let nextId = 1;
     let dismissed = false;
 
@@ -6197,6 +6238,10 @@
     const syncSummary = (): void => {
       const current = counts();
       syncAggregate();
+
+      const cumulativeDone = aggregateCompletedIds.size;
+      const cumulativeCancelled = aggregateCancelledIds.size;
+
       if (options.showSummary === false) {
         summaryNode.hidden = true;
       } else {
@@ -6204,11 +6249,17 @@
         const parts: string[] = [];
         if (current.active) parts.push(`${current.active} active`);
         if (current.error) parts.push(`${current.error} failed`);
-        if (current.success) parts.push(`${current.success} done`);
-        if (current.cancelled) parts.push(`${current.cancelled} cancelled`);
+        if (cumulativeDone) parts.push(`${cumulativeDone} done`);
+        if (cumulativeCancelled) parts.push(`${cumulativeCancelled} cancelled`);
         summaryNode.textContent = parts.length ? parts.join(" · ") : "All operations completed";
       }
-      clearButton.disabled = current.success === 0 && current.cancelled === 0;
+
+      const hasClearableRows = [...items.values()].some(
+        (item) => !item.removing && (item.status === "success" || item.status === "cancelled"),
+      );
+      clearButton.hidden = !hasClearableRows;
+      clearButton.disabled = !hasClearableRows;
+      cancelAllButton.hidden = current.active === 0;
       cancelAllButton.disabled = current.active === 0;
       list.dataset.empty = String(items.size === 0);
       if (!items.size) {
@@ -6384,8 +6435,13 @@
       });
 
       items.set(id, item);
-      aggregateProgressById.set(id, item.status === "success" ? 1 : item.progress ?? 0);
+      if (!aggregateProgressById.has(id)) {
+        aggregateProgressById.set(id, item.status === "success" ? 1 : item.progress ?? 0);
+      } else if (item.status === "success") {
+        aggregateProgressById.set(id, 1);
+      }
       if (item.status === "success") aggregateCompletedIds.add(id);
+      if (item.status === "cancelled") aggregateCancelledIds.add(id);
       list.append(itemNode);
       renderItem(item);
       return item;
@@ -6401,12 +6457,22 @@
       if (hasOwn(next, "error")) item.error = next.error;
       if (isUnknownRecord(next.metadata)) item.metadata = { ...item.metadata, ...next.metadata };
 
-      const aggregateProgress = item.status === "success"
+      const previousAggregateProgress = aggregateProgressById.get(item.id) ?? 0;
+      const reportedAggregateProgress = item.status === "success"
         ? 1
-        : item.progress ?? 0;
-      aggregateProgressById.set(item.id, clamp(aggregateProgress, 0, 1));
-      if (item.status === "success") aggregateCompletedIds.add(item.id);
-      else aggregateCompletedIds.delete(item.id);
+        : item.progress ?? previousAggregateProgress;
+
+      aggregateProgressById.set(
+        item.id,
+        Math.max(previousAggregateProgress, clamp(reportedAggregateProgress, 0, 1)),
+      );
+
+      if (item.status === "success") {
+        aggregateCompletedIds.add(item.id);
+        aggregateCancelledIds.delete(item.id);
+      } else if (item.status === "cancelled") {
+        aggregateCancelledIds.add(item.id);
+      }
 
       renderItem(item);
     };
