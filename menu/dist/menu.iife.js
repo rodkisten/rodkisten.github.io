@@ -1,4 +1,4 @@
-/* Auto-generated from menu/menu.ts. at 8/15/2026, 12:56:21 PM Do not edit directly. */
+/* Auto-generated from menu/menu.ts. at 8/15/2026, 5:21:00 PM Do not edit directly. */
 var RodMenu = (function() {
 
 //#region \0rolldown/runtime.js
@@ -22,13 +22,13 @@ var RodMenu = (function() {
 	var menu_exports = /* @__PURE__ */ __exportAll({});
 	(function installRodMenu(rootWindow) {
 		"use strict";
-		const VERSION = "2.2.7";
+		const VERSION = "2.2.8";
 		const GLOBAL_NAME = "RodMenu";
 		const ROOT_ATTR = "data-rod-menu-host";
 		const ACTIVE_ATTR = "data-rod-menu-active";
 		const ID_PREFIX = "rod-menu";
 		const DEFAULT_Z_INDEX = 2147482500;
-		const STYLE_VERSION = "v2.2.7";
+		const STYLE_VERSION = "v2.2.8";
 		const defaultDependencyUrls = {
 			elements: [
 				"https://rod.migos.club/elements/dist/elements.js",
@@ -50,6 +50,13 @@ var RodMenu = (function() {
 			velocityMinDragPx: 64,
 			minDismissDistancePx: 96
 		};
+		const defaultStackConfig = {
+			enabled: true,
+			maxVisible: 3,
+			offsetPx: 12,
+			scaleStep: .018,
+			backdropClick: "previous"
+		};
 		const defaultKeyboardConfig = {
 			visualViewport: true,
 			preserveFocusOnHydrate: true,
@@ -65,6 +72,7 @@ var RodMenu = (function() {
 			dependencyTimeoutMs: 8e3,
 			dependencyUrls: defaultDependencyUrls,
 			toasterErrors: true,
+			stack: defaultStackConfig,
 			gestures: defaultGestureConfig,
 			keyboard: defaultKeyboardConfig,
 			scrollIsolation: true,
@@ -78,6 +86,7 @@ var RodMenu = (function() {
 		let globalConfig = {
 			...defaultConfig,
 			dependencyUrls: { ...defaultDependencyUrls },
+			stack: { ...defaultStackConfig },
 			gestures: { ...defaultGestureConfig },
 			keyboard: { ...defaultKeyboardConfig },
 			defaultSchema: {},
@@ -87,6 +96,53 @@ var RodMenu = (function() {
 		};
 		let counter = 0;
 		const activeHandles = /* @__PURE__ */ new Map();
+		const surfaceStackByDocument = /* @__PURE__ */ new WeakMap();
+		function getSurfaceStack(doc) {
+			const current = surfaceStackByDocument.get(doc) || [];
+			const live = current.filter((surface) => !surface.isDestroyedForStack());
+			if (live.length !== current.length) surfaceStackByDocument.set(doc, live);
+			return live;
+		}
+		function refreshSurfaceStack(doc) {
+			const stack = getSurfaceStack(doc);
+			const total = stack.length;
+			stack.forEach((surface, index) => surface.applyStackState(index, total));
+		}
+		function registerSurfaceInStack(surface) {
+			const stack = getSurfaceStack(surface.doc).filter((item) => item !== surface);
+			stack.push(surface);
+			surfaceStackByDocument.set(surface.doc, stack);
+			refreshSurfaceStack(surface.doc);
+		}
+		function unregisterSurfaceFromStack(surface) {
+			const stack = getSurfaceStack(surface.doc).filter((item) => item !== surface);
+			if (stack.length) surfaceStackByDocument.set(surface.doc, stack);
+			else surfaceStackByDocument.delete(surface.doc);
+			refreshSurfaceStack(surface.doc);
+		}
+		function isTopStackSurface(surface) {
+			const stack = getSurfaceStack(surface.doc);
+			return stack.length === 0 || stack[stack.length - 1] === surface;
+		}
+		function activateStackSurface(surface) {
+			const stack = getSurfaceStack(surface.doc);
+			const index = stack.indexOf(surface);
+			if (index < 0) return false;
+			if (index !== stack.length - 1) {
+				stack.splice(index, 1);
+				stack.push(surface);
+				surfaceStackByDocument.set(surface.doc, stack);
+				refreshSurfaceStack(surface.doc);
+			}
+			surface.focusFromStack();
+			return true;
+		}
+		function activatePreviousStackSurface(surface) {
+			const stack = getSurfaceStack(surface.doc);
+			const index = stack.indexOf(surface);
+			if (index <= 0) return false;
+			return activateStackSurface(stack[index - 1]);
+		}
 		const registeredComponents = /* @__PURE__ */ new Map();
 		const registeredFieldTypes = /* @__PURE__ */ new Map();
 		const docState = /* @__PURE__ */ new WeakMap();
@@ -751,7 +807,7 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 .rm-root {
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: var(--rm-z);
   pointer-events: none;
@@ -762,6 +818,18 @@ button {
 }
 .rm-root[data-open="true"] {
   pointer-events: auto;
+}
+.rm-root[data-stack-active="false"] {
+  pointer-events: none;
+}
+.rm-root[data-stack-active="false"] .rm-backdrop {
+  opacity: 0 !important;
+}
+.rm-root[data-stack-active="false"] .rm-shell {
+  opacity: var(--rm-stack-opacity, 1);
+}
+.rm-root[data-has-behind="true"] .rm-backdrop {
+  background: rgba(0,0,0,.36);
 }
 .rm-root[data-visual-viewport="true"] {
   inset: auto;
@@ -815,7 +883,7 @@ button {
 }
 .rm-root[data-presentation="bottom-sheet"][data-open="true"] .rm-shell {
   opacity: 1;
-  transform: translate3d(var(--rm-sheet-x), var(--rm-drag-y), 0) scale(1);
+  transform: translate3d(var(--rm-sheet-x), calc(var(--rm-drag-y) + var(--rm-stack-y, 0px)), 0) scale(var(--rm-stack-scale, 1));
 }
 .rm-root[data-presentation="modal"] .rm-shell {
   left: 50%;
@@ -826,7 +894,7 @@ button {
   transform: translate3d(-50%, calc(-50% + 24px), 0) scale(.97);
 }
 .rm-root[data-presentation="modal"][data-open="true"] .rm-shell {
-  transform: translate3d(-50%, -50%, 0) scale(1);
+  transform: translate3d(-50%, calc(-50% + var(--rm-stack-y, 0px)), 0) scale(var(--rm-stack-scale, 1));
 }
 .rm-root[data-presentation="drawer"] .rm-shell {
   border-radius: 0;
@@ -1944,6 +2012,8 @@ button {
 				bodyRight: body?.style.right || "",
 				bodyWidth: body?.style.width || "",
 				bodyOverflow: body?.style.overflow || "",
+				bodyTouchAction: body?.style.touchAction || "",
+				bodyOverscrollBehavior: body?.style.overscrollBehavior || "",
 				scrollX: win.scrollX,
 				scrollY: win.scrollY
 			};
@@ -1958,18 +2028,12 @@ button {
 				doc.documentElement.style.overscrollBehavior = "none";
 				if (scrollbar > 0) doc.documentElement.style.paddingRight = `${scrollbar}px`;
 				if (body) {
-					state.bodyPosition = body.style.position;
-					state.bodyTop = body.style.top;
-					state.bodyLeft = body.style.left;
-					state.bodyRight = body.style.right;
-					state.bodyWidth = body.style.width;
 					state.bodyOverflow = body.style.overflow;
-					body.style.position = "fixed";
-					body.style.top = `${-state.scrollY}px`;
-					body.style.left = `${-state.scrollX}px`;
-					body.style.right = "0";
-					body.style.width = "100%";
+					state.bodyTouchAction = body.style.touchAction;
+					state.bodyOverscrollBehavior = body.style.overscrollBehavior;
 					body.style.overflow = "hidden";
+					body.style.touchAction = "none";
+					body.style.overscrollBehavior = "none";
 				}
 			}
 			state.count += 1;
@@ -1980,23 +2044,16 @@ button {
 			if (!state) return;
 			state.count = Math.max(0, state.count - 1);
 			if (state.count === 0) {
-				const win = getOwnerWindow(doc);
 				const body = doc.body;
 				doc.documentElement.style.overflow = state.overflow;
 				doc.documentElement.style.paddingRight = state.paddingRight;
 				doc.documentElement.style.overscrollBehavior = state.overscrollBehavior;
 				if (body) {
-					body.style.position = state.bodyPosition;
-					body.style.top = state.bodyTop;
-					body.style.left = state.bodyLeft;
-					body.style.right = state.bodyRight;
-					body.style.width = state.bodyWidth;
 					body.style.overflow = state.bodyOverflow;
+					body.style.touchAction = state.bodyTouchAction;
+					body.style.overscrollBehavior = state.bodyOverscrollBehavior;
 				}
 				docState.delete(doc);
-				try {
-					win.scrollTo(state.scrollX, state.scrollY);
-				} catch {}
 			}
 		}
 		function getSizeWidth(size) {
@@ -2046,6 +2103,10 @@ button {
 			destroyed = false;
 			resolveResult;
 			previousFocus = null;
+			lastFocusedInside = null;
+			stackIndex = 0;
+			stackTotal = 1;
+			stackActive = true;
 			listeners = [];
 			renderListeners = [];
 			fieldNodes = /* @__PURE__ */ new Map();
@@ -2067,6 +2128,16 @@ button {
 				this.host = createElement(this.doc, "div");
 				this.host.setAttribute(ROOT_ATTR, this.id);
 				this.host.className = "rm-host";
+				this.host.style.position = "fixed";
+				this.host.style.inset = "0";
+				this.host.style.width = "100%";
+				this.host.style.height = "100%";
+				this.host.style.pointerEvents = "none";
+				this.host.style.overflow = "visible";
+				this.host.style.contain = "layout style";
+				this.host.style.isolation = "isolate";
+				this.host.style.backfaceVisibility = "hidden";
+				this.host.style.setProperty("-webkit-backface-visibility", "hidden");
 				const useShadow = globalConfig.shadowRoot && typeof this.host.attachShadow === "function";
 				this.root = useShadow ? this.host.attachShadow({ mode: "open" }) : this.host;
 				appendStyle(this.root, this.schemaValue.css || "");
@@ -2150,6 +2221,9 @@ button {
 					clearPersisted() {
 						return controller.storeHandle.clearPersisted();
 					},
+					bringToFront() {
+						controller.bringToFront();
+					},
 					component(name, props = {}) {
 						return controller.renderNamedComponent(name, props);
 					}
@@ -2183,9 +2257,72 @@ button {
 					persist: () => this.storeHandle.persist(),
 					hydrate: () => this.storeHandle.hydrate(),
 					clearPersisted: () => this.storeHandle.clearPersisted(),
+					bringToFront: () => this.bringToFront(),
 					destroy: () => this.destroy()
 				};
 				this.mount();
+			}
+			isDestroyedForStack() {
+				return this.destroyed;
+			}
+			getStackConfig() {
+				const local = this.schemaValue.stack;
+				if (local === false) return {
+					...globalConfig.stack,
+					enabled: false
+				};
+				if (local === true || local == null) return { ...globalConfig.stack };
+				return {
+					...globalConfig.stack,
+					...local
+				};
+			}
+			isStackTop() {
+				return isTopStackSurface(this);
+			}
+			applyStackState(index, total) {
+				this.stackIndex = index;
+				this.stackTotal = Math.max(1, total);
+				this.stackActive = index === total - 1;
+				const config = this.getStackConfig();
+				const depth = Math.max(0, total - 1 - index);
+				const visibleDepth = Math.min(depth, Math.max(0, config.maxVisible - 1));
+				const hiddenByDepth = depth >= Math.max(1, config.maxVisible);
+				const visuallyStacked = config.enabled && total > 1;
+				const baseZ = this.schemaValue.zIndex ?? globalConfig.zIndex;
+				this.host.style.zIndex = String(baseZ + index);
+				this.host.dataset.stackActive = String(this.stackActive);
+				this.host.dataset.stackDepth = String(depth);
+				const root = this.root.querySelector(".rm-root");
+				if (!root) return;
+				root.dataset.stackActive = String(this.stackActive);
+				root.dataset.stackDepth = String(depth);
+				root.dataset.stackCount = String(total);
+				root.dataset.hasBehind = String(this.stackActive && total > 1 && visuallyStacked);
+				root.style.setProperty("--rm-stack-y", visuallyStacked && !this.stackActive ? `${-visibleDepth * config.offsetPx}px` : "0px");
+				root.style.setProperty("--rm-stack-scale", visuallyStacked && !this.stackActive ? String(Math.max(.9, 1 - visibleDepth * config.scaleStep)) : "1");
+				root.style.setProperty("--rm-stack-opacity", hiddenByDepth || !config.enabled && !this.stackActive ? "0" : "1");
+				root.style.visibility = hiddenByDepth || !config.enabled && !this.stackActive ? "hidden" : "visible";
+				const shell = root.querySelector(".rm-shell");
+				if (shell) {
+					shell.setAttribute("aria-hidden", String(!this.stackActive));
+					if ("inert" in shell) shell.inert = !this.stackActive;
+				}
+			}
+			bringToFront() {
+				if (this.destroyed) return;
+				activateStackSurface(this);
+			}
+			focusFromStack() {
+				if (this.destroyed || !this.stackActive) return;
+				this.win.requestAnimationFrame(() => {
+					if (this.destroyed || !this.isStackTop()) return;
+					if (this.lastFocusedInside?.isConnected) try {
+						this.lastFocusedInside.focus({ preventScroll: true });
+						return;
+					} catch {}
+					this.focusInitial();
+				});
 			}
 			buildInitialValues(schema) {
 				const result = { ...schema.initialValues || {} };
@@ -2239,9 +2376,10 @@ button {
 			}
 			mount() {
 				this.previousFocus = this.doc.activeElement;
-				(globalConfig.mount?.(this.doc) || this.doc.body || this.doc.documentElement).append(this.host);
+				(globalConfig.mount?.(this.doc) || this.doc.documentElement).append(this.host);
 				this.render();
 				activeHandles.set(this.id, this.handle);
+				registerSurfaceInStack(this);
 				if (this.schemaValue.scrollLock !== false) lockDocumentScroll(this.doc);
 				this.bindGlobalEvents();
 				this.setupScrollIsolation();
@@ -2291,7 +2429,12 @@ button {
 				const backdrop = this.renderComponent("backdrop", () => createElement(this.doc, "div"));
 				backdrop.classList.add("rm-backdrop");
 				if (this.schemaValue.closeOnBackdrop !== false && this.schemaValue.dismissible !== false) backdrop.addEventListener("pointerdown", (event) => {
-					if (event.target === backdrop) this.finish("dismiss", void 0, "backdrop");
+					if (event.target !== backdrop || !this.isStackTop()) return;
+					const stackConfig = this.getStackConfig();
+					if (stackConfig.enabled && stackConfig.backdropClick === "previous" && this.stackTotal > 1) {
+						if (activatePreviousStackSurface(this)) return;
+					}
+					this.finish("dismiss", void 0, "backdrop");
 				});
 				const shell = this.renderComponent("shell", () => createElement(this.doc, "section"));
 				shell.classList.add("rm-shell");
@@ -2324,6 +2467,7 @@ button {
 				this.root.append(root);
 				if (root.dataset.presentation === "bottom-sheet") this.bindBottomSheetGestures(root, shell);
 				this.refreshDynamicState();
+				if (getSurfaceStack(this.doc).includes(this)) refreshSurfaceStack(this.doc);
 			}
 			renderHeader() {
 				return this.renderComponent("header", () => this.renderHeaderDefault());
@@ -3628,7 +3772,7 @@ button {
 			}
 			bindGlobalEvents() {
 				const keydown = (event) => {
-					if (this.destroyed || this.settled) return;
+					if (this.destroyed || this.settled || !this.isStackTop()) return;
 					const shortcutAction = this.schemaValue.actions?.find((action) => action.shortcut && matchesShortcut(event, action.shortcut));
 					if (shortcutAction) {
 						event.preventDefault();
@@ -3651,8 +3795,16 @@ button {
 						}
 					}
 				};
+				const focusin = (event) => {
+					const target = event.composedPath()[0];
+					if (target instanceof this.win.HTMLElement && this.root.contains(target)) this.lastFocusedInside = target;
+				};
 				this.doc.addEventListener("keydown", keydown, true);
-				this.listeners.push(() => this.doc.removeEventListener("keydown", keydown, true));
+				this.host.addEventListener("focusin", focusin, true);
+				this.listeners.push(() => {
+					this.doc.removeEventListener("keydown", keydown, true);
+					this.host.removeEventListener("focusin", focusin, true);
+				});
 			}
 			handleTab(event) {
 				const focusable = this.getFocusable();
@@ -3691,6 +3843,7 @@ button {
 				return node instanceof this.win.HTMLTextAreaElement || node instanceof this.win.HTMLSelectElement || node.isContentEditable;
 			}
 			focusInitial() {
+				if (!this.isStackTop()) return;
 				const config = this.getKeyboardConfig();
 				if (config.autoFocus === "never") return;
 				const explicit = this.root.querySelector("[autofocus]");
@@ -3705,6 +3858,7 @@ button {
 				this.getFocusable()[0]?.focus({ preventScroll: true });
 			}
 			keepFocusedFieldVisible() {
+				if (!this.isStackTop()) return;
 				const config = this.getKeyboardConfig();
 				if (!config.keepFocusedFieldVisible) return;
 				const active = this.getDeepActiveElement();
@@ -3812,6 +3966,7 @@ button {
 					return body && body.scrollHeight > body.clientHeight + 1 ? body : null;
 				};
 				const onTouchStart = (event) => {
+					if (!this.isStackTop()) return;
 					if (!pathHasHost(event) || event.touches.length !== 1) return;
 					const touch = event.touches[0];
 					lastTouchX = touch.clientX;
@@ -3819,6 +3974,7 @@ button {
 					touchStartedInHorizontalScroller = event.composedPath().some((item) => item instanceof this.win.Element && !!item.closest?.(".rm-tabs"));
 				};
 				const onTouchMove = (event) => {
+					if (!this.isStackTop()) return;
 					if (!event.cancelable || event.touches.length !== 1) return;
 					if (!pathHasHost(event)) {
 						event.preventDefault();
@@ -3850,6 +4006,7 @@ button {
 					touchStartedInHorizontalScroller = false;
 				};
 				const onWheel = (event) => {
+					if (!this.isStackTop()) return;
 					if (!event.cancelable) return;
 					if (!pathHasHost(event)) {
 						event.preventDefault();
@@ -3966,7 +4123,7 @@ button {
 					shell.style.transition = "";
 				};
 				const touchStart = (event) => {
-					if (event.touches.length !== 1) return;
+					if (!this.isStackTop() || event.touches.length !== 1) return;
 					const touch = event.touches[0];
 					tracking = true;
 					dragging = false;
@@ -4206,10 +4363,14 @@ button {
 				for (const off of this.listeners.splice(0)) try {
 					off();
 				} catch {}
+				const wasTop = this.isStackTop();
 				activeHandles.delete(this.id);
+				unregisterSurfaceFromStack(this);
 				if (this.schemaValue.scrollLock !== false) unlockDocumentScroll(this.doc);
 				this.host.remove();
-				if (this.schemaValue.restoreFocus !== false && this.previousFocus instanceof HTMLElement && this.previousFocus.isConnected) try {
+				const remainingStack = getSurfaceStack(this.doc);
+				if (wasTop && remainingStack.length) remainingStack[remainingStack.length - 1].focusFromStack();
+				else if (!remainingStack.length && this.schemaValue.restoreFocus !== false && this.previousFocus instanceof HTMLElement && this.previousFocus.isConnected) try {
 					this.previousFocus.focus({ preventScroll: true });
 				} catch {}
 				if (resolveIfNeeded && !this.settled) {
@@ -4714,6 +4875,10 @@ button {
 						...globalConfig.dependencyUrls,
 						...config.dependencyUrls
 					} : globalConfig.dependencyUrls,
+					stack: config.stack ? {
+						...globalConfig.stack,
+						...config.stack
+					} : globalConfig.stack,
 					gestures: config.gestures ? {
 						...globalConfig.gestures,
 						...config.gestures
@@ -4747,6 +4912,7 @@ button {
 				return Object.freeze({
 					...globalConfig,
 					dependencyUrls: Object.freeze({ ...globalConfig.dependencyUrls }),
+					stack: Object.freeze({ ...globalConfig.stack }),
 					gestures: Object.freeze({ ...globalConfig.gestures }),
 					keyboard: Object.freeze({ ...globalConfig.keyboard }),
 					defaultSchema: Object.freeze({ ...globalConfig.defaultSchema }),
@@ -4759,6 +4925,7 @@ button {
 				globalConfig = {
 					...defaultConfig,
 					dependencyUrls: { ...defaultDependencyUrls },
+					stack: { ...defaultStackConfig },
 					gestures: { ...defaultGestureConfig },
 					keyboard: { ...defaultKeyboardConfig },
 					defaultSchema: {},
@@ -4817,6 +4984,13 @@ button {
 			loadDependencies,
 			get(id) {
 				return activeHandles.get(id);
+			},
+			activate(id) {
+				const surface = getSurfaceStack(resolveDocument()).find((item) => item.id === id);
+				return surface ? activateStackSurface(surface) : false;
+			},
+			stack() {
+				return getSurfaceStack(resolveDocument()).map((surface) => activeHandles.get(surface.id)).filter((handle) => !!handle);
 			},
 			closeAll(reason = "replaced") {
 				for (const handle of Array.from(activeHandles.values())) handle.dismiss(reason);
