@@ -3,7 +3,7 @@
 
 /*
  * Rod Super Toaster
- * Version 4.9.1
+ * Version 4.9.2
  *
  * Browser-first, bundler-optional TypeScript IIFE.
  * Compile with: tsc --target ES2022 --lib ES2022,DOM --strict
@@ -12,7 +12,7 @@
 (function installRodToaster(globalWindow: Window & typeof globalThis): void {
   "use strict";
 
-  const VERSION = "4.9.1" as const;
+  const VERSION = "4.9.2" as const;
   const TOAST_GLOBAL = "RodToaster" as const;
   const INSPECTOR_GLOBAL = "RodObjectInspector" as const;
   const TOAST_HOST_ID = "__rod-super-toaster-host__";
@@ -3242,18 +3242,51 @@
       }
 
       .rod-multi-loading__list {
-        display: flex;
-        flex-direction: column;
-        gap: 0;
+        position: relative;
+        display: block;
         min-height: 0;
+        height: var(--rod-multi-list-height, min(42dvh, 440px));
         max-height: var(--rod-multi-list-height, min(42dvh, 440px));
         overflow-x: hidden;
-        overflow-y: auto;
+        overflow-y: scroll;
         overscroll-behavior: contain;
+        touch-action: pan-y;
+        pointer-events: auto;
         -webkit-overflow-scrolling: touch;
         scrollbar-width: thin;
         scrollbar-color: var(--rod-border-strong) transparent;
         scrollbar-gutter: stable;
+        contain: layout paint;
+      }
+
+      .rod-multi-loading__virtual-space {
+        position: relative;
+        display: block;
+        width: 100%;
+        min-width: 0;
+        min-height: 100%;
+      }
+
+      .rod-multi-loading__virtual-space[data-virtualized="true"] {
+        contain: layout size style;
+      }
+
+      .rod-multi-loading__item[data-virtualized="true"] {
+        position: absolute;
+        top: var(--rod-multi-virtual-top, 0);
+        right: 0;
+        left: 0;
+        width: 100%;
+        min-height: 0;
+        max-height: none;
+        contain: layout paint style;
+      }
+
+
+      .rod-multi-loading__list[data-empty="true"] {
+        height: auto;
+        min-height: 90px;
+        overflow-y: hidden;
       }
 
       .rod-multi-loading__empty {
@@ -3526,6 +3559,7 @@
           padding: 0;
         }
         .rod-multi-loading__list {
+          height: min(41dvh, 350px);
           max-height: min(41dvh, 350px);
         }
         .rod-multi-loading__item {
@@ -6055,6 +6089,19 @@
   }
 
 
+  interface MultiLoadingItemView {
+    node: HTMLDivElement;
+    lead: HTMLDivElement;
+    copy: HTMLDivElement;
+    titleNode: HTMLDivElement;
+    descriptionNode: HTMLDivElement;
+    progressNode: HTMLDivElement;
+    progressLabelNode: HTMLSpanElement;
+    actionsNode: HTMLDivElement;
+    retryButton: HTMLButtonElement;
+    cancelButton: HTMLButtonElement;
+  }
+
   interface MultiLoadingInternalItem {
     descriptor: MultiLoadingItemDescriptor;
     id: string;
@@ -6066,19 +6113,10 @@
     metadata: UnknownRecord;
     error: unknown;
     abortController: AbortController;
-    node: HTMLDivElement;
-    lead: HTMLDivElement;
-    copy: HTMLDivElement;
-    titleNode: HTMLDivElement;
-    descriptionNode: HTMLDivElement;
-    progressNode: HTMLDivElement;
-    progressLabelNode: HTMLSpanElement;
-    actionsNode: HTMLDivElement;
-    retryButton: HTMLButtonElement;
-    cancelButton: HTMLButtonElement;
     successTimer: number | null;
     removing: boolean;
     running: boolean;
+    view: MultiLoadingItemView | null;
   }
 
   function showMultiLoadingToast(descriptor: MultiLoadingDescriptor = {}): MultiLoadingController | null {
@@ -6125,16 +6163,38 @@
     const clearButton = documentRef.createElement("button");
     const cancelAllButton = documentRef.createElement("button");
     const list = documentRef.createElement("div");
+    const virtualSpace = documentRef.createElement("div");
     const empty = documentRef.createElement("div");
-    const items = new Map<string, MultiLoadingInternalItem>();
 
-    // Aggregate state is independent from live DOM rows. Rows are allowed to
-    // fade out, but the batch header keeps the work already accounted for.
+    const items = new Map<string, MultiLoadingInternalItem>();
+    let order: MultiLoadingInternalItem[] = [];
+
+    // Aggregate state is deliberately independent from live rows. A completed
+    // row may disappear from the viewport while its contribution remains in the
+    // batch total. The scalar avoids O(n) summation on every progress update.
     const aggregateProgressById = new Map<string, number>();
     const aggregateCompletedIds = new Set<string>();
     const aggregateCancelledIds = new Set<string>();
+    let aggregateContribution = 0;
+    let aggregateTotal = 0;
+
+    // Live counters are also incremental. Updating one item remains O(1), even
+    // when the batch contains tens of thousands of descriptors.
+    let activeCount = 0;
+    let successCount = 0;
+    let errorCount = 0;
+    let cancelledCount = 0;
+    let clearableCount = 0;
+
     let nextId = 1;
     let dismissed = false;
+    let virtualFrame: number | null = null;
+    let compactFrame: number | null = null;
+    let autoDismissTimer: number | null = null;
+    let lastVirtualStart = -1;
+    let lastVirtualEnd = -1;
+    let lastVirtualCount = -1;
+    let batchDepth = 0;
 
     node.dataset.multiLoading = "true";
     root.className = "rod-multi-loading";
@@ -6150,13 +6210,19 @@
     aggregateBar.className = "rod-multi-loading__aggregate-bar";
     headerActions.className = "rod-multi-loading__header-actions";
     list.className = "rod-multi-loading__list";
+    virtualSpace.className = "rod-multi-loading__virtual-space";
     empty.className = "rod-multi-loading__empty";
     empty.textContent = String(options.emptyLabel ?? "No active operations.");
 
     titleNode.textContent = String(options.title ?? "Processing items");
     heading.append(titleNode, summaryNode);
 
-    const configureHeaderButton = (button: HTMLButtonElement, icon: SvgIconName, label: string, action: string): void => {
+    const configureHeaderButton = (
+      button: HTMLButtonElement,
+      icon: SvgIconName,
+      label: string,
+      action: string,
+    ): void => {
       button.type = "button";
       button.className = "rod-multi-loading__header-button";
       button.dataset.action = action;
@@ -6167,12 +6233,18 @@
     };
 
     configureHeaderButton(clearButton, "check", "Clear done", "clear");
-    configureHeaderButton(cancelAllButton, "x-circle", String(options.cancelAllLabel ?? "Cancel all"), "cancel-all");
+    configureHeaderButton(
+      cancelAllButton,
+      "x-circle",
+      String(options.cancelAllLabel ?? "Cancel all"),
+      "cancel-all",
+    );
     headerActions.append(clearButton, cancelAllButton);
     header.append(heading, headerActions);
     aggregateMeta.append(aggregatePercent, aggregateCount);
     aggregateTrack.append(aggregateBar);
     aggregate.append(aggregateMeta, aggregateTrack);
+    list.append(virtualSpace);
     root.append(header, aggregate, list);
     content.replaceChildren(root);
 
@@ -6184,13 +6256,26 @@
         ? rawMaxHeight
         : `min(${Math.round(viewportRatio * 100)}dvh,520px)`;
     root.style.setProperty("--rod-multi-max-height", maxHeight);
-    root.style.setProperty("--rod-multi-list-height", `min(${Math.max(16, Math.round(viewportRatio * 100) - 8)}dvh,440px)`);
+    root.style.setProperty(
+      "--rod-multi-list-height",
+      `min(${Math.max(16, Math.round(viewportRatio * 100) - 8)}dvh,440px)`,
+    );
 
     const successDuration = Math.max(400, Number(options.successDuration) || 2200);
     const successMorphDelay = Math.max(0, Number(options.successMorphDelay) || 220);
     const successFadeDuration = Math.max(180, Number(options.successFadeDuration) || 420);
     const cancelledDuration = Math.max(120, Number(options.cancelledDuration) || 650);
     const globalCancellable = options.cancellable !== false;
+    const virtualizeAfter = Math.max(1, Number(options.virtualizeAfter) || 60);
+    const overscanRows = Math.max(2, Math.floor(Number(options.virtualOverscan) || 8));
+
+    const getRowHeight = (): number => {
+      const compactMobile = safeCall(
+        () => hostWindow.matchMedia?.("(max-width: 560px)")?.matches === true,
+        false,
+      );
+      return compactMobile ? 54 : 58;
+    };
 
     const snapshot = (item: MultiLoadingInternalItem): MultiLoadingItemSnapshot => ({
       id: item.id,
@@ -6203,31 +6288,42 @@
       error: item.error,
     });
 
-    const counts = () => {
-      let active = 0;
-      let success = 0;
-      let error = 0;
-      let cancelled = 0;
-      for (const item of items.values()) {
-        if (item.removing) continue;
-        if (item.status === "success") success += 1;
-        else if (item.status === "error") error += 1;
-        else if (item.status === "cancelled") cancelled += 1;
-        else active += 1;
-      }
-      return { active, success, error, cancelled, total: items.size };
+    const statusBucket = (
+      status: MultiLoadingItemStatus,
+    ): "active" | "success" | "error" | "cancelled" => {
+      if (status === "success") return "success";
+      if (status === "error") return "error";
+      if (status === "cancelled") return "cancelled";
+      return "active";
     };
 
+    const adjustBucket = (status: MultiLoadingItemStatus, delta: 1 | -1): void => {
+      switch (statusBucket(status)) {
+        case "active": activeCount += delta; break;
+        case "success": successCount += delta; break;
+        case "error": errorCount += delta; break;
+        case "cancelled": cancelledCount += delta; break;
+      }
+      if (status === "success" || status === "cancelled") clearableCount += delta;
+    };
+
+    const counts = () => ({
+      active: Math.max(0, activeCount),
+      success: Math.max(0, successCount),
+      error: Math.max(0, errorCount),
+      cancelled: Math.max(0, cancelledCount),
+      total: items.size,
+    });
+
     const syncAggregate = (): void => {
-      const total = aggregateProgressById.size;
-      let contribution = 0;
-      for (const progress of aggregateProgressById.values()) contribution += progress;
-      const normalized = total > 0 ? clamp(contribution / total, 0, 1) : 0;
+      const normalized = aggregateTotal > 0
+        ? clamp(aggregateContribution / aggregateTotal, 0, 1)
+        : 0;
       const percent = Math.round(normalized * 100);
       const completed = aggregateCompletedIds.size;
       aggregate.style.setProperty("--rod-multi-aggregate-progress", `${percent}%`);
       aggregatePercent.textContent = `${percent}% concluído`;
-      aggregateCount.textContent = `${completed} de ${total} ${total === 1 ? "item" : "itens"}`;
+      aggregateCount.textContent = `${completed} de ${aggregateTotal} ${aggregateTotal === 1 ? "item" : "itens"}`;
       aggregateTrack.setAttribute("aria-valuemin", "0");
       aggregateTrack.setAttribute("aria-valuemax", "100");
       aggregateTrack.setAttribute("aria-valuenow", String(percent));
@@ -6235,126 +6331,98 @@
       aggregateTrack.setAttribute("aria-label", `Progresso total: ${percent}%`);
     };
 
-    const syncSummary = (): void => {
-      const current = counts();
-      syncAggregate();
+    const maybeScheduleAutoDismiss = (): void => {
+      if (autoDismissTimer !== null) {
+        hostWindow.clearTimeout(autoDismissTimer);
+        autoDismissTimer = null;
+      }
+      if (options.autoDismiss === false || items.size === 0 || activeCount > 0 || errorCount > 0) return;
+      autoDismissTimer = hostWindow.setTimeout(() => {
+        autoDismissTimer = null;
+        if (!dismissed && items.size > 0 && activeCount === 0 && errorCount === 0) {
+          toastController.dismiss("multi-complete");
+        }
+      }, successDuration + successFadeDuration + 120);
+    };
 
-      const cumulativeDone = aggregateCompletedIds.size;
-      const cumulativeCancelled = aggregateCancelledIds.size;
+    const syncSummary = (): void => {
+      syncAggregate();
 
       if (options.showSummary === false) {
         summaryNode.hidden = true;
       } else {
         summaryNode.hidden = false;
         const parts: string[] = [];
-        if (current.active) parts.push(`${current.active} active`);
-        if (current.error) parts.push(`${current.error} failed`);
-        if (cumulativeDone) parts.push(`${cumulativeDone} done`);
-        if (cumulativeCancelled) parts.push(`${cumulativeCancelled} cancelled`);
+        if (activeCount) parts.push(`${activeCount} active`);
+        if (errorCount) parts.push(`${errorCount} failed`);
+        if (aggregateCompletedIds.size) parts.push(`${aggregateCompletedIds.size} done`);
+        if (aggregateCancelledIds.size) parts.push(`${aggregateCancelledIds.size} cancelled`);
         summaryNode.textContent = parts.length ? parts.join(" · ") : "All operations completed";
       }
 
-      const hasClearableRows = [...items.values()].some(
-        (item) => !item.removing && (item.status === "success" || item.status === "cancelled"),
-      );
-      clearButton.hidden = !hasClearableRows;
-      clearButton.disabled = !hasClearableRows;
-      cancelAllButton.hidden = current.active === 0;
-      cancelAllButton.disabled = current.active === 0;
+      clearButton.hidden = clearableCount <= 0;
+      clearButton.disabled = clearableCount <= 0;
+      cancelAllButton.hidden = activeCount <= 0;
+      cancelAllButton.disabled = activeCount <= 0;
       list.dataset.empty = String(items.size === 0);
-      if (!items.size) {
-        if (!empty.isConnected) list.append(empty);
-      } else {
+
+      if (items.size === 0) {
+        virtualSpace.replaceChildren(empty);
+        virtualSpace.style.height = "auto";
+      } else if (empty.isConnected) {
         empty.remove();
       }
 
-      if (options.autoDismiss !== false && current.total > 0 && current.active === 0 && current.error === 0) {
-        hostWindow.setTimeout(() => {
-          if (!dismissed && counts().active === 0 && counts().error === 0) toastController.dismiss("multi-complete");
-        }, successDuration + successFadeDuration + 120);
-      }
+      maybeScheduleAutoDismiss();
     };
 
-    const setLead = (item: MultiLoadingInternalItem, icon: TaskIcon, spin = false): void => {
-      item.lead.dataset.spin = "false";
-      item.lead.replaceChildren();
+    const setLead = (view: MultiLoadingItemView, icon: TaskIcon, spin = false): void => {
+      view.lead.dataset.spin = "false";
+      view.lead.replaceChildren();
       const imageDescriptor = getImageIconDescriptor(icon);
       if (imageDescriptor) {
-        item.lead.append(createImageIcon(documentRef, imageDescriptor));
+        view.lead.append(createImageIcon(documentRef, imageDescriptor));
       } else {
-        const name: SvgIconName = typeof icon === "string" && hasOwn(SVG_ICONS, icon) ? icon : "circle";
-        item.lead.append(createSvgIcon(documentRef, name, 15));
+        const name: SvgIconName = typeof icon === "string" && hasOwn(SVG_ICONS, icon)
+          ? icon
+          : "circle";
+        view.lead.append(createSvgIcon(documentRef, name, 15));
       }
-      item.lead.dataset.spin = String(spin && !imageDescriptor);
+      view.lead.dataset.spin = String(spin && !imageDescriptor);
     };
 
-    const renderItem = (item: MultiLoadingInternalItem): void => {
-      item.node.dataset.status = item.status;
-      item.titleNode.textContent = item.title;
-      item.descriptionNode.textContent = item.description;
-      item.descriptionNode.hidden = !item.description;
-      const percent = item.progress === null ? 0 : Math.round(item.progress * 100);
-      item.node.style.setProperty("--rod-multi-progress", `${percent}%`);
-      item.progressLabelNode.textContent = item.progressLabel ?? (item.progress === null ? "" : `${percent}%`);
-      item.progressNode.hidden = item.progress === null || item.status === "success" || item.status === "error" || item.status === "cancelled";
-      item.retryButton.hidden = item.status !== "error" || typeof item.descriptor.retry !== "function";
-      item.cancelButton.hidden = !globalCancellable || item.descriptor.cancellable === false || item.status === "success" || item.status === "cancelled";
+    const renderItemView = (item: MultiLoadingInternalItem): void => {
+      const view = item.view;
+      if (!view) return;
 
-      if (item.status === "success") setLead(item, "check", false);
-      else if (item.status === "error") setLead(item, "circle-x", false);
-      else if (item.status === "cancelled") setLead(item, "x", false);
+      view.node.dataset.status = item.status;
+      view.titleNode.textContent = item.title;
+      view.descriptionNode.textContent = item.description;
+      view.descriptionNode.hidden = !item.description;
+      const percent = item.progress === null ? 0 : Math.round(item.progress * 100);
+      view.node.style.setProperty("--rod-multi-progress", `${percent}%`);
+      view.progressLabelNode.textContent = item.progressLabel ?? (item.progress === null ? "" : `${percent}%`);
+      view.progressNode.hidden = item.progress === null || item.status === "success" || item.status === "error" || item.status === "cancelled";
+      view.retryButton.hidden = item.status !== "error" || typeof item.descriptor.retry !== "function";
+      view.retryButton.disabled = item.running;
+      view.cancelButton.hidden = !globalCancellable || item.descriptor.cancellable === false || item.status === "success" || item.status === "cancelled";
+
+      if (item.status === "success") setLead(view, "check", false);
+      else if (item.status === "error") setLead(view, "circle-x", false);
+      else if (item.status === "cancelled") setLead(view, "x", false);
       else {
         const persistentIcon = item.descriptor.icon ?? "loader-circle";
-        setLead(item, persistentIcon, item.status === "loading" && !getImageIconDescriptor(persistentIcon));
+        setLead(
+          view,
+          persistentIcon,
+          item.status === "loading" && !getImageIconDescriptor(persistentIcon),
+        );
       }
-      syncSummary();
-    };
-
-    const removeItem = (item: MultiLoadingInternalItem, immediate = false): void => {
-      if (item.removing) return;
-      item.removing = true;
-      if (item.successTimer !== null) hostWindow.clearTimeout(item.successTimer);
-      if (immediate) {
-        item.node.remove();
-        items.delete(item.id);
-        syncSummary();
-        return;
-      }
-      item.node.dataset.removing = "true";
-      hostWindow.setTimeout(() => {
-        item.node.remove();
-        items.delete(item.id);
-        syncSummary();
-      }, successFadeDuration + 40);
-    };
-
-    const completeSuccess = (item: MultiLoadingInternalItem): void => {
-      if (item.successTimer !== null) hostWindow.clearTimeout(item.successTimer);
-
-      // The row stays intact. Its leading status icon changes to the green
-      // check in renderItem(), then the whole row gently fades upward.
-      // This intentionally replaces the old "collapse into a green bubble"
-      // animation without changing the public multiLoading API.
-      const holdDuration = Math.max(0, successMorphDelay + successDuration);
-
-      item.node.dataset.successExit = "false";
-      item.successTimer = hostWindow.setTimeout(() => {
-        if (!item.node.isConnected || item.status !== "success") return;
-
-        item.node.dataset.successExit = "true";
-        item.successTimer = hostWindow.setTimeout(() => {
-          if (!item.node.isConnected || item.status !== "success") return;
-          removeItem(item, true);
-        }, successFadeDuration);
-      }, holdDuration);
     };
 
     let api!: MultiLoadingController;
 
-    const makeItem = (source: MultiLoadingItemDescriptor = {}): MultiLoadingInternalItem => {
-      const id = String(source.id ?? `item-${nextId++}`);
-      const existing = items.get(id);
-      if (existing) return existing;
+    const createItemView = (item: MultiLoadingInternalItem): MultiLoadingItemView => {
       const itemNode = documentRef.createElement("div");
       const lead = documentRef.createElement("div");
       const copy = documentRef.createElement("div");
@@ -6369,7 +6437,7 @@
       const cancel = documentRef.createElement("button");
 
       itemNode.className = "rod-multi-loading__item";
-      itemNode.dataset.multiItemId = id;
+      itemNode.dataset.multiItemId = item.id;
       lead.className = "rod-multi-loading__lead";
       copy.className = "rod-multi-loading__copy";
       itemTitle.className = "rod-multi-loading__item-title";
@@ -6389,13 +6457,172 @@
       retryLabel.textContent = "Retry";
       retry.append(retryLabel);
       cancel.append(createSvgIcon(documentRef, "x", 14));
-      cancel.setAttribute("aria-label", `Cancel ${id}`);
+      cancel.setAttribute("aria-label", `Cancel ${item.id}`);
       cancel.title = "Cancel";
       track.append(bar);
       progress.append(track, progressLabel);
       copy.append(itemTitle, description, progress);
       actions.append(retry, cancel);
       itemNode.append(lead, copy, actions);
+
+      retry.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void api.retry(item.id);
+      });
+      cancel.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void api.cancel(item.id, "user");
+      });
+
+      const view: MultiLoadingItemView = {
+        node: itemNode,
+        lead,
+        copy,
+        titleNode: itemTitle,
+        descriptionNode: description,
+        progressNode: progress,
+        progressLabelNode: progressLabel,
+        actionsNode: actions,
+        retryButton: retry,
+        cancelButton: cancel,
+      };
+      item.view = view;
+      renderItemView(item);
+      return view;
+    };
+
+    const destroyItemView = (item: MultiLoadingInternalItem): void => {
+      if (!item.view) return;
+      item.view.node.remove();
+      item.view = null;
+    };
+
+    const shouldVirtualize = (): boolean => order.length >= virtualizeAfter;
+
+    const renderVirtualWindow = (force = false): void => {
+      virtualFrame = null;
+      if (dismissed || !list.isConnected) return;
+
+      if (items.size === 0) {
+        for (const item of order) destroyItemView(item);
+        virtualSpace.replaceChildren(empty);
+        virtualSpace.style.height = "auto";
+        lastVirtualStart = lastVirtualEnd = lastVirtualCount = -1;
+        return;
+      }
+
+      const virtualized = shouldVirtualize();
+      const rowHeight = getRowHeight();
+      const total = order.length;
+      let start = 0;
+      let end = total;
+
+      if (virtualized) {
+        const viewportHeight = Math.max(rowHeight, list.clientHeight || Math.min(rowHeight * 7, 440));
+        start = Math.max(0, Math.floor(list.scrollTop / rowHeight) - overscanRows);
+        end = Math.min(total, Math.ceil((list.scrollTop + viewportHeight) / rowHeight) + overscanRows);
+      }
+
+      if (!force && start === lastVirtualStart && end === lastVirtualEnd && total === lastVirtualCount) return;
+      lastVirtualStart = start;
+      lastVirtualEnd = end;
+      lastVirtualCount = total;
+
+      virtualSpace.dataset.virtualized = String(virtualized);
+      virtualSpace.style.height = virtualized ? `${total * rowHeight}px` : "auto";
+
+      for (let index = 0; index < total; index += 1) {
+        const item = order[index];
+        const visible = !item.removing && index >= start && index < end;
+        if (!visible) {
+          destroyItemView(item);
+          continue;
+        }
+
+        const view = item.view ?? createItemView(item);
+        if (virtualized) {
+          view.node.dataset.virtualized = "true";
+          view.node.style.setProperty("--rod-multi-virtual-top", `${index * rowHeight}px`);
+          view.node.style.height = `${rowHeight}px`;
+        } else {
+          delete view.node.dataset.virtualized;
+          view.node.style.removeProperty("--rod-multi-virtual-top");
+          view.node.style.removeProperty("height");
+        }
+        if (view.node.parentNode !== virtualSpace) virtualSpace.append(view.node);
+        renderItemView(item);
+      }
+    };
+
+    const scheduleVirtualRender = (force = false): void => {
+      if (force) {
+        if (virtualFrame !== null) {
+          hostWindow.cancelAnimationFrame?.(virtualFrame);
+          virtualFrame = null;
+        }
+        renderVirtualWindow(true);
+        return;
+      }
+      if (virtualFrame !== null) return;
+      const requestFrame = hostWindow.requestAnimationFrame?.bind(hostWindow)
+        ?? ((callback: FrameRequestCallback) => hostWindow.setTimeout(() => callback(performance.now()), 16));
+      virtualFrame = requestFrame(() => renderVirtualWindow(false));
+    };
+
+    const scheduleOrderCompaction = (): void => {
+      if (compactFrame !== null) return;
+      const requestFrame = hostWindow.requestAnimationFrame?.bind(hostWindow)
+        ?? ((callback: FrameRequestCallback) => hostWindow.setTimeout(() => callback(performance.now()), 16));
+      compactFrame = requestFrame(() => {
+        compactFrame = null;
+        order = order.filter((item) => !item.removing && items.get(item.id) === item);
+        lastVirtualStart = lastVirtualEnd = lastVirtualCount = -1;
+        scheduleVirtualRender(true);
+      });
+    };
+
+    list.addEventListener("scroll", () => scheduleVirtualRender(false), { passive: true });
+
+    const resizeObserver = typeof hostWindow.ResizeObserver === "function"
+      ? new hostWindow.ResizeObserver(() => {
+          lastVirtualStart = lastVirtualEnd = lastVirtualCount = -1;
+          scheduleVirtualRender(false);
+        })
+      : null;
+    resizeObserver?.observe(list);
+
+    const registerAggregateItem = (item: MultiLoadingInternalItem): void => {
+      if (aggregateProgressById.has(item.id)) return;
+      const initial = item.status === "success" ? 1 : clamp(item.progress ?? 0, 0, 1);
+      aggregateProgressById.set(item.id, initial);
+      aggregateContribution += initial;
+      aggregateTotal += 1;
+      if (item.status === "success") aggregateCompletedIds.add(item.id);
+      if (item.status === "cancelled") aggregateCancelledIds.add(item.id);
+    };
+
+    const updateAggregateItem = (item: MultiLoadingInternalItem): void => {
+      const previous = aggregateProgressById.get(item.id) ?? 0;
+      const reported = item.status === "success" ? 1 : item.progress ?? previous;
+      const next = Math.max(previous, clamp(reported, 0, 1));
+      if (next !== previous) {
+        aggregateProgressById.set(item.id, next);
+        aggregateContribution += next - previous;
+      }
+      if (item.status === "success") {
+        aggregateCompletedIds.add(item.id);
+        aggregateCancelledIds.delete(item.id);
+      } else if (item.status === "cancelled") {
+        aggregateCancelledIds.add(item.id);
+      }
+    };
+
+    const makeItem = (source: MultiLoadingItemDescriptor = {}): MultiLoadingInternalItem => {
+      const id = String(source.id ?? `item-${nextId++}`);
+      const existing = items.get(id);
+      if (existing) return existing;
 
       const item: MultiLoadingInternalItem = {
         descriptor: { ...source },
@@ -6408,99 +6635,124 @@
         metadata: isUnknownRecord(source.metadata) ? { ...source.metadata } : {},
         error: source.error ?? null,
         abortController: new AbortController(),
-        node: itemNode,
-        lead,
-        copy,
-        titleNode: itemTitle,
-        descriptionNode: description,
-        progressNode: progress,
-        progressLabelNode: progressLabel,
-        actionsNode: actions,
-        retryButton: retry,
-        cancelButton: cancel,
         successTimer: null,
         removing: false,
         running: false,
+        view: null,
       };
 
-      retry.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        void api.retry(id);
-      });
-      cancel.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        void api.cancel(id, "user");
-      });
-
       items.set(id, item);
-      if (!aggregateProgressById.has(id)) {
-        aggregateProgressById.set(id, item.status === "success" ? 1 : item.progress ?? 0);
-      } else if (item.status === "success") {
-        aggregateProgressById.set(id, 1);
+      order.push(item);
+      adjustBucket(item.status, 1);
+      registerAggregateItem(item);
+      if (batchDepth === 0) {
+        syncSummary();
+        scheduleVirtualRender(false);
       }
-      if (item.status === "success") aggregateCompletedIds.add(id);
-      if (item.status === "cancelled") aggregateCancelledIds.add(id);
-      list.append(itemNode);
-      renderItem(item);
       return item;
     };
 
-    const patchItem = (item: MultiLoadingInternalItem, next: Partial<MultiLoadingItemDescriptor> = {}): void => {
+    const patchItem = (
+      item: MultiLoadingInternalItem,
+      next: Partial<MultiLoadingItemDescriptor> = {},
+    ): void => {
+      const previousStatus = item.status;
       item.descriptor = { ...item.descriptor, ...next };
       if (hasOwn(next, "title")) item.title = String(next.title ?? "");
       if (hasOwn(next, "description")) item.description = String(next.description ?? "");
       if (hasOwn(next, "status") && next.status) item.status = next.status;
       if (hasOwn(next, "progress")) item.progress = normalizeProgress(next.progress);
-      if (hasOwn(next, "progressLabel")) item.progressLabel = next.progressLabel == null ? null : String(next.progressLabel);
+      if (hasOwn(next, "progressLabel")) {
+        item.progressLabel = next.progressLabel == null ? null : String(next.progressLabel);
+      }
       if (hasOwn(next, "error")) item.error = next.error;
       if (isUnknownRecord(next.metadata)) item.metadata = { ...item.metadata, ...next.metadata };
 
-      const previousAggregateProgress = aggregateProgressById.get(item.id) ?? 0;
-      const reportedAggregateProgress = item.status === "success"
-        ? 1
-        : item.progress ?? previousAggregateProgress;
-
-      aggregateProgressById.set(
-        item.id,
-        Math.max(previousAggregateProgress, clamp(reportedAggregateProgress, 0, 1)),
-      );
-
-      if (item.status === "success") {
-        aggregateCompletedIds.add(item.id);
-        aggregateCancelledIds.delete(item.id);
-      } else if (item.status === "cancelled") {
-        aggregateCancelledIds.add(item.id);
+      if (previousStatus !== item.status) {
+        adjustBucket(previousStatus, -1);
+        adjustBucket(item.status, 1);
       }
 
-      renderItem(item);
+      updateAggregateItem(item);
+      renderItemView(item);
+      syncSummary();
+    };
+
+    const finalizeRemoval = (item: MultiLoadingInternalItem): void => {
+      if (!items.has(item.id)) return;
+      adjustBucket(item.status, -1);
+      items.delete(item.id);
+      destroyItemView(item);
+      syncSummary();
+      scheduleOrderCompaction();
+    };
+
+    const removeItem = (item: MultiLoadingInternalItem, immediate = false): void => {
+      if (item.removing) return;
+      item.removing = true;
+      if (item.successTimer !== null) {
+        hostWindow.clearTimeout(item.successTimer);
+        item.successTimer = null;
+      }
+
+      const view = item.view;
+      if (immediate || !view?.node.isConnected) {
+        finalizeRemoval(item);
+        return;
+      }
+
+      view.node.dataset.removing = "true";
+      hostWindow.setTimeout(() => finalizeRemoval(item), successFadeDuration + 40);
+    };
+
+    const completeSuccess = (item: MultiLoadingInternalItem): void => {
+      if (item.successTimer !== null) hostWindow.clearTimeout(item.successTimer);
+      const holdDuration = Math.max(0, successMorphDelay + successDuration);
+      if (item.view) item.view.node.dataset.successExit = "false";
+
+      item.successTimer = hostWindow.setTimeout(() => {
+        if (!items.has(item.id) || item.status !== "success") return;
+        const view = item.view;
+        if (view?.node.isConnected) {
+          view.node.dataset.successExit = "true";
+          item.successTimer = hostWindow.setTimeout(() => {
+            if (!items.has(item.id) || item.status !== "success") return;
+            removeItem(item, true);
+          }, successFadeDuration);
+        } else {
+          // Off-screen virtual rows do not need an animation DOM allocation.
+          removeItem(item, true);
+        }
+      }, holdDuration);
     };
 
     api = {
       get id() { return toastController.id; },
       get element() { return node; },
       get size() { return items.size; },
-      get activeCount() { return counts().active; },
-      get errorCount() { return counts().error; },
-      get successCount() { return counts().success; },
+      get activeCount() { return Math.max(0, activeCount); },
+      get errorCount() { return Math.max(0, errorCount); },
+      get successCount() { return Math.max(0, successCount); },
+
       add(source = {}) {
         makeItem(source);
-        syncSummary();
         return api;
       },
+
       update(id, next = {}) {
         const item = items.get(String(id));
         if (!item || item.removing) return api;
         patchItem(item, next);
         return api;
       },
+
       progress(id, value, next = {}) {
         const item = items.get(String(id));
         if (!item || item.removing || item.status === "success" || item.status === "cancelled") return api;
         patchItem(item, { ...next, status: "loading", progress: value });
         return api;
       },
+
       success(id, next = {}) {
         const item = items.get(String(id));
         if (!item || item.removing || item.status === "cancelled") return api;
@@ -6509,6 +6761,7 @@
         completeSuccess(item);
         return api;
       },
+
       error(id, error, next = {}) {
         const item = items.get(String(id));
         if (!item || item.removing || item.status === "cancelled") return api;
@@ -6521,13 +6774,19 @@
         safeCall(() => options.onItemError?.(snapshot(item)), undefined);
         return api;
       },
+
       async retry(id) {
         const item = items.get(String(id));
         if (!item || item.removing || typeof item.descriptor.retry !== "function" || item.running) return api;
         item.running = true;
-        item.retryButton.disabled = true;
+        renderItemView(item);
         item.abortController = new AbortController();
-        patchItem(item, { status: "loading", error: null, progress: null, description: item.descriptor.description ?? "Retrying…" });
+        patchItem(item, {
+          status: "loading",
+          error: null,
+          progress: null,
+          description: item.descriptor.description ?? "Retrying…",
+        });
         try {
           await Promise.resolve().then(() => item.descriptor.retry?.({
             id: item.id,
@@ -6536,7 +6795,9 @@
             progress: (value, next = {}) => api.progress(item.id, value, next),
             update: (next = {}) => api.update(item.id, next),
           }));
-          if (item.abortController.signal.aborted || item.status === "cancelled") throw createAbortError(item.abortController.signal.reason);
+          if (item.abortController.signal.aborted || item.status === "cancelled") {
+            throw createAbortError(item.abortController.signal.reason);
+          }
           api.success(item.id, { description: item.descriptor.description ?? "Completed" });
           return api;
         } catch (error: unknown) {
@@ -6544,9 +6805,10 @@
           return api;
         } finally {
           item.running = false;
-          item.retryButton.disabled = false;
+          renderItemView(item);
         }
       },
+
       async cancel(id, reason = "cancelled") {
         const item = items.get(String(id));
         if (!item || item.removing || item.status === "success" || item.status === "cancelled") return api;
@@ -6569,27 +6831,42 @@
         }
         return api;
       },
+
       async cancelAll(reason = "cancel-all") {
-        await Promise.allSettled([...items.values()].map((item) => api.cancel(item.id, reason)));
+        await Promise.allSettled(
+          [...items.values()].map((item) => api.cancel(item.id, reason)),
+        );
         return api;
       },
+
       remove(id, immediate = false) {
         const item = items.get(String(id));
         if (item) removeItem(item, immediate);
         return api;
       },
+
       clearCompleted(immediate = false) {
         for (const item of [...items.values()]) {
           if (item.status === "success" || item.status === "cancelled") removeItem(item, immediate);
         }
         return api;
       },
+
       get(id) {
         const item = items.get(String(id));
         return item ? snapshot(item) : null;
       },
-      getItems() { return [...items.values()].map(snapshot); },
-      async run<T>(id: string | number, executor: (context: MultiLoadingItemContext) => Promise<T>): Promise<T> {
+
+      getItems() {
+        return order
+          .filter((item) => !item.removing && items.get(item.id) === item)
+          .map(snapshot);
+      },
+
+      async run<T>(
+        id: string | number,
+        executor: (context: MultiLoadingItemContext) => Promise<T>,
+      ): Promise<T> {
         const key = String(id);
         let item = items.get(key);
         if (!item) item = makeItem({ id: key, status: "queued" });
@@ -6606,27 +6883,47 @@
             progress: (value, next = {}) => api.progress(item!.id, value, next),
             update: (next = {}) => api.update(item!.id, next),
           });
-          if (item.abortController.signal.aborted || item.status === "cancelled") throw createAbortError(item.abortController.signal.reason);
+          if (item.abortController.signal.aborted || item.status === "cancelled") {
+            throw createAbortError(item.abortController.signal.reason);
+          }
           api.success(item.id);
           return result;
         } catch (error: unknown) {
           if (item.abortController.signal.aborted || item.status === "cancelled") {
-            if (item.status !== "cancelled") await api.cancel(item.id, item.abortController.signal.reason ?? "aborted");
+            if (item.status !== "cancelled") {
+              await api.cancel(item.id, item.abortController.signal.reason ?? "aborted");
+            }
           } else {
             api.error(item.id, error);
           }
           throw error;
         } finally {
           item.running = false;
+          renderItemView(item);
         }
       },
+
       dismiss(reason = "programmatic", immediate = false) {
         dismissed = true;
+        resizeObserver?.disconnect();
+        if (virtualFrame !== null) {
+          hostWindow.cancelAnimationFrame?.(virtualFrame);
+          virtualFrame = null;
+        }
+        if (compactFrame !== null) {
+          hostWindow.cancelAnimationFrame?.(compactFrame);
+          compactFrame = null;
+        }
+        if (autoDismissTimer !== null) {
+          hostWindow.clearTimeout(autoDismissTimer);
+          autoDismissTimer = null;
+        }
         for (const item of items.values()) {
           if (!item.abortController.signal.aborted && item.status !== "success" && item.status !== "cancelled") {
             item.abortController.abort(reason);
           }
           if (item.successTimer !== null) hostWindow.clearTimeout(item.successTimer);
+          destroyItemView(item);
         }
         toastController.dismiss(reason, immediate);
       },
@@ -6643,8 +6940,18 @@
       void api.cancelAll("user-all");
     });
 
-    for (const item of options.items ?? []) api.add(item);
+    // Batch initial descriptors without rendering a DOM row for every item or
+    // repainting the header thousands of times. makeItem() stores only data;
+    // the final render mounts the visible window plus overscan.
+    batchDepth += 1;
+    try {
+      for (const item of options.items ?? []) makeItem(item);
+    } finally {
+      batchDepth -= 1;
+    }
     syncSummary();
+    scheduleVirtualRender(true);
+
     record.externalUpdate = (next) => {
       if (hasOwn(next, "title")) titleNode.textContent = String(next.title ?? "");
       return toastController;
@@ -6652,6 +6959,7 @@
     syncStackLayout();
     return api;
   }
+
 
   function normalizeActionDescriptors(
     actions: ToastActionDescriptor[] | undefined,
