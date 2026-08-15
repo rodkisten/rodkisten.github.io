@@ -2,7 +2,7 @@
 // @outfile dist/menu.js
 
 /**
- * RodMenu v2.2.4
+ * RodMenu v2.2.5
  * Browser-first declarative menu + form surface engine with adaptive Rod ecosystem integrations.
  *
  * Compile:
@@ -51,13 +51,13 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
 (function installRodMenu(rootWindow: Window & typeof globalThis): void {
   "use strict";
 
-  const VERSION = "2.2.4" as const;
+  const VERSION = "2.2.5" as const;
   const GLOBAL_NAME = "RodMenu" as const;
   const ROOT_ATTR = "data-rod-menu-host";
   const ACTIVE_ATTR = "data-rod-menu-active";
   const ID_PREFIX = "rod-menu";
   const DEFAULT_Z_INDEX = 2147482500;
-  const STYLE_VERSION = "v2.2.4";
+  const STYLE_VERSION = "v2.2.5";
 
   type Awaitable<T> = T | Promise<T>;
   type AnyRecord = Record<string, unknown>;
@@ -2120,6 +2120,63 @@ button {
 .rm-saved-sync {
   display: grid;
   gap: 12px;
+}
+.rm-saved-sync-summary {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--rm-border);
+  border-radius: 14px;
+  background: var(--rm-elevated);
+}
+.rm-saved-sync-summary strong {
+  font: 750 14px/1.25 var(--rm-font);
+  color: var(--rm-text);
+}
+.rm-saved-sync-summary small {
+  font: 500 11px/1.45 var(--rm-font);
+  color: var(--rm-muted);
+}
+.rm-saved-sync-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+.rm-saved-sync-stat {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 8px;
+  border: 1px solid var(--rm-border);
+  border-radius: 12px;
+  background: var(--rm-panel);
+}
+.rm-saved-sync-stat b {
+  font: 800 13px/1 var(--rm-font);
+  color: var(--rm-text);
+}
+.rm-saved-sync-stat span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 9px/1.2 var(--rm-font);
+  color: var(--rm-muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.rm-saved-sync-commands {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.rm-saved-sync-command {
+  width: 100%;
+  min-height: 42px;
+}
+@media (max-width: 420px) {
+  .rm-saved-sync-commands {
+    grid-template-columns: 1fr;
+  }
 }
 
 .rm-media-preview {
@@ -4858,10 +4915,48 @@ button {
     renderItem?: (item: T, index: number, context: RodMenuContext<any>) => Node | string;
   }
 
+  interface RodMenuSavedSyncSnapshot {
+    title?: string;
+    description?: string;
+    total: number;
+    visible?: number;
+    sent: number;
+    unknown?: number;
+    selected: number;
+    pending: number;
+    syncing?: boolean;
+  }
+
+  interface RodMenuSavedSyncCommand {
+    id: string;
+    label: string | ((snapshot: RodMenuSavedSyncSnapshot) => string);
+    variant?: ActionVariant;
+    disabled?: boolean | ((snapshot: RodMenuSavedSyncSnapshot) => boolean);
+    run: (context: {
+      snapshot: RodMenuSavedSyncSnapshot;
+      refresh: () => void;
+    }) => Awaitable<void>;
+  }
+
+  interface RodMenuSavedSyncOptions {
+    title?: string;
+    description?: string;
+    presentation?: Presentation;
+    size?: SurfaceSize;
+    getSnapshot: () => RodMenuSavedSyncSnapshot;
+    commands: readonly RodMenuSavedSyncCommand[];
+    onClose?: (result: RodMenuResult) => void;
+  }
+
+  interface RodMenuSavedSyncHandle extends RodMenuHandle {
+    refresh(): void;
+  }
+
   interface RodMenuPresetApi {
     media<TValues extends AnyRecord = AnyRecord>(options: RodMenuMediaPresetOptions<TValues>): RodMenuHandle<TValues>;
     settings<TValues extends AnyRecord = AnyRecord>(schema: RodMenuSchema<TValues>): RodMenuHandle<TValues>;
     history<T = unknown>(options: RodMenuHistoryPresetOptions<T>): RodMenuHandle;
+    savedSync(options: RodMenuSavedSyncOptions): RodMenuSavedSyncHandle;
     debug(options: RodMenuDebugPresetOptions): RodMenuHandle;
     channelPicker<T extends string = string>(options: {
       title?: string;
@@ -5013,6 +5108,169 @@ button {
         }],
         actions: [{ id: "close", label: "Fechar", role: "cancel", variant: "secondary" }],
       });
+    },
+
+    savedSync(options: RodMenuSavedSyncOptions): RodMenuSavedSyncHandle {
+      let refreshImpl: () => void = () => undefined;
+      let destroyed = false;
+
+      const handle = api.open({
+        title: options.title || "Saved / Bookmarks",
+        description: options.description || "Selecione, confira e sincronize suas mídias.",
+        presentation: options.presentation || "bottom-sheet",
+        size: options.size || "md",
+        store: { persist: false },
+        fields: [{
+          type: "custom",
+          name: "savedSync",
+          render(context) {
+            const doc = context.host.ownerDocument;
+            const root = createElement(doc, "div");
+            root.className = "rm-saved-sync";
+
+            const summary = createElement(doc, "div");
+            summary.className = "rm-saved-sync-summary";
+
+            const summaryTitle = createElement(doc, "strong");
+            const summaryDescription = createElement(doc, "small");
+            summary.append(summaryTitle, summaryDescription);
+
+            const stats = createElement(doc, "div");
+            stats.className = "rm-saved-sync-stats";
+
+            const statNodes = new Map<string, HTMLElement>();
+            const statDefinitions = [
+              ["pending", "Pendentes"],
+              ["selected", "Selecionados"],
+              ["sent", "Enviados"],
+              ["unknown", "Sem check"],
+              ["visible", "Na tela"],
+              ["total", "Vistos"],
+            ] as const;
+
+            for (const [key, label] of statDefinitions) {
+              const card = createElement(doc, "div");
+              card.className = "rm-saved-sync-stat";
+
+              const value = createElement(doc, "b");
+              const copy = createElement(doc, "span");
+              copy.textContent = label;
+
+              card.append(value, copy);
+              stats.append(card);
+              statNodes.set(key, value);
+            }
+
+            const commands = createElement(doc, "div");
+            commands.className = "rm-saved-sync-commands";
+
+            const commandButtons = new Map<string, HTMLButtonElement>();
+
+            const reportSavedSyncError = (error: unknown): void => {
+              try { globalConfig.onError?.(error); } catch {}
+              try {
+                notifyToaster(
+                  "error",
+                  options.title || "Saved / Bookmarks",
+                  error instanceof Error ? error.message : String(error),
+                );
+              } catch {}
+            };
+
+            for (const command of options.commands) {
+              const button = createElement(doc, "button") as HTMLButtonElement;
+              button.type = "button";
+              button.className = "rm-field-button rm-action rm-saved-sync-command";
+              button.dataset.variant = command.variant || "secondary";
+              button.dataset.command = command.id;
+
+              button.addEventListener("click", async () => {
+                if (button.disabled || destroyed) return;
+
+                button.dataset.loading = "true";
+                refreshImpl();
+
+                try {
+                  await command.run({
+                    snapshot: options.getSnapshot(),
+                    refresh: refreshImpl,
+                  });
+                } catch (error) {
+                  reportSavedSyncError(error);
+                } finally {
+                  button.dataset.loading = "false";
+                  refreshImpl();
+                }
+              });
+
+              commandButtons.set(command.id, button);
+              commands.append(button);
+            }
+
+            root.append(summary, stats, commands);
+
+            refreshImpl = () => {
+              if (destroyed || !root.isConnected) return;
+
+              let snapshot: RodMenuSavedSyncSnapshot;
+              try {
+                snapshot = options.getSnapshot();
+              } catch (error) {
+                reportSavedSyncError(error);
+                return;
+              }
+
+              summaryTitle.textContent = snapshot.title || options.title || "Saved / Bookmarks";
+              summaryDescription.textContent = snapshot.description || options.description || "";
+
+              for (const key of ["pending", "selected", "sent", "unknown", "visible", "total"] as const) {
+                const node = statNodes.get(key);
+                if (node) node.textContent = String(Number(snapshot[key] ?? 0));
+              }
+
+              for (const command of options.commands) {
+                const button = commandButtons.get(command.id);
+                if (!button) continue;
+
+                button.textContent = typeof command.label === "function"
+                  ? command.label(snapshot)
+                  : command.label;
+
+                const busy = button.dataset.loading === "true";
+                const disabled = typeof command.disabled === "function"
+                  ? command.disabled(snapshot)
+                  : Boolean(command.disabled);
+
+                button.disabled = busy || Boolean(snapshot.syncing) || disabled;
+              }
+            };
+
+            requestAnimationFrame(refreshImpl);
+            return root;
+          },
+        }],
+        actions: [{
+          id: "close",
+          label: "Fechar",
+          role: "cancel",
+          variant: "secondary",
+        }],
+        onClose(result) {
+          destroyed = true;
+          try {
+            options.onClose?.(result);
+          } catch (error) {
+            try { globalConfig.onError?.(error); } catch {}
+          }
+        },
+      }) as RodMenuSavedSyncHandle;
+
+      Object.defineProperty(handle, "refresh", {
+        value: () => refreshImpl(),
+        enumerable: true,
+      });
+
+      return handle;
     },
 
     debug(options: RodMenuDebugPresetOptions): RodMenuHandle {
