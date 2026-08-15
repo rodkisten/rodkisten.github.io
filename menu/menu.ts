@@ -2,7 +2,7 @@
 // @outfile dist/menu.js
 
 /**
- * RodMenu v2.2.1
+ * RodMenu v2.1.0
  * Browser-first declarative menu + form surface engine with adaptive Rod ecosystem integrations.
  *
  * Compile:
@@ -51,13 +51,13 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
 (function installRodMenu(rootWindow: Window & typeof globalThis): void {
   "use strict";
 
-  const VERSION = "2.2.1" as const;
+  const VERSION = "2.3.0" as const;
   const GLOBAL_NAME = "RodMenu" as const;
   const ROOT_ATTR = "data-rod-menu-host";
   const ACTIVE_ATTR = "data-rod-menu-active";
   const ID_PREFIX = "rod-menu";
   const DEFAULT_Z_INDEX = 2147482500;
-  const STYLE_VERSION = "v2.2.1";
+  const STYLE_VERSION = "v2.3";
 
   type Awaitable<T> = T | Promise<T>;
   type AnyRecord = Record<string, unknown>;
@@ -456,11 +456,6 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     onChange?: (context: RodMenuContext<TValues>) => void;
     onClose?: (result: RodMenuResult<TValues>) => void;
     onError?: (error: unknown, context: RodMenuContext<TValues>) => void;
-    gestures?: Partial<RodMenuGestureConfig>;
-    theme?: Readonly<Record<string, string | number>>;
-    css?: string;
-    components?: Readonly<Record<string, RodMenuComponentRenderer>>;
-    fieldTypes?: Readonly<Record<string, RodMenuFieldRenderer>>;
   }
 
   interface RodMenuResult<TValues extends AnyRecord = AnyRecord> {
@@ -496,7 +491,6 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     persist(): Promise<void>;
     hydrate(): Promise<void>;
     clearPersisted(): Promise<void>;
-    component(name: string, props?: AnyRecord): HTMLElement | null;
   }
 
   interface RodMenuHandle<TValues extends AnyRecord = AnyRecord> {
@@ -521,45 +515,6 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     destroy(): void;
   }
 
-
-
-  interface RodMenuGestureConfig {
-    preventPullToRefresh: boolean;
-    dragFromContent: boolean;
-    dismissThresholdPx: number;
-    dismissThresholdRatio: number;
-    velocityThresholdPxMs: number;
-    activationDistancePx: number;
-  }
-
-  interface RodMenuComponentRenderContext<TValues extends AnyRecord = AnyRecord> {
-    readonly name: string;
-    readonly document: Document;
-    readonly window: Window & typeof globalThis;
-    readonly schema: RodMenuSchema<TValues>;
-    readonly context: RodMenuContext<TValues>;
-    readonly props: Readonly<AnyRecord>;
-    readonly defaultRender: () => HTMLElement;
-    create(tag: string, className?: string): HTMLElement;
-    render(name: string, props?: AnyRecord): HTMLElement | null;
-  }
-
-  type RodMenuComponentRenderer = (context: RodMenuComponentRenderContext<any>) => HTMLElement | null | undefined;
-
-  interface RodMenuFieldRenderContext<TValues extends AnyRecord = AnyRecord> {
-    readonly type: string;
-    readonly field: BaseField & AnyRecord;
-    readonly value: unknown;
-    readonly document: Document;
-    readonly window: Window & typeof globalThis;
-    readonly context: RodMenuContext<TValues>;
-    create(tag: string, className?: string): HTMLElement;
-    commit(value: unknown): void;
-    defaultRender(): HTMLElement;
-  }
-
-  type RodMenuFieldRenderer = (context: RodMenuFieldRenderContext<any>) => HTMLElement | null | undefined;
-
   interface RodMenuDependencyUrls {
     elements: readonly string[];
     toaster: readonly string[];
@@ -572,16 +527,10 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     defaultPresentation: Presentation;
     zIndex: number;
     autoLoadDependencies: boolean;
+    strictDependencies: boolean;
     dependencyTimeoutMs: number;
     dependencyUrls: RodMenuDependencyUrls;
     toasterErrors: boolean;
-    gestures: RodMenuGestureConfig;
-    defaultSchema: Partial<RodMenuSchema<any>>;
-    theme: Readonly<Record<string, string | number>>;
-    css: string;
-    components: Readonly<Record<string, RodMenuComponentRenderer>>;
-    fieldTypes: Readonly<Record<string, RodMenuFieldRenderer>>;
-    refreshActiveOnConfigure: boolean;
     mount?: (doc: Document) => HTMLElement;
     onError?: (error: unknown) => void;
   }
@@ -604,59 +553,21 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     ],
   };
 
-  const defaultGestureConfig: RodMenuGestureConfig = {
-    preventPullToRefresh: true,
-    dragFromContent: true,
-    dismissThresholdPx: 140,
-    dismissThresholdRatio: 0.22,
-    velocityThresholdPxMs: 0.65,
-    activationDistancePx: 5,
-  };
-
   const defaultConfig: RodMenuConfig = {
     shadowRoot: true,
     defaultPresentation: "bottom-sheet",
     zIndex: DEFAULT_Z_INDEX,
     autoLoadDependencies: true,
+    strictDependencies: false,
     dependencyTimeoutMs: 8_000,
     dependencyUrls: defaultDependencyUrls,
     toasterErrors: true,
-    gestures: defaultGestureConfig,
-    defaultSchema: {},
-    theme: {},
-    css: "",
-    components: {},
-    fieldTypes: {},
-    refreshActiveOnConfigure: true,
   };
 
-  let globalConfig: RodMenuConfig = {
-    ...defaultConfig,
-    dependencyUrls: { ...defaultDependencyUrls },
-    gestures: { ...defaultGestureConfig },
-    defaultSchema: {},
-    theme: {},
-    components: {},
-    fieldTypes: {},
-  };
+  let globalConfig: RodMenuConfig = { ...defaultConfig };
   let counter = 0;
   const activeHandles = new Map<string, RodMenuHandle>();
-  const registeredComponents = new Map<string, RodMenuComponentRenderer>();
-  const registeredFieldTypes = new Map<string, RodMenuFieldRenderer>();
-  const docState = new WeakMap<Document, {
-    count: number;
-    overflow: string;
-    paddingRight: string;
-    overscrollBehavior: string;
-    bodyPosition: string;
-    bodyTop: string;
-    bodyLeft: string;
-    bodyRight: string;
-    bodyWidth: string;
-    bodyOverflow: string;
-    scrollX: number;
-    scrollY: number;
-  }>();
+  const docState = new WeakMap<Document, { count: number; overflow: string; paddingRight: string }>();
 
 
   type LooseGlobal = Record<string, unknown> & { document?: Document };
@@ -954,6 +865,12 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
       return existing;
     }
 
+    if (globalConfig.strictDependencies) {
+      const error = new Error(`RodMenu strictDependencies: runtime obrigatório ausente: ${name}.`);
+      markDependency(name, "failed", undefined, error);
+      return null;
+    }
+
     const pending = dependencyPromises.get(name);
     if (pending) return pending;
 
@@ -1034,6 +951,9 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
         if (node && node.ownerDocument === doc) return node;
       } catch {}
     }
+    if (globalConfig.strictDependencies) {
+      throw new Error(`RodMenu strictDependencies: RodElements falhou ao criar <${tag}>.`);
+    }
     return doc.createElement(tag);
   }
 
@@ -1055,7 +975,10 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
 
   function compileStylesheet(source: string): string {
     const cipo = resolveCipo();
-    if (!cipo) return source;
+    if (!cipo) {
+      if (globalConfig.strictDependencies) throw new Error("RodMenu strictDependencies: Cipó não está disponível.");
+      return source;
+    }
 
     try {
       const tag = cipo.sheet?.css;
@@ -1077,6 +1000,9 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
       } catch {}
     }
 
+    if (globalConfig.strictDependencies) {
+      throw new Error("RodMenu strictDependencies: Cipó não conseguiu compilar o stylesheet.");
+    }
     return source;
   }
 
@@ -1111,6 +1037,9 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
 
     if (broto?.store) {
       try { brotoStore = broto.store({ ...snapshot }); } catch {}
+    }
+    if (!brotoStore && globalConfig.strictDependencies) {
+      throw new Error("RodMenu strictDependencies: Broto.store() não está disponível ou falhou.");
     }
 
     const run = (fn: () => void) => {
@@ -1397,8 +1326,6 @@ button {
   pointer-events: none;
   font-family: var(--rm-font);
   color: var(--rm-text);
-  overscroll-behavior: none;
-  -webkit-overflow-scrolling: auto;
 }
 .rm-root[data-open="true"] {
   pointer-events: auto;
@@ -1411,8 +1338,6 @@ button {
   -webkit-backdrop-filter: blur(10px) saturate(130%);
   opacity: 0;
   transition: opacity 240ms var(--rm-ease);
-  touch-action: none;
-  overscroll-behavior: none;
 }
 .rm-root[data-open="true"] .rm-backdrop {
   opacity: 1;
@@ -1428,9 +1353,8 @@ button {
   overflow: hidden;
   opacity: 0;
   transform: translate3d(0, 30px, 0) scale(.985);
-  transition: transform 220ms var(--rm-ease), opacity 180ms ease;
+  transition: transform 280ms var(--rm-ease), opacity 220ms ease;
   will-change: transform, opacity;
-  overscroll-behavior: contain;
 }
 .rm-root[data-open="true"] .rm-shell {
   opacity: 1;
@@ -1446,11 +1370,11 @@ button {
   --rm-sheet-x: 0px;
   --rm-drag-y: 0px;
   opacity: 0;
-  transform: translate3d(var(--rm-sheet-x), calc(18px + var(--rm-drag-y)), 0) scale(.992);
+  transform: translate3d(var(--rm-sheet-x), calc(100% + 24px + var(--rm-drag-y)), 0);
 }
 .rm-root[data-presentation="bottom-sheet"][data-open="true"] .rm-shell {
   opacity: 1;
-  transform: translate3d(var(--rm-sheet-x), var(--rm-drag-y), 0) scale(1);
+  transform: translate3d(var(--rm-sheet-x), var(--rm-drag-y), 0);
 }
 .rm-root[data-presentation="modal"] .rm-shell {
   left: 50%;
@@ -1597,8 +1521,6 @@ button {
   -webkit-overflow-scrolling: touch;
   padding: 0 16px 8px;
   scrollbar-width: thin;
-  touch-action: pan-y;
-  overscroll-behavior-y: contain;
 }
 .rm-section {
   margin: 0 0 14px;
@@ -2063,22 +1985,6 @@ button {
 }
 .rm-tab-panel {
   min-width: 0;
-  transform-origin: center center;
-}
-.rm-tab-panel[data-entering="true"] {
-  animation: rm-tab-panel-enter 170ms cubic-bezier(.2,.75,.25,1) both;
-}
-@keyframes rm-tab-panel-enter {
-  from {
-    opacity: 0;
-    transform: translate3d(10px, 0, 0);
-    filter: blur(1.5px);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-    filter: blur(0);
-  }
 }
 .rm-media-preview {
   display: grid;
@@ -2337,6 +2243,18 @@ button {
   color: var(--rm-muted);
   font: 500 10px/1.2 var(--rm-font);
 }
+.rm-saved-sync { display:grid; gap:12px; }
+.rm-saved-sync-summary { display:grid; gap:4px; padding:12px; border:1px solid var(--rm-border); border-radius:14px; background:var(--rm-elevated); }
+.rm-saved-sync-summary strong { font:750 14px/1.25 var(--rm-font); color:var(--rm-text); }
+.rm-saved-sync-summary small { font:500 11px/1.45 var(--rm-font); color:var(--rm-muted); }
+.rm-saved-sync-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
+.rm-saved-sync-stat { display:grid; gap:2px; min-width:0; padding:9px 8px; border:1px solid var(--rm-border); border-radius:12px; background:var(--rm-panel); }
+.rm-saved-sync-stat b { font:800 13px/1 var(--rm-font); color:var(--rm-text); }
+.rm-saved-sync-stat span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:600 9px/1.2 var(--rm-font); color:var(--rm-muted); text-transform:uppercase; letter-spacing:.04em; }
+.rm-saved-sync-commands { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.rm-saved-sync-command { width:100%; min-height:42px; }
+@media (max-width:420px) { .rm-saved-sync-commands { grid-template-columns:1fr; } }
+
 .rm-history-list {
   display: grid;
   gap: 7px;
@@ -2457,12 +2375,11 @@ button {
     }
   }
 
-  function appendStyle(root: ShadowRoot | HTMLElement, instanceCss = ""): void {
-    const doc = root.ownerDocument;
+  function appendStyle(root: ShadowRoot | HTMLElement): void {
+    const doc = root instanceof ShadowRoot ? root.ownerDocument : root.ownerDocument;
     const style = createElement(doc, "style");
     style.dataset.rodMenuStyle = STYLE_VERSION;
-    const extra = [globalConfig.css, instanceCss].filter(Boolean).join("\n\n");
-    style.textContent = compileStylesheet(extra ? `${css}\n\n${extra}` : css);
+    style.textContent = compileStylesheet(css);
     root.append(style);
   }
 
@@ -2476,48 +2393,19 @@ button {
   }
 
   function lockDocumentScroll(doc: Document): void {
-    const win = getOwnerWindow(doc);
-    const body = doc.body;
     const state = docState.get(doc) ?? {
       count: 0,
       overflow: doc.documentElement.style.overflow,
       paddingRight: doc.documentElement.style.paddingRight,
-      overscrollBehavior: doc.documentElement.style.overscrollBehavior,
-      bodyPosition: body?.style.position || "",
-      bodyTop: body?.style.top || "",
-      bodyLeft: body?.style.left || "",
-      bodyRight: body?.style.right || "",
-      bodyWidth: body?.style.width || "",
-      bodyOverflow: body?.style.overflow || "",
-      scrollX: win.scrollX,
-      scrollY: win.scrollY,
     };
 
     if (state.count === 0) {
+      const win = getOwnerWindow(doc);
       const scrollbar = Math.max(0, win.innerWidth - doc.documentElement.clientWidth);
       state.overflow = doc.documentElement.style.overflow;
       state.paddingRight = doc.documentElement.style.paddingRight;
-      state.overscrollBehavior = doc.documentElement.style.overscrollBehavior;
-      state.scrollX = win.scrollX;
-      state.scrollY = win.scrollY;
       doc.documentElement.style.overflow = "hidden";
-      doc.documentElement.style.overscrollBehavior = "none";
       if (scrollbar > 0) doc.documentElement.style.paddingRight = `${scrollbar}px`;
-
-      if (body) {
-        state.bodyPosition = body.style.position;
-        state.bodyTop = body.style.top;
-        state.bodyLeft = body.style.left;
-        state.bodyRight = body.style.right;
-        state.bodyWidth = body.style.width;
-        state.bodyOverflow = body.style.overflow;
-        body.style.position = "fixed";
-        body.style.top = `${-state.scrollY}px`;
-        body.style.left = `${-state.scrollX}px`;
-        body.style.right = "0";
-        body.style.width = "100%";
-        body.style.overflow = "hidden";
-      }
     }
 
     state.count += 1;
@@ -2529,21 +2417,9 @@ button {
     if (!state) return;
     state.count = Math.max(0, state.count - 1);
     if (state.count === 0) {
-      const win = getOwnerWindow(doc);
-      const body = doc.body;
       doc.documentElement.style.overflow = state.overflow;
       doc.documentElement.style.paddingRight = state.paddingRight;
-      doc.documentElement.style.overscrollBehavior = state.overscrollBehavior;
-      if (body) {
-        body.style.position = state.bodyPosition;
-        body.style.top = state.bodyTop;
-        body.style.left = state.bodyLeft;
-        body.style.right = state.bodyRight;
-        body.style.width = state.bodyWidth;
-        body.style.overflow = state.bodyOverflow;
-      }
       docState.delete(doc);
-      try { win.scrollTo(state.scrollX, state.scrollY); } catch {}
     }
   }
 
@@ -2602,13 +2478,12 @@ button {
     private resolveResult!: (result: RodMenuResult<TValues>) => void;
     private previousFocus: Element | null = null;
     private listeners: Array<() => void> = [];
-    private renderListeners: Array<() => void> = [];
     private fieldNodes = new Map<string, HTMLElement>();
     private inputNodes = new Map<string, HTMLElement>();
     private customNodes = new Map<string, HTMLElement>();
 
     constructor(schema: RodMenuSchema<TValues>) {
-      this.schemaValue = { ...globalConfig.defaultSchema, ...schema } as RodMenuSchema<TValues>;
+      this.schemaValue = { ...schema };
       this.id = schema.id || nextId();
       this.doc = resolveDocument();
       this.win = getOwnerWindow(this.doc);
@@ -2624,7 +2499,7 @@ button {
 
       const useShadow = globalConfig.shadowRoot && typeof this.host.attachShadow === "function";
       this.root = useShadow ? this.host.attachShadow({ mode: "open" }) : this.host;
-      appendStyle(this.root, this.schemaValue.css || "");
+      appendStyle(this.root);
 
       this.result = new Promise<RodMenuResult<TValues>>((resolve) => {
         this.resolveResult = resolve;
@@ -2657,7 +2532,6 @@ button {
         persist() { return controller.storeHandle.persist(); },
         hydrate() { return controller.storeHandle.hydrate(); },
         clearPersisted() { return controller.storeHandle.clearPersisted(); },
-        component(name: string, props: AnyRecord = {}) { return controller.renderNamedComponent(name, props); },
       };
 
       this.persistenceManager = createPersistenceManager(
@@ -2771,15 +2645,12 @@ button {
     }
 
     private render(): void {
-      for (const off of this.renderListeners.splice(0)) {
-        try { off(); } catch {}
-      }
       this.fieldNodes.clear();
       this.inputNodes.clear();
       this.customNodes.clear();
       this.root.querySelector?.(".rm-root")?.remove();
 
-      const root = this.renderComponent("root", () => createElement(this.doc, "div"));
+      const root = createElement(this.doc, "div");
       root.className = `rm-root ${this.schemaValue.className || ""}`.trim();
       root.dataset.open = "false";
       root.dataset.loading = String(this.loading);
@@ -2787,34 +2658,27 @@ button {
       root.dataset.side = this.schemaValue.drawerSide || "right";
       root.style.setProperty("--rm-z", String(this.schemaValue.zIndex ?? globalConfig.zIndex));
       root.style.setProperty("--rm-width", getSizeWidth(this.schemaValue.size));
-      const theme = { ...globalConfig.theme, ...(this.schemaValue.theme || {}) };
-      for (const [name, value] of Object.entries(theme)) {
-        const variable = name.startsWith("--") ? name : `--rm-${name}`;
-        root.style.setProperty(variable, String(value));
-      }
 
-      const backdrop = this.renderComponent("backdrop", () => createElement(this.doc, "div"));
-      backdrop.classList.add("rm-backdrop");
+      const backdrop = createElement(this.doc, "div");
+      backdrop.className = "rm-backdrop";
       if (this.schemaValue.closeOnBackdrop !== false && this.schemaValue.dismissible !== false) {
         backdrop.addEventListener("pointerdown", (event) => {
           if (event.target === backdrop) this.finish("dismiss", undefined, "backdrop");
         });
       }
 
-      const shell = this.renderComponent("shell", () => createElement(this.doc, "section"));
-      shell.classList.add("rm-shell");
+      const shell = createElement(this.doc, "section");
+      shell.className = "rm-shell";
       shell.setAttribute("role", "dialog");
       shell.setAttribute("aria-modal", "true");
       shell.setAttribute("aria-label", this.schemaValue.title || "Menu");
 
       if (this.schemaValue.showHandle !== false && root.dataset.presentation === "bottom-sheet") {
-        const wrap = this.renderComponent("handle", () => {
-          const node = createElement(this.doc, "div");
-          node.innerHTML = '<div class="rm-handle" aria-hidden="true"></div>';
-          return node;
-        });
-        wrap.classList.add("rm-handle-wrap");
+        const wrap = createElement(this.doc, "div");
+        wrap.className = "rm-handle-wrap";
+        wrap.innerHTML = '<div class="rm-handle" aria-hidden="true"></div>';
         shell.append(wrap);
+        if (this.schemaValue.draggable !== false || this.schemaValue.swipeToDismiss !== false) this.bindSwipe(wrap, shell);
       }
 
       shell.append(this.renderHeader());
@@ -2824,8 +2688,8 @@ button {
       globalError.dataset.show = "false";
       shell.append(globalError);
 
-      const body = this.renderComponent("body", () => createElement(this.doc, "div"));
-      body.classList.add("rm-body");
+      const body = createElement(this.doc, "div");
+      body.className = "rm-body";
 
       if (this.schemaValue.fields?.length) {
         body.append(this.renderSection({ fields: this.schemaValue.fields }));
@@ -2844,27 +2708,10 @@ button {
 
       root.append(backdrop, shell);
       this.root.append(root);
-      if (root.dataset.presentation === "bottom-sheet") this.bindBottomSheetGestures(root, shell);
       this.refreshDynamicState();
     }
 
-    private renderHeader(): HTMLElement {
-      return this.renderComponent("header", () => this.renderHeaderDefault());
-    }
-
     private renderTabs(): HTMLElement {
-      return this.renderComponent("tabs", () => this.renderTabsDefault(), { activeTab: this.activeTabId });
-    }
-
-    private renderSection(section: RodMenuSection): HTMLElement {
-      return this.renderComponent("section", () => this.renderSectionDefault(section), { section });
-    }
-
-    private renderActions(): HTMLElement {
-      return this.renderComponent("actions", () => this.renderActionsDefault(), { actions: this.schemaValue.actions || [] });
-    }
-
-    private renderTabsDefault(): HTMLElement {
       const wrapper = createElement(this.doc, "div");
       wrapper.className = "rm-tabs-wrap";
 
@@ -2881,7 +2728,6 @@ button {
         button.type = "button";
         button.className = "rm-tab";
         button.dataset.active = String(tab.id === this.activeTabId);
-        button.dataset.tabId = tab.id;
         button.setAttribute("role", "tab");
         button.setAttribute("aria-selected", String(tab.id === this.activeTabId));
         if (tab.icon) {
@@ -2954,7 +2800,7 @@ button {
       shell.style.setProperty("--rm-popover-shift", align === "start" ? "0%" : align === "end" ? "-100%" : "-50%");
     }
 
-    private renderHeaderDefault(): HTMLElement {
+    private renderHeader(): HTMLElement {
       const header = createElement(this.doc, "header");
       header.className = "rm-header";
       const heading = createElement(this.doc, "div");
@@ -2995,20 +2841,18 @@ button {
       header.append(heading);
 
       if (this.schemaValue.dismissible !== false) {
-        const close = this.renderComponent("closeButton", () => createElement(this.doc, "button"));
-        close.setAttribute("type", "button");
-        close.classList.add("rm-close");
-        close.setAttribute("aria-label", close.getAttribute("aria-label") || "Fechar");
-        if (!close.childNodes.length) {
-          close.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg>';
-        }
+        const close = createElement(this.doc, "button");
+        close.type = "button";
+        close.className = "rm-close";
+        close.setAttribute("aria-label", "Fechar");
+        close.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg>';
         close.addEventListener("click", () => this.finish("dismiss", undefined, "api"));
         header.append(close);
       }
       return header;
     }
 
-    private renderSectionDefault(section: RodMenuSection): HTMLElement {
+    private renderSection(section: RodMenuSection): HTMLElement {
       const wrapper = createElement(this.doc, "section");
       wrapper.className = "rm-section";
       if (section.id) wrapper.dataset.section = section.id;
@@ -3068,32 +2912,6 @@ button {
     }
 
     private renderField(field: RodMenuField): HTMLElement {
-      const renderType = () => {
-        const registered = this.resolveFieldTypeRenderer(field.type);
-        if (registered) {
-          const rendered = registered({
-            type: field.type,
-            field: field as BaseField & AnyRecord,
-            value: this.valuesValue[field.name],
-            document: this.doc,
-            window: this.win,
-            context: this.context,
-            create: (tag, className) => {
-              const node = createElement(this.doc, tag);
-              if (className) node.className = className;
-              return node;
-            },
-            commit: (value) => this.commitField(field, value),
-            defaultRender: () => this.renderFieldDefault(field),
-          });
-          if (rendered) return rendered;
-        }
-        return this.renderFieldDefault(field);
-      };
-      return this.renderComponent("field", renderType, { field, value: this.valuesValue[field.name] });
-    }
-
-    private renderFieldDefault(field: RodMenuField): HTMLElement {
       const row = createElement(this.doc, "div");
       row.className = `rm-field ${field.className || ""}`.trim();
       row.dataset.field = field.name;
@@ -3760,15 +3578,12 @@ button {
       throw new Error(`Unsupported RodMenu field type: ${(field as BaseField).type}`);
     }
 
-    private renderActionsDefault(): HTMLElement {
+    private renderActions(): HTMLElement {
       const footer = createElement(this.doc, "footer");
       footer.className = "rm-actions";
       for (const action of this.schemaValue.actions || []) {
-        const button = this.renderComponent("action", () => {
-          const node = createElement(this.doc, "button");
-          return node;
-        }, { action });
-        button.setAttribute("type", action.role === "submit" ? "submit" : "button");
+        const button = createElement(this.doc, "button");
+        button.type = action.role === "submit" ? "submit" : "button";
         button.className = "rm-action";
         button.dataset.action = action.id;
         button.dataset.variant = action.variant || (action.role === "destructive" ? "danger" : action.role === "cancel" ? "secondary" : "primary");
@@ -4043,82 +3858,17 @@ button {
     }
 
     private setActiveTab(tabId: string): void {
-      const tabs = this.schemaValue.tabs || [];
-      const nextTab = tabs.find((tab) => tab.id === tabId);
-      if (!nextTab || this.activeTabId === tabId || this.destroyed) return;
-
-      const root = this.getRootElement();
-      const shell = root.querySelector<HTMLElement>(".rm-shell");
-      const wrapper = root.querySelector<HTMLElement>(".rm-tabs-wrap");
-      const oldPanel = wrapper?.querySelector<HTMLElement>(".rm-tab-panel");
-      if (!shell || !wrapper || !oldPanel) {
-        this.activeTabId = tabId;
-        this.render();
-        requestAnimationFrame(() => {
-          if (!this.destroyed) this.getRootElement().dataset.open = "true";
-        });
-        return;
-      }
-
-      // Once the user starts navigating tabs, keep the surface height stable.
-      // This prevents the bottom sheet from visually collapsing and reopening
-      // when tabs contain very different amounts of content.
-      const currentHeight = shell.getBoundingClientRect().height;
-      if (currentHeight > 0) {
-        shell.style.height = `${Math.round(currentHeight)}px`;
-        shell.style.maxHeight = `min(92dvh, calc(var(--rm-vvh, 100vh) - 8px))`;
-      }
-
-      for (const tab of tabs) {
-        for (const field of tab.fields || []) {
-          this.fieldNodes.delete(field.name);
-          this.inputNodes.delete(field.name);
-          this.customNodes.delete(field.name);
-        }
-        for (const section of tab.sections || []) {
-          for (const field of section.fields || []) {
-            this.fieldNodes.delete(field.name);
-            this.inputNodes.delete(field.name);
-            this.customNodes.delete(field.name);
-          }
-        }
-      }
-
+      if (!this.schemaValue.tabs?.some((tab) => tab.id === tabId)) return;
+      if (this.activeTabId === tabId) return;
       this.activeTabId = tabId;
-
-      for (const button of Array.from(wrapper.querySelectorAll<HTMLElement>(".rm-tab"))) {
-        const isActive = button.getAttribute("data-tab-id") === tabId;
-        button.dataset.active = String(isActive);
-        button.setAttribute("aria-selected", String(isActive));
-      }
-
-      const panel = createElement(this.doc, "div");
-      panel.className = "rm-tab-panel";
-      panel.dataset.tabPanel = nextTab.id;
-      panel.dataset.entering = "true";
-      panel.setAttribute("role", "tabpanel");
-      if (nextTab.fields?.length) panel.append(this.renderSection({ fields: nextTab.fields }));
-      for (const section of nextTab.sections || []) panel.append(this.renderSection(section));
-
-      oldPanel.replaceWith(panel);
-      this.refreshDynamicState();
-
+      this.render();
       requestAnimationFrame(() => {
-        if (this.destroyed) return;
-        panel.addEventListener("animationend", () => panel.removeAttribute("data-entering"), { once: true });
+        if (!this.destroyed) this.getRootElement().dataset.open = "true";
       });
-    }
-
-    private refreshStyles(): void {
-      const style = this.root.querySelector<HTMLStyleElement>(`style[data-rod-menu-style="${STYLE_VERSION}"]`);
-      if (!style) return;
-      const extra = [globalConfig.css, this.schemaValue.css || ""].filter(Boolean).join("\n\n");
-      style.textContent = compileStylesheet(extra ? `${css}\n\n${extra}` : css);
     }
 
     private update(patch: Partial<RodMenuSchema<TValues>>): void {
       this.schemaValue = { ...this.schemaValue, ...patch };
-      this.refreshStyles();
       this.render();
       requestAnimationFrame(() => { this.getRootElement().dataset.open = "true"; });
     }
@@ -4218,250 +3968,47 @@ button {
       });
     }
 
-    private getGestureConfig(): RodMenuGestureConfig {
-      return { ...globalConfig.gestures, ...(this.schemaValue.gestures || {}) };
-    }
-
-    private findScrollableAncestor(target: EventTarget | null, boundary: HTMLElement): HTMLElement | null {
-      let node = target instanceof this.win.Element ? target : null;
-      while (node && node !== boundary) {
-        if (node instanceof this.win.HTMLElement) {
-          const style = this.win.getComputedStyle(node);
-          const overflowY = style.overflowY;
-          if ((overflowY === "auto" || overflowY === "scroll") && node.scrollHeight > node.clientHeight + 1) return node;
-        }
-        node = node.parentElement;
-      }
-      const body = boundary.querySelector<HTMLElement>(".rm-body");
-      return body && body.scrollHeight > body.clientHeight + 1 ? body : null;
-    }
-
-    private bindBottomSheetGestures(root: HTMLElement, shell: HTMLElement): void {
-      const config = this.getGestureConfig();
-      if (!config.preventPullToRefresh && this.schemaValue.draggable === false && this.schemaValue.swipeToDismiss === false) return;
-
-      let tracking = false;
-      let dragging = false;
-      let startedOnHandle = false;
-      let startX = 0;
+    private bindSwipe(handle: HTMLElement, shell: HTMLElement): void {
       let startY = 0;
-      let lastY = 0;
-      let startTime = 0;
       let currentY = 0;
-      let scrollable: HTMLElement | null = null;
-      let directionLocked = false;
-      let verticalGesture = false;
-
-      const reset = () => {
-        tracking = false;
-        dragging = false;
-        startedOnHandle = false;
-        currentY = 0;
-        scrollable = null;
-        directionLocked = false;
-        verticalGesture = false;
-        shell.style.transition = "";
-      };
-
-      const touchStart = (event: TouchEvent) => {
-        if (event.touches.length !== 1) return;
-        const touch = event.touches[0];
-        tracking = true;
-        dragging = false;
-        startX = touch.clientX;
-        startY = touch.clientY;
-        lastY = touch.clientY;
-        startTime = performance.now();
-        currentY = 0;
-        directionLocked = false;
-        verticalGesture = false;
-        const target = event.composedPath()[0] as EventTarget | undefined;
-        const element = target instanceof this.win.Element ? target : null;
-        startedOnHandle = !!element?.closest?.(".rm-handle-wrap");
-        scrollable = this.findScrollableAncestor(target || event.target, shell);
-      };
-
-      const touchMove = (event: TouchEvent) => {
-        if (!tracking || event.touches.length !== 1) return;
-        const touch = event.touches[0];
-        const dx = touch.clientX - startX;
-        const dy = touch.clientY - startY;
-        lastY = touch.clientY;
-
-        if (!directionLocked && Math.max(Math.abs(dx), Math.abs(dy)) >= config.activationDistancePx) {
-          directionLocked = true;
-          verticalGesture = Math.abs(dy) >= Math.abs(dx);
-        }
-        if (!directionLocked || !verticalGesture) return;
-
-        const contentAtTop = !scrollable || scrollable.scrollTop <= 0;
-        const canDrag = this.schemaValue.draggable !== false && (startedOnHandle || config.dragFromContent);
-        const pullingDown = dy > 0;
-
-        if (pullingDown && contentAtTop) {
-          if (event.cancelable && config.preventPullToRefresh) event.preventDefault();
-          event.stopPropagation();
-          if (canDrag) {
-            if (!dragging) {
-              dragging = true;
-              shell.style.transition = "none";
-            }
-            currentY = Math.max(0, dy);
-            shell.style.setProperty("--rm-drag-y", `${currentY}px`);
-          }
-          return;
-        }
-
-        if (dragging) {
-          if (event.cancelable) event.preventDefault();
-          currentY = Math.max(0, dy);
-          shell.style.setProperty("--rm-drag-y", `${currentY}px`);
-          return;
-        }
-
-        // A root-level downward overscroll must never leak to Safari's pull-to-refresh.
-        if (pullingDown && !scrollable && config.preventPullToRefresh && event.cancelable) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-      };
-
-      const finishGesture = () => {
-        if (!tracking) return;
-        const elapsed = Math.max(1, performance.now() - startTime);
-        const velocity = Math.max(0, (lastY - startY) / elapsed);
-        const threshold = Math.min(config.dismissThresholdPx, shell.getBoundingClientRect().height * config.dismissThresholdRatio);
-        const shouldDismiss = dragging
-          && this.schemaValue.swipeToDismiss !== false
-          && this.schemaValue.dismissible !== false
-          && (currentY >= threshold || (currentY > config.activationDistancePx * 2 && velocity >= config.velocityThresholdPxMs));
-
-        shell.style.transition = "";
-        if (shouldDismiss) {
-          this.finish("dismiss", undefined, "swipe");
-        } else {
-          shell.style.removeProperty("--rm-drag-y");
-        }
-        reset();
-      };
-
-      let pointerDragging = false;
+      let dragging = false;
       let pointerId = -1;
-      let pointerStartY = 0;
-      let pointerCurrentY = 0;
-      let pointerStartTime = 0;
-      const handle = shell.querySelector<HTMLElement>(".rm-handle-wrap");
 
-      const pointerDown = (event: PointerEvent) => {
-        if (!handle || event.pointerType === "touch" || event.button !== 0 || this.schemaValue.draggable === false) return;
-        pointerDragging = true;
+      const down = (event: PointerEvent) => {
+        if (event.button !== 0) return;
+        dragging = true;
         pointerId = event.pointerId;
-        pointerStartY = event.clientY;
-        pointerCurrentY = 0;
-        pointerStartTime = performance.now();
+        startY = event.clientY;
+        currentY = 0;
         handle.setPointerCapture?.(pointerId);
         shell.style.transition = "none";
-        event.preventDefault();
       };
-      const pointerMove = (event: PointerEvent) => {
-        if (!pointerDragging || event.pointerId !== pointerId) return;
-        pointerCurrentY = Math.max(0, event.clientY - pointerStartY);
-        shell.style.setProperty("--rm-drag-y", `${pointerCurrentY}px`);
-        event.preventDefault();
+      const move = (event: PointerEvent) => {
+        if (!dragging || event.pointerId !== pointerId) return;
+        currentY = Math.max(0, event.clientY - startY);
+        shell.style.setProperty("--rm-drag-y", `${currentY}px`);
       };
-      const pointerUp = (event: PointerEvent) => {
-        if (!pointerDragging || event.pointerId !== pointerId) return;
-        const elapsed = Math.max(1, performance.now() - pointerStartTime);
-        const velocity = pointerCurrentY / elapsed;
-        const threshold = Math.min(config.dismissThresholdPx, shell.getBoundingClientRect().height * config.dismissThresholdRatio);
-        pointerDragging = false;
+      const up = (event: PointerEvent) => {
+        if (!dragging || event.pointerId !== pointerId) return;
+        dragging = false;
         shell.style.transition = "";
-        if (this.schemaValue.swipeToDismiss !== false && this.schemaValue.dismissible !== false && (pointerCurrentY >= threshold || velocity >= config.velocityThresholdPxMs)) {
+        if (currentY > Math.min(140, shell.getBoundingClientRect().height * .22) && this.schemaValue.swipeToDismiss !== false && this.schemaValue.dismissible !== false) {
           this.finish("dismiss", undefined, "swipe");
         } else {
           shell.style.removeProperty("--rm-drag-y");
         }
       };
 
-      const rootTouchMove = (event: TouchEvent) => {
-        if (!config.preventPullToRefresh || !event.cancelable) return;
-        const path = event.composedPath();
-        if (!path.includes(shell)) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-      };
-
-      shell.addEventListener("touchstart", touchStart, { passive: true });
-      shell.addEventListener("touchmove", touchMove, { passive: false });
-      shell.addEventListener("touchend", finishGesture, { passive: true });
-      shell.addEventListener("touchcancel", finishGesture, { passive: true });
-      root.addEventListener("touchmove", rootTouchMove, { passive: false, capture: true });
-      handle?.addEventListener("pointerdown", pointerDown);
-      handle?.addEventListener("pointermove", pointerMove);
-      handle?.addEventListener("pointerup", pointerUp);
-      handle?.addEventListener("pointercancel", pointerUp);
-
-      this.renderListeners.push(() => {
-        shell.removeEventListener("touchstart", touchStart);
-        shell.removeEventListener("touchmove", touchMove);
-        shell.removeEventListener("touchend", finishGesture);
-        shell.removeEventListener("touchcancel", finishGesture);
-        root.removeEventListener("touchmove", rootTouchMove, true);
-        handle?.removeEventListener("pointerdown", pointerDown);
-        handle?.removeEventListener("pointermove", pointerMove);
-        handle?.removeEventListener("pointerup", pointerUp);
-        handle?.removeEventListener("pointercancel", pointerUp);
+      handle.addEventListener("pointerdown", down);
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", up);
+      handle.addEventListener("pointercancel", up);
+      this.listeners.push(() => {
+        handle.removeEventListener("pointerdown", down);
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", up);
+        handle.removeEventListener("pointercancel", up);
       });
-    }
-
-    private resolveComponentRenderer(name: string): RodMenuComponentRenderer | undefined {
-      return this.schemaValue.components?.[name] || registeredComponents.get(name) || globalConfig.components[name];
-    }
-
-    private resolveFieldTypeRenderer(type: string): RodMenuFieldRenderer | undefined {
-      return this.schemaValue.fieldTypes?.[type] || registeredFieldTypes.get(type) || globalConfig.fieldTypes[type];
-    }
-
-    private renderNamedComponent(name: string, props: AnyRecord = {}): HTMLElement | null {
-      const renderer = this.resolveComponentRenderer(name);
-      if (!renderer) return null;
-      return renderer({
-        name,
-        document: this.doc,
-        window: this.win,
-        schema: this.schemaValue,
-        context: this.context,
-        props,
-        defaultRender: () => createElement(this.doc, "div"),
-        create: (tag, className) => {
-          const node = createElement(this.doc, tag);
-          if (className) node.className = className;
-          return node;
-        },
-        render: (nestedName, nestedProps = {}) => this.renderNamedComponent(nestedName, nestedProps),
-      }) || null;
-    }
-
-    private renderComponent(name: string, defaultRender: () => HTMLElement, props: AnyRecord = {}): HTMLElement {
-      const renderer = this.resolveComponentRenderer(name);
-      if (!renderer) return defaultRender();
-      const renderNested = (nestedName: string, nestedProps: AnyRecord = {}): HTMLElement | null => this.renderNamedComponent(nestedName, nestedProps);
-      return renderer({
-        name,
-        document: this.doc,
-        window: this.win,
-        schema: this.schemaValue,
-        context: this.context,
-        props,
-        defaultRender,
-        create: (tag, className) => {
-          const node = createElement(this.doc, tag);
-          if (className) node.className = className;
-          return node;
-        },
-        render: renderNested,
-      }) || defaultRender();
     }
 
     private finish(action: string | "dismiss", data: unknown, reason: RodMenuResult["reason"]): void {
@@ -4488,9 +4035,6 @@ button {
     private destroy(resolveIfNeeded = true): void {
       if (this.destroyed) return;
       this.destroyed = true;
-      for (const off of this.renderListeners.splice(0)) {
-        try { off(); } catch {}
-      }
       for (const off of this.listeners.splice(0)) {
         try { off(); } catch {}
       }
@@ -4564,10 +4108,45 @@ button {
     renderItem?: (item: T, index: number, context: RodMenuContext<any>) => Node | string;
   }
 
+  interface RodMenuSavedSyncSnapshot {
+    title?: string;
+    description?: string;
+    total: number;
+    visible?: number;
+    sent: number;
+    unknown?: number;
+    selected: number;
+    pending: number;
+    syncing?: boolean;
+  }
+
+  interface RodMenuSavedSyncCommand {
+    id: string;
+    label: string | ((snapshot: RodMenuSavedSyncSnapshot) => string);
+    variant?: ActionVariant;
+    disabled?: boolean | ((snapshot: RodMenuSavedSyncSnapshot) => boolean);
+    run: (context: { snapshot: RodMenuSavedSyncSnapshot; refresh: () => void }) => Awaitable<void>;
+  }
+
+  interface RodMenuSavedSyncOptions {
+    title?: string;
+    description?: string;
+    presentation?: Presentation;
+    size?: SurfaceSize;
+    getSnapshot: () => RodMenuSavedSyncSnapshot;
+    commands: readonly RodMenuSavedSyncCommand[];
+    onClose?: (result: RodMenuResult) => void;
+  }
+
+  interface RodMenuSavedSyncHandle extends RodMenuHandle {
+    refresh(): void;
+  }
+
   interface RodMenuPresetApi {
     media<TValues extends AnyRecord = AnyRecord>(options: RodMenuMediaPresetOptions<TValues>): RodMenuHandle<TValues>;
     settings<TValues extends AnyRecord = AnyRecord>(schema: RodMenuSchema<TValues>): RodMenuHandle<TValues>;
     history<T = unknown>(options: RodMenuHistoryPresetOptions<T>): RodMenuHandle;
+    savedSync(options: RodMenuSavedSyncOptions): RodMenuSavedSyncHandle;
     debug(options: RodMenuDebugPresetOptions): RodMenuHandle;
     channelPicker<T extends string = string>(options: {
       title?: string;
@@ -4592,17 +4171,7 @@ button {
     form<TValues extends AnyRecord = AnyRecord>(schema: Omit<RodMenuSchema<TValues>, "actions"> & { actions?: readonly RodMenuAction[] }): Promise<RodMenuResult<TValues>>;
     confirm(options: { title: string; description?: string; confirmLabel?: string; cancelLabel?: string; danger?: boolean; presentation?: Presentation }): Promise<boolean>;
     actions<T extends string = string>(options: { title?: string; description?: string; presentation?: Presentation; anchor?: RodMenuSchema["anchor"]; items: readonly { label: string; value: T; variant?: ActionVariant; icon?: string; badge?: string | number; shortcut?: string }[] }): Promise<T | null>;
-    configure(config: Partial<RodMenuConfig>): RodMenuPublicApi;
-    getConfig(): Readonly<RodMenuConfig>;
-    resetConfig(): RodMenuPublicApi;
-    refreshAll(): void;
-    registerComponent(name: string, renderer: RodMenuComponentRenderer): RodMenuPublicApi;
-    unregisterComponent(name: string): boolean;
-    getComponent(name: string): RodMenuComponentRenderer | undefined;
-    registerFieldType(type: string, renderer: RodMenuFieldRenderer): RodMenuPublicApi;
-    unregisterFieldType(type: string): boolean;
-    hasFieldType(type: string): boolean;
-    field(type: string, config: Omit<BaseField, "type"> & AnyRecord): RodMenuField;
+    configure(config: Partial<RodMenuConfig>): void;
     loadDependencies(): Promise<RodMenuRuntimeStatus>;
     get(id: string): RodMenuHandle | undefined;
     closeAll(reason?: RodMenuResult["reason"]): void;
@@ -4721,6 +4290,107 @@ button {
       });
     },
 
+    savedSync(options: RodMenuSavedSyncOptions): RodMenuSavedSyncHandle {
+      let refreshImpl: () => void = () => undefined;
+      let destroyed = false;
+      const handle = api.open({
+        title: options.title || "Saved / Bookmarks",
+        description: options.description || "Selecione, confira e sincronize suas mídias.",
+        presentation: options.presentation || "bottom-sheet",
+        size: options.size || "md",
+        store: { persist: false },
+        fields: [{
+          type: "custom",
+          name: "savedSync",
+          render(context) {
+            const doc = context.host.ownerDocument;
+            const root = createElement(doc, "div");
+            root.className = "rm-saved-sync";
+
+            const summary = createElement(doc, "div");
+            summary.className = "rm-saved-sync-summary";
+            const summaryTitle = createElement(doc, "strong");
+            const summaryDescription = createElement(doc, "small");
+            summary.append(summaryTitle, summaryDescription);
+
+            const stats = createElement(doc, "div");
+            stats.className = "rm-saved-sync-stats";
+            const statNodes = new Map<string, HTMLElement>();
+            for (const [key, label] of [["pending", "Pendentes"], ["selected", "Selecionados"], ["sent", "Enviados"], ["unknown", "Sem check"], ["visible", "Na tela"], ["total", "Vistos"]] as const) {
+              const card = createElement(doc, "div");
+              card.className = "rm-saved-sync-stat";
+              const value = createElement(doc, "b");
+              const copy = createElement(doc, "span");
+              copy.textContent = label;
+              card.append(value, copy);
+              stats.append(card);
+              statNodes.set(key, value);
+            }
+
+            const commands = createElement(doc, "div");
+            commands.className = "rm-saved-sync-commands";
+            const commandButtons = new Map<string, HTMLButtonElement>();
+            for (const command of options.commands) {
+              const button = createElement(doc, "button") as HTMLButtonElement;
+              button.type = "button";
+              button.className = "rm-field-button rm-action rm-saved-sync-command";
+              button.dataset.variant = command.variant || "secondary";
+              button.dataset.command = command.id;
+              button.addEventListener("click", async () => {
+                if (button.disabled || destroyed) return;
+                button.dataset.loading = "true";
+                refreshImpl();
+                try {
+                  await command.run({ snapshot: options.getSnapshot(), refresh: refreshImpl });
+                } catch (error) {
+                  try { globalConfig.onError?.(error); } catch {}
+                  try { notifyToaster("error", options.title || "Saved / Bookmarks", error instanceof Error ? error.message : String(error)); } catch {}
+                } finally {
+                  button.dataset.loading = "false";
+                  refreshImpl();
+                }
+              });
+              commandButtons.set(command.id, button);
+              commands.append(button);
+            }
+
+            root.append(summary, stats, commands);
+
+            refreshImpl = () => {
+              if (destroyed || !root.isConnected) return;
+              let snapshot: RodMenuSavedSyncSnapshot;
+              try { snapshot = options.getSnapshot(); }
+              catch (error) { try { globalConfig.onError?.(error); } catch {}
+                  try { notifyToaster("error", options.title || "Saved / Bookmarks", error instanceof Error ? error.message : String(error)); } catch {} return; }
+              summaryTitle.textContent = snapshot.title || options.title || "Saved / Bookmarks";
+              summaryDescription.textContent = snapshot.description || options.description || "";
+              for (const key of ["pending", "selected", "sent", "unknown", "visible", "total"] as const) {
+                const node = statNodes.get(key);
+                if (node) node.textContent = String(Number(snapshot[key] ?? 0));
+              }
+              for (const command of options.commands) {
+                const button = commandButtons.get(command.id);
+                if (!button) continue;
+                button.textContent = typeof command.label === "function" ? command.label(snapshot) : command.label;
+                const busy = button.dataset.loading === "true";
+                const disabled = typeof command.disabled === "function" ? command.disabled(snapshot) : Boolean(command.disabled);
+                button.disabled = busy || Boolean(snapshot.syncing) || disabled;
+              }
+            };
+            requestAnimationFrame(refreshImpl);
+            return root;
+          },
+        }],
+        actions: [{ id: "close", label: "Fechar", role: "cancel", variant: "secondary" }],
+        onClose(result) {
+          destroyed = true;
+          try { options.onClose?.(result); } catch (error) { globalConfig.onError?.(error); }
+        },
+      }) as RodMenuSavedSyncHandle;
+      Object.defineProperty(handle, "refresh", { value: () => refreshImpl(), enumerable: true });
+      return handle;
+    },
+
     debug(options: RodMenuDebugPresetOptions): RodMenuHandle {
       const tabs: RodMenuTab[] = [];
       if (options.summary !== undefined) tabs.push({
@@ -4803,7 +4473,7 @@ button {
 
   const api: RodMenuPublicApi = {
     version: VERSION,
-    get config() { return api.getConfig(); },
+    get config() { return Object.freeze({ ...globalConfig, dependencyUrls: { ...globalConfig.dependencyUrls } }); },
     get runtime() {
       return Object.freeze({
         elements: { ...runtimeStatus.elements },
@@ -4852,94 +4522,26 @@ button {
       }).result;
       return result.action === "dismiss" || result.action === "cancel" ? null : result.action as T;
     },
-    configure(config: Partial<RodMenuConfig>): RodMenuPublicApi {
+    configure(config: Partial<RodMenuConfig>): void {
       globalConfig = {
         ...globalConfig,
         ...config,
         dependencyUrls: config.dependencyUrls
           ? { ...globalConfig.dependencyUrls, ...config.dependencyUrls }
           : globalConfig.dependencyUrls,
-        gestures: config.gestures
-          ? { ...globalConfig.gestures, ...config.gestures }
-          : globalConfig.gestures,
-        defaultSchema: config.defaultSchema
-          ? { ...globalConfig.defaultSchema, ...config.defaultSchema }
-          : globalConfig.defaultSchema,
-        theme: config.theme
-          ? { ...globalConfig.theme, ...config.theme }
-          : globalConfig.theme,
-        components: config.components
-          ? { ...globalConfig.components, ...config.components }
-          : globalConfig.components,
-        fieldTypes: config.fieldTypes
-          ? { ...globalConfig.fieldTypes, ...config.fieldTypes }
-          : globalConfig.fieldTypes,
       };
-      if (config.autoLoadDependencies === true) void loadDependencies();
-      if (globalConfig.refreshActiveOnConfigure) api.refreshAll();
-      return api;
-    },
-    getConfig(): Readonly<RodMenuConfig> {
-      return Object.freeze({
-        ...globalConfig,
-        dependencyUrls: Object.freeze({ ...globalConfig.dependencyUrls }),
-        gestures: Object.freeze({ ...globalConfig.gestures }),
-        defaultSchema: Object.freeze({ ...globalConfig.defaultSchema }),
-        theme: Object.freeze({ ...globalConfig.theme }),
-        components: Object.freeze({ ...globalConfig.components }),
-        fieldTypes: Object.freeze({ ...globalConfig.fieldTypes }),
-      });
-    },
-    resetConfig(): RodMenuPublicApi {
-      globalConfig = {
-        ...defaultConfig,
-        dependencyUrls: { ...defaultDependencyUrls },
-        gestures: { ...defaultGestureConfig },
-        defaultSchema: {},
-        theme: {},
-        components: {},
-        fieldTypes: {},
-      };
-      registeredComponents.clear();
-      registeredFieldTypes.clear();
-      api.refreshAll();
-      return api;
-    },
-    refreshAll(): void {
-      for (const handle of Array.from(activeHandles.values())) {
-        try { handle.update({}); } catch (error) { try { globalConfig.onError?.(error); } catch {} }
+      if (globalConfig.strictDependencies) {
+        for (const name of ["elements", "toaster", "cipo", "broto"] as const) {
+          const runtime = dependencyPresent(name);
+          if (!runtime) {
+            const error = new Error(`RodMenu strictDependencies: runtime obrigatório ausente: ${name}.`);
+            markDependency(name, "failed", undefined, error);
+            throw error;
+          }
+          markDependency(name, "native", "window");
+        }
       }
-    },
-    registerComponent(name: string, renderer: RodMenuComponentRenderer): RodMenuPublicApi {
-      if (!name || typeof renderer !== "function") throw new TypeError("registerComponent(name, renderer) requires a name and renderer function.");
-      registeredComponents.set(name, renderer);
-      if (globalConfig.refreshActiveOnConfigure) api.refreshAll();
-      return api;
-    },
-    unregisterComponent(name: string): boolean {
-      const deleted = registeredComponents.delete(name);
-      if (deleted && globalConfig.refreshActiveOnConfigure) api.refreshAll();
-      return deleted;
-    },
-    getComponent(name: string): RodMenuComponentRenderer | undefined {
-      return registeredComponents.get(name) || globalConfig.components[name];
-    },
-    registerFieldType(type: string, renderer: RodMenuFieldRenderer): RodMenuPublicApi {
-      if (!type || typeof renderer !== "function") throw new TypeError("registerFieldType(type, renderer) requires a type and renderer function.");
-      registeredFieldTypes.set(type, renderer);
-      if (globalConfig.refreshActiveOnConfigure) api.refreshAll();
-      return api;
-    },
-    unregisterFieldType(type: string): boolean {
-      const deleted = registeredFieldTypes.delete(type);
-      if (deleted && globalConfig.refreshActiveOnConfigure) api.refreshAll();
-      return deleted;
-    },
-    hasFieldType(type: string): boolean {
-      return registeredFieldTypes.has(type) || typeof globalConfig.fieldTypes[type] === "function";
-    },
-    field(type: string, config: Omit<BaseField, "type"> & AnyRecord): RodMenuField {
-      return { ...config, type } as unknown as RodMenuField;
+      if (config.autoLoadDependencies === true && !globalConfig.strictDependencies) void loadDependencies();
     },
     loadDependencies,
     get(id: string): RodMenuHandle | undefined {
