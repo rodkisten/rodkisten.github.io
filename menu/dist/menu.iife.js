@@ -1,4 +1,4 @@
-/* Auto-generated from menu/menu.ts. at 8/15/2026, 12:21:38 PM Do not edit directly. */
+/* Auto-generated from menu/menu.ts. at 8/15/2026, 12:26:30 PM Do not edit directly. */
 var RodMenu = (function() {
 
 //#region \0rolldown/runtime.js
@@ -22,13 +22,13 @@ var RodMenu = (function() {
 	var menu_exports = /* @__PURE__ */ __exportAll({});
 	(function installRodMenu(rootWindow) {
 		"use strict";
-		const VERSION = "2.2.3";
+		const VERSION = "2.2.4";
 		const GLOBAL_NAME = "RodMenu";
 		const ROOT_ATTR = "data-rod-menu-host";
 		const ACTIVE_ATTR = "data-rod-menu-active";
 		const ID_PREFIX = "rod-menu";
 		const DEFAULT_Z_INDEX = 2147482500;
-		const STYLE_VERSION = "v2.2.3";
+		const STYLE_VERSION = "v2.2.4";
 		const defaultDependencyUrls = {
 			elements: [
 				"https://rod.migos.club/elements/dist/elements.js",
@@ -1448,6 +1448,11 @@ button {
     filter: blur(0);
   }
 }
+.rm-saved-sync {
+  display: grid;
+  gap: 12px;
+}
+
 .rm-media-preview {
   display: grid;
   grid-template-columns: minmax(90px, 34%) minmax(0, 1fr);
