@@ -1,4 +1,4 @@
-/* Auto-generated from menu/menu.ts. at 8/15/2026, 12:30:57 PM Do not edit directly. */
+/* Auto-generated from menu/menu.ts. at 8/15/2026, 12:33:40 PM Do not edit directly. */
 var RodMenu = (function() {
 
 //#region \0rolldown/runtime.js
@@ -22,13 +22,13 @@ var RodMenu = (function() {
 	var menu_exports = /* @__PURE__ */ __exportAll({});
 	(function installRodMenu(rootWindow) {
 		"use strict";
-		const VERSION = "2.2.5";
+		const VERSION = "2.2.6";
 		const GLOBAL_NAME = "RodMenu";
 		const ROOT_ATTR = "data-rod-menu-host";
 		const ACTIVE_ATTR = "data-rod-menu-active";
 		const ID_PREFIX = "rod-menu";
 		const DEFAULT_Z_INDEX = 2147482500;
-		const STYLE_VERSION = "v2.2.5";
+		const STYLE_VERSION = "v2.2.6";
 		const defaultDependencyUrls = {
 			elements: [
 				"https://rod.migos.club/elements/dist/elements.js",
@@ -773,7 +773,7 @@ button {
 .rm-backdrop {
   position: absolute;
   inset: 0;
-  background: rgba(0,0,0,.38);
+  background: rgba(0,0,0,.48);
   opacity: 0;
   transition: opacity 130ms linear;
   touch-action: none;
@@ -977,6 +977,16 @@ button {
   border: 1px solid var(--rm-border);
   overflow: hidden;
 }
+.rm-section[data-bare="true"] {
+  margin: 0 0 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+.rm-section[data-bare="true"] .rm-fields {
+  gap: 12px;
+}
 .rm-section-head {
   padding: 14px 14px 6px;
 }
@@ -1010,6 +1020,11 @@ button {
   padding: 12px 14px;
   border-top: 1px solid var(--rm-border);
   min-width: 0;
+}
+.rm-field[data-chrome="bare"] {
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 .rm-field:first-child {
   border-top: 0;
@@ -2438,6 +2453,8 @@ button {
 				const wrapper = createElement(this.doc, "section");
 				wrapper.className = "rm-section";
 				if (section.id) wrapper.dataset.section = section.id;
+				const isBareSection = !section.title && !section.description && section.fields.length > 0 && section.fields.every((field) => field.chrome === "bare");
+				wrapper.dataset.bare = String(isBareSection);
 				if (section.visibleWhen && !this.safePredicate(section.visibleWhen)) wrapper.hidden = true;
 				let collapsed = !!section.collapsed;
 				let fieldsContainer;
@@ -2517,12 +2534,13 @@ button {
 				row.className = `rm-field ${field.className || ""}`.trim();
 				row.dataset.field = field.name;
 				row.dataset.hidden = String(!!field.hidden);
+				row.dataset.chrome = field.chrome || "default";
 				this.fieldNodes.set(field.name, row);
 				if (field.type === "divider") {
 					row.innerHTML = "<div class=\"rm-divider\" aria-hidden=\"true\"></div>";
 					return row;
 				}
-				if (field.type !== "checkbox" && field.type !== "switch" && field.type !== "hidden" && field.type !== "button" && field.type !== "html") {
+				if (field.chrome !== "bare" && field.type !== "checkbox" && field.type !== "switch" && field.type !== "hidden" && field.type !== "button" && field.type !== "html") {
 					const labelRow = createElement(this.doc, "div");
 					labelRow.className = "rm-label-row";
 					const label = createElement(this.doc, "label");
@@ -4304,6 +4322,7 @@ button {
 					fields: [{
 						type: "custom",
 						name: "savedSync",
+						chrome: "bare",
 						render(context) {
 							const doc = context.host.ownerDocument;
 							const root = createElement(doc, "div");
@@ -4379,7 +4398,11 @@ button {
 									reportSavedSyncError(error);
 									return;
 								}
-								summaryTitle.textContent = snapshot.title || options.title || "Saved / Bookmarks";
+								const surfaceTitle = (options.title || "Saved / Bookmarks").trim();
+								const snapshotTitle = snapshot.title?.trim() || "";
+								const showSummaryTitle = !!snapshotTitle && snapshotTitle !== surfaceTitle;
+								summaryTitle.hidden = !showSummaryTitle;
+								summaryTitle.textContent = showSummaryTitle ? snapshotTitle : "";
 								summaryDescription.textContent = snapshot.description || options.description || "";
 								for (const key of [
 									"pending",
