@@ -1,4 +1,4 @@
-/* Auto-generated from menu/menu.ts. at 8/14/2026, 7:38:09 PM Do not edit directly. */
+/* Auto-generated from menu/menu.ts. at 8/15/2026, 11:40:02 AM Do not edit directly. */
 var RodMenu = (function() {
 
 //#region \0rolldown/runtime.js
@@ -22,60 +22,34 @@ var RodMenu = (function() {
 	var menu_exports = /* @__PURE__ */ __exportAll({});
 	(function installRodMenu(rootWindow) {
 		"use strict";
-		const VERSION = "2.2.1";
+		const VERSION = "2.3.0";
 		const GLOBAL_NAME = "RodMenu";
 		const ROOT_ATTR = "data-rod-menu-host";
 		const ACTIVE_ATTR = "data-rod-menu-active";
 		const ID_PREFIX = "rod-menu";
 		const DEFAULT_Z_INDEX = 2147482500;
-		const STYLE_VERSION = "v2.2.1";
-		const defaultDependencyUrls = {
-			elements: [
-				"https://rod.migos.club/elements/dist/elements.js",
-				"https://rod.migos.club/elements/elements.js",
-				"https://raw.githubusercontent.com/rodkisten/rodkisten.github.io/master/elements/elements.js"
-			],
-			toaster: ["https://rod.migos.club/userscripts/toaster.js?v=4.7.0", "https://rod.migos.club/userscripts/toaster.js"],
-			cipo: ["https://rod.migos.club/bundler/cipo.iife.js"],
-			broto: ["https://rod.migos.club/bundler/broto.iife.js"]
-		};
-		const defaultGestureConfig = {
-			preventPullToRefresh: true,
-			dragFromContent: true,
-			dismissThresholdPx: 140,
-			dismissThresholdRatio: .22,
-			velocityThresholdPxMs: .65,
-			activationDistancePx: 5
-		};
-		const defaultConfig = {
+		const STYLE_VERSION = "v2.3";
+		let globalConfig = {
 			shadowRoot: true,
 			defaultPresentation: "bottom-sheet",
 			zIndex: DEFAULT_Z_INDEX,
 			autoLoadDependencies: true,
+			strictDependencies: false,
 			dependencyTimeoutMs: 8e3,
-			dependencyUrls: defaultDependencyUrls,
-			toasterErrors: true,
-			gestures: defaultGestureConfig,
-			defaultSchema: {},
-			theme: {},
-			css: "",
-			components: {},
-			fieldTypes: {},
-			refreshActiveOnConfigure: true
-		};
-		let globalConfig = {
-			...defaultConfig,
-			dependencyUrls: { ...defaultDependencyUrls },
-			gestures: { ...defaultGestureConfig },
-			defaultSchema: {},
-			theme: {},
-			components: {},
-			fieldTypes: {}
+			dependencyUrls: {
+				elements: [
+					"https://rod.migos.club/elements/dist/elements.js",
+					"https://rod.migos.club/elements/elements.js",
+					"https://raw.githubusercontent.com/rodkisten/rodkisten.github.io/master/elements/elements.js"
+				],
+				toaster: ["https://rod.migos.club/userscripts/toaster.js?v=4.7.0", "https://rod.migos.club/userscripts/toaster.js"],
+				cipo: ["https://rod.migos.club/bundler/cipo.iife.js"],
+				broto: ["https://rod.migos.club/bundler/broto.iife.js"]
+			},
+			toasterErrors: true
 		};
 		let counter = 0;
 		const activeHandles = /* @__PURE__ */ new Map();
-		const registeredComponents = /* @__PURE__ */ new Map();
-		const registeredFieldTypes = /* @__PURE__ */ new Map();
 		const docState = /* @__PURE__ */ new WeakMap();
 		const runtimeStatus = {
 			elements: {
@@ -299,6 +273,10 @@ var RodMenu = (function() {
 				markDependency(name, "native", "window");
 				return existing;
 			}
+			if (globalConfig.strictDependencies) {
+				markDependency(name, "failed", void 0, /* @__PURE__ */ new Error(`RodMenu strictDependencies: runtime obrigatório ausente: ${name}.`));
+				return null;
+			}
 			const pending = dependencyPromises.get(name);
 			if (pending) return pending;
 			const promise = (async () => {
@@ -382,6 +360,7 @@ var RodMenu = (function() {
 				const node = facade.el(tag, { $document: doc });
 				if (node && node.ownerDocument === doc) return node;
 			} catch {}
+			if (globalConfig.strictDependencies) throw new Error(`RodMenu strictDependencies: RodElements falhou ao criar <${tag}>.`);
 			return doc.createElement(tag);
 		}
 		function artifactCssText(value) {
@@ -408,7 +387,10 @@ var RodMenu = (function() {
 		}
 		function compileStylesheet(source) {
 			const cipo = resolveCipo();
-			if (!cipo) return source;
+			if (!cipo) {
+				if (globalConfig.strictDependencies) throw new Error("RodMenu strictDependencies: Cipó não está disponível.");
+				return source;
+			}
 			try {
 				const tag = cipo.sheet?.css;
 				if (typeof tag === "function") {
@@ -425,6 +407,7 @@ var RodMenu = (function() {
 					if (cssText) return cssText;
 				} catch {}
 			}
+			if (globalConfig.strictDependencies) throw new Error("RodMenu strictDependencies: Cipó não conseguiu compilar o stylesheet.");
 			return source;
 		}
 		function setBrotoLeaf(store, name, value) {
@@ -443,6 +426,7 @@ var RodMenu = (function() {
 			if (broto?.store) try {
 				brotoStore = broto.store({ ...snapshot });
 			} catch {}
+			if (!brotoStore && globalConfig.strictDependencies) throw new Error("RodMenu strictDependencies: Broto.store() não está disponível ou falhou.");
 			const run = (fn) => {
 				if (broto?.batch) try {
 					broto.batch(fn);
@@ -744,8 +728,6 @@ button {
   pointer-events: none;
   font-family: var(--rm-font);
   color: var(--rm-text);
-  overscroll-behavior: none;
-  -webkit-overflow-scrolling: auto;
 }
 .rm-root[data-open="true"] {
   pointer-events: auto;
@@ -758,8 +740,6 @@ button {
   -webkit-backdrop-filter: blur(10px) saturate(130%);
   opacity: 0;
   transition: opacity 240ms var(--rm-ease);
-  touch-action: none;
-  overscroll-behavior: none;
 }
 .rm-root[data-open="true"] .rm-backdrop {
   opacity: 1;
@@ -775,9 +755,8 @@ button {
   overflow: hidden;
   opacity: 0;
   transform: translate3d(0, 30px, 0) scale(.985);
-  transition: transform 220ms var(--rm-ease), opacity 180ms ease;
+  transition: transform 280ms var(--rm-ease), opacity 220ms ease;
   will-change: transform, opacity;
-  overscroll-behavior: contain;
 }
 .rm-root[data-open="true"] .rm-shell {
   opacity: 1;
@@ -793,11 +772,11 @@ button {
   --rm-sheet-x: 0px;
   --rm-drag-y: 0px;
   opacity: 0;
-  transform: translate3d(var(--rm-sheet-x), calc(18px + var(--rm-drag-y)), 0) scale(.992);
+  transform: translate3d(var(--rm-sheet-x), calc(100% + 24px + var(--rm-drag-y)), 0);
 }
 .rm-root[data-presentation="bottom-sheet"][data-open="true"] .rm-shell {
   opacity: 1;
-  transform: translate3d(var(--rm-sheet-x), var(--rm-drag-y), 0) scale(1);
+  transform: translate3d(var(--rm-sheet-x), var(--rm-drag-y), 0);
 }
 .rm-root[data-presentation="modal"] .rm-shell {
   left: 50%;
@@ -944,8 +923,6 @@ button {
   -webkit-overflow-scrolling: touch;
   padding: 0 16px 8px;
   scrollbar-width: thin;
-  touch-action: pan-y;
-  overscroll-behavior-y: contain;
 }
 .rm-section {
   margin: 0 0 14px;
@@ -1410,22 +1387,6 @@ button {
 }
 .rm-tab-panel {
   min-width: 0;
-  transform-origin: center center;
-}
-.rm-tab-panel[data-entering="true"] {
-  animation: rm-tab-panel-enter 170ms cubic-bezier(.2,.75,.25,1) both;
-}
-@keyframes rm-tab-panel-enter {
-  from {
-    opacity: 0;
-    transform: translate3d(10px, 0, 0);
-    filter: blur(1.5px);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-    filter: blur(0);
-  }
 }
 .rm-media-preview {
   display: grid;
@@ -1684,6 +1645,18 @@ button {
   color: var(--rm-muted);
   font: 500 10px/1.2 var(--rm-font);
 }
+.rm-saved-sync { display:grid; gap:12px; }
+.rm-saved-sync-summary { display:grid; gap:4px; padding:12px; border:1px solid var(--rm-border); border-radius:14px; background:var(--rm-elevated); }
+.rm-saved-sync-summary strong { font:750 14px/1.25 var(--rm-font); color:var(--rm-text); }
+.rm-saved-sync-summary small { font:500 11px/1.45 var(--rm-font); color:var(--rm-muted); }
+.rm-saved-sync-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }
+.rm-saved-sync-stat { display:grid; gap:2px; min-width:0; padding:9px 8px; border:1px solid var(--rm-border); border-radius:12px; background:var(--rm-panel); }
+.rm-saved-sync-stat b { font:800 13px/1 var(--rm-font); color:var(--rm-text); }
+.rm-saved-sync-stat span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:600 9px/1.2 var(--rm-font); color:var(--rm-muted); text-transform:uppercase; letter-spacing:.04em; }
+.rm-saved-sync-commands { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.rm-saved-sync-command { width:100%; min-height:42px; }
+@media (max-width:420px) { .rm-saved-sync-commands { grid-template-columns:1fr; } }
+
 .rm-history-list {
   display: grid;
   gap: 7px;
@@ -1788,12 +1761,10 @@ button {
 				} catch {}
 			}
 		}
-		function appendStyle(root, instanceCss = "") {
-			const doc = root.ownerDocument;
-			const style = createElement(doc, "style");
+		function appendStyle(root) {
+			const style = createElement(root instanceof ShadowRoot ? root.ownerDocument : root.ownerDocument, "style");
 			style.dataset.rodMenuStyle = STYLE_VERSION;
-			const extra = [globalConfig.css, instanceCss].filter(Boolean).join("\n\n");
-			style.textContent = compileStylesheet(extra ? `${css}\n\n${extra}` : css);
+			style.textContent = compileStylesheet(css);
 			root.append(style);
 		}
 		function applyAttributes(element, attributes) {
@@ -1805,46 +1776,18 @@ button {
 			}
 		}
 		function lockDocumentScroll(doc) {
-			const win = getOwnerWindow(doc);
-			const body = doc.body;
 			const state = docState.get(doc) ?? {
 				count: 0,
 				overflow: doc.documentElement.style.overflow,
-				paddingRight: doc.documentElement.style.paddingRight,
-				overscrollBehavior: doc.documentElement.style.overscrollBehavior,
-				bodyPosition: body?.style.position || "",
-				bodyTop: body?.style.top || "",
-				bodyLeft: body?.style.left || "",
-				bodyRight: body?.style.right || "",
-				bodyWidth: body?.style.width || "",
-				bodyOverflow: body?.style.overflow || "",
-				scrollX: win.scrollX,
-				scrollY: win.scrollY
+				paddingRight: doc.documentElement.style.paddingRight
 			};
 			if (state.count === 0) {
+				const win = getOwnerWindow(doc);
 				const scrollbar = Math.max(0, win.innerWidth - doc.documentElement.clientWidth);
 				state.overflow = doc.documentElement.style.overflow;
 				state.paddingRight = doc.documentElement.style.paddingRight;
-				state.overscrollBehavior = doc.documentElement.style.overscrollBehavior;
-				state.scrollX = win.scrollX;
-				state.scrollY = win.scrollY;
 				doc.documentElement.style.overflow = "hidden";
-				doc.documentElement.style.overscrollBehavior = "none";
 				if (scrollbar > 0) doc.documentElement.style.paddingRight = `${scrollbar}px`;
-				if (body) {
-					state.bodyPosition = body.style.position;
-					state.bodyTop = body.style.top;
-					state.bodyLeft = body.style.left;
-					state.bodyRight = body.style.right;
-					state.bodyWidth = body.style.width;
-					state.bodyOverflow = body.style.overflow;
-					body.style.position = "fixed";
-					body.style.top = `${-state.scrollY}px`;
-					body.style.left = `${-state.scrollX}px`;
-					body.style.right = "0";
-					body.style.width = "100%";
-					body.style.overflow = "hidden";
-				}
 			}
 			state.count += 1;
 			docState.set(doc, state);
@@ -1854,23 +1797,9 @@ button {
 			if (!state) return;
 			state.count = Math.max(0, state.count - 1);
 			if (state.count === 0) {
-				const win = getOwnerWindow(doc);
-				const body = doc.body;
 				doc.documentElement.style.overflow = state.overflow;
 				doc.documentElement.style.paddingRight = state.paddingRight;
-				doc.documentElement.style.overscrollBehavior = state.overscrollBehavior;
-				if (body) {
-					body.style.position = state.bodyPosition;
-					body.style.top = state.bodyTop;
-					body.style.left = state.bodyLeft;
-					body.style.right = state.bodyRight;
-					body.style.width = state.bodyWidth;
-					body.style.overflow = state.bodyOverflow;
-				}
 				docState.delete(doc);
-				try {
-					win.scrollTo(state.scrollX, state.scrollY);
-				} catch {}
 			}
 		}
 		function getSizeWidth(size) {
@@ -1921,15 +1850,11 @@ button {
 			resolveResult;
 			previousFocus = null;
 			listeners = [];
-			renderListeners = [];
 			fieldNodes = /* @__PURE__ */ new Map();
 			inputNodes = /* @__PURE__ */ new Map();
 			customNodes = /* @__PURE__ */ new Map();
 			constructor(schema) {
-				this.schemaValue = {
-					...globalConfig.defaultSchema,
-					...schema
-				};
+				this.schemaValue = { ...schema };
 				this.id = schema.id || nextId();
 				this.doc = resolveDocument();
 				this.win = getOwnerWindow(this.doc);
@@ -1943,7 +1868,7 @@ button {
 				this.host.className = "rm-host";
 				const useShadow = globalConfig.shadowRoot && typeof this.host.attachShadow === "function";
 				this.root = useShadow ? this.host.attachShadow({ mode: "open" }) : this.host;
-				appendStyle(this.root, this.schemaValue.css || "");
+				appendStyle(this.root);
 				this.result = new Promise((resolve) => {
 					this.resolveResult = resolve;
 				});
@@ -2023,9 +1948,6 @@ button {
 					},
 					clearPersisted() {
 						return controller.storeHandle.clearPersisted();
-					},
-					component(name, props = {}) {
-						return controller.renderNamedComponent(name, props);
 					}
 				};
 				this.persistenceManager = createPersistenceManager(this.stateStore, this.schemaValue.store, this.id, this.win, (values) => {
@@ -2139,14 +2061,11 @@ button {
 				});
 			}
 			render() {
-				for (const off of this.renderListeners.splice(0)) try {
-					off();
-				} catch {}
 				this.fieldNodes.clear();
 				this.inputNodes.clear();
 				this.customNodes.clear();
 				this.root.querySelector?.(".rm-root")?.remove();
-				const root = this.renderComponent("root", () => createElement(this.doc, "div"));
+				const root = createElement(this.doc, "div");
 				root.className = `rm-root ${this.schemaValue.className || ""}`.trim();
 				root.dataset.open = "false";
 				root.dataset.loading = String(this.loading);
@@ -2154,40 +2073,30 @@ button {
 				root.dataset.side = this.schemaValue.drawerSide || "right";
 				root.style.setProperty("--rm-z", String(this.schemaValue.zIndex ?? globalConfig.zIndex));
 				root.style.setProperty("--rm-width", getSizeWidth(this.schemaValue.size));
-				const theme = {
-					...globalConfig.theme,
-					...this.schemaValue.theme || {}
-				};
-				for (const [name, value] of Object.entries(theme)) {
-					const variable = name.startsWith("--") ? name : `--rm-${name}`;
-					root.style.setProperty(variable, String(value));
-				}
-				const backdrop = this.renderComponent("backdrop", () => createElement(this.doc, "div"));
-				backdrop.classList.add("rm-backdrop");
+				const backdrop = createElement(this.doc, "div");
+				backdrop.className = "rm-backdrop";
 				if (this.schemaValue.closeOnBackdrop !== false && this.schemaValue.dismissible !== false) backdrop.addEventListener("pointerdown", (event) => {
 					if (event.target === backdrop) this.finish("dismiss", void 0, "backdrop");
 				});
-				const shell = this.renderComponent("shell", () => createElement(this.doc, "section"));
-				shell.classList.add("rm-shell");
+				const shell = createElement(this.doc, "section");
+				shell.className = "rm-shell";
 				shell.setAttribute("role", "dialog");
 				shell.setAttribute("aria-modal", "true");
 				shell.setAttribute("aria-label", this.schemaValue.title || "Menu");
 				if (this.schemaValue.showHandle !== false && root.dataset.presentation === "bottom-sheet") {
-					const wrap = this.renderComponent("handle", () => {
-						const node = createElement(this.doc, "div");
-						node.innerHTML = "<div class=\"rm-handle\" aria-hidden=\"true\"></div>";
-						return node;
-					});
-					wrap.classList.add("rm-handle-wrap");
+					const wrap = createElement(this.doc, "div");
+					wrap.className = "rm-handle-wrap";
+					wrap.innerHTML = "<div class=\"rm-handle\" aria-hidden=\"true\"></div>";
 					shell.append(wrap);
+					if (this.schemaValue.draggable !== false || this.schemaValue.swipeToDismiss !== false) this.bindSwipe(wrap, shell);
 				}
 				shell.append(this.renderHeader());
 				const globalError = createElement(this.doc, "div");
 				globalError.className = "rm-global-error";
 				globalError.dataset.show = "false";
 				shell.append(globalError);
-				const body = this.renderComponent("body", () => createElement(this.doc, "div"));
-				body.classList.add("rm-body");
+				const body = createElement(this.doc, "div");
+				body.className = "rm-body";
 				if (this.schemaValue.fields?.length) body.append(this.renderSection({ fields: this.schemaValue.fields }));
 				for (const section of this.schemaValue.sections || []) body.append(this.renderSection(section));
 				if (this.schemaValue.tabs?.length) body.append(this.renderTabs());
@@ -2196,22 +2105,9 @@ button {
 				if (this.schemaValue.actions?.length) shell.append(this.renderActions());
 				root.append(backdrop, shell);
 				this.root.append(root);
-				if (root.dataset.presentation === "bottom-sheet") this.bindBottomSheetGestures(root, shell);
 				this.refreshDynamicState();
 			}
-			renderHeader() {
-				return this.renderComponent("header", () => this.renderHeaderDefault());
-			}
 			renderTabs() {
-				return this.renderComponent("tabs", () => this.renderTabsDefault(), { activeTab: this.activeTabId });
-			}
-			renderSection(section) {
-				return this.renderComponent("section", () => this.renderSectionDefault(section), { section });
-			}
-			renderActions() {
-				return this.renderComponent("actions", () => this.renderActionsDefault(), { actions: this.schemaValue.actions || [] });
-			}
-			renderTabsDefault() {
 				const wrapper = createElement(this.doc, "div");
 				wrapper.className = "rm-tabs-wrap";
 				const visibleTabs = (this.schemaValue.tabs || []).filter((tab) => !tab.visibleWhen || this.safePredicate(tab.visibleWhen));
@@ -2225,7 +2121,6 @@ button {
 					button.type = "button";
 					button.className = "rm-tab";
 					button.dataset.active = String(tab.id === this.activeTabId);
-					button.dataset.tabId = tab.id;
 					button.setAttribute("role", "tab");
 					button.setAttribute("aria-selected", String(tab.id === this.activeTabId));
 					if (tab.icon) {
@@ -2293,7 +2188,7 @@ button {
 				shell.style.setProperty("--rm-popover-align", align === "start" ? "0%" : align === "end" ? "100%" : "50%");
 				shell.style.setProperty("--rm-popover-shift", align === "start" ? "0%" : align === "end" ? "-100%" : "-50%");
 			}
-			renderHeaderDefault() {
+			renderHeader() {
 				const header = createElement(this.doc, "header");
 				header.className = "rm-header";
 				const heading = createElement(this.doc, "div");
@@ -2329,17 +2224,17 @@ button {
 				}
 				header.append(heading);
 				if (this.schemaValue.dismissible !== false) {
-					const close = this.renderComponent("closeButton", () => createElement(this.doc, "button"));
-					close.setAttribute("type", "button");
-					close.classList.add("rm-close");
-					close.setAttribute("aria-label", close.getAttribute("aria-label") || "Fechar");
-					if (!close.childNodes.length) close.innerHTML = "<svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path d=\"M6 6l12 12M18 6L6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.1\" stroke-linecap=\"round\"/></svg>";
+					const close = createElement(this.doc, "button");
+					close.type = "button";
+					close.className = "rm-close";
+					close.setAttribute("aria-label", "Fechar");
+					close.innerHTML = "<svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path d=\"M6 6l12 12M18 6L6 18\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.1\" stroke-linecap=\"round\"/></svg>";
 					close.addEventListener("click", () => this.finish("dismiss", void 0, "api"));
 					header.append(close);
 				}
 				return header;
 			}
-			renderSectionDefault(section) {
+			renderSection(section) {
 				const wrapper = createElement(this.doc, "section");
 				wrapper.className = "rm-section";
 				if (section.id) wrapper.dataset.section = section.id;
@@ -2390,34 +2285,6 @@ button {
 				return wrapper;
 			}
 			renderField(field) {
-				const renderType = () => {
-					const registered = this.resolveFieldTypeRenderer(field.type);
-					if (registered) {
-						const rendered = registered({
-							type: field.type,
-							field,
-							value: this.valuesValue[field.name],
-							document: this.doc,
-							window: this.win,
-							context: this.context,
-							create: (tag, className) => {
-								const node = createElement(this.doc, tag);
-								if (className) node.className = className;
-								return node;
-							},
-							commit: (value) => this.commitField(field, value),
-							defaultRender: () => this.renderFieldDefault(field)
-						});
-						if (rendered) return rendered;
-					}
-					return this.renderFieldDefault(field);
-				};
-				return this.renderComponent("field", renderType, {
-					field,
-					value: this.valuesValue[field.name]
-				});
-			}
-			renderFieldDefault(field) {
 				const row = createElement(this.doc, "div");
 				row.className = `rm-field ${field.className || ""}`.trim();
 				row.dataset.field = field.name;
@@ -3100,14 +2967,12 @@ button {
 				}
 				throw new Error(`Unsupported RodMenu field type: ${field.type}`);
 			}
-			renderActionsDefault() {
+			renderActions() {
 				const footer = createElement(this.doc, "footer");
 				footer.className = "rm-actions";
 				for (const action of this.schemaValue.actions || []) {
-					const button = this.renderComponent("action", () => {
-						return createElement(this.doc, "button");
-					}, { action });
-					button.setAttribute("type", action.role === "submit" ? "submit" : "button");
+					const button = createElement(this.doc, "button");
+					button.type = action.role === "submit" ? "submit" : "button";
 					button.className = "rm-action";
 					button.dataset.action = action.id;
 					button.dataset.variant = action.variant || (action.role === "destructive" ? "danger" : action.role === "cancel" ? "secondary" : "primary");
@@ -3387,70 +3252,19 @@ button {
 				});
 			}
 			setActiveTab(tabId) {
-				const tabs = this.schemaValue.tabs || [];
-				const nextTab = tabs.find((tab) => tab.id === tabId);
-				if (!nextTab || this.activeTabId === tabId || this.destroyed) return;
-				const root = this.getRootElement();
-				const shell = root.querySelector(".rm-shell");
-				const wrapper = root.querySelector(".rm-tabs-wrap");
-				const oldPanel = wrapper?.querySelector(".rm-tab-panel");
-				if (!shell || !wrapper || !oldPanel) {
-					this.activeTabId = tabId;
-					this.render();
-					requestAnimationFrame(() => {
-						if (!this.destroyed) this.getRootElement().dataset.open = "true";
-					});
-					return;
-				}
-				const currentHeight = shell.getBoundingClientRect().height;
-				if (currentHeight > 0) {
-					shell.style.height = `${Math.round(currentHeight)}px`;
-					shell.style.maxHeight = `min(92dvh, calc(var(--rm-vvh, 100vh) - 8px))`;
-				}
-				for (const tab of tabs) {
-					for (const field of tab.fields || []) {
-						this.fieldNodes.delete(field.name);
-						this.inputNodes.delete(field.name);
-						this.customNodes.delete(field.name);
-					}
-					for (const section of tab.sections || []) for (const field of section.fields || []) {
-						this.fieldNodes.delete(field.name);
-						this.inputNodes.delete(field.name);
-						this.customNodes.delete(field.name);
-					}
-				}
+				if (!this.schemaValue.tabs?.some((tab) => tab.id === tabId)) return;
+				if (this.activeTabId === tabId) return;
 				this.activeTabId = tabId;
-				for (const button of Array.from(wrapper.querySelectorAll(".rm-tab"))) {
-					const isActive = button.getAttribute("data-tab-id") === tabId;
-					button.dataset.active = String(isActive);
-					button.setAttribute("aria-selected", String(isActive));
-				}
-				const panel = createElement(this.doc, "div");
-				panel.className = "rm-tab-panel";
-				panel.dataset.tabPanel = nextTab.id;
-				panel.dataset.entering = "true";
-				panel.setAttribute("role", "tabpanel");
-				if (nextTab.fields?.length) panel.append(this.renderSection({ fields: nextTab.fields }));
-				for (const section of nextTab.sections || []) panel.append(this.renderSection(section));
-				oldPanel.replaceWith(panel);
-				this.refreshDynamicState();
+				this.render();
 				requestAnimationFrame(() => {
-					if (this.destroyed) return;
-					panel.addEventListener("animationend", () => panel.removeAttribute("data-entering"), { once: true });
+					if (!this.destroyed) this.getRootElement().dataset.open = "true";
 				});
-			}
-			refreshStyles() {
-				const style = this.root.querySelector(`style[data-rod-menu-style="${STYLE_VERSION}"]`);
-				if (!style) return;
-				const extra = [globalConfig.css, this.schemaValue.css || ""].filter(Boolean).join("\n\n");
-				style.textContent = compileStylesheet(extra ? `${css}\n\n${extra}` : css);
 			}
 			update(patch) {
 				this.schemaValue = {
 					...this.schemaValue,
 					...patch
 				};
-				this.refreshStyles();
 				this.render();
 				requestAnimationFrame(() => {
 					this.getRootElement().dataset.open = "true";
@@ -3555,221 +3369,42 @@ button {
 					this.win.removeEventListener("scroll", sync, true);
 				});
 			}
-			getGestureConfig() {
-				return {
-					...globalConfig.gestures,
-					...this.schemaValue.gestures || {}
-				};
-			}
-			findScrollableAncestor(target, boundary) {
-				let node = target instanceof this.win.Element ? target : null;
-				while (node && node !== boundary) {
-					if (node instanceof this.win.HTMLElement) {
-						const overflowY = this.win.getComputedStyle(node).overflowY;
-						if ((overflowY === "auto" || overflowY === "scroll") && node.scrollHeight > node.clientHeight + 1) return node;
-					}
-					node = node.parentElement;
-				}
-				const body = boundary.querySelector(".rm-body");
-				return body && body.scrollHeight > body.clientHeight + 1 ? body : null;
-			}
-			bindBottomSheetGestures(root, shell) {
-				const config = this.getGestureConfig();
-				if (!config.preventPullToRefresh && this.schemaValue.draggable === false && this.schemaValue.swipeToDismiss === false) return;
-				let tracking = false;
-				let dragging = false;
-				let startedOnHandle = false;
-				let startX = 0;
+			bindSwipe(handle, shell) {
 				let startY = 0;
-				let lastY = 0;
-				let startTime = 0;
 				let currentY = 0;
-				let scrollable = null;
-				let directionLocked = false;
-				let verticalGesture = false;
-				const reset = () => {
-					tracking = false;
-					dragging = false;
-					startedOnHandle = false;
-					currentY = 0;
-					scrollable = null;
-					directionLocked = false;
-					verticalGesture = false;
-					shell.style.transition = "";
-				};
-				const touchStart = (event) => {
-					if (event.touches.length !== 1) return;
-					const touch = event.touches[0];
-					tracking = true;
-					dragging = false;
-					startX = touch.clientX;
-					startY = touch.clientY;
-					lastY = touch.clientY;
-					startTime = performance.now();
-					currentY = 0;
-					directionLocked = false;
-					verticalGesture = false;
-					const target = event.composedPath()[0];
-					startedOnHandle = !!(target instanceof this.win.Element ? target : null)?.closest?.(".rm-handle-wrap");
-					scrollable = this.findScrollableAncestor(target || event.target, shell);
-				};
-				const touchMove = (event) => {
-					if (!tracking || event.touches.length !== 1) return;
-					const touch = event.touches[0];
-					const dx = touch.clientX - startX;
-					const dy = touch.clientY - startY;
-					lastY = touch.clientY;
-					if (!directionLocked && Math.max(Math.abs(dx), Math.abs(dy)) >= config.activationDistancePx) {
-						directionLocked = true;
-						verticalGesture = Math.abs(dy) >= Math.abs(dx);
-					}
-					if (!directionLocked || !verticalGesture) return;
-					const contentAtTop = !scrollable || scrollable.scrollTop <= 0;
-					const canDrag = this.schemaValue.draggable !== false && (startedOnHandle || config.dragFromContent);
-					const pullingDown = dy > 0;
-					if (pullingDown && contentAtTop) {
-						if (event.cancelable && config.preventPullToRefresh) event.preventDefault();
-						event.stopPropagation();
-						if (canDrag) {
-							if (!dragging) {
-								dragging = true;
-								shell.style.transition = "none";
-							}
-							currentY = Math.max(0, dy);
-							shell.style.setProperty("--rm-drag-y", `${currentY}px`);
-						}
-						return;
-					}
-					if (dragging) {
-						if (event.cancelable) event.preventDefault();
-						currentY = Math.max(0, dy);
-						shell.style.setProperty("--rm-drag-y", `${currentY}px`);
-						return;
-					}
-					if (pullingDown && !scrollable && config.preventPullToRefresh && event.cancelable) {
-						event.preventDefault();
-						event.stopPropagation();
-					}
-				};
-				const finishGesture = () => {
-					if (!tracking) return;
-					const elapsed = Math.max(1, performance.now() - startTime);
-					const velocity = Math.max(0, (lastY - startY) / elapsed);
-					const threshold = Math.min(config.dismissThresholdPx, shell.getBoundingClientRect().height * config.dismissThresholdRatio);
-					const shouldDismiss = dragging && this.schemaValue.swipeToDismiss !== false && this.schemaValue.dismissible !== false && (currentY >= threshold || currentY > config.activationDistancePx * 2 && velocity >= config.velocityThresholdPxMs);
-					shell.style.transition = "";
-					if (shouldDismiss) this.finish("dismiss", void 0, "swipe");
-					else shell.style.removeProperty("--rm-drag-y");
-					reset();
-				};
-				let pointerDragging = false;
+				let dragging = false;
 				let pointerId = -1;
-				let pointerStartY = 0;
-				let pointerCurrentY = 0;
-				let pointerStartTime = 0;
-				const handle = shell.querySelector(".rm-handle-wrap");
-				const pointerDown = (event) => {
-					if (!handle || event.pointerType === "touch" || event.button !== 0 || this.schemaValue.draggable === false) return;
-					pointerDragging = true;
+				const down = (event) => {
+					if (event.button !== 0) return;
+					dragging = true;
 					pointerId = event.pointerId;
-					pointerStartY = event.clientY;
-					pointerCurrentY = 0;
-					pointerStartTime = performance.now();
+					startY = event.clientY;
+					currentY = 0;
 					handle.setPointerCapture?.(pointerId);
 					shell.style.transition = "none";
-					event.preventDefault();
 				};
-				const pointerMove = (event) => {
-					if (!pointerDragging || event.pointerId !== pointerId) return;
-					pointerCurrentY = Math.max(0, event.clientY - pointerStartY);
-					shell.style.setProperty("--rm-drag-y", `${pointerCurrentY}px`);
-					event.preventDefault();
+				const move = (event) => {
+					if (!dragging || event.pointerId !== pointerId) return;
+					currentY = Math.max(0, event.clientY - startY);
+					shell.style.setProperty("--rm-drag-y", `${currentY}px`);
 				};
-				const pointerUp = (event) => {
-					if (!pointerDragging || event.pointerId !== pointerId) return;
-					const elapsed = Math.max(1, performance.now() - pointerStartTime);
-					const velocity = pointerCurrentY / elapsed;
-					const threshold = Math.min(config.dismissThresholdPx, shell.getBoundingClientRect().height * config.dismissThresholdRatio);
-					pointerDragging = false;
+				const up = (event) => {
+					if (!dragging || event.pointerId !== pointerId) return;
+					dragging = false;
 					shell.style.transition = "";
-					if (this.schemaValue.swipeToDismiss !== false && this.schemaValue.dismissible !== false && (pointerCurrentY >= threshold || velocity >= config.velocityThresholdPxMs)) this.finish("dismiss", void 0, "swipe");
+					if (currentY > Math.min(140, shell.getBoundingClientRect().height * .22) && this.schemaValue.swipeToDismiss !== false && this.schemaValue.dismissible !== false) this.finish("dismiss", void 0, "swipe");
 					else shell.style.removeProperty("--rm-drag-y");
 				};
-				const rootTouchMove = (event) => {
-					if (!config.preventPullToRefresh || !event.cancelable) return;
-					if (!event.composedPath().includes(shell)) {
-						event.preventDefault();
-						event.stopPropagation();
-					}
-				};
-				shell.addEventListener("touchstart", touchStart, { passive: true });
-				shell.addEventListener("touchmove", touchMove, { passive: false });
-				shell.addEventListener("touchend", finishGesture, { passive: true });
-				shell.addEventListener("touchcancel", finishGesture, { passive: true });
-				root.addEventListener("touchmove", rootTouchMove, {
-					passive: false,
-					capture: true
+				handle.addEventListener("pointerdown", down);
+				handle.addEventListener("pointermove", move);
+				handle.addEventListener("pointerup", up);
+				handle.addEventListener("pointercancel", up);
+				this.listeners.push(() => {
+					handle.removeEventListener("pointerdown", down);
+					handle.removeEventListener("pointermove", move);
+					handle.removeEventListener("pointerup", up);
+					handle.removeEventListener("pointercancel", up);
 				});
-				handle?.addEventListener("pointerdown", pointerDown);
-				handle?.addEventListener("pointermove", pointerMove);
-				handle?.addEventListener("pointerup", pointerUp);
-				handle?.addEventListener("pointercancel", pointerUp);
-				this.renderListeners.push(() => {
-					shell.removeEventListener("touchstart", touchStart);
-					shell.removeEventListener("touchmove", touchMove);
-					shell.removeEventListener("touchend", finishGesture);
-					shell.removeEventListener("touchcancel", finishGesture);
-					root.removeEventListener("touchmove", rootTouchMove, true);
-					handle?.removeEventListener("pointerdown", pointerDown);
-					handle?.removeEventListener("pointermove", pointerMove);
-					handle?.removeEventListener("pointerup", pointerUp);
-					handle?.removeEventListener("pointercancel", pointerUp);
-				});
-			}
-			resolveComponentRenderer(name) {
-				return this.schemaValue.components?.[name] || registeredComponents.get(name) || globalConfig.components[name];
-			}
-			resolveFieldTypeRenderer(type) {
-				return this.schemaValue.fieldTypes?.[type] || registeredFieldTypes.get(type) || globalConfig.fieldTypes[type];
-			}
-			renderNamedComponent(name, props = {}) {
-				const renderer = this.resolveComponentRenderer(name);
-				if (!renderer) return null;
-				return renderer({
-					name,
-					document: this.doc,
-					window: this.win,
-					schema: this.schemaValue,
-					context: this.context,
-					props,
-					defaultRender: () => createElement(this.doc, "div"),
-					create: (tag, className) => {
-						const node = createElement(this.doc, tag);
-						if (className) node.className = className;
-						return node;
-					},
-					render: (nestedName, nestedProps = {}) => this.renderNamedComponent(nestedName, nestedProps)
-				}) || null;
-			}
-			renderComponent(name, defaultRender, props = {}) {
-				const renderer = this.resolveComponentRenderer(name);
-				if (!renderer) return defaultRender();
-				const renderNested = (nestedName, nestedProps = {}) => this.renderNamedComponent(nestedName, nestedProps);
-				return renderer({
-					name,
-					document: this.doc,
-					window: this.win,
-					schema: this.schemaValue,
-					context: this.context,
-					props,
-					defaultRender,
-					create: (tag, className) => {
-						const node = createElement(this.doc, tag);
-						if (className) node.className = className;
-						return node;
-					},
-					render: renderNested
-				}) || defaultRender();
 			}
 			finish(action, data, reason) {
 				if (this.settled) return;
@@ -3798,9 +3433,6 @@ button {
 			destroy(resolveIfNeeded = true) {
 				if (this.destroyed) return;
 				this.destroyed = true;
-				for (const off of this.renderListeners.splice(0)) try {
-					off();
-				} catch {}
 				for (const off of this.listeners.splice(0)) try {
 					off();
 				} catch {}
@@ -3966,6 +3598,142 @@ button {
 					}]
 				});
 			},
+			savedSync(options) {
+				let refreshImpl = () => void 0;
+				let destroyed = false;
+				const handle = api.open({
+					title: options.title || "Saved / Bookmarks",
+					description: options.description || "Selecione, confira e sincronize suas mídias.",
+					presentation: options.presentation || "bottom-sheet",
+					size: options.size || "md",
+					store: { persist: false },
+					fields: [{
+						type: "custom",
+						name: "savedSync",
+						render(context) {
+							const doc = context.host.ownerDocument;
+							const root = createElement(doc, "div");
+							root.className = "rm-saved-sync";
+							const summary = createElement(doc, "div");
+							summary.className = "rm-saved-sync-summary";
+							const summaryTitle = createElement(doc, "strong");
+							const summaryDescription = createElement(doc, "small");
+							summary.append(summaryTitle, summaryDescription);
+							const stats = createElement(doc, "div");
+							stats.className = "rm-saved-sync-stats";
+							const statNodes = /* @__PURE__ */ new Map();
+							for (const [key, label] of [
+								["pending", "Pendentes"],
+								["selected", "Selecionados"],
+								["sent", "Enviados"],
+								["unknown", "Sem check"],
+								["visible", "Na tela"],
+								["total", "Vistos"]
+							]) {
+								const card = createElement(doc, "div");
+								card.className = "rm-saved-sync-stat";
+								const value = createElement(doc, "b");
+								const copy = createElement(doc, "span");
+								copy.textContent = label;
+								card.append(value, copy);
+								stats.append(card);
+								statNodes.set(key, value);
+							}
+							const commands = createElement(doc, "div");
+							commands.className = "rm-saved-sync-commands";
+							const commandButtons = /* @__PURE__ */ new Map();
+							for (const command of options.commands) {
+								const button = createElement(doc, "button");
+								button.type = "button";
+								button.className = "rm-field-button rm-action rm-saved-sync-command";
+								button.dataset.variant = command.variant || "secondary";
+								button.dataset.command = command.id;
+								button.addEventListener("click", async () => {
+									if (button.disabled || destroyed) return;
+									button.dataset.loading = "true";
+									refreshImpl();
+									try {
+										await command.run({
+											snapshot: options.getSnapshot(),
+											refresh: refreshImpl
+										});
+									} catch (error) {
+										try {
+											globalConfig.onError?.(error);
+										} catch {}
+										try {
+											notifyToaster("error", options.title || "Saved / Bookmarks", error instanceof Error ? error.message : String(error));
+										} catch {}
+									} finally {
+										button.dataset.loading = "false";
+										refreshImpl();
+									}
+								});
+								commandButtons.set(command.id, button);
+								commands.append(button);
+							}
+							root.append(summary, stats, commands);
+							refreshImpl = () => {
+								if (destroyed || !root.isConnected) return;
+								let snapshot;
+								try {
+									snapshot = options.getSnapshot();
+								} catch (error) {
+									try {
+										globalConfig.onError?.(error);
+									} catch {}
+									try {
+										notifyToaster("error", options.title || "Saved / Bookmarks", error instanceof Error ? error.message : String(error));
+									} catch {}
+									return;
+								}
+								summaryTitle.textContent = snapshot.title || options.title || "Saved / Bookmarks";
+								summaryDescription.textContent = snapshot.description || options.description || "";
+								for (const key of [
+									"pending",
+									"selected",
+									"sent",
+									"unknown",
+									"visible",
+									"total"
+								]) {
+									const node = statNodes.get(key);
+									if (node) node.textContent = String(Number(snapshot[key] ?? 0));
+								}
+								for (const command of options.commands) {
+									const button = commandButtons.get(command.id);
+									if (!button) continue;
+									button.textContent = typeof command.label === "function" ? command.label(snapshot) : command.label;
+									const busy = button.dataset.loading === "true";
+									const disabled = typeof command.disabled === "function" ? command.disabled(snapshot) : Boolean(command.disabled);
+									button.disabled = busy || Boolean(snapshot.syncing) || disabled;
+								}
+							};
+							requestAnimationFrame(refreshImpl);
+							return root;
+						}
+					}],
+					actions: [{
+						id: "close",
+						label: "Fechar",
+						role: "cancel",
+						variant: "secondary"
+					}],
+					onClose(result) {
+						destroyed = true;
+						try {
+							options.onClose?.(result);
+						} catch (error) {
+							globalConfig.onError?.(error);
+						}
+					}
+				});
+				Object.defineProperty(handle, "refresh", {
+					value: () => refreshImpl(),
+					enumerable: true
+				});
+				return handle;
+			},
 			debug(options) {
 				const tabs = [];
 				if (options.summary !== void 0) tabs.push({
@@ -4086,7 +3854,10 @@ button {
 		const api = {
 			version: VERSION,
 			get config() {
-				return api.getConfig();
+				return Object.freeze({
+					...globalConfig,
+					dependencyUrls: { ...globalConfig.dependencyUrls }
+				});
 			},
 			get runtime() {
 				return Object.freeze({
@@ -4170,100 +3941,22 @@ button {
 					dependencyUrls: config.dependencyUrls ? {
 						...globalConfig.dependencyUrls,
 						...config.dependencyUrls
-					} : globalConfig.dependencyUrls,
-					gestures: config.gestures ? {
-						...globalConfig.gestures,
-						...config.gestures
-					} : globalConfig.gestures,
-					defaultSchema: config.defaultSchema ? {
-						...globalConfig.defaultSchema,
-						...config.defaultSchema
-					} : globalConfig.defaultSchema,
-					theme: config.theme ? {
-						...globalConfig.theme,
-						...config.theme
-					} : globalConfig.theme,
-					components: config.components ? {
-						...globalConfig.components,
-						...config.components
-					} : globalConfig.components,
-					fieldTypes: config.fieldTypes ? {
-						...globalConfig.fieldTypes,
-						...config.fieldTypes
-					} : globalConfig.fieldTypes
+					} : globalConfig.dependencyUrls
 				};
-				if (config.autoLoadDependencies === true) loadDependencies();
-				if (globalConfig.refreshActiveOnConfigure) api.refreshAll();
-				return api;
-			},
-			getConfig() {
-				return Object.freeze({
-					...globalConfig,
-					dependencyUrls: Object.freeze({ ...globalConfig.dependencyUrls }),
-					gestures: Object.freeze({ ...globalConfig.gestures }),
-					defaultSchema: Object.freeze({ ...globalConfig.defaultSchema }),
-					theme: Object.freeze({ ...globalConfig.theme }),
-					components: Object.freeze({ ...globalConfig.components }),
-					fieldTypes: Object.freeze({ ...globalConfig.fieldTypes })
-				});
-			},
-			resetConfig() {
-				globalConfig = {
-					...defaultConfig,
-					dependencyUrls: { ...defaultDependencyUrls },
-					gestures: { ...defaultGestureConfig },
-					defaultSchema: {},
-					theme: {},
-					components: {},
-					fieldTypes: {}
-				};
-				registeredComponents.clear();
-				registeredFieldTypes.clear();
-				api.refreshAll();
-				return api;
-			},
-			refreshAll() {
-				for (const handle of Array.from(activeHandles.values())) try {
-					handle.update({});
-				} catch (error) {
-					try {
-						globalConfig.onError?.(error);
-					} catch {}
+				if (globalConfig.strictDependencies) for (const name of [
+					"elements",
+					"toaster",
+					"cipo",
+					"broto"
+				]) {
+					if (!dependencyPresent(name)) {
+						const error = /* @__PURE__ */ new Error(`RodMenu strictDependencies: runtime obrigatório ausente: ${name}.`);
+						markDependency(name, "failed", void 0, error);
+						throw error;
+					}
+					markDependency(name, "native", "window");
 				}
-			},
-			registerComponent(name, renderer) {
-				if (!name || typeof renderer !== "function") throw new TypeError("registerComponent(name, renderer) requires a name and renderer function.");
-				registeredComponents.set(name, renderer);
-				if (globalConfig.refreshActiveOnConfigure) api.refreshAll();
-				return api;
-			},
-			unregisterComponent(name) {
-				const deleted = registeredComponents.delete(name);
-				if (deleted && globalConfig.refreshActiveOnConfigure) api.refreshAll();
-				return deleted;
-			},
-			getComponent(name) {
-				return registeredComponents.get(name) || globalConfig.components[name];
-			},
-			registerFieldType(type, renderer) {
-				if (!type || typeof renderer !== "function") throw new TypeError("registerFieldType(type, renderer) requires a type and renderer function.");
-				registeredFieldTypes.set(type, renderer);
-				if (globalConfig.refreshActiveOnConfigure) api.refreshAll();
-				return api;
-			},
-			unregisterFieldType(type) {
-				const deleted = registeredFieldTypes.delete(type);
-				if (deleted && globalConfig.refreshActiveOnConfigure) api.refreshAll();
-				return deleted;
-			},
-			hasFieldType(type) {
-				return registeredFieldTypes.has(type) || typeof globalConfig.fieldTypes[type] === "function";
-			},
-			field(type, config) {
-				return {
-					...config,
-					type
-				};
+				if (config.autoLoadDependencies === true && !globalConfig.strictDependencies) loadDependencies();
 			},
 			loadDependencies,
 			get(id) {
