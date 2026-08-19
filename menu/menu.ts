@@ -2,7 +2,7 @@
 // @outfile dist/menu.js
 
 /**
- * RodMenu v2.2.8
+ * RodMenu v2.3.0
  * Browser-first declarative menu + form surface engine with adaptive Rod ecosystem integrations.
  *
  * Compile:
@@ -51,13 +51,13 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
 (function installRodMenu(rootWindow: Window & typeof globalThis): void {
   "use strict";
 
-  const VERSION = "2.2.8" as const;
+  const VERSION = "2.3.0" as const;
   const GLOBAL_NAME = "RodMenu" as const;
   const ROOT_ATTR = "data-rod-menu-host";
   const ACTIVE_ATTR = "data-rod-menu-active";
   const ID_PREFIX = "rod-menu";
   const DEFAULT_Z_INDEX = 2147482500;
-  const STYLE_VERSION = "v2.2.8";
+  const STYLE_VERSION = "v2.3.0";
 
   type Awaitable<T> = T | Promise<T>;
   type AnyRecord = Record<string, unknown>;
@@ -223,16 +223,41 @@ declare const require: ((...args: unknown[]) => unknown) | undefined;
     resize?: "none" | "vertical" | "horizontal" | "both";
   }
 
+  /**
+   * Native single-value select by default. When `searchable` is enabled, the
+   * field becomes a mobile-friendly typeahead with radio-style option states.
+   *
+   * Example:
+   * {
+   *   type: "select",
+   *   name: "provider",
+   *   label: "Provider",
+   *   searchable: true,
+   *   options: [
+   *     { value: "instagram", label: "Instagram" },
+   *     { value: "twitter", label: "X / Twitter" },
+   *   ],
+   * }
+   */
   interface SelectField extends BaseField {
     type: "select";
     options: readonly OptionItem[];
+    searchable?: boolean;
+    searchPlaceholder?: string;
+    emptyMessage?: string;
     multiple?: false;
   }
 
+  /**
+   * Multi-value select. The existing chip presentation remains the default;
+   * enabling `searchable` switches it to a typeahead with checkbox-style options.
+   */
   interface MultiSelectField extends BaseField {
     type: "multiselect";
     options: readonly OptionItem[];
     searchable?: boolean;
+    searchPlaceholder?: string;
+    emptyMessage?: string;
   }
 
   interface RadioField extends BaseField {
@@ -2025,6 +2050,185 @@ button {
   border-color:var(--rm-accent);
   background:color-mix(in srgb, var(--rm-accent) 13%, var(--rm-panel));
 }
+.rm-typeahead {
+  position: relative;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+.rm-typeahead[data-disabled="true"] {
+  opacity: .56;
+  pointer-events: none;
+}
+.rm-typeahead-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.rm-typeahead-input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--rm-border);
+  border-radius: 13px;
+  background: color-mix(in srgb, Canvas 87%, transparent);
+  color: var(--rm-text);
+  outline: none;
+  padding: 10px 38px 10px 12px;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+.rm-typeahead-input:focus {
+  border-color: color-mix(in srgb, var(--rm-accent) 72%, white 10%);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--rm-accent) 18%, transparent);
+}
+.rm-typeahead-chevron {
+  position: absolute;
+  right: 12px;
+  pointer-events: none;
+  color: var(--rm-muted);
+  font: 800 13px/1 var(--rm-font);
+  transform: translateY(-1px);
+}
+.rm-typeahead-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.rm-typeahead-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid color-mix(in srgb, var(--rm-accent) 38%, var(--rm-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--rm-accent) 11%, var(--rm-panel));
+  color: var(--rm-text);
+  padding: 5px 8px 5px 10px;
+  font: 650 11px/1.2 var(--rm-font);
+}
+.rm-typeahead-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rm-typeahead-chip button {
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--rm-muted);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  cursor: pointer;
+  font: 800 12px/1 var(--rm-font);
+}
+.rm-typeahead-list {
+  display: grid;
+  gap: 5px;
+  max-height: 240px;
+  overflow: auto;
+  padding: 5px;
+  border: 1px solid var(--rm-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--rm-panel) 96%, Canvas 4%);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .18);
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.rm-typeahead-option {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--rm-text);
+  padding: 9px 10px;
+  text-align: left;
+  cursor: pointer;
+}
+.rm-typeahead-option:hover,
+.rm-typeahead-option[data-highlighted="true"] {
+  background: color-mix(in srgb, var(--rm-accent) 8%, transparent);
+}
+.rm-typeahead-option[data-selected="true"] {
+  border-color: color-mix(in srgb, var(--rm-accent) 34%, var(--rm-border));
+  background: color-mix(in srgb, var(--rm-accent) 12%, transparent);
+}
+.rm-typeahead-option:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+.rm-typeahead-option-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.rm-typeahead-option-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 650 12px/1.25 var(--rm-font);
+}
+.rm-typeahead-option-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--rm-muted);
+  font: 500 10px/1.25 var(--rm-font);
+}
+.rm-typeahead-indicator {
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid color-mix(in srgb, CanvasText 24%, var(--rm-border));
+  display: grid;
+  place-items: center;
+  color: white;
+  flex: 0 0 auto;
+}
+.rm-typeahead-indicator[data-kind="radio"] {
+  border-radius: 50%;
+}
+.rm-typeahead-indicator[data-kind="checkbox"] {
+  border-radius: 6px;
+}
+.rm-typeahead-option[data-selected="true"] .rm-typeahead-indicator {
+  border-color: var(--rm-accent);
+  background: var(--rm-accent);
+}
+.rm-typeahead-indicator::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+}
+.rm-typeahead-indicator[data-kind="checkbox"]::after {
+  width: 9px;
+  height: 5px;
+  border-left: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  background: transparent;
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+.rm-typeahead-option[data-selected="true"] .rm-typeahead-indicator::after {
+  opacity: 1;
+}
+.rm-typeahead-empty {
+  padding: 12px 10px;
+  color: var(--rm-muted);
+  text-align: center;
+  font: 500 11px/1.35 var(--rm-font);
+}
 .rm-divider {
   height:1px;
   background:var(--rm-border);
@@ -3559,6 +3763,280 @@ button {
       return row;
     }
 
+    /**
+     * Renders the searchable select family used by `select[searchable]` and
+     * `multiselect[searchable]`.
+     *
+     * The control intentionally uses native text input and button primitives
+     * instead of a browser `<select>`. This keeps filtering, radio/checkbox
+     * affordances and touch behavior predictable across Safari/iOS and desktop
+     * browsers while preserving the existing field value contracts.
+     */
+    private renderTypeaheadSelect(
+      field: SelectField | MultiSelectField,
+      value: unknown,
+      multiple: boolean,
+    ): HTMLElement {
+      const wrap = createElement(this.doc, "div");
+      wrap.className = "rm-typeahead";
+      wrap.dataset.multiple = String(multiple);
+      wrap.dataset.disabled = String(!!field.disabled);
+
+      const selected = new Set(
+        multiple
+          ? (Array.isArray(value) ? value.map(String) : [])
+          : [String(value ?? "")].filter(Boolean),
+      );
+      let query = "";
+      let open = false;
+      let highlightedIndex = 0;
+
+      const inputWrap = createElement(this.doc, "div");
+      inputWrap.className = "rm-typeahead-input-wrap";
+
+      const input = createElement(this.doc, "input");
+      input.id = `${this.id}-${field.name}`;
+      input.name = field.name;
+      input.type = "text";
+      input.className = "rm-typeahead-input";
+      input.placeholder = field.placeholder || field.searchPlaceholder || "Pesquisar…";
+      input.disabled = !!field.disabled;
+      input.readOnly = !!field.readonly;
+      input.autocomplete = "off";
+      input.setAttribute("role", "combobox");
+      input.setAttribute("aria-autocomplete", "list");
+      input.setAttribute("aria-expanded", "false");
+      input.setAttribute("aria-haspopup", "listbox");
+      applyAttributes(input, field.attributes);
+
+      const chevron = createElement(this.doc, "span");
+      chevron.className = "rm-typeahead-chevron";
+      chevron.setAttribute("aria-hidden", "true");
+      chevron.textContent = "⌄";
+      inputWrap.append(input, chevron);
+
+      const selectedHost = createElement(this.doc, "div");
+      selectedHost.className = "rm-typeahead-selected";
+      selectedHost.hidden = !multiple || selected.size === 0;
+
+      const listId = `${this.id}-${field.name}-typeahead-list`;
+      const list = createElement(this.doc, "div");
+      list.id = listId;
+      list.className = "rm-typeahead-list";
+      list.setAttribute("role", "listbox");
+      list.hidden = true;
+      input.setAttribute("aria-controls", listId);
+
+      const filteredOptions = (): OptionItem[] => {
+        const normalized = query.trim().toLocaleLowerCase();
+        if (!normalized) return Array.from(field.options);
+        return Array.from(field.options).filter((option) => {
+          const haystack = `${option.label} ${option.value} ${option.description || ""}`.toLocaleLowerCase();
+          return haystack.includes(normalized);
+        });
+      };
+
+      const syncInputValue = (): void => {
+        if (multiple) {
+          input.value = query;
+          return;
+        }
+        const selectedOption = field.options.find((option) => selected.has(option.value));
+        input.value = open ? query : selectedOption?.label || "";
+      };
+
+      const scrollHighlightedIntoView = (): void => {
+        const node = list.querySelector<HTMLElement>(
+          `.rm-typeahead-option[data-index="${highlightedIndex}"]`,
+        );
+        node?.scrollIntoView({ block: "nearest" });
+      };
+
+      const renderSelected = (): void => {
+        selectedHost.replaceChildren();
+        if (!multiple || selected.size === 0) {
+          selectedHost.hidden = true;
+          return;
+        }
+
+        selectedHost.hidden = false;
+        for (const valueItem of selected) {
+          const option = field.options.find((item) => item.value === valueItem);
+          if (!option) continue;
+
+          const chip = createElement(this.doc, "div");
+          chip.className = "rm-typeahead-chip";
+          const label = createElement(this.doc, "span");
+          label.textContent = option.label;
+          chip.append(label);
+
+          if (!field.disabled && !field.readonly && !option.disabled) {
+            const remove = createElement(this.doc, "button");
+            remove.type = "button";
+            remove.setAttribute("aria-label", `Remover ${option.label}`);
+            remove.textContent = "×";
+            remove.addEventListener("click", (event) => {
+              event.stopPropagation();
+              selected.delete(option.value);
+              this.commitField(field, Array.from(selected));
+              renderSelected();
+              renderOptions();
+            });
+            chip.append(remove);
+          }
+          selectedHost.append(chip);
+        }
+      };
+
+      const renderOptions = (): void => {
+        const options = filteredOptions();
+        list.replaceChildren();
+        highlightedIndex = Math.min(highlightedIndex, Math.max(0, options.length - 1));
+
+        if (!options.length) {
+          const empty = createElement(this.doc, "div");
+          empty.className = "rm-typeahead-empty";
+          empty.textContent = field.emptyMessage || "Nenhuma opção encontrada.";
+          list.append(empty);
+          return;
+        }
+
+        options.forEach((option, index) => {
+          const button = createElement(this.doc, "button");
+          button.type = "button";
+          button.className = "rm-typeahead-option";
+          button.dataset.selected = String(selected.has(option.value));
+          button.dataset.highlighted = String(index === highlightedIndex);
+          button.dataset.index = String(index);
+          button.disabled = !!field.disabled || !!field.readonly || !!option.disabled;
+          button.setAttribute("role", "option");
+          button.setAttribute("aria-selected", String(selected.has(option.value)));
+
+          const indicator = createElement(this.doc, "span");
+          indicator.className = "rm-typeahead-indicator";
+          indicator.dataset.kind = multiple ? "checkbox" : "radio";
+          indicator.setAttribute("aria-hidden", "true");
+
+          const copy = createElement(this.doc, "span");
+          copy.className = "rm-typeahead-option-copy";
+          const title = createElement(this.doc, "strong");
+          title.textContent = option.label;
+          copy.append(title);
+          if (option.description) {
+            const description = createElement(this.doc, "small");
+            description.textContent = option.description;
+            copy.append(description);
+          }
+
+          button.append(indicator, copy);
+          button.addEventListener("mouseenter", () => {
+            highlightedIndex = index;
+            for (const item of Array.from(list.querySelectorAll<HTMLElement>(".rm-typeahead-option"))) {
+              item.dataset.highlighted = String(item === button);
+            }
+          });
+          button.addEventListener("click", () => {
+            if (multiple) {
+              selected.has(option.value) ? selected.delete(option.value) : selected.add(option.value);
+              this.commitField(field, Array.from(selected));
+              renderSelected();
+              renderOptions();
+              open = true;
+              list.hidden = false;
+              input.setAttribute("aria-expanded", "true");
+              input.focus({ preventScroll: true });
+            } else {
+              selected.clear();
+              selected.add(option.value);
+              this.commitField(field, option.value);
+              query = "";
+              open = false;
+              list.hidden = true;
+              input.setAttribute("aria-expanded", "false");
+              syncInputValue();
+            }
+          });
+          list.append(button);
+        });
+      };
+
+      const openList = (): void => {
+        if (field.disabled || field.readonly) return;
+        open = true;
+        list.hidden = false;
+        input.setAttribute("aria-expanded", "true");
+        renderOptions();
+        if (!multiple) input.value = query;
+      };
+
+      const closeList = (): void => {
+        open = false;
+        list.hidden = true;
+        input.setAttribute("aria-expanded", "false");
+        query = "";
+        syncInputValue();
+      };
+
+      input.addEventListener("focus", openList);
+      input.addEventListener("click", openList);
+      input.addEventListener("input", () => {
+        query = input.value;
+        highlightedIndex = 0;
+        open = true;
+        list.hidden = false;
+        input.setAttribute("aria-expanded", "true");
+        renderOptions();
+      });
+      input.addEventListener("keydown", (event) => {
+        const options = filteredOptions();
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          openList();
+          if (options.length) highlightedIndex = (highlightedIndex + 1) % options.length;
+          renderOptions();
+          scrollHighlightedIntoView();
+          return;
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          openList();
+          if (options.length) highlightedIndex = (highlightedIndex - 1 + options.length) % options.length;
+          renderOptions();
+          scrollHighlightedIntoView();
+          return;
+        }
+        if (event.key === "Enter" && open && options.length) {
+          event.preventDefault();
+          list.querySelector<HTMLButtonElement>(`.rm-typeahead-option[data-index="${highlightedIndex}"]`)?.click();
+          return;
+        }
+        if (event.key === "Escape" && open) {
+          event.preventDefault();
+          closeList();
+        }
+      });
+
+      this.renderListeners.push(() => {
+        // The listener lives on the RodMenu root so clicks outside this field can
+        // close the list without leaking listeners into the host page.
+        this.root.removeEventListener("pointerdown", onRootPointerDown, true);
+      });
+      const onRootPointerDown = (event: Event): void => {
+        if (!open) return;
+        const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+        if (path.includes(wrap)) return;
+        closeList();
+      };
+      this.root.addEventListener("pointerdown", onRootPointerDown, true);
+
+      renderSelected();
+      renderOptions();
+      syncInputValue();
+      wrap.append(selectedHost, inputWrap, list);
+      this.inputNodes.set(field.name, wrap);
+      return wrap;
+    }
+
     private createControl(field: RodMenuField): HTMLElement {
       const value = this.valuesValue[field.name];
       const baseInput = (type: string): HTMLInputElement => {
@@ -3620,6 +4098,8 @@ button {
           return input;
         }
         case "select": {
+          if (field.searchable) return this.renderTypeaheadSelect(field, value, false);
+
           const select = createElement(this.doc, "select");
           select.id = `${this.id}-${field.name}`;
           select.name = field.name;
@@ -3638,6 +4118,8 @@ button {
           return select;
         }
         case "multiselect": {
+          if (field.searchable) return this.renderTypeaheadSelect(field, value, true);
+
           const box = createElement(this.doc, "div");
           box.className = "rm-chipbox";
           const selected = new Set(Array.isArray(value) ? value.map(String) : []);
