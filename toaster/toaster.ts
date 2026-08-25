@@ -8,7 +8,6 @@
  * Browser-first, bundler-optional TypeScript IIFE.
  * Compile with: tsc --target ES2022 --lib ES2022,DOM --strict
  */
-
 (function installRodToaster(globalWindow: Window & typeof globalThis): void {
   "use strict";
 
