@@ -1,1 +1,84 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <meta name="referrer" content="no-referrer">
 
+  <!--
+    The page is intentionally self-contained and has no analytics, remote fonts,
+    API calls or third-party assets. Review data is injected locally by Scriptable.
+  -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' data: blob:;
+                 connect-src 'none';
+                 img-src 'self' data: blob:;
+                 media-src 'none';
+                 object-src 'none';
+                 frame-src 'none';
+                 font-src 'self';
+                 style-src 'self' 'unsafe-inline';
+                 script-src 'self';
+                 base-uri 'none';
+                 form-action 'none'">
+
+  <title>Photo Review</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-line">
+      <div>
+        <strong id="position">0 / 0</strong>
+        <span id="reviewCounter" class="muted"></span>
+      </div>
+
+      <div class="top-actions">
+        <button id="skipButton" class="text-button" type="button">Pular</button>
+        <button id="finishButton" class="text-button text-button--strong"
+                type="button">Finalizar</button>
+      </div>
+    </div>
+
+    <div class="progress" aria-hidden="true">
+      <div id="progressBar"></div>
+    </div>
+  </header>
+
+  <main id="app" class="app">
+    <section class="empty-state">
+      <div class="spinner"></div>
+      <p>Aguardando dados do iPhone…</p>
+    </section>
+  </main>
+
+  <nav class="bottombar" aria-label="Navegação">
+    <button id="previousButton" class="nav-button" type="button"
+            aria-label="Foto anterior">‹</button>
+
+    <button id="saveButton" class="save-button" type="button">
+      <span>Salvar</span>
+      <span class="save-arrow">→</span>
+    </button>
+
+    <button id="nextButton" class="nav-button" type="button"
+            aria-label="Próxima foto">›</button>
+  </nav>
+
+  <div id="doneOverlay" class="done-overlay" hidden>
+    <div class="done-card">
+      <div class="done-icon">✓</div>
+      <strong>Revisão pronta</strong>
+      <p id="doneSummary"></p>
+      <p class="done-help">
+        Toque em <b>Close</b> no topo do Scriptable para voltar ao Atalhos.
+      </p>
+    </div>
+  </div>
+
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
