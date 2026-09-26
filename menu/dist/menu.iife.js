@@ -1,4 +1,4 @@
-/* Auto-generated from menu/menu.ts. at 8/25/2026, 6:00:29 PM Do not edit directly. */
+/* Auto-generated from menu/menu.ts. at 9/26/2026, 7:39:25 AM Do not edit directly. */
 var RodMenu = (function() {
 
 //#region \0rolldown/runtime.js
