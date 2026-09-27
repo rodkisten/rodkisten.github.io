@@ -1,7 +1,8 @@
 (() => {
   "use strict";
 
-  const CONFIG = window.REVIEW_CONFIG;
+  let CONFIG = window.REVIEW_CONFIG || { version: "fallback", labels: [], groups: [] };
+
   const state = {
     loaded: false,
     finished: false,
@@ -13,6 +14,16 @@
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
+  }
+
+  function normalizeConfig(value) {
+    const raw = value && typeof value === "object" ? clone(value) : {};
+    return {
+      version: String(raw.version || "unknown"),
+      schema: raw.schema || null,
+      labels: Array.isArray(raw.labels) ? raw.labels : [],
+      groups: Array.isArray(raw.groups) ? raw.groups : []
+    };
   }
 
   function normalizeToken(value) {
@@ -54,7 +65,6 @@
             typeof value.confidence === "number" ? value.confidence :
             1;
 
-          // Only use low-level predictions as suggestions above 0.5.
           if (score >= 0.5) tokens.add(normalizeToken(value.label));
         }
 
@@ -73,6 +83,27 @@
     return (aliases || []).some((alias) => tokens.has(normalizeToken(alias)));
   }
 
+  function predictionValueForGroup(prediction, group) {
+    const keys = [group.id, ...(group.aliases || [])];
+
+    for (const key of keys) {
+      const direct =
+        prediction?.attributes?.[key] ??
+        prediction?.predictions?.[key] ??
+        prediction?.[key];
+
+      const directValue =
+        typeof direct === "string" ? direct :
+        direct && typeof direct === "object"
+          ? direct.value ?? direct.label ?? direct.class
+          : null;
+
+      if (directValue != null) return normalizeToken(directValue);
+    }
+
+    return null;
+  }
+
   function suggestionState(prediction) {
     const tokens = collectPredictionTokens(prediction);
     const labels = {};
@@ -85,30 +116,23 @@
     for (const group of CONFIG.groups) {
       groups[group.id] = null;
 
-      for (const option of group.options) {
+      for (const option of group.options || []) {
         if (aliasMatches(tokens, [option.id, ...(option.aliases || [])])) {
           groups[group.id] = option.id;
           break;
         }
       }
 
-      // Prefer explicit structured values when present.
-      const direct =
-        prediction?.attributes?.[group.id] ??
-        prediction?.predictions?.[group.id] ??
-        prediction?.[group.id];
+      const directValue = predictionValueForGroup(prediction, group);
 
-      const directValue =
-        typeof direct === "string" ? direct :
-        direct && typeof direct === "object"
-          ? direct.value ?? direct.label ?? direct.class
-          : null;
+      if (directValue) {
+        const matching = (group.options || []).find((option) =>
+          [option.id, ...(option.aliases || [])]
+            .map(normalizeToken)
+            .includes(directValue)
+        );
 
-      if (
-        directValue &&
-        group.options.some((option) => option.id === normalizeToken(directValue))
-      ) {
-        groups[group.id] = normalizeToken(directValue);
+        if (matching) groups[group.id] = matching.id;
       }
     }
 
@@ -121,13 +145,16 @@
 
     return {
       index,
+      source_index:
+        Number.isInteger(raw.source_index) ? raw.source_index :
+        Number.isInteger(raw?.source?.index) ? raw.source.index :
+        index,
       id: raw.id || raw.asset_id || raw.sha256 || `item-${index + 1}`,
       name: raw.name || raw.filename || `Imagem ${index + 1}`,
+      source: raw.source || null,
       image_data_url: raw.image_data_url || null,
       prediction,
       suggested,
-      // Suggestions start selected so one tap on "Salvar" confirms them.
-      // The blue dot still tells you they came from the model.
       selected_labels: { ...suggested.labels },
       selected_groups: { ...suggested.groups },
       reviewed: false,
@@ -147,23 +174,41 @@
 
     for (const group of CONFIG.groups) {
       const selected = item.selected_groups[group.id];
-      const option = group.options.find((entry) => entry.id === selected);
+      const option = (group.options || []).find((entry) => entry.id === selected);
       if (option?.keyword) keywords.push(option.keyword);
     }
 
     return [...new Set(keywords)];
   }
 
+  function positiveLabelsFor(item) {
+    const labels = [];
+
+    for (const def of CONFIG.labels) {
+      if (item.selected_labels[def.id]) labels.push(def.id);
+    }
+
+    for (const group of CONFIG.groups) {
+      const selected = item.selected_groups[group.id];
+      if (selected) labels.push(selected);
+    }
+
+    return [...new Set(labels)];
+  }
+
   function exportItem(item) {
     return {
       index: item.index,
+      source_index: item.source_index,
       id: item.id,
       name: item.name,
+      source: clone(item.source),
       reviewed: item.reviewed,
       skipped: item.skipped,
       changed: item.changed,
       labels: clone(item.selected_labels),
       attributes: clone(item.selected_groups),
+      positive_labels: positiveLabelsFor(item),
       keywords: keywordsFor(item),
       model_suggestions: clone(item.suggested),
       prediction: clone(item.prediction)
@@ -171,15 +216,12 @@
   }
 
   function exportResult() {
-    const reviewed = state.items.filter(
-      (item) => item.reviewed && !item.skipped
-    ).length;
-
+    const reviewed = state.items.filter((item) => item.reviewed && !item.skipped).length;
     const skipped = state.items.filter((item) => item.skipped).length;
 
     return {
       ok: true,
-      schema: "photo-review-v2",
+      schema: "photo-review-v3",
       ui_version: CONFIG.version,
       finished: state.finished,
       total: state.items.length,
@@ -220,13 +262,8 @@
   function clearSelections() {
     const item = state.items[state.index];
 
-    for (const def of CONFIG.labels) {
-      item.selected_labels[def.id] = false;
-    }
-
-    for (const group of CONFIG.groups) {
-      item.selected_groups[group.id] = null;
-    }
+    for (const def of CONFIG.labels) item.selected_labels[def.id] = false;
+    for (const group of CONFIG.groups) item.selected_groups[group.id] = null;
 
     item.changed = true;
     item.skipped = false;
@@ -238,10 +275,7 @@
     item.reviewed = true;
     item.skipped = false;
 
-    if (state.index < state.items.length - 1) {
-      state.index += 1;
-    }
-
+    if (state.index < state.items.length - 1) state.index += 1;
     render();
   }
 
@@ -250,10 +284,7 @@
     item.skipped = true;
     item.reviewed = false;
 
-    if (state.index < state.items.length - 1) {
-      state.index += 1;
-    }
-
+    if (state.index < state.items.length - 1) state.index += 1;
     render();
   }
 
@@ -308,22 +339,38 @@
     return shell;
   }
 
-  function renderLabelPanel(item) {
+  function groupedLabelSections() {
+    const sections = new Map();
+
+    for (const def of CONFIG.labels) {
+      const id = def.group_id || "details";
+      const title = def.group_title || "Detalhes";
+
+      if (!sections.has(id)) sections.set(id, { id, title, labels: [] });
+      sections.get(id).labels.push(def);
+    }
+
+    return [...sections.values()];
+  }
+
+  function renderLabelSection(item, section) {
+    if (!section.labels.length) return null;
+
     const panel = document.createElement("section");
     panel.className = "panel";
 
     const heading = document.createElement("div");
     heading.className = "panel-line";
     heading.innerHTML =
-      `<h2 class="panel-title">Detalhes</h2>` +
-      `<span class="panel-help">sem seleção = incerto</span>`;
+      `<h2 class="panel-title">${escapeHTML(section.title)}</h2>` +
+      `<span class="panel-help">toque = confirmar · vazio = incerto</span>`;
 
     panel.appendChild(heading);
 
     const chips = document.createElement("div");
     chips.className = "chips";
 
-    for (const def of CONFIG.labels) {
+    for (const def of section.labels) {
       chips.appendChild(
         chip(
           def,
@@ -346,14 +393,14 @@
     heading.className = "panel-line";
     heading.innerHTML =
       `<h2 class="panel-title">${escapeHTML(group.title)}</h2>` +
-      `<span class="panel-help">${escapeHTML(group.help || "")}</span>`;
+      `<span class="panel-help">${escapeHTML(group.help || "sem seleção = incerto")}</span>`;
 
     panel.appendChild(heading);
 
     const chips = document.createElement("div");
     chips.className = "chips";
 
-    for (const option of group.options) {
+    for (const option of group.options || []) {
       chips.appendChild(
         chip(
           option,
@@ -368,6 +415,13 @@
     return panel;
   }
 
+  function hasSuggestions(item) {
+    return (
+      Object.values(item.suggested.labels || {}).some(Boolean) ||
+      Object.values(item.suggested.groups || {}).some(Boolean)
+    );
+  }
+
   function render() {
     if (!state.loaded || !state.items.length) return;
 
@@ -376,7 +430,11 @@
     app.replaceChildren();
 
     app.appendChild(renderPhoto(item));
-    app.appendChild(renderLabelPanel(item));
+
+    for (const section of groupedLabelSections()) {
+      const panel = renderLabelSection(item, section);
+      if (panel) app.appendChild(panel);
+    }
 
     for (const group of CONFIG.groups) {
       app.appendChild(renderGroupPanel(item, group));
@@ -385,31 +443,34 @@
     const quickRow = document.createElement("div");
     quickRow.className = "quick-row";
 
-    const accept = document.createElement("button");
-    accept.type = "button";
-    accept.className = "quick-action";
-    accept.textContent = "↺ Sugestões do modelo";
-    accept.addEventListener("click", acceptSuggestions);
+    if (hasSuggestions(item)) {
+      const accept = document.createElement("button");
+      accept.type = "button";
+      accept.className = "quick-action";
+      accept.textContent = "↺ Sugestões do modelo";
+      accept.addEventListener("click", acceptSuggestions);
+      quickRow.appendChild(accept);
+    }
 
     const clear = document.createElement("button");
     clear.type = "button";
     clear.className = "quick-action";
     clear.textContent = "Limpar seleção";
     clear.addEventListener("click", clearSelections);
+    quickRow.appendChild(clear);
 
-    quickRow.append(accept, clear);
     app.appendChild(quickRow);
 
-    const details = document.createElement("details");
-    details.className = "prediction-details";
-    details.innerHTML =
-      `<summary>Predição original</summary>` +
-      `<pre>${escapeHTML(JSON.stringify(item.prediction, null, 2))}</pre>`;
-    app.appendChild(details);
+    if (item.prediction && Object.keys(item.prediction).length) {
+      const details = document.createElement("details");
+      details.className = "prediction-details";
+      details.innerHTML =
+        `<summary>Predição original</summary>` +
+        `<pre>${escapeHTML(JSON.stringify(item.prediction, null, 2))}</pre>`;
+      app.appendChild(details);
+    }
 
-    const reviewed = state.items.filter(
-      (entry) => entry.reviewed && !entry.skipped
-    ).length;
+    const reviewed = state.items.filter((entry) => entry.reviewed && !entry.skipped).length;
 
     $("position").textContent = `${state.index + 1} / ${state.items.length}`;
     $("reviewCounter").textContent = `${reviewed} revisadas`;
@@ -418,9 +479,6 @@
 
     $("previousButton").disabled = state.index === 0;
     $("nextButton").disabled = state.index === state.items.length - 1;
-
-    $("saveButton").querySelector("span:first-child").textContent =
-      state.index === state.items.length - 1 ? "Salvar" : "Salvar";
   }
 
   function escapeHTML(value) {
@@ -455,10 +513,11 @@
         throw new Error("Payload inválido: items[] é obrigatório.");
       }
 
+      CONFIG = normalizeConfig(payload.taxonomy || window.REVIEW_CONFIG);
       state.items = payload.items.map(prepareItem);
       state.index = Math.max(
         0,
-        Math.min(Number(payload.start_index || 0), state.items.length - 1)
+        Math.min(Number(payload.start_index || 0), Math.max(0, state.items.length - 1))
       );
       state.finished = false;
       state.loaded = true;
@@ -468,7 +527,8 @@
       return {
         ok: true,
         total: state.items.length,
-        ui_version: CONFIG.version
+        ui_version: CONFIG.version,
+        taxonomy_schema: CONFIG.schema || null
       };
     },
 
