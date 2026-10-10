@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="vue-pending">
   <head>
     <meta charset="utf-8" />
     <meta
@@ -7,7 +7,7 @@
       content="width=device-width,initial-scale=1,viewport-fit=cover"
     />
     <meta name="color-scheme" content="dark light" />
-    <title>Photo Manager 4.7.0</title>
+    <title>Photo Manager 4.8.0</title>
     <link rel="stylesheet" href="./assets/ui.css" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./assets/icons/icon-180.png" />
@@ -19,7 +19,7 @@
   <body>
     <a class="skip-link" href="#mainContent">Pular para o conteúdo</a>
     <div class="toast" id="toast" popover="manual"></div>
-    <div class="shell">
+    <div class="shell" id="vueApp">
       <div class="topbar">
         <div class="brand">
           <div class="logo">◫</div>
@@ -37,8 +37,8 @@
           </button>
           <span class="worker-badge" id="workerBadge">worker…</span>
           <div class="connection">
-            <span class="dot" id="connDot"></span>
-            <span id="connText">conectando…</span>
+            <span class="dot" id="connDot" :class="{ ok: online }"></span>
+            <span id="connText">{{ online ? "conectado" : "offline" }}</span>
           </div>
         </div>
       </div>
@@ -48,41 +48,42 @@
           class="app-tab"
           id="tabOverview"
           role="tab"
-          aria-selected="true"
+         
           aria-controls="viewOverview"
           data-tab="overview"
           type="button"
-        >
+         :aria-selected="activeTab === 'overview'" :tabindex="activeTab === 'overview' ? 0 : -1" @click="navigate('overview')" @keydown="onTabKeydown($event, 'overview')">
           Visão geral
         </button>
         <button
           class="app-tab"
           id="tabQuality"
           role="tab"
-          aria-selected="false"
+         
           aria-controls="viewQuality"
           data-tab="quality"
           type="button"
-        >
+         :aria-selected="activeTab === 'quality'" :tabindex="activeTab === 'quality' ? 0 : -1" @click="navigate('quality')" @keydown="onTabKeydown($event, 'quality')">
           Qualidade
         </button>
         <button
           class="app-tab"
           id="tabDuplicates"
           role="tab"
-          aria-selected="false"
+         
           aria-controls="viewDuplicates"
           data-tab="duplicates"
           type="button"
-        >
+         :aria-selected="activeTab === 'duplicates'" :tabindex="activeTab === 'duplicates' ? 0 : -1" @click="navigate('duplicates')" @keydown="onTabKeydown($event, 'duplicates')">
           DUPLICATES Finder
         </button>
-        <button class="app-tab" id="tabSearch" role="tab" aria-selected="false"
-          aria-controls="viewSearch" data-tab="search" type="button">✦ Search Lab</button>
+        <button class="app-tab" id="tabSearch" role="tab"
+          aria-controls="viewSearch" data-tab="search" type="button" :aria-selected="activeTab === 'search'" :tabindex="activeTab === 'search' ? 0 : -1" @click="navigate('search')" @keydown="onTabKeydown($event, 'search')">✦ Search Lab</button>
       </nav>
+      <router-view class="route-announcement" aria-live="polite"></router-view>
 
       <main id="mainContent">
-        <div class="tab-view" id="viewSearch" role="tabpanel" aria-labelledby="tabSearch" hidden>
+        <div class="tab-view" id="viewSearch" role="tabpanel" aria-labelledby="tabSearch" :hidden="activeTab !== 'search'">
           <section class="search-hero">
             <div class="search-eyebrow">PHOTO MANAGER / INTELLIGENCE</div>
             <div class="page-job-indicator" id="searchJobIndicator" role="status" aria-live="polite" hidden>
@@ -95,7 +96,7 @@
             <p>Uma fototeca inteira, pesquisável por pessoa, conteúdo, data, tamanho e semelhança visual.</p>
             <form id="searchForm" class="search-bar">
               <span aria-hidden="true">⌕</span>
-              <input id="searchInput" type="search" autocomplete="off" spellcheck="false"
+              <input id="searchInput" v-model="search.query" type="search" autocomplete="off" spellcheck="false"
                 placeholder='person:"Fulano" tag:beach before:2020 size:<20MB'
                 aria-label="Consulta avançada na fototeca" />
               <button class="search-go" type="submit">Buscar ↗</button>
@@ -149,11 +150,11 @@
             </aside>
             <section class="search-main">
               <div class="search-results-head"><div><h2>Explorar fototeca</h2><p id="searchResultSummary">Indexe os metadados para começar.</p></div>
-                <select id="searchSort" aria-label="Ordenar resultados"><option value="newest">Mais recentes</option><option value="oldest">Mais antigas</option><option value="largest">Maiores</option><option value="smallest">Menores</option></select>
+                <select id="searchSort" v-model="search.sort" aria-label="Ordenar resultados"><option value="newest">Mais recentes</option><option value="oldest">Mais antigas</option><option value="largest">Maiores</option><option value="smallest">Menores</option></select>
               </div>
               <div class="search-similar" id="searchSimilar" hidden>
                 <span id="searchSimilarLabel">Fotos semelhantes</span>
-                <label>Distância <input type="range" id="searchDistance" min="0" max="24" value="8" /></label>
+                <label>Distância <input type="range" id="searchDistance" v-model="search.distance" min="0" max="24" value="8" /></label>
                 <button id="searchClearSimilar" type="button">Limpar ×</button>
               </div>
               <section class="search-face-section" aria-labelledby="searchFacesTitle">
@@ -204,7 +205,7 @@
           id="viewOverview"
           role="tabpanel"
           aria-labelledby="tabOverview"
-        >
+         :hidden="activeTab !== 'overview'">
       <div class="page-job-indicator" id="overviewJobIndicator" role="status" aria-live="polite" hidden>
         <span class="page-job-spinner" aria-hidden="true"></span>
         <div class="page-job-copy"><strong id="overviewJobTitle">Job em execução</strong><span id="overviewJobText">Preparando…</span></div>
@@ -842,8 +843,7 @@
           id="viewDuplicates"
           role="tabpanel"
           aria-labelledby="tabDuplicates"
-          hidden
-        >
+         :hidden="activeTab !== 'duplicates'">
           <div class="duplicates-shell">
             <div class="page-job-indicator" id="duplicatesJobIndicator" role="status" aria-live="polite" hidden>
               <span class="page-job-spinner" aria-hidden="true"></span>
@@ -1040,8 +1040,7 @@
           id="viewQuality"
           role="tabpanel"
           aria-labelledby="tabQuality"
-          hidden
-        >
+         :hidden="activeTab !== 'quality'">
           <div class="duplicates-shell quality-shell">
             <div class="page-job-indicator" id="qualityJobIndicator" role="status" aria-live="polite" hidden>
               <span class="page-job-spinner" aria-hidden="true"></span>
@@ -1188,6 +1187,8 @@
       </div>
     </div>
 
-    <script src="./assets/ui.js"></script>
+    <script src="./assets/vue.global.prod.js"></script>
+    <!-- Vue Router is pinned and cached by the service worker after first load. -->
+    <script src="./assets/boot.js"></script>
   </body>
 </html>

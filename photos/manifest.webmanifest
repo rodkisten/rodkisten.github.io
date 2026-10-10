@@ -2,7 +2,7 @@
   "name": "Photo Manager",
   "short_name": "Photo Manager",
   "description": "Gerencie Fotos, compressão, qualidade e duplicados pelo Pyto.",
-  "start_url": "./#overview",
+  "start_url": "./#/overview",
   "scope": "./",
   "display": "standalone",
   "background_color": "#010101",

@@ -1,0 +1,224 @@
+// Photo Manager 4.8.0 · Vue 3 standalone + Vue Router 4 global builds
+// No bundler, hydration server, or app-specific remote JavaScript required.
+(() => {
+  "use strict";
+
+  const root = document.getElementById("vueApp");
+  if (!root) return;
+  const VueAPI = window.Vue;
+  const RouterAPI = window.VueRouter;
+  if (!VueAPI || !RouterAPI) {
+    const warning = document.createElement("div");
+    warning.setAttribute("role", "alert");
+    warning.className = "vue-loading-error";
+    warning.textContent = "Vue Router não carregou. Conecte à internet uma vez para ativar a navegação offline.";
+    root.prepend(warning);
+    // Legacy navigation/controls are left usable if the CDN is not reachable.
+    window.PhotoManagerUI = null;
+    return;
+  }
+
+  const { createApp, reactive, watch, computed, nextTick } = VueAPI;
+  const { createRouter, createWebHashHistory } = RouterAPI;
+  const validTabs = ["overview", "quality", "duplicates", "search"];
+  const storageKey = "photo-manager:ui-preferences:v2";
+  let saved = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(storageKey) || "{}");
+    if (!saved || typeof saved !== "object" || Array.isArray(saved)) saved = {};
+  } catch { saved = {}; }
+  const recognized = new Set(validTabs);
+  const prefSort = ["newest", "oldest", "largest", "smallest"].includes(saved.sort)
+    ? saved.sort : "newest";
+  const prefDistance = Number.isFinite(Number(saved.distance))
+    ? String(Math.max(0, Math.min(24, Number(saved.distance)))) : "8";
+  const lastTab = recognized.has(saved.tab) ? saved.tab : "overview";
+
+  // Migrate old v4.7 URLs without breaking existing bookmarks.
+  const oldHash = location.hash.slice(1);
+  const oldParams = new URLSearchParams(location.search);
+  if ((!oldHash || recognized.has(oldHash)) && (oldHash || oldParams.has("tab"))) {
+    const tab = recognized.has(oldParams.get("tab")) ? oldParams.get("tab")
+      : (recognized.has(oldHash) ? oldHash : lastTab);
+    const routeQuery = new URLSearchParams();
+    if (tab === "search") {
+      for (const key of ["q", "sort", "distance", "similar", "photo"]) {
+        if (oldParams.has(key)) routeQuery.set(key, oldParams.get(key));
+      }
+    }
+    history.replaceState(history.state, "",
+      `${location.pathname}#/${tab}${routeQuery.toString() ? "?" + routeQuery : ""}`);
+  }
+
+  const viewLabels = {
+    overview: "Visão geral",
+    quality: "Qualidade",
+    duplicates: "DUPLICATES Finder",
+    search: "Search Lab",
+  };
+  const screenComponents = Object.fromEntries(validTabs.map(name => [name, {
+    name: `PhotoManager${name[0].toUpperCase()}${name.slice(1)}Announcement`,
+    // View content remains permanently mounted in the app shell (for job polling,
+    // selections, dialogs and legacy DOM listeners). The RouterView announces routes.
+    template: `<span class="sr-only">${viewLabels[name]}</span>`,
+  }]));
+  const router = createRouter({
+    history: createWebHashHistory(),
+    routes: [
+      { path: "/", redirect: `/${lastTab}` },
+      ...validTabs.map(name => ({ path: `/${name}`, name, component: screenComponents[name] })),
+      { path: "/:pathMatch(.*)*", redirect: "/overview" },
+    ],
+  });
+
+  const ui = reactive({
+    activeTab: lastTab,
+    online: false,
+    terminalOpen: false,
+    workerLabel: "worker…",
+    job: null,
+    search: {
+      query: "",
+      sort: prefSort,
+      distance: prefDistance,
+      similarTo: "",
+      photo: "",
+    },
+    // These collections are reactive, and persist while switching routes.
+    duplicates: {
+      groups: [],
+      selected: new Set(),
+      result: null,
+      status: null,
+      drive: null,
+      lastCompletedScanId: null,
+    },
+    searchResults: {
+      offset: 0,
+      total: 0,
+      query: "",
+      similarTo: "",
+      busy: false,
+      items: new Map(),
+      selected: null,
+      status: null,
+    },
+    quality: { status: null, results: null },
+  });
+
+  let legacyRouteListener = null;
+  let currentRouteSnapshot = null;
+  const routeQuery = () => router.currentRoute.value.query || {};
+  function normalizeQuery(query) {
+    const output = {};
+    for (const key of ["q", "sort", "distance", "similar", "photo"]) {
+      const val = query?.[key];
+      if (val != null && val !== "") output[key] = String(val);
+    }
+    return output;
+  }
+  function querySnapshot(query) {
+    return JSON.stringify(normalizeQuery(query));
+  }
+  function syncFromRoute(route) {
+    const nextTab = recognized.has(route.name) ? route.name : "overview";
+    const previousTab = ui.activeTab;
+    const previousQuery = currentRouteSnapshot;
+    ui.activeTab = nextTab;
+    if (nextTab === "search") {
+      const query = normalizeQuery(route.query);
+      if (query.q !== undefined) ui.search.query = query.q;
+      if (query.sort !== undefined && ["newest", "oldest", "largest", "smallest"].includes(query.sort)) ui.search.sort = query.sort;
+      if (query.distance !== undefined && /^\d+$/.test(query.distance)) ui.search.distance = query.distance;
+      ui.search.similarTo = query.similar || "";
+      ui.search.photo = query.photo || "";
+    }
+    const snapshot = querySnapshot(route.query);
+    currentRouteSnapshot = snapshot;
+    const tabChanged = previousTab !== nextTab;
+    // Do not make another request when a search result merely updates ?photo=.
+    const externalSearchChange = nextTab === "search" && previousQuery !== snapshot;
+    if (legacyRouteListener) {
+      nextTick(() => legacyRouteListener(nextTab, {
+        tabChanged,
+        searchChanged: externalSearchChange,
+        query: normalizeQuery(route.query),
+      }));
+    }
+  }
+  watch(() => router.currentRoute.value.fullPath,
+    () => syncFromRoute(router.currentRoute.value), { immediate: true });
+
+  let persistTimer;
+  watch(() => [ui.activeTab, ui.search.sort, ui.search.distance], () => {
+    clearTimeout(persistTimer);
+    persistTimer = setTimeout(() => {
+      try {
+        // Do not store private queries, IDs, thumbnails or authentication tokens.
+        localStorage.setItem(storageKey, JSON.stringify({
+          tab: ui.activeTab,
+          sort: ui.search.sort,
+          distance: ui.search.distance,
+        }));
+      } catch { /* storage might be disabled */ }
+    }, 300);
+  });
+
+  const service = {
+    state: ui,
+    router,
+    navigate(tab, options = {}) {
+      const name = recognized.has(tab) ? tab : "overview";
+      const query = name === "search" && ui.activeTab === "search"
+        ? normalizeQuery(routeQuery()) : {};
+      return router[options.replace ? "replace" : "push"]({ name, query });
+    },
+    setRoute(tab, query, replace = true) {
+      const name = recognized.has(tab) ? tab : "overview";
+      const normal = name === "search" ? normalizeQuery(query) : {};
+      const method = replace ? "replace" : "push";
+      const current = router.currentRoute.value;
+      if (current.name === name && querySnapshot(current.query) === querySnapshot(normal)) return Promise.resolve();
+      return router[method]({name, query: normal}).catch(() => {});
+    },
+    onRouteChanged(listener) {
+      legacyRouteListener = listener;
+      nextTick(() => listener(ui.activeTab, {
+        tabChanged: true,
+        searchChanged: false,
+        query: normalizeQuery(routeQuery()),
+      }));
+    },
+    setConnection(connected) { ui.online = !!connected; },
+    setTerminal(open) { ui.terminalOpen = !!open; },
+    setJob(status) { ui.job = status || null; },
+    setSearchQuery(text) { ui.search.query = String(text || ""); },
+  };
+  window.PhotoManagerUI = service;
+
+  const app = createApp({
+    setup() {
+      const activeTab = computed(() => ui.activeTab);
+      function navigate(name) { service.navigate(name); }
+      function onTabKeydown(event, tab) {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        const index = validTabs.indexOf(tab);
+        const target = validTabs[(index + (event.key === "ArrowRight" ? 1 : -1) + validTabs.length) % validTabs.length];
+        nextTick(() => document.querySelector(`[data-tab="${target}"]`)?.focus());
+        navigate(target);
+      }
+      return {
+        activeTab,
+        search: ui.search,
+        online: computed(() => ui.online),
+        terminalOpen: computed(() => ui.terminalOpen),
+        navigate,
+        onTabKeydown,
+      };
+    },
+  });
+  app.use(router);
+  app.mount(root);
+  document.documentElement.classList.remove("vue-pending");
+})();
