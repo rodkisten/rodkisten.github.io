@@ -217,7 +217,7 @@ const $ = (s) => document.querySelector(s),
             $("#bridgeDialog").close();
             location.reload();
           } catch (error) {
-            message.textContent = `${error.message}. Verifique se o Pyto está aberto e o código está correto.`;
+            message.textContent = `${error}. Verifique se o Pyto está aberto e o código está correto.`;
           } finally { button.disabled = false; }
         });
         if (hostedShell) {
