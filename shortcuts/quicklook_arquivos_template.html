@@ -1,0 +1,1562 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#090a0b">
+    <title>Meus arquivos · Arquivos</title>
+    <style>
+    :root {
+        color-scheme: dark;
+        --page: #090a0b;
+        --surface: #111315;
+        --surface-2: #17191c;
+        --stroke: #282b2f;
+        --stroke-soft: #212428;
+        --text: #f2f3f4;
+        --muted: #9b9fa7;
+        --subtle: #6d737a;
+        --purple: #c3a8ff;
+        --green: #a6dfbd;
+        --amber: #f2c98a;
+        --blue: #a8c8f8;
+        --red: #f3aaa6;
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    html {
+        -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+        min-width: 280px;
+        margin: 0;
+        background: var(--page);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, sans-serif;
+        font-size: 14px;
+        -webkit-font-smoothing: antialiased;
+    }
+
+    .icon-defs {
+        position: absolute;
+        overflow: hidden;
+        pointer-events: none;
+    }
+
+    .icon {
+        width: 20px;
+        height: 20px;
+        display: block;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.65;
+        flex-shrink: 0;
+    }
+
+    .page {
+        max-width: 600px;
+        min-height: 100vh;
+        margin: 0 auto;
+        padding: calc(24px + env(safe-area-inset-top, 0px)) 18px calc(34px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .overline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 21px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 1.7px;
+        text-transform: uppercase;
+    }
+
+    .overline__left {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+    }
+
+    .overline__dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--green);
+        box-shadow: 0 0 0 4px rgba(166, 223, 189, 0.08);
+    }
+
+    .overline__right {
+        color: #777c84;
+        font-weight: 600;
+        letter-spacing: 0.8px;
+    }
+
+    .heading {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 24px;
+    }
+
+    .heading__mark {
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 48px;
+        border: 1px solid #383b40;
+        border-radius: 15px;
+        background: linear-gradient(145deg, #25272b 0%, #141619 100%);
+        color: #f1f2f3;
+    }
+
+    .heading__mark .icon {
+        width: 24px;
+        height: 24px;
+    }
+
+    h1 {
+        margin: 0;
+        font-size: clamp(27px, 7vw, 35px);
+        font-weight: 760;
+        letter-spacing: -1.25px;
+        line-height: 1.08;
+    }
+
+    .heading__desc {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.05px;
+    }
+
+    .location {
+        padding: 17px 17px 15px;
+        border: 1px solid var(--stroke);
+        border-radius: 18px;
+        background: var(--surface);
+    }
+
+    .location__top {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 11px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+    }
+
+    .location__top .icon {
+        width: 14px;
+        height: 14px;
+    }
+
+    .location__path {
+        margin: 0;
+        overflow-wrap: anywhere;
+        font-size: 15px;
+        font-weight: 650;
+        letter-spacing: -0.3px;
+        line-height: 1.5;
+    }
+
+    .location__path span {
+        padding: 0 5px;
+        color: #626870;
+    }
+
+    .stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        margin-top: 16px;
+        padding-top: 15px;
+        border-top: 1px solid var(--stroke-soft);
+    }
+
+    .stat {
+        min-width: 0;
+        padding-left: 14px;
+        border-left: 1px solid var(--stroke-soft);
+    }
+
+    .stat:first-child {
+        padding-left: 0;
+        border-left: 0;
+    }
+
+    .stat__value {
+        display: block;
+        margin-bottom: 3px;
+        font-size: 19px;
+        font-weight: 730;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.5px;
+    }
+
+    .stat__label {
+        display: block;
+        color: var(--muted);
+        font-size: 10.5px;
+    }
+
+    .section {
+        margin-top: 28px;
+    }
+
+    .section__heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin: 0 2px 12px;
+    }
+
+    .section__title {
+        margin: 0;
+        color: #c3c6ca;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 1.45px;
+        text-transform: uppercase;
+    }
+
+    .section__meta {
+        color: var(--subtle);
+        font-size: 11px;
+    }
+
+    .entries {
+        overflow: hidden;
+        border: 1px solid var(--stroke);
+        border-radius: 18px;
+        background: var(--surface);
+    }
+
+    .entry {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        gap: 12px;
+        min-height: 73px;
+        padding: 13px 12px;
+    }
+
+    .entry + .entry {
+        border-top: 1px solid var(--stroke-soft);
+    }
+
+    .entry__glyph {
+        width: 45px;
+        height: 45px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 45px;
+        position: relative;
+        border: 1px solid transparent;
+        border-radius: 13px;
+    }
+
+    .entry__glyph .icon {
+        width: 22px;
+        height: 22px;
+    }
+
+    .entry__glyph--folder {
+        color: var(--amber);
+        border-color: rgba(242, 201, 138, 0.10);
+        background: rgba(242, 201, 138, 0.10);
+    }
+
+    .entry__glyph--image {
+        color: var(--purple);
+        background: rgba(195, 168, 255, 0.11);
+    }
+
+    .entry__glyph--video {
+        color: var(--blue);
+        background: rgba(168, 200, 248, 0.10);
+    }
+
+    .entry__glyph--code {
+        color: var(--green);
+        background: rgba(166, 223, 189, 0.09);
+    }
+
+    .entry__glyph--pdf {
+        color: var(--red);
+        background: rgba(243, 170, 166, 0.10);
+    }
+
+    .entry__glyph--archive {
+        color: var(--amber);
+        background: rgba(242, 201, 138, 0.09);
+    }
+
+    .entry__glyph--default {
+        color: #d2d4d8;
+        background: rgba(216, 221, 226, 0.08);
+    }
+
+    .entry__content {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .entry__name {
+        display: block;
+        overflow: hidden;
+        color: var(--text);
+        font-size: 13.5px;
+        font-weight: 650;
+        letter-spacing: -0.1px;
+        line-height: 1.5;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .entry__details {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        overflow: hidden;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 11px;
+        line-height: 1.4;
+        white-space: nowrap;
+    }
+
+    .entry__details span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .entry__separator {
+        color: #50555c;
+    }
+
+    .entry__trailing {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+        color: #5f666e;
+    }
+
+    .entry__trailing > .icon {
+        width: 15px;
+        height: 15px;
+    }
+
+    .entry__trailing > .icon--star {
+        color: var(--amber);
+        fill: currentColor;
+        stroke-width: 1.4;
+    }
+
+    .entry__trailing > .icon--cloud {
+        color: var(--blue);
+    }
+
+    .entry__trailing > .icon--check {
+        color: var(--green);
+    }
+
+    .filetype {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 5px;
+        border: 1px solid #32363c;
+        border-radius: 5px;
+        color: #b9bdc3;
+        font-size: 9px;
+        font-weight: 750;
+        letter-spacing: 0.4px;
+        line-height: 1;
+    }
+
+    .entry--folder .entry__name {
+        font-weight: 700;
+    }
+
+    .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 9px 17px;
+        margin: 19px 2px 0;
+        color: var(--muted);
+        font-size: 10.5px;
+    }
+
+    .legend__item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .legend__item .icon {
+        width: 13px;
+        height: 13px;
+    }
+
+    .legend__item--favorite .icon {
+        color: var(--amber);
+        fill: currentColor;
+    }
+
+    .legend__item--cloud .icon {
+        color: var(--blue);
+    }
+
+    .legend__item--local .icon {
+        color: var(--green);
+    }
+
+    .footer {
+        margin: 38px 0 0;
+        color: #666b72;
+        font-size: 10px;
+        line-height: 1.6;
+        text-align: center;
+    }
+
+    @media (max-width: 355px) {
+        .page {
+            padding-left: 12px;
+            padding-right: 12px;
+        }
+
+        .entry {
+            gap: 9px;
+            padding-right: 10px;
+            padding-left: 10px;
+        }
+
+        .entry__glyph {
+            width: 40px;
+            height: 40px;
+            flex-basis: 40px;
+        }
+
+        .entry__name {
+            font-size: 12.5px;
+        }
+    }
+    
+
+    /* URL-driven responsive file browser */
+    :root {
+        --console: #0b0d0f;
+        --console-border: #33373d;
+    }
+
+    .page {
+        max-width: 620px;
+        padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .overline__right {
+        display: flex;
+        gap: 7px;
+        align-items: center;
+    }
+
+    .source-pill {
+        padding: 5px 8px;
+        border: 1px solid var(--stroke);
+        border-radius: 7px;
+        color: #a8abb0;
+        font-size: 9px;
+        letter-spacing: 1px;
+    }
+
+    .source-pill[data-mode="hash"] {
+        border-color: rgba(166, 223, 189, 0.25);
+        color: var(--green);
+    }
+
+    .location__path {
+        word-break: break-word;
+    }
+
+    .entries:empty {
+        display: none;
+    }
+
+    .entry-card + .entry-card {
+        border-top: 1px solid var(--stroke-soft);
+    }
+
+    .entry-card .entry + .entry {
+        border-top: 0;
+    }
+
+    .entry__name {
+        overflow-wrap: anywhere;
+    }
+
+    .entry__details {
+        min-width: 0;
+    }
+
+    .entry__trailing {
+        gap: 7px;
+    }
+
+    .entry__glyph--audio {
+        color: #ebbdaf;
+        background: rgba(235, 189, 175, 0.11);
+    }
+
+    .entry__glyph--sheet {
+        color: #a7dcae;
+        background: rgba(167, 220, 174, 0.09);
+    }
+
+    .entry__glyph--text {
+        color: #c5c9d0;
+        background: rgba(197, 201, 208, 0.09);
+    }
+
+    .filetype {
+        max-width: 56px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .entry-debug {
+        padding: 0 12px 11px 68px;
+        margin-top: -2px;
+        color: var(--muted);
+    }
+
+    .entry-debug > summary {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 0;
+        color: #9ba5b0;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        list-style: none;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .entry-debug > summary::-webkit-details-marker,
+    .debug-panel > summary::-webkit-details-marker,
+    .raw-payload > summary::-webkit-details-marker {
+        display: none;
+    }
+
+    .entry-debug .icon {
+        width: 12px;
+        height: 12px;
+        transform: rotate(0deg);
+        transition: transform 180ms ease;
+    }
+
+    .entry-debug[open] > summary .icon {
+        transform: rotate(90deg);
+    }
+
+    .entry-debug .terminal {
+        margin-top: 8px;
+    }
+
+    .empty-state {
+        margin: 0;
+        padding: 20px;
+        color: var(--muted);
+        font-size: 12px;
+        text-align: center;
+    }
+
+    .notice {
+        display: none;
+        gap: 10px;
+        margin: 16px 0 0;
+        padding: 12px;
+        border: 1px solid rgba(243, 170, 166, 0.25);
+        border-radius: 12px;
+        color: var(--red);
+        background: rgba(243, 170, 166, 0.05);
+        line-height: 1.5;
+        font-size: 12px;
+    }
+
+    .notice.visible {
+        display: flex;
+    }
+
+    .notice .icon {
+        width: 17px;
+        height: 17px;
+    }
+
+    .debug-panel {
+        margin-top: 31px;
+        overflow: hidden;
+        border: 1px solid var(--stroke);
+        border-radius: 17px;
+        background: var(--surface);
+    }
+
+    .debug-panel > summary {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 15px;
+        cursor: pointer;
+        list-style: none;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .debug-panel > summary:focus-visible,
+    .entry-debug > summary:focus-visible,
+    .raw-payload > summary:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: -2px;
+    }
+
+    .debug-toggle-icon {
+        display: grid;
+        place-items: center;
+        width: 36px;
+        height: 36px;
+        border: 1px solid #343940;
+        border-radius: 10px;
+        color: var(--green);
+        background: #1b2020;
+        flex-shrink: 0;
+    }
+
+    .debug-toggle-icon .icon {
+        width: 19px;
+        height: 19px;
+    }
+
+    .debug-label {
+        display: flex;
+        flex: 1;
+        flex-direction: column;
+        min-width: 0;
+        gap: 3px;
+    }
+
+    .debug-label strong {
+        font-size: 13px;
+        font-weight: 700;
+    }
+
+    .debug-label small {
+        color: var(--muted);
+        font-size: 10.5px;
+    }
+
+    .debug-summary-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: #858a92;
+        font-size: 10px;
+        flex-shrink: 0;
+    }
+
+    .debug-summary-right .icon {
+        width: 16px;
+        height: 16px;
+        transform: rotate(90deg);
+        transition: transform 180ms ease;
+    }
+
+    .debug-panel[open] .debug-summary-right .icon {
+        transform: rotate(-90deg);
+    }
+
+    .debug-body {
+        padding: 0 12px 13px;
+        border-top: 1px solid var(--stroke-soft);
+    }
+
+    .debug-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 13px 2px 9px;
+        color: var(--muted);
+        font-size: 10px;
+    }
+
+    .debug-toolbar strong {
+        color: #cdd1d7;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 1.1px;
+        text-transform: uppercase;
+    }
+
+    .terminal {
+        overflow: hidden;
+        border: 1px solid var(--console-border);
+        border-radius: 11px;
+        background: var(--console);
+    }
+
+    .terminal__chrome {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-height: 30px;
+        padding: 0 11px;
+        border-bottom: 1px solid #25292d;
+        background: #121519;
+    }
+
+    .terminal__dots {
+        display: inline-flex;
+        gap: 5px;
+    }
+
+    .terminal__dots i {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #42474d;
+    }
+
+    .terminal__dots i:first-child { background: #ba6668; }
+    .terminal__dots i:nth-child(2) { background: #b89b60; }
+    .terminal__dots i:nth-child(3) { background: #6aaf84; }
+
+    .terminal__title {
+        overflow: hidden;
+        color: #79818a;
+        font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+        font-size: 9px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .terminal__screen {
+        max-height: 340px;
+        overflow: auto;
+        padding: 9px 0;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+    }
+
+    .terminal__line {
+        display: flex;
+        min-height: 17px;
+        font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+        font-size: 10.5px;
+        line-height: 1.65;
+    }
+
+    .terminal__num {
+        position: sticky;
+        left: 0;
+        width: 39px;
+        min-width: 39px;
+        padding-right: 10px;
+        color: #505962;
+        background: var(--console);
+        border-right: 1px solid #22272a;
+        text-align: right;
+        user-select: none;
+    }
+
+    .terminal__code {
+        min-width: 0;
+        padding: 0 10px;
+        color: #cbd2da;
+        white-space: pre;
+        tab-size: 2;
+    }
+
+    .json-key { color: #a5c5f0; }
+    .json-string { color: #aedbb7; }
+    .json-number { color: #e6bc85; }
+    .json-keyword { color: #c9a9ef; }
+
+    .raw-payload {
+        margin-top: 14px;
+        border-top: 1px solid var(--stroke-soft);
+    }
+
+    .raw-payload > summary {
+        padding: 15px 2px 6px;
+        color: #bbc0c6;
+        font-size: 11px;
+        font-weight: 650;
+        cursor: pointer;
+        list-style: none;
+    }
+
+    .raw-payload > .terminal {
+        margin-top: 9px;
+    }
+
+    .debug-help {
+        padding: 12px 2px 1px;
+        color: #7b818a;
+        font-size: 10px;
+        line-height: 1.6;
+        overflow-wrap: anywhere;
+    }
+
+    .debug-help code {
+        color: #a7b4c3;
+        font-size: 10px;
+    }
+
+    @media (max-width: 355px) {
+        .entry-debug {
+            padding-left: 58px;
+        }
+
+        .terminal__line {
+            font-size: 10px;
+        }
+    }
+    </style>
+</head>
+<body>
+<svg aria-hidden="true" width="0" height="0" class="icon-defs" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <symbol id="icon-folder" viewBox="0 0 24 24">
+            <path d="M3 7a2 2 0 0 1 2-2h4.2l2.1 2H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
+        </symbol>
+        <symbol id="icon-image" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="18" height="18" rx="3" />
+            <circle cx="8.5" cy="8.5" r="1.5" />
+            <path d="m21 15-5-5L5 21" />
+        </symbol>
+        <symbol id="icon-code" viewBox="0 0 24 24">
+            <path d="M13.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8.5L13.5 2Z" />
+            <path d="M13 2v7h7M10 13l-2 2 2 2m4-4 2 2-2 2" />
+        </symbol>
+        <symbol id="icon-document" viewBox="0 0 24 24">
+            <path d="M13.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8.5L13.5 2Z" />
+            <path d="M13 2v7h7M8 13h8M8 17h6" />
+        </symbol>
+        <symbol id="icon-archive" viewBox="0 0 24 24">
+            <rect x="4" y="2" width="16" height="20" rx="2" />
+            <path d="M12 2v5m0 3v3m0 3v1M9 7h6M9 13h6M10 18h4" />
+        </symbol>
+        <symbol id="icon-video" viewBox="0 0 24 24">
+            <rect x="3" y="4" width="18" height="16" rx="3" />
+            <path d="M7 4v16M17 4v16M3 9h4m-4 6h4m10-6h4m-4 6h4" />
+            <path d="m10 9 5 3-5 3V9Z" />
+        </symbol>
+        <symbol id="icon-chevron" viewBox="0 0 24 24">
+            <path d="m9 18 6-6-6-6" />
+        </symbol>
+        <symbol id="icon-star" viewBox="0 0 24 24">
+            <path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.8 1-6.1-4.4-4.3 6.1-.9L12 3Z" />
+        </symbol>
+        <symbol id="icon-cloud" viewBox="0 0 24 24">
+            <path d="M7 18a5 5 0 0 1-.5-10 6.5 6.5 0 0 1 12.2 1.4A4.5 4.5 0 0 1 18 18H7Z" />
+        </symbol>
+        <symbol id="icon-check" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="9" />
+            <path d="m8 12 2.5 2.5L16 9" />
+        </symbol>
+        <symbol id="icon-device" viewBox="0 0 24 24">
+            <rect x="5" y="2" width="14" height="20" rx="3" />
+            <path d="M10 18h4" />
+        </symbol>
+        <symbol id="icon-layers" viewBox="0 0 24 24">
+            <path d="m12 2 9 5-9 5-9-5 9-5Zm-9 10 9 5 9-5M3 17l9 5 9-5" />
+        </symbol>
+        <symbol id="icon-audio" viewBox="0 0 24 24">
+            <path d="M9 18V5l12-2v13M9 9l12-2" />
+            <circle cx="5" cy="18" r="4" />
+            <circle cx="17" cy="16" r="4" />
+        </symbol>
+        <symbol id="icon-grid" viewBox="0 0 24 24">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M3 10h18M3 16h18M10 3v18" />
+        </symbol>
+        <symbol id="icon-terminal" viewBox="0 0 24 24">
+            <rect x="2" y="3" width="20" height="18" rx="3" />
+            <path d="m6 9 4 3-4 3m7 0h5" />
+        </symbol>
+        <symbol id="icon-info" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 11v5m0-8h.01" />
+        </symbol>
+        <symbol id="icon-search" viewBox="0 0 24 24">
+            <circle cx="10.5" cy="10.5" r="6.5" />
+            <path d="m16 16 5 5" />
+        </symbol>
+        <symbol id="icon-alert" viewBox="0 0 24 24">
+            <path d="M12 3 2 21h20L12 3Z" />
+            <path d="M12 9v5m0 3h.01" />
+        </symbol>
+    </defs>
+</svg>
+    <main class="page">
+        <div class="overline">
+            <div class="overline__left">
+                <span class="overline__dot"></span>
+                <span>Atalhos · File Viewer</span>
+            </div>
+            <div class="overline__right">
+                <span class="source-pill" id="sourceMode" data-mode="demo">EXEMPLO</span>
+            </div>
+        </div>
+
+        <header class="heading">
+            <div class="heading__mark">
+                <svg class="icon" aria-hidden="true"><use href="#icon-layers"></use></svg>
+            </div>
+            <div>
+                <h1 id="pageTitle">Meus arquivos</h1>
+                <p class="heading__desc" id="pageDescription">Conteúdo do diretório</p>
+            </div>
+        </header>
+
+        <section class="location" aria-label="Localização e resumo">
+            <div class="location__top">
+                <svg class="icon" aria-hidden="true"><use href="#icon-device"></use></svg>
+                <span id="originLabel">No meu iPhone</span>
+            </div>
+            <p class="location__path" id="locationPath">/</p>
+            <div class="stats">
+                <div class="stat">
+                    <span class="stat__value" id="totalCount">0</span>
+                    <span class="stat__label">Itens</span>
+                </div>
+                <div class="stat">
+                    <span class="stat__value" id="folderCount">0</span>
+                    <span class="stat__label">Pastas</span>
+                </div>
+                <div class="stat">
+                    <span class="stat__value" id="fileCount">0</span>
+                    <span class="stat__label">Arquivos</span>
+                </div>
+            </div>
+        </section>
+
+        <div class="notice" id="parseNotice" role="alert">
+            <svg class="icon" aria-hidden="true"><use href="#icon-alert"></use></svg>
+            <span id="parseNoticeText"></span>
+        </div>
+
+        <section class="section" aria-label="Pastas">
+            <div class="section__heading">
+                <h2 class="section__title">Pastas</h2>
+                <span class="section__meta" id="folderMeta">0 encontradas</span>
+            </div>
+            <div class="entries" id="foldersList"></div>
+        </section>
+
+        <section class="section" aria-label="Arquivos">
+            <div class="section__heading">
+                <h2 class="section__title">Arquivos</h2>
+                <span class="section__meta" id="fileMeta">0 encontrados</span>
+            </div>
+            <div class="entries" id="filesList"></div>
+        </section>
+
+        <div class="legend" aria-label="Legenda">
+            <span class="legend__item legend__item--favorite">
+                <svg class="icon" aria-hidden="true"><use href="#icon-star"></use></svg>
+                Favorito
+            </span>
+            <span class="legend__item legend__item--cloud">
+                <svg class="icon" aria-hidden="true"><use href="#icon-cloud"></use></svg>
+                iCloud
+            </span>
+            <span class="legend__item legend__item--local">
+                <svg class="icon" aria-hidden="true"><use href="#icon-check"></use></svg>
+                Disponível offline
+            </span>
+        </div>
+
+        <details class="debug-panel" id="debugPanel">
+            <summary>
+                <span class="debug-toggle-icon">
+                    <svg class="icon" aria-hidden="true"><use href="#icon-terminal"></use></svg>
+                </span>
+                <span class="debug-label">
+                    <strong>Debug</strong>
+                    <small id="debugSubtitle">Logs e JSON identado</small>
+                </span>
+                <span class="debug-summary-right">
+                    Console
+                    <svg class="icon" aria-hidden="true"><use href="#icon-chevron"></use></svg>
+                </span>
+            </summary>
+            <div class="debug-body">
+                <div class="debug-toolbar">
+                    <strong>debug.json</strong>
+                    <span id="debugSize">Pronto</span>
+                </div>
+                <div class="terminal" aria-label="Conteúdo de depuração">
+                    <div class="terminal__chrome">
+                        <span class="terminal__dots"><i></i><i></i><i></i></span>
+                        <span class="terminal__title">$ cat debug.json</span>
+                    </div>
+                    <div class="terminal__screen" id="debugScreen"></div>
+                </div>
+                <details class="raw-payload" id="rawPayloadDetails">
+                    <summary>Ver JSON completo recebido</summary>
+                    <div class="terminal" aria-label="Payload recebido">
+                        <div class="terminal__chrome">
+                            <span class="terminal__dots"><i></i><i></i><i></i></span>
+                            <span class="terminal__title">$ cat payload.json</span>
+                        </div>
+                        <div class="terminal__screen" id="rawPayloadScreen"></div>
+                    </div>
+                </details>
+                <div class="debug-help">
+                    Envie JSON pela URL no formato <code>#data=%7B...%7D</code> ou
+                    <code>#data=BASE64URL</code>. O fragmento não é enviado ao servidor.
+                    Use Safari ou uma visualização web com JavaScript habilitado.
+                </div>
+            </div>
+        </details>
+
+        <footer class="footer">Visualizador local · Interface criada para Atalhos no iPhone</footer>
+        <noscript>
+            <p class="empty-state">Este visualizador precisa de JavaScript para interpretar dados da URL. Abra em Safari ou uma WebView com JavaScript.</p>
+        </noscript>
+    </main>
+    <script>
+    (() => {
+        "use strict";
+
+        const SAMPLE = {
+            title: "Backup do iPhone",
+            description: "Arquivos encontrados para sincronização",
+            path: "On My iPhone / Pyto / Projetos",
+            origin: "No meu iPhone",
+            items: [
+                {
+                    name: "Projetos favoritos",
+                    type: "folder",
+                    modified: "2026-10-12T10:24:00",
+                    favorite: true,
+                    location: "local",
+                    debug: { action: "skip", reason: "Pasta excluída do backup por ser favorita" }
+                },
+                {
+                    name: "Exportações",
+                    type: "folder",
+                    modified: "2026-10-11T18:20:00",
+                    location: "icloud"
+                },
+                {
+                    name: "foto_outubro.heic",
+                    type: "file",
+                    size: 4532800,
+                    modified: "2026-10-12T09:18:00",
+                    location: "local",
+                    debug: { checksum: "md5: exemplo", changed: true, transfer: "pending" }
+                },
+                {
+                    name: "backup_2026.zip",
+                    size: 13762560,
+                    modified: "2026-10-10T16:40:00",
+                    location: "icloud"
+                },
+                {
+                    name: "compressor.py",
+                    size: 19822,
+                    modified: "2026-10-12T08:30:00",
+                    favorite: true,
+                    location: "local"
+                },
+                {
+                    name: "relatorio.pdf",
+                    size: 1450000,
+                    modified: "2026-10-09T11:25:00",
+                    location: "synced"
+                },
+                {
+                    name: "video_final.mov",
+                    size: 120000000,
+                    modified: "2026-10-08T19:10:00",
+                    location: "icloud"
+                }
+            ],
+            debug: {
+                job: "icloud-backup",
+                version: "2.0.0",
+                dry_run: true,
+                status: "ready",
+                skipped: ["Projetos favoritos"],
+                transfer: { pending: 4, complete: 0, errors: [] }
+            }
+        };
+
+        const ICONS = {
+            folder: "folder",
+            image: "image",
+            video: "video",
+            audio: "audio",
+            code: "code",
+            pdf: "document",
+            archive: "archive",
+            sheet: "grid",
+            text: "document",
+            default: "document"
+        };
+
+        const EXTENSIONS = {
+            image: new Set(["heic", "heif", "jpg", "jpeg", "png", "gif", "webp", "avif", "svg", "tiff", "bmp", "raw", "dng"]),
+            video: new Set(["mov", "mp4", "m4v", "webm", "avi", "mkv"]),
+            audio: new Set(["mp3", "wav", "m4a", "aac", "flac", "ogg", "aiff"]),
+            code: new Set(["js", "jsx", "ts", "tsx", "py", "json", "html", "css", "scss", "sh", "yaml", "yml", "xml", "sql", "swift", "mdx"]),
+            pdf: new Set(["pdf"]),
+            archive: new Set(["zip", "rar", "7z", "tar", "gz", "tgz", "bz2"]),
+            sheet: new Set(["xls", "xlsx", "csv", "numbers"]),
+            text: new Set(["txt", "md", "rtf", "doc", "docx", "pages", "log"])
+        };
+
+        const byId = (id) => document.getElementById(id);
+        const state = { diagnostics: [], source: "demo", rawLength: 0 };
+
+        function svgIcon(name, extraClass = "") {
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute("class", `icon ${extraClass}`.trim());
+            svg.setAttribute("aria-hidden", "true");
+
+            const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+            use.setAttribute("href", `#icon-${name}`);
+            svg.appendChild(use);
+            return svg;
+        }
+
+        function pick(object, keys, fallback) {
+            for (const key of keys) {
+                if (object != null && object[key] !== undefined && object[key] !== null) {
+                    return object[key];
+                }
+            }
+            return fallback;
+        }
+
+        function flag(value) {
+            return value === true || value === 1 || value === "true" || value === "1";
+        }
+
+        function decodeBase64Url(value) {
+            const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+            const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+            const binary = atob(padded);
+            const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+            return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+        }
+
+        function parseEncodedData(raw) {
+            const variants = [raw];
+            let current = raw;
+
+            for (let index = 0; index < 2; index += 1) {
+                try {
+                    const decoded = decodeURIComponent(current);
+                    if (decoded === current) break;
+                    variants.push(decoded);
+                    current = decoded;
+                } catch {
+                    break;
+                }
+            }
+
+            for (const variant of variants) {
+                try {
+                    return { value: JSON.parse(variant), encoding: "JSON URL encoded" };
+                } catch {
+                    // Try the next representation.
+                }
+            }
+
+            for (const variant of variants) {
+                try {
+                    return { value: JSON.parse(decodeBase64Url(variant)), encoding: "BASE64URL UTF-8" };
+                } catch {
+                    // Try the next representation.
+                }
+            }
+
+            throw new Error("Não foi possível interpretar #data. Envie um objeto JSON codificado em URL ou BASE64URL.");
+        }
+
+        function getPayloadFromHash() {
+            const hash = window.location.hash.slice(1).replace(/^\?/, "");
+            if (!hash) {
+                return { payload: SAMPLE, source: "demo", encoding: "exemplo interno", debugOpen: false };
+            }
+
+            const candidates = [hash];
+            let debugOpen = false;
+
+            if (!/^\s*(?:\{|%7B)/i.test(hash)) {
+                const params = new URLSearchParams(hash);
+                const paramValue = params.get("data") || params.get("payload") || params.get("json");
+                if (paramValue != null) candidates.unshift(paramValue);
+                debugOpen = flag(params.get("debug"));
+            }
+
+            let error;
+            for (const candidate of candidates) {
+                try {
+                    const result = parseEncodedData(candidate);
+                    return { payload: result.value, source: "hash", encoding: result.encoding, debugOpen };
+                } catch (caught) {
+                    error = caught;
+                }
+            }
+            throw error;
+        }
+
+        function classify(item) {
+            const name = String(pick(item, ["name", "nome", "filename"], "Sem nome"));
+            const explicit = String(pick(item, ["type", "tipo", "kind"], "")).toLowerCase();
+            const folder = ["folder", "directory", "dir", "pasta"].includes(explicit) ||
+                flag(pick(item, ["isFolder", "isDirectory", "pasta"], false));
+            const extension = name.includes(".") ? name.split(".").pop().toLowerCase() : "";
+            let category = "default";
+            const explicitCategories = {
+                image: "image", imagem: "image", foto: "image", photo: "image",
+                video: "video", audio: "audio", music: "audio", musica: "audio",
+                code: "code", codigo: "code", script: "code", pdf: "pdf",
+                archive: "archive", arquivo_compactado: "archive", zip: "archive",
+                spreadsheet: "sheet", planilha: "sheet", sheet: "sheet",
+                document: "text", documento: "text", text: "text", texto: "text"
+            };
+
+            if (folder) {
+                category = "folder";
+            } else if (Object.hasOwn(explicitCategories, explicit)) {
+                category = explicitCategories[explicit];
+            } else {
+                for (const [kind, extensions] of Object.entries(EXTENSIONS)) {
+                    if (extensions.has(extension)) {
+                        category = kind;
+                        break;
+                    }
+                }
+            }
+
+            return { name, folder, extension, category };
+        }
+
+        function prettySize(input) {
+            if (input === undefined || input === null || input === "") return "";
+            const value = Number(input);
+            if (!Number.isFinite(value) || value < 0) return String(input);
+            const units = ["B", "KB", "MB", "GB", "TB"];
+            let index = 0;
+            let size = value;
+            while (size >= 1024 && index < units.length - 1) {
+                size /= 1024;
+                index += 1;
+            }
+            const digits = index === 0 ? 0 : (size < 10 ? 1 : 0);
+            return `${size.toLocaleString("pt-BR", { maximumFractionDigits: digits })} ${units[index]}`;
+        }
+
+        function prettyModified(input) {
+            if (input === undefined || input === null || input === "") return "";
+            if (typeof input === "number") {
+                const ms = input < 1e11 ? input * 1000 : input;
+                const date = new Date(ms);
+                return Number.isNaN(date.getTime()) ? String(input) :
+                    date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+            }
+            const str = String(input);
+            if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+                const [y, m, d] = str.slice(0, 10).split("-");
+                return `${d}/${m}/${y}`;
+            }
+            return str;
+        }
+
+        function escapeHtml(input) {
+            return String(input).replace(/[&<>"']/g, (char) => ({
+                "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+            })[char]);
+        }
+
+        function highlightJsonLine(line) {
+            const tokens = /("(?:\\.|[^"\\])*"(?=\s*:))|("(?:\\.|[^"\\])*")|\b(true|false|null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
+            let html = "";
+            let last = 0;
+            for (const match of line.matchAll(tokens)) {
+                html += escapeHtml(line.slice(last, match.index));
+                const style = match[1] ? "json-key" : match[2] ? "json-string" : match[3] ? "json-keyword" : "json-number";
+                html += `<span class="${style}">${escapeHtml(match[0])}</span>`;
+                last = match.index + match[0].length;
+            }
+            return html + escapeHtml(line.slice(last));
+        }
+
+        function renderTerminal(target, value) {
+            const formatted = JSON.stringify(value === undefined ? null : value, null, 2);
+            const text = typeof formatted === "string" ? formatted : String(value);
+            const lines = text.split("\n");
+            const limit = 1200;
+            const maxLineLength = 1200;
+            const fragment = document.createDocumentFragment();
+
+            for (let index = 0; index < Math.min(lines.length, limit); index += 1) {
+                const row = document.createElement("div");
+                row.className = "terminal__line";
+                const number = document.createElement("span");
+                number.className = "terminal__num";
+                number.textContent = String(index + 1);
+                const code = document.createElement("code");
+                code.className = "terminal__code";
+                const line = lines[index].slice(0, maxLineLength);
+                code.innerHTML = highlightJsonLine(line + (lines[index].length > maxLineLength ? " …" : ""));
+                row.append(number, code);
+                fragment.appendChild(row);
+            }
+
+            if (lines.length > limit) {
+                const row = document.createElement("div");
+                row.className = "terminal__line";
+                row.textContent = `… ${lines.length - limit} linhas omitidas (limite de visualização)`;
+                fragment.appendChild(row);
+            }
+            target.replaceChildren(fragment);
+            return { bytes: new Blob([text]).size, lines: lines.length };
+        }
+
+        function createTerminal(value, filename) {
+            const wrapper = document.createElement("div");
+            wrapper.className = "terminal";
+            const chrome = document.createElement("div");
+            chrome.className = "terminal__chrome";
+            chrome.innerHTML = '<span class="terminal__dots"><i></i><i></i><i></i></span>';
+            const label = document.createElement("span");
+            label.className = "terminal__title";
+            label.textContent = `$ cat ${filename}`;
+            chrome.appendChild(label);
+            const screen = document.createElement("div");
+            screen.className = "terminal__screen";
+            renderTerminal(screen, value);
+            wrapper.append(chrome, screen);
+            return wrapper;
+        }
+
+        function createItem(rawItem) {
+            const item = typeof rawItem === "string" ? { name: rawItem } : rawItem;
+            if (!item || typeof item !== "object" || Array.isArray(item)) {
+                throw new Error("Cada item precisa ser um objeto com name ou uma string.");
+            }
+
+            const info = classify(item);
+            const wrapper = document.createElement("article");
+            wrapper.className = "entry-card";
+            const entry = document.createElement("div");
+            entry.className = `entry ${info.folder ? "entry--folder" : ""}`.trim();
+
+            const glyph = document.createElement("div");
+            glyph.className = `entry__glyph entry__glyph--${info.category}`;
+            glyph.appendChild(svgIcon(ICONS[info.category]));
+
+            const content = document.createElement("div");
+            content.className = "entry__content";
+            const name = document.createElement("span");
+            name.className = "entry__name";
+            name.textContent = info.name;
+            name.title = info.name;
+            const detail = document.createElement("div");
+            detail.className = "entry__details";
+            const size = !info.folder ? prettySize(pick(item, ["size", "tamanho", "bytes"], "")) : "";
+            const modified = prettyModified(pick(item, ["modified", "modificado", "updatedAt", "date"], ""));
+            const segments = [size, modified].filter(Boolean);
+            segments.forEach((segment, index) => {
+                if (index > 0) {
+                    const separator = document.createElement("span");
+                    separator.className = "entry__separator";
+                    separator.textContent = "·";
+                    detail.appendChild(separator);
+                }
+                const span = document.createElement("span");
+                span.textContent = segment;
+                detail.appendChild(span);
+            });
+            if (detail.childElementCount === 0) {
+                const placeholder = document.createElement("span");
+                placeholder.textContent = info.folder ? "Pasta" : "Arquivo";
+                detail.appendChild(placeholder);
+            }
+            content.append(name, detail);
+
+            const trailing = document.createElement("div");
+            trailing.className = "entry__trailing";
+            const favorite = flag(pick(item, ["favorite", "favorito", "isFavorite"], false));
+            const where = String(pick(item, ["location", "localizacao", "storage", "status"], "")).toLowerCase();
+            const cloud = flag(pick(item, ["icloud", "inCloud"], false)) || ["icloud", "cloud", "remote", "nuvem"].includes(where);
+            const offline = flag(pick(item, ["offline", "availableOffline", "local"], false)) || ["local", "synced", "downloaded", "offline"].includes(where);
+            if (favorite) trailing.appendChild(svgIcon("star", "icon--star"));
+            if (cloud) trailing.appendChild(svgIcon("cloud", "icon--cloud"));
+            if (offline) trailing.appendChild(svgIcon("check", "icon--check"));
+            if (!info.folder && info.extension) {
+                const badge = document.createElement("span");
+                badge.className = "filetype";
+                badge.textContent = info.extension.toUpperCase();
+                trailing.appendChild(badge);
+            }
+            if (info.folder) trailing.appendChild(svgIcon("chevron"));
+
+            entry.append(glyph, content, trailing);
+            wrapper.appendChild(entry);
+
+            const debug = pick(item, ["debug", "depuracao"], undefined);
+            if (debug !== undefined) {
+                const details = document.createElement("details");
+                details.className = "entry-debug";
+                const summary = document.createElement("summary");
+                summary.append(svgIcon("chevron"), document.createTextNode("Debug do item"));
+                details.append(summary, createTerminal(debug, "item.debug.json"));
+                wrapper.appendChild(details);
+            }
+            return { element: wrapper, isFolder: info.folder };
+        }
+
+        function normalizePayload(value) {
+            if (Array.isArray(value)) value = { items: value };
+            if (!value || typeof value !== "object") {
+                throw new Error("O payload deve ser um objeto JSON (ou um array de itens).");
+            }
+            let items = pick(value, ["items", "itens", "entries"], null);
+            if (items === null) {
+                const folders = pick(value, ["folders", "pastas"], []);
+                const files = pick(value, ["files", "arquivos"], []);
+                items = [
+                    ...folders.map((entry) => ({ ...(typeof entry === "string" ? { name: entry } : entry), type: "folder" })),
+                    ...files.map((entry) => (typeof entry === "string" ? { name: entry } : entry))
+                ];
+            }
+            if (!Array.isArray(items)) throw new Error("items precisa ser uma lista JSON.");
+            if (items.length > 10000) throw new Error("Muitos itens na URL. Use até 10.000 itens ou divida em páginas.");
+            return { value, items };
+        }
+
+        function render() {
+            const notice = byId("parseNotice");
+            notice.classList.remove("visible");
+            let sourceData;
+            let failure;
+            try {
+                sourceData = getPayloadFromHash();
+            } catch (error) {
+                failure = error;
+                sourceData = { payload: { title: "Dados inválidos", description: "Verifique o formato do fragmento na URL", items: [] }, source: "error", encoding: "não reconhecido", debugOpen: true };
+            }
+            state.diagnostics = [];
+            state.source = sourceData.source;
+            state.rawLength = window.location.hash.length;
+
+            let normalized;
+            try {
+                normalized = normalizePayload(sourceData.payload);
+            } catch (error) {
+                failure = error;
+                normalized = normalizePayload({ title: "Dados inválidos", items: [] });
+            }
+            const payload = normalized.value;
+            const mode = byId("sourceMode");
+            mode.dataset.mode = state.source;
+            mode.textContent = state.source === "demo" ? "EXEMPLO" : state.source === "hash" ? "VIA URL" : "ERRO";
+            const title = String(pick(payload, ["title", "titulo"], "Meus arquivos"));
+            byId("pageTitle").textContent = title;
+            byId("pageDescription").textContent = String(pick(payload, ["description", "descricao", "subtitle"], "Conteúdo do diretório"));
+            byId("locationPath").textContent = String(pick(payload, ["path", "caminho"], "/"));
+            byId("originLabel").textContent = String(pick(payload, ["origin", "origem"], "No meu iPhone"));
+            document.title = `${title} · Arquivos`;
+
+            const folders = document.createDocumentFragment();
+            const files = document.createDocumentFragment();
+            let folderCount = 0;
+            let fileCount = 0;
+            for (const rawItem of normalized.items) {
+                try {
+                    const created = createItem(rawItem);
+                    if (created.isFolder) {
+                        folders.appendChild(created.element);
+                        folderCount += 1;
+                    } else {
+                        files.appendChild(created.element);
+                        fileCount += 1;
+                    }
+                } catch (error) {
+                    state.diagnostics.push({ level: "warn", message: error.message });
+                }
+            }
+
+            const folderList = byId("foldersList");
+            const fileList = byId("filesList");
+            folderList.replaceChildren(folders);
+            fileList.replaceChildren(files);
+            if (!folderCount) {
+                const empty = document.createElement("p");
+                empty.className = "empty-state";
+                empty.textContent = "Nenhuma pasta nesta localização";
+                folderList.appendChild(empty);
+            }
+            if (!fileCount) {
+                const empty = document.createElement("p");
+                empty.className = "empty-state";
+                empty.textContent = "Nenhum arquivo nesta localização";
+                fileList.appendChild(empty);
+            }
+            byId("totalCount").textContent = String(folderCount + fileCount);
+            byId("folderCount").textContent = String(folderCount);
+            byId("fileCount").textContent = String(fileCount);
+            byId("folderMeta").textContent = `${folderCount} ${folderCount === 1 ? "encontrada" : "encontradas"}`;
+            byId("fileMeta").textContent = `${fileCount} ${fileCount === 1 ? "encontrado" : "encontrados"}`;
+
+            if (failure) {
+                notice.classList.add("visible");
+                byId("parseNoticeText").textContent = failure.message;
+                state.diagnostics.unshift({ level: "error", message: failure.message });
+            }
+            const report = {
+                source: state.source,
+                encoding: sourceData.encoding,
+                hash_characters: state.rawLength,
+                rendered: { total: folderCount + fileCount, folders: folderCount, files: fileCount },
+                warnings: state.diagnostics,
+                debug: pick(payload, ["debug", "depuracao"], null)
+            };
+            const result = renderTerminal(byId("debugScreen"), report);
+            renderTerminal(byId("rawPayloadScreen"), sourceData.payload);
+            byId("debugSize").textContent = `${prettySize(result.bytes)} · ${result.lines} linhas`;
+            byId("debugSubtitle").textContent = failure ? "Erro ao decodificar a URL" :
+                sourceData.source === "demo" ? "Exemplo e terminal de diagnóstico" : "Logs e JSON recebido da URL";
+            byId("debugPanel").open = Boolean(sourceData.debugOpen || failure);
+            byId("rawPayloadDetails").open = false;
+        }
+
+        window.addEventListener("hashchange", render);
+        render();
+    })();
+    </script>
+</body>
+</html>
