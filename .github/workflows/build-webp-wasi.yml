@@ -1,0 +1,75 @@
+name: Build WebP WASI for a-Shell
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Download WASI SDK and libwebp source
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-29/wasi-sdk-29.0-x86_64-linux.tar.gz \
+            -o /tmp/wasi-sdk.tar.gz
+          mkdir -p /tmp/wasitools
+          tar -xf /tmp/wasi-sdk.tar.gz -C /tmp/wasitools
+          git clone --depth 1 --branch v1.6.0 \
+            https://github.com/webmproject/libwebp.git libwebp
+          echo "WASI_SDK=$(find /tmp/wasitools -mindepth 1 -maxdepth 1 -type d | head -1)" >> "$GITHUB_ENV"
+
+      - name: Cross-compile cwebp and img2webp for WASI Preview 1
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S libwebp -B build-wasi -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$WASI_SDK/share/cmake/wasi-sdk.cmake" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_WORKS=TRUE \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DWEBP_LINK_STATIC=ON \
+            -DWEBP_ENABLE_SIMD=OFF \
+            -DWEBP_USE_THREAD=OFF \
+            -DWEBP_BUILD_CWEBP=ON \
+            -DWEBP_BUILD_IMG2WEBP=ON \
+            -DWEBP_BUILD_LIBWEBPMUX=ON \
+            -DWEBP_BUILD_GIF2WEBP=OFF \
+            -DWEBP_BUILD_DWEBP=OFF \
+            -DWEBP_BUILD_WEBPMUX=OFF \
+            -DWEBP_BUILD_ANIM_UTILS=OFF \
+            -DWEBP_BUILD_EXTRAS=OFF \
+            -DWEBP_BUILD_VWEBP=OFF \
+            -DWEBP_BUILD_WEBPINFO=OFF
+          cmake --build build-wasi --target cwebp img2webp --parallel 2
+          mkdir -p bin
+          cp build-wasi/cwebp bin/cwebp.wasm
+          cp build-wasi/img2webp bin/img2webp.wasm
+
+      - name: Check WebAssembly magic bytes and compute SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          for name in ("cwebp", "img2webp"):
+              p=Path('bin') / f'{name}.wasm'
+              assert p.is_file(), f'Missing {p}'
+              assert p.read_bytes()[:4] == b'\x00asm', f'Not wasm: {p}'
+              print(p, p.stat().st_size, hashlib.sha256(p.read_bytes()).hexdigest())
+          PY
+          (cd bin && sha256sum *.wasm > SHA256SUMS)
+
+      - name: Downloadable archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: RodSticker-WebP-WASI
+          path: bin/
+          if-no-files-found: error
+          retention-days: 30
