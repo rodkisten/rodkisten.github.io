@@ -236,6 +236,21 @@
       .top-actions .hide-sm { display: none; }
     }
   </style>
+
+<style id="studio-v3-style">
+.studio-v3{margin:18px 0;padding:18px;border:1px solid #303745;border-radius:15px;background:#11161c;color:#dce4ee}
+.studio-v3 h3{margin:0 0 12px;font-size:16px}.v3-actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.v3-actions button,.v3-actions select{background:#202833;border:1px solid #455366;border-radius:8px;color:#e7edf5;padding:9px 12px;cursor:pointer}
+.v3-actions button:hover{border-color:#8cbcf1}.v3-editor{width:100%;min-height:160px;background:#080c11;color:#b9e2c8;border:1px solid #364353;border-radius:9px;padding:12px;font:12px/1.7 ui-monospace,SFMono-Regular,monospace;resize:vertical}
+.v3-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.v3-panel{background:#0b1016;border:1px solid #2e3744;border-radius:10px;padding:12px;min-width:0}
+.v3-node{display:inline-flex;flex-direction:column;gap:4px;padding:10px;margin:4px;border:1px solid #4a627d;border-radius:9px;cursor:pointer;background:#192431;max-width:170px;overflow-wrap:anywhere}
+.v3-node small{opacity:.7}.v3-arrow{color:#79b6fa}.v3-note{font-size:12px;color:#aab6c7;line-height:1.5}
+.v3-palette{position:fixed;inset:0;z-index:999999;background:#000b;display:flex;align-items:flex-start;justify-content:center;padding:12vh 14px}
+.v3-palette-inner{width:min(600px,100%);background:#141c26;border:1px solid #53637b;border-radius:14px;padding:16px;box-shadow:0 20px 70px #000}
+.v3-results{max-height:45vh;overflow:auto}.v3-result{display:block;width:100%;padding:11px;text-align:left;background:transparent;color:#e8effa;border:0;border-bottom:1px solid #283443;cursor:pointer}
+.v3-result:hover{background:#29394b}.v3-token{cursor:pointer;border-bottom:1px dotted #7da9cf}
+@media(max-width:750px){.v3-grid{grid-template-columns:1fr}.studio-v3{padding:12px}}
+</style>
 </head>
 <body>
   <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden" xmlns="http://www.w3.org/2000/svg">
@@ -796,29 +811,35 @@
       };
       // Conservative shell parser: preserves unfamiliar constructs as raw shell rather than rewriting them.
       const splitShell = source => {
-        const chunks=[]; let buf='', quoteChar='', escaped=false, depth=0, brace=0;
-        const flush = op => {if(buf.trim())chunks.push({code:buf.trim(),join:op});buf='';};
-        let next='newline';
+        // Top-level tokenizer: line continuations, quoted strings, nested shell loops.
+        const chunks=[];let buf='',q='',esc=false,paren=0,brace=0,loop=0,next='newline';
+        const push=()=>{if(buf.trim())chunks.push({code:buf.trim(),join:next});buf='';};
+        const keywordAt=(i,word)=>source.slice(i,i+word.length)===word &&
+          (i===0||!/[A-Za-z0-9_]/.test(source[i-1])) &&
+          (i+word.length===source.length||!/[A-Za-z0-9_]/.test(source[i+word.length]));
         for(let i=0;i<source.length;i++){
-          const c=source[i], n=source[i+1];
-          if(escaped){buf+=c;escaped=false;continue;}
-          if(c==='\\' && n==='\n'){i++;continue;}
-          if(c==='\\' && quoteChar!=="'"){buf+=c;escaped=true;continue;}
-          if(quoteChar){buf+=c;if(c===quoteChar)quoteChar='';continue;}
-          if(c==='"'||c==="'"){quoteChar=c;buf+=c;continue;}
-          if(c==='('){depth++;buf+=c;continue;}
-          if(c===')'){depth=Math.max(0,depth-1);buf+=c;continue;}
+          const c=source[i],n=source[i+1];
+          if(esc){buf+=c;esc=false;continue;}
+          if(c==='\\'&&n==='\n'){i++;continue;}
+          if(c==='\\'&&q!=="'"){buf+=c;esc=true;continue;}
+          if(q){buf+=c;if(c===q)q='';continue;}
+          if(c==='"'||c==="'"){q=c;buf+=c;continue;}
+          if(c==='('){paren++;buf+=c;continue;}
+          if(c===')'){paren=Math.max(0,paren-1);buf+=c;continue;}
           if(c==='{'){brace++;buf+=c;continue;}
           if(c==='}'){brace=Math.max(0,brace-1);buf+=c;continue;}
-          if(depth===0&&brace===0){
-            const op=['|&','&&','||','|',';','&'].find(x=>source.startsWith(x,i));
-            if(op){if(buf.trim())chunks.push({code:buf.trim(),join:next});buf='';next=op;i+=op.length-1;continue;}
-            if(c==='\n' || c==='\r'){if(buf.trim())chunks.push({code:buf.trim(),join:next});buf='';next='newline';continue;}
+          if(paren===0&&brace===0){
+            if(keywordAt(i,'while')||keywordAt(i,'for')||keywordAt(i,'until')||keywordAt(i,'select'))loop++;
+            if(keywordAt(i,'done')&&loop>0)loop--;
+            if(loop===0){
+              const op=['|&','&&','||','|',';','&'].find(x=>source.startsWith(x,i));
+              if(op){push();next=op;i+=op.length-1;continue;}
+              if(c==='\n'||c==='\r'){push();next='newline';continue;}
+            }
           }
           buf+=c;
         }
-        if(buf.trim())chunks.push({code:buf.trim(),join:next});
-        return chunks;
+        push();return chunks;
       };
       const shellWords = input => {
         const result=[];let token='',q='',escape=false,started=false;
@@ -837,7 +858,7 @@
         let rawCount=0;
         const stages=splitShell(input.replace(/^#![^\n]*\n/,'').replace(/^set -euo pipefail\s*;?\s*\n?/,'')).filter(x=>x.code&&!/^\s*#/.test(x.code)).map(({code,join})=>{
           // Unsupported shell grammar is intentionally kept intact.
-          if(/\b(if|then|fi|for|while|do|done|case|esac|function)\b/.test(code)||/<<[-]?\s*\w+/.test(code)||/\$\(|`/.test(code)||/\n/.test(code)){rawCount++;return rawStage(code,join);}
+          if(/\b(if|then|fi|for|while|do|done|case|esac|function)\b/.test(code)||/<<[-]?\s*\w+/.test(code)||/\$\(|`/.test(code)||/\n/.test(code)||/(['"]).*\{.*\1/.test(code)){rawCount++;return rawStage(code,join);}
           const words=shellWords(code),name=words.shift();
           if(!name || /[=(){}]/.test(name)&&!BY_NAME.has(name)){rawCount++;return rawStage(code,join);}
           const stage=newStage(name,join);stage.args=[];stage.options={};stage.extra='';stage.redirs=[];
@@ -1120,6 +1141,73 @@
 
       $('commandNames').innerHTML = CATALOG.map(c => `<option value="${escapeHTML(c.name)}"></option>`).join('');
       renderCatalog(); renderTemplates(); render(true); persist();
+
+      // UNIX Studio v3: local, dependency-free advanced workspace.
+      const v3=document.createElement('section');
+      v3.className='studio-v3';
+      v3.innerHTML=`<h3>⌘ UNIX Studio · Advanced Workspace</h3>
+      <p class="v3-note">Editor textual, grafo de pipeline, inspeção, diagnósticos, snapshots e exportação. Tudo local. Ctrl/⌘ K abre a paleta.</p>
+      <div class="v3-actions"><button id="v3sync">↔ Texto → blocos</button><button id="v3refresh">↻ Blocos → texto</button><button id="v3palette">⌘ Paleta</button><button id="v3snapshot">◈ Snapshot</button><button id="v3json">↓ Projeto JSON</button><button id="v3make">↓ Makefile</button><select id="v3shell"><option>Bash</option><option>POSIX sh</option><option>Zsh</option><option>BusyBox ash</option></select></div>
+      <div class="v3-grid"><div class="v3-panel"><h3>Script editável</h3><textarea class="v3-editor" id="v3source" spellcheck="false" aria-label="Editor Bash"></textarea><p class="v3-note">Importação conservadora: construções complexas ficam em blocos de código livre. A sincronização textual é explícita para evitar perda acidental de edições.</p></div>
+      <div class="v3-panel"><h3>Pipeline visual</h3><div id="v3graph" style="overflow:auto;line-height:2"></div><h3 style="margin-top:14px">Análise estática</h3><div id="v3lint" class="v3-note"></div></div></div>
+      <div class="v3-grid" style="margin-top:12px"><div class="v3-panel"><h3>Snapshots locais</h3><div id="v3versions" class="v3-note"></div></div><div class="v3-panel"><h3>Inspetor de dados · demonstração</h3><textarea id="v3sample" class="v3-editor" style="min-height:85px" placeholder="Cole aqui uma amostra de JSON para inspecionar"></textarea><div class="v3-actions"><button id="v3inspect">Inspecionar JSON</button></div><pre id="v3result" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px"></pre><p class="v3-note">Este inspetor valida JSON; não executa Bash, awk ou jq. Executar comandos arbitrários exigiria um runtime isolado.</p></div></div>`;
+      document.querySelector('main')?.appendChild(v3) || document.body.insertBefore(v3,document.body.lastElementChild);
+      const v3get=id=>document.getElementById(id);
+      let v3dirty=false;
+      const v3refresh=()=>{
+        if(!v3dirty)v3get('v3source').value=generate(state.format);
+        v3get('v3graph').innerHTML=state.stages.map((st,i)=>`${i?'<span class="v3-arrow"> → </span>':''}<button class="v3-node" data-v3stage="${escapeHTML(st.id)}"><strong>${escapeHTML(st.kind==='raw'?'shell':st.command)}</strong><small>${escapeHTML(st.join||'newline')}</small></button>`).join('')||'<span class="v3-note">Adicione comandos para visualizar o fluxo.</span>';
+        const script=generate(state.format);
+        const warnings=[];
+        if(/\brm\s+(-[^\s]*r[^\s]*f|-[^\s]*f[^\s]*r)\b/.test(script))warnings.push('⚠ rm recursivo e forçado: confira os caminhos.');
+        if(/\bcurl\b[^\n|]*\|\s*(sh|bash)\b/.test(script))warnings.push('⚠ Download conectado a um shell: revise a origem e o conteúdo.');
+        if(/\beval\s+/.test(script))warnings.push('⚠ eval executa texto como código.');
+        if(/\bsudo\b/.test(script))warnings.push('⚠ Execução privilegiada detectada.');
+        if(/\bset\s+-e\b/.test(script)&&!/\bpipefail\b/.test(script))warnings.push('ℹ Considere pipefail para capturar falhas de pipeline em Bash.');
+        if(v3get('v3shell').value==='POSIX sh'&&(/\[\[|<<<|\bsource\b|\bpipefail\b/.test(script)))warnings.push('⚠ Construções potencialmente incompatíveis com POSIX sh.');
+        if(/\b(sed|awk|find)\b/.test(script))warnings.push('ℹ Opções GNU e BSD/macOS podem variar.');
+        v3get('v3lint').innerHTML=warnings.length?warnings.map(x=>`<p>${escapeHTML(x)}</p>`).join(''):'✓ Nenhum padrão de risco conhecido encontrado. Isto não substitui ShellCheck.';
+        v3renderVersions();
+      };
+      const v3versionsKey='unix-studio-v3-snapshots';
+      const v3versions=()=>{try{return JSON.parse(localStorage.getItem(v3versionsKey)||'[]')}catch{return []}};
+      const v3renderVersions=()=>{v3get('v3versions').innerHTML=v3versions().map((v,i)=>`<div style="margin:6px 0"><button class="btn" data-v3restore="${i}">Restaurar</button> <span>${escapeHTML(v.label)}</span></div>`).join('')||'Nenhuma versão salva.'};
+      const v3download=(name,body,type='text/plain')=>{const a=document.createElement('a');const url=URL.createObjectURL(new Blob([body],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+      v3get('v3source').addEventListener('input',()=>v3dirty=true);
+      v3get('v3refresh').onclick=()=>{v3dirty=false;v3refresh();toast('Editor atualizado a partir dos blocos.')};
+      v3get('v3sync').onclick=()=>{
+        const source=v3get('v3source').value;
+        const parsed=parseShell(source);
+        if(!parsed.stages.length)return toast('Nenhuma etapa identificada.');
+        confirmDialog('Aplicar texto aos blocos?',`Substituir por ${parsed.stages.length} etapas? ${parsed.rawCount} trecho(s) preservado(s) como shell livre.`,()=>{
+          commit(()=>{state.stages=parsed.stages;state.selectedId=parsed.stages[0]?.id||null;state.shebang=/^#!/.test(source);state.strict=/set -euo pipefail/.test(source)});
+          v3dirty=false;v3refresh();toast('Blocos atualizados.');
+        });
+      };
+      v3get('v3graph').onclick=e=>{const b=e.target.closest('[data-v3stage]');if(b)showCommandPopover(b.dataset.v3stage,b)};
+      v3get('v3snapshot').onclick=()=>{const versions=v3versions();versions.unshift({label:new Date().toLocaleString('pt-BR'),model:snapshot()});try{localStorage.setItem(v3versionsKey,JSON.stringify(versions.slice(0,20)))}catch{}v3renderVersions();toast('Snapshot salvo.')};
+      v3get('v3versions').onclick=e=>{const b=e.target.closest('[data-v3restore]');if(!b)return;const v=v3versions()[Number(b.dataset.v3restore)];if(!v)return;confirmDialog('Restaurar snapshot?','O estado atual poderá ser recuperado com Desfazer.',()=>{commit(()=>{state=normalize(JSON.parse(v.model))});v3dirty=false;v3refresh()})};
+      v3get('v3json').onclick=()=>v3download('unix-studio-project.json',JSON.stringify({version:3,model:state},null,2),'application/json');
+      v3get('v3make').onclick=()=>v3download('Makefile','SHELL := /bin/bash\n.PHONY: run\nrun:\n\t'+generate('single').replace(/^#![^\n]*\n/,'').replace(/\n/g,' \\\n\t')+'\n');
+      v3get('v3shell').onchange=v3refresh;
+      v3get('v3inspect').onclick=()=>{try{const data=JSON.parse(v3get('v3sample').value);v3get('v3result').textContent='JSON válido ✓\nTipo: '+(Array.isArray(data)?'array':typeof data)+'\n'+JSON.stringify(data,null,2).slice(0,3500)}catch(e){v3get('v3result').textContent='JSON inválido: '+e.message}};
+      const v3openPalette=()=>{
+        document.getElementById('v3paletteRoot')?.remove();
+        const overlay=document.createElement('div');overlay.id='v3paletteRoot';overlay.className='v3-palette';
+        overlay.innerHTML='<div class="v3-palette-inner"><input id="v3query" placeholder="Buscar comando ou ação..." aria-label="Buscar na paleta" style="width:100%;padding:14px;background:#090e14;color:white;border:1px solid #506078;border-radius:8px"><div class="v3-results" id="v3results"></div><p class="v3-note">Esc fecha · Clique para adicionar ao pipeline</p></div>';
+        document.body.appendChild(overlay);
+        const input=overlay.querySelector('input'),results=overlay.querySelector('#v3results');
+        const update=()=>{const q=input.value.toLowerCase();results.innerHTML=CATALOG.filter(c=>(c.name+' '+c.description).toLowerCase().includes(q)).slice(0,30).map(c=>`<button class="v3-result" data-v3add="${escapeHTML(c.name)}"><strong>${escapeHTML(c.name)}</strong> · ${escapeHTML(c.description)}</button>`).join('')};
+        input.oninput=update;update();input.focus();
+        overlay.onclick=e=>{if(e.target===overlay)overlay.remove();const b=e.target.closest('[data-v3add]');if(b){addCommand(b.dataset.v3add);overlay.remove()}};
+      };
+      v3get('v3palette').onclick=v3openPalette;
+      document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementById('v3paletteRoot')?.remove();if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();v3openPalette()}},true);
+      // Keep the visual workspace in sync with existing command-builder mutations.
+      const v3observer=new MutationObserver(()=>{if(!document.getElementById('v3graph'))return;v3refresh()});
+      v3observer.observe(v3get('codePreview'),{childList:true,subtree:false});
+      v3refresh();
+
     })();
   </script>
 </body>
