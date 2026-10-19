@@ -549,14 +549,55 @@
           shebang: raw.shebang !== false, strict: !!raw.strict
         };
       };
+      // Portable URL state: UTF-8 JSON encoded as base64url in #state=.
+      const encodeURLState = value => {
+        const bytes = new TextEncoder().encode(value);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i,i+8192));
+        return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+      };
+      const decodeURLState = value => {
+        if (!/^[A-Za-z0-9_-]+$/.test(value) || value.length > 250000) throw Error('Invalid URL state');
+        const binary = atob(value.replace(/-/g,'+').replace(/_/g,'/'));
+        return new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(binary,c=>c.charCodeAt(0)));
+      };
+      const fromHash = () => {
+        const match = location.hash.match(/(?:^#|&)state=([^&]+)/);
+        if (!match) return null;
+        return normalize(JSON.parse(decodeURLState(match[1])));
+      };
       let state;
-      try { state = normalize(JSON.parse(localStorage.getItem(STORAGE))); }
-      catch { state = defaultModel(); }
+      try { state = fromHash(); } catch (error) { console.warn('Invalid shared URL state',error); }
+      if (!state) {
+        try { state = normalize(JSON.parse(localStorage.getItem(STORAGE))); }
+        catch { state = defaultModel(); }
+      }
       if (state.stages.length && !state.stages.some(s => s.id === state.selectedId)) state.selectedId = state.stages[Math.min(1,state.stages.length-1)].id;
       let undoStack = [], redoStack = [], category = 'Todos', search = '', optionFilter = '', dragId = null;
       const $ = id => document.getElementById(id);
       const snapshot = () => JSON.stringify(state);
-      const persist = () => { try { localStorage.setItem(STORAGE, snapshot()); $('saveStatus').textContent = 'Salvo neste navegador'; } catch { $('saveStatus').textContent = 'Armazenamento indisponível'; } };
+      const persist = () => {
+        const serialized = snapshot();
+        try { localStorage.setItem(STORAGE, serialized); } catch {}
+        try {
+          const hash = '#state=' + encodeURLState(serialized);
+          if (location.hash !== hash) history.replaceState(null,'',location.pathname+location.search+hash);
+          $('saveStatus').textContent = 'Salvo · URL compartilhável';
+        } catch (error) {
+          console.warn('Unable to update URL',error);
+          $('saveStatus').textContent = 'Salvo localmente · URL indisponível';
+        }
+      };
+      window.addEventListener('hashchange', () => {
+        try {
+          const next = fromHash();
+          if (!next || JSON.stringify(next) === snapshot()) return;
+          state = next;
+          undoStack = []; redoStack = [];
+          render(true);
+          try { localStorage.setItem(STORAGE,snapshot()); } catch {}
+        } catch (error) { console.warn('Invalid URL state',error); }
+      });
       const commit = (fn, inspector = true) => {
         const before = snapshot();
         fn();
