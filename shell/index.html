@@ -126,6 +126,7 @@
     .empty p { color: var(--muted); margin: 0 0 14px; font-size: 12px; }
     .workspace-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
     .divider { height: 1px; width: 100%; background: var(--line-soft); margin: 27px 0; }
+    .import-shell{border:1px solid #303745;border-radius:14px;padding:16px;background:#11161c;margin-bottom:18px}.import-shell textarea{width:100%;font-family:var(--mono);line-height:1.65}.preview-token{cursor:pointer;border-radius:4px;outline:1px solid transparent}.preview-token:hover,.preview-token:focus{background:#29364a;outline-color:#4b82bf}.command-popover{position:fixed;z-index:99999;width:min(380px,calc(100vw - 24px));padding:17px;background:#1b222c;border:1px solid #536175;border-radius:14px;box-shadow:0 18px 65px #000b;color:#e9edf5}.command-popover h3{margin:0 0 8px;font:700 18px var(--mono)}.command-popover p{line-height:1.55;color:#c1cad6}.command-popover code{overflow-wrap:anywhere}.popover-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
     .preview-shell { border: 1px solid #303745; border-radius: 13px; background: #0b0f14; overflow: hidden; box-shadow: var(--shadow); }
     .preview-toolbar { min-height: 48px; background: #171c23; border-bottom: 1px solid #2c3340; display: flex; align-items: center; padding: 0 13px; gap: 12px; flex-wrap: wrap; }
     .terminal-dots { display: inline-flex; gap: 5px; }
@@ -287,6 +288,7 @@
       <section class="workspace" id="workspace" aria-label="Construtor de pipelines"></section>
       <div class="workspace-actions"><button class="btn" id="addCommandBtn"><svg><use href="#i-plus"/></svg> Adicionar comando</button><button class="btn" id="addRawBtn"><svg><use href="#i-code"/></svg> Trecho livre</button></div>
 
+      <section class="import-shell"><div class="section-header"><div class="section-title">Importar script <small>cole Bash / shell para transformar em blocos editáveis</small></div></div><textarea id="importSource" class="textarea-field" rows="5" spellcheck="false" placeholder="cat dados.json | jq -r '.items[]' | awk '{print $1}' > resultado.txt"></textarea><div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:10px;align-items:center"><button class="btn primary" id="parseSource">Interpretar e montar blocos</button><span class="muted" id="parseStatus">Preserva trechos complexos como código livre, sem executar nada.</span></div></section>
       <div class="divider"></div>
       <div class="section-header"><div class="section-title">Prévia do script <small>atualização ao vivo</small></div><span class="count" id="lineMeta"></span></div>
       <section class="preview-shell" aria-label="Código gerado">
@@ -751,9 +753,91 @@
           <div class="editor-group"><div class="editor-label">Redirecionamentos <span class="count">${stage.redirs.length}</span></div>${redirectMarkup}<button class="add-mini" data-action="add-redir">${icon('plus')} Adicionar redirecionamento</button><p class="editor-help">Saída: <code>&gt;</code>, <code>&gt;&gt;</code>, <code>2&gt;</code>. Entrada: <code>&lt;</code>, <code>&lt;&lt;&lt;</code>. <code>2&gt;&amp;1</code> não precisa de destino.</p></div>
           <div class="hint-box"><strong>Conexões:</strong> selecione <code>|</code> entre etapas para enviar stdout ao próximo comando. Use <code>&amp;&amp;</code> quando a próxima etapa depende do sucesso anterior.</div>`;
       };
+      // Conservative shell parser: preserves unfamiliar constructs as raw shell rather than rewriting them.
+      const splitShell = source => {
+        const chunks=[]; let buf='', quoteChar='', escaped=false, depth=0, brace=0;
+        const flush = op => {if(buf.trim())chunks.push({code:buf.trim(),join:op});buf='';};
+        let next='newline';
+        for(let i=0;i<source.length;i++){
+          const c=source[i], n=source[i+1];
+          if(escaped){buf+=c;escaped=false;continue;}
+          if(c==='\\' && n==='\n'){i++;continue;}
+          if(c==='\\' && quoteChar!=="'"){buf+=c;escaped=true;continue;}
+          if(quoteChar){buf+=c;if(c===quoteChar)quoteChar='';continue;}
+          if(c==='"'||c==="'"){quoteChar=c;buf+=c;continue;}
+          if(c==='('){depth++;buf+=c;continue;}
+          if(c===')'){depth=Math.max(0,depth-1);buf+=c;continue;}
+          if(c==='{'){brace++;buf+=c;continue;}
+          if(c==='}'){brace=Math.max(0,brace-1);buf+=c;continue;}
+          if(depth===0&&brace===0){
+            const op=['|&','&&','||','|',';','&'].find(x=>source.startsWith(x,i));
+            if(op){if(buf.trim())chunks.push({code:buf.trim(),join:next});buf='';next=op;i+=op.length-1;continue;}
+            if(c==='\n' || c==='\r'){if(buf.trim())chunks.push({code:buf.trim(),join:next});buf='';next='newline';continue;}
+          }
+          buf+=c;
+        }
+        if(buf.trim())chunks.push({code:buf.trim(),join:next});
+        return chunks;
+      };
+      const shellWords = input => {
+        const result=[];let token='',q='',escape=false,started=false;
+        for(const c of input){
+          if(escape){token+=c;escape=false;continue;}
+          if(c==='\\'&&q!=="'"){escape=true;started=true;continue;}
+          if(q){if(c===q){q='';continue;}token+=c;continue;}
+          if(c==='"'||c==="'"){q=c;started=true;continue;}
+          if(/\s/.test(c)){if(started){result.push(token);token='';started=false;}continue;}
+          token+=c;started=true;
+        }
+        if(started)result.push(token);
+        return result;
+      };
+      const parseShell = input => {
+        let rawCount=0;
+        const stages=splitShell(input.replace(/^#![^\n]*\n/,'').replace(/^set -euo pipefail\s*;?\s*\n?/,'')).filter(x=>x.code&&!/^\s*#/.test(x.code)).map(({code,join})=>{
+          // Unsupported shell grammar is intentionally kept intact.
+          if(/\b(if|then|fi|for|while|do|done|case|esac|function)\b/.test(code)||/<<[-]?\s*\w+/.test(code)||/\$\(|`/.test(code)||/\n/.test(code)){rawCount++;return rawStage(code,join);}
+          const words=shellWords(code),name=words.shift();
+          if(!name || /[=(){}]/.test(name)&&!BY_NAME.has(name)){rawCount++;return rawStage(code,join);}
+          const stage=newStage(name,join);stage.args=[];stage.options={};stage.extra='';stage.redirs=[];
+          const def=BY_NAME.get(name), opts=def?.options||[];
+          const extras=[];
+          for(let i=0;i<words.length;i++){
+            const w=words[i];
+            if(['>','>>','<','2>','2>>','&>','&>>','<<<'].includes(w)&&i+1<words.length){stage.redirs.push({id:uid(),op:w,target:argument(words[++i])});continue;}
+            if(w==='2>&1'){stage.redirs.push({id:uid(),op:w,target:argument('')});continue;}
+            const redir=w.match(/^(2>>|2>|>>|>|<|&>>|&>)(.+)$/);
+            if(redir){stage.redirs.push({id:uid(),op:redir[1],target:argument(redir[2])});continue;}
+            const equal=w.match(/^(--[\w-]+)=(.*)$/);
+            const entry=opts.find(o=>o[0]===w||o[0]===equal?.[1]);
+            if(entry){if(entry.length>2){stage.options[entry[0]]=equal?equal[2]:(words[++i]??'');}else stage.options[entry[0]]=true;continue;}
+            if(w.startsWith('-')&&w!=='-'){extras.push(w);continue;}
+            stage.args.push(argument(w,/[$*?\[\]{}]/.test(w)?'raw':'auto'));
+          }
+          stage.extra=extras.join(' ');
+          return stage;
+        });
+        return {stages,rawCount};
+      };
+      const showCommandPopover = (id,anchor) => {
+        document.querySelector('.command-popover')?.remove();
+        const stage=state.stages.find(s=>s.id===id);if(!stage)return;
+        const def=BY_NAME.get(stage.command);
+        const pop=document.createElement('div');pop.className='command-popover';pop.setAttribute('role','dialog');
+        const desc=stage.kind==='raw'?'Trecho de shell preservado literalmente. Edite no painel lateral.':(def?.description||'Comando personalizado. Consulte a documentação do executável instalado.');
+        const flags=(def?.options||[]).slice(0,5).map(o=>`<div><code>${escapeHTML(o[0])}</code> · ${escapeHTML(o[1])}</div>`).join('');
+        pop.innerHTML=`<h3>${escapeHTML(stage.kind==='raw'?'Shell livre':stage.command)}</h3><p>${escapeHTML(desc)}</p><div style="font-size:12px;line-height:1.8">${flags}</div><p><code>${escapeHTML(buildCommand(stage))}</code></p><div class="popover-actions"><button class="btn primary" data-pop="edit">Editar bloco</button><button class="btn" data-pop="remove">Remover</button><button class="btn" data-pop="close">Fechar</button></div>`;
+        document.body.appendChild(pop);const rect=anchor.getBoundingClientRect();pop.style.left=Math.max(12,Math.min(rect.left,innerWidth-pop.offsetWidth-12))+'px';pop.style.top=(rect.bottom+pop.offsetHeight+12<innerHeight?rect.bottom+8:Math.max(12,rect.top-pop.offsetHeight-8))+'px';
+        pop.addEventListener('click',e=>{const action=e.target.closest('[data-pop]')?.dataset.pop;if(!action)return;pop.remove();if(action==='edit'){state.selectedId=id;persist();render(true);if(innerWidth<=980)$('rightPanel').classList.add('mobile-open');else $('inspector').scrollIntoView({behavior:'smooth',block:'nearest'});}if(action==='remove')commit(()=>{state.stages=state.stages.filter(s=>s.id!==id);state.selectedId=state.stages[0]?.id||null;});});
+      };
+      const interactivePreview = script => {
+        let result='',cursor=0;
+        for(const stage of state.stages){const fragment=buildCommand(stage);if(!fragment)continue;const pos=script.indexOf(fragment,cursor);if(pos<0)continue;result+=tokenizeColor(script.slice(cursor,pos));result+=`<span class="preview-token" tabindex="0" role="button" data-preview-stage="${escapeHTML(stage.id)}" title="Clique para detalhes e ações">${tokenizeColor(fragment)}</span>`;cursor=pos+fragment.length;}
+        return result+tokenizeColor(script.slice(cursor));
+      };
       const renderPreview = () => {
         const script = generate(state.format);
-        $('codePreview').innerHTML = tokenizeColor(script || '# Adicione comandos para começar');
+        $('codePreview').innerHTML = script ? interactivePreview(script) : tokenizeColor('# Adicione comandos para começar');
         const lines = (script || '# Adicione comandos para começar').split('\n');
         $('lineNumbers').textContent = lines.map((_,i) => i+1).join('\n');
         $('lineMeta').textContent = `${lines.length} linha${lines.length === 1 ? '' : 's'}`;
@@ -842,6 +926,10 @@
         setTimeout(() => URL.revokeObjectURL(url), 5000); toast('Script .sh gerado.');
       };
 
+      $('parseSource').addEventListener('click',()=>{const source=$('importSource').value.trim();if(!source)return toast('Cole um script primeiro.');const parsed=parseShell(source);if(!parsed.stages.length)return toast('Nenhum comando identificado.');confirmDialog('Importar código?',`Substituir os blocos atuais por ${parsed.stages.length} etapas? ${parsed.rawCount} trecho(s) complexo(s) serão preservados como código livre.`,()=>{commit(()=>{state.stages=parsed.stages;state.selectedId=parsed.stages[0]?.id||null;state.shebang=/^#!/.test(source);state.strict=/set -euo pipefail/.test(source);});$('parseStatus').textContent=`${parsed.stages.length} blocos importados · ${parsed.rawCount} trechos livres`;toast('Script convertido em blocos.');});});
+      $('codePreview').addEventListener('click',e=>{const target=e.target.closest('[data-preview-stage]');if(target)showCommandPopover(target.dataset.previewStage,target);});
+      $('codePreview').addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){const target=e.target.closest('[data-preview-stage]');if(target){e.preventDefault();showCommandPopover(target.dataset.previewStage,target);}}});
+      document.addEventListener('pointerdown',e=>{const pop=document.querySelector('.command-popover');if(pop&&!pop.contains(e.target)&&!e.target.closest('[data-preview-stage]'))pop.remove();});
       // Ações delegadas do workspace e do inspector.
       $('workspace').addEventListener('click', event => {
         const target = event.target.closest('[data-action]'); if (!target) return;
