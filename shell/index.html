@@ -1224,17 +1224,17 @@ editor.parentNode.insertBefore(wrap,editor);wrap.append(editor);
 const overlay=document.createElement('div');overlay.className='sc-overlay';overlay.setAttribute('aria-hidden','true');wrap.append(overlay);
 const pop=document.createElement('div');pop.className='sc-pop';pop.hidden=true;wrap.append(pop);
 const ui=document.createElement('section');ui.style.cssText='margin-top:14px;padding-top:12px;border-top:1px solid #384454';
-ui.innerHTML='<strong>ShellCheck WASM</strong><div class="v3-actions"><button id="scRun">Analisar</button><label><input id="scAuto" type="checkbox"> Automático</label><span id="scStatus" class="v3-note">Aguardando</span></div><div id="scDiagnostics"></div>';
+ui.innerHTML='<strong>ShellCheck WASM</strong><div class="v3-actions"><button id="scRun">Analisar</button><button id="scTest" type="button">Testar motor</button><label><input id="scAuto" type="checkbox"> Automático</label><span id="scStatus" class="v3-note">Aguardando</span></div><div id="scDiagnostics"></div>';
 panel.append(ui);
 const $=id=>document.getElementById(id);
-let lintFn=null,loading=null,diagnostics=[],sourceAtLint='',sequence=0,timer=null;
-const normalize=r=>{if(typeof r==='string'){try{r=JSON.parse(r)}catch{return []}}return Array.isArray(r)?r:Array.isArray(r?.comments)?r.comments:Array.isArray(r?.diagnostics)?r.diagnostics:[]};
+let lintFn=null,loading=null,diagnostics=[],sourceAtLint='',sequence=0,timer=null;let engineVerified=false;
+const normalize=r=>{if(typeof r==='string'){try{r=JSON.parse(r)}catch{throw Error('Resposta não é JSON de diagnósticos')}}if(Array.isArray(r))return r;if(Array.isArray(r?.comments))return r.comments;if(Array.isArray(r?.diagnostics))return r.diagnostics;throw Error('Resposta desconhecida do motor WASM')};
 async function load(){
  if(lintFn)return lintFn;if(loading)return loading;
  loading=(async()=>{
   const mod=await import('https://esm.sh/shellcheck-wasm@0.3.3?bundle');
   const fn=[mod.shellcheck,mod.check,mod.analyze,mod.default?.shellcheck,mod.default?.check,typeof mod.default==='function'?mod.default:null].find(f=>typeof f==='function');
-  if(!fn)throw Error('O módulo carregou, mas não expôs uma API compatível.');
+  if(!fn)throw Error('O módulo carregou, mas não expôs uma API compatível: '+Object.keys(mod).join(', '));
   lintFn=fn;return fn;
  })();
  try{return await loading}catch(e){loading=null;throw e}
@@ -1265,6 +1265,8 @@ function show(d,index){
  pop.querySelector('#scClose').onclick=()=>pop.hidden=true;
  if(fix)pop.querySelector('#scApply').onclick=()=>{if(editor.value!==sourceAtLint)return;editor.value=sourceAtLint.slice(0,fix.a)+fix.replacement+sourceAtLint.slice(fix.b);editor.dispatchEvent(new Event('input',{bubbles:true}));pop.hidden=true;$('scStatus').textContent='Correção aplicada. Analise novamente.'};
 }
+async function invoke(fn,script){try{return normalize(await fn(script,{format:'json'}))}catch(first){try{return normalize(await fn({script,format:'json'}))}catch(second){throw Error('Nenhuma assinatura da API funcionou: '+first.message+' / '+second.message)}}}
+async function verify(fn){const items=await invoke(fn,'#!/bin/sh\necho $UNQUOTED_VARIABLE\n');if(!items.some(x=>Number(String(x.code||'').replace(/^SC/,''))===2086))throw Error('O motor não retornou o diagnóstico SC2086 esperado no autoteste');engineVerified=true;return true}
 function render(){
  const counts={error:0,warning:0,info:0,style:0};
  diagnostics.forEach(d=>{const k=String(d.level||d.type||'info').toLowerCase();counts[k in counts?k:'info']++});
@@ -1274,16 +1276,115 @@ function render(){
 async function run(){
  const seq=++sequence;sourceAtLint=editor.value;pop.hidden=true;$('scStatus').textContent='Carregando/analisando...';
  try{
-  const fn=await load();let r;
-  try{r=await fn(sourceAtLint,{format:'json'})}catch(e){r=await fn({script:sourceAtLint,format:'json'})}
-  if(seq!==sequence)return;diagnostics=normalize(r);$('scStatus').textContent=diagnostics.length+' diagnóstico(s)';render();
- }catch(e){if(seq!==sequence)return;diagnostics=[];overlay.textContent='';$('scStatus').textContent='WASM indisponível';$('scDiagnostics').textContent='Não foi possível executar ShellCheck: '+e.message+'. O analisador básico continua disponível.'}
+  const fn=await load();if(!engineVerified)await verify(fn);const r=await invoke(fn,sourceAtLint);
+  if(seq!==sequence)return;diagnostics=r;$('scStatus').textContent=diagnostics.length+' diagnóstico(s)';render();
+ }catch(e){if(seq!==sequence)return;diagnostics=[];overlay.textContent='';$('scStatus').textContent='ShellCheck WASM não validado';$('scDiagnostics').textContent='Não foi possível executar ShellCheck: '+e.message+'. O analisador básico continua disponível.'}
 }
 $('scRun').onclick=run;
+$('scTest').onclick=async()=>{const status=$('scStatus');status.textContent='Testando SC2086...';try{await verify(await load());status.textContent='✓ Motor WASM validado: SC2086 detectado'}catch(e){engineVerified=false;status.textContent='✗ Motor não validado: '+e.message}};
 $('scAuto').onchange=()=>{if($('scAuto').checked)run()};
 editor.addEventListener('input',()=>{overlay.textContent='';pop.hidden=true;sequence++;if($('scAuto').checked){clearTimeout(timer);timer=setTimeout(run,1000)}});
 editor.addEventListener('scroll',()=>{overlay.scrollTop=editor.scrollTop;overlay.scrollLeft=editor.scrollLeft});
 $('scDiagnostics').addEventListener('click',e=>{const b=e.target.closest('[data-sc]');if(b)show(diagnostics[Number(b.dataset.sc)],Number(b.dataset.sc))});
+})();
+</script>
+
+<style id="unix-syntax-everywhere-css">
+:root{--sh-command:#8bd5ff;--sh-keyword:#c5a3ff;--sh-string:#b7e49a;--sh-var:#ffcb85;--sh-operator:#f19db5;--sh-flag:#9bd8db;--sh-comment:#77869a;--sh-number:#efbd89}
+.sh-edit-wrap{position:relative;isolation:isolate;min-width:0}
+.sh-edit-wrap>textarea{position:relative;z-index:2;background:transparent!important;color:transparent!important;-webkit-text-fill-color:transparent!important;caret-color:#f2f6ff!important;resize:vertical}
+.sh-edit-wrap>textarea::selection{background:#4c72aa66!important}
+.sh-edit-wrap>.sh-highlight{position:absolute;inset:0;z-index:1;overflow:hidden;pointer-events:none;white-space:pre-wrap;overflow-wrap:break-word;word-break:normal;tab-size:4;background:#0b1119;border-radius:inherit;color:#e4eaf2}
+.sh-edit-wrap>.sh-highlight .sh-content{display:block;white-space:pre-wrap;overflow-wrap:break-word;min-height:100%;box-sizing:border-box}
+.sh-edit-wrap:focus-within{outline:1px solid #658bb3;border-radius:8px}
+.sh-keyword{color:var(--sh-keyword)}.sh-command{color:var(--sh-command)}.sh-string{color:var(--sh-string)}.sh-variable{color:var(--sh-var)}.sh-operator{color:var(--sh-operator)}.sh-flag{color:var(--sh-flag)}.sh-comment{color:var(--sh-comment)}.sh-number{color:var(--sh-number)}
+#codePreview .tok-comment{color:var(--sh-comment)}#codePreview .tok-string{color:var(--sh-string)}#codePreview .tok-var{color:var(--sh-var)}#codePreview .tok-flag{color:var(--sh-flag)}#codePreview .tok-op{color:var(--sh-operator)}
+.sh-preview-advanced{color:#e4eaf2}
+.sh-preview-advanced .preview-token{border-radius:3px}
+.sh-edit-wrap>.sc-overlay{z-index:3!important}
+</style>
+<script id="unix-syntax-everywhere">
+(()=>{
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const keywords=new Set('if then else elif fi for while until do done case esac in function select time coproc return local readonly declare typeset export unset shift break continue exit trap source eval exec set shopt'.split(' '));
+const commands=new Set('ls cp mv rm mkdir rmdir touch cat zcat gzip gunzip tar zip unzip awk jq sed grep egrep fgrep rg find xargs sort uniq head tail cut tr tee wc printf echo read curl wget ssh scp rsync git docker kubectl make chmod chown chgrp df du ps top kill pkill pgrep test basename dirname realpath date sleep env printenv bash sh zsh fish perl python python3 node npm npx yq tr sort column paste join comm diff patch less more stat file strings od hexdump base64 openssl dig ping ip ss netstat systemctl journalctl findmnt mount umount whoami id groups sudo su seq yes true false'.split(' '));
+function lex(src){
+ let out='',i=0,expectCommand=true,quote='',wordStart=true;
+ const emit=(text,kind)=>{out+=kind?'<span class="sh-'+kind+'">'+esc(text)+'</span>':esc(text)};
+ while(i<src.length){
+  const rest=src.slice(i),c=src[i],start=i;
+  if(c==='\\'&&src[i+1]==='\n'){emit(src.slice(i,i+2),'operator');i+=2;continue}
+  if(c==='#'&&(i===0||/[\s;|&(){}]/.test(src[i-1]))){while(i<src.length&&src[i]!=='\n')i++;emit(src.slice(start,i),'comment');continue}
+  if(c==="'"||c==='"'){
+   const q=c;i++;while(i<src.length){if(q==='"'&&src[i]==='\\'&&i+1<src.length){i+=2;continue}if(src[i++]===q)break}
+   const str=src.slice(start,i);
+   if(q==='"'){let cursor=0;const re=/\$\{[^}]*\}|\$\([^)]+\)|\$[A-Za-z_][A-Za-z0-9_]*|\$[?@#$!0-9*]/g;let m;out+='<span class="sh-string">';while((m=re.exec(str))){out+=esc(str.slice(cursor,m.index));out+='<span class="sh-variable">'+esc(m[0])+'</span>';cursor=re.lastIndex}out+=esc(str.slice(cursor))+'</span>'}else emit(str,'string');
+   expectCommand=false;continue;
+  }
+  if(c==='$'){
+   const m=rest.match(/^\$\{[^}]*\}|^\$\((?:[^()]|\([^()]*\))*\)|^\$[A-Za-z_][A-Za-z0-9_]*|^\$[?@#$!0-9*]/);
+   if(m){emit(m[0],'variable');i+=m[0].length;expectCommand=false;continue}
+  }
+  const op=rest.match(/^(?:\|&|&&|\|\||2>&1|&>>|2>>|<<<|<<-|>>|&>|2>|[|;&<>(){}])/);
+  if(op){emit(op[0],'operator');i+=op[0].length;if(/^(?:\||\|&|&&|\|\||;|&|\(|\{)$/.test(op[0]))expectCommand=true;continue}
+  if(/\s/.test(c)){emit(c);i++;if(c==='\n')expectCommand=true;continue}
+  const m=rest.match(/^[^\s'"$#|;&<>(){}]+/);
+  if(m){
+   const word=m[0];i+=word.length;
+   let kind=null;
+   if(keywords.has(word)){kind='keyword';expectCommand=/^(then|do|else|elif|if|while|for|until|time|!)$/.test(word)}
+   else if(/^--?[A-Za-z]/.test(word))kind='flag';
+   else if(/^[0-9]+$/.test(word))kind='number';
+   else if(expectCommand&&(commands.has(word)||/^[\w./-]+$/.test(word))){kind='command';expectCommand=false}
+   else if(/^[A-Za-z_]\w*=/.test(word))kind='variable';
+   emit(word,kind);continue;
+  }
+  emit(c);i++;
+ }
+ return out;
+}
+window.UnixSyntax={highlight:lex};
+const wrappers=new WeakMap();
+function enhance(el){
+ if(wrappers.has(el)||!el.isConnected||el.id==='v3sample')return;
+ const wrap=document.createElement('div');wrap.className='sh-edit-wrap';
+ const backdrop=document.createElement('div');backdrop.className='sh-highlight';backdrop.setAttribute('aria-hidden','true');
+ const content=document.createElement('div');content.className='sh-content';backdrop.append(content);
+ el.parentNode.insertBefore(wrap,el);wrap.append(backdrop,el);
+ const sync=()=>{
+  const cs=getComputedStyle(el);
+  for(const prop of ['fontFamily','fontSize','fontWeight','fontStyle','lineHeight','letterSpacing','textAlign','tabSize','paddingTop','paddingRight','paddingBottom','paddingLeft','borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth','boxSizing','wordSpacing'])content.style[prop]=cs[prop];
+  backdrop.style.borderRadius=cs.borderRadius;
+  backdrop.style.borderWidth=cs.borderWidth;backdrop.style.borderStyle='solid';backdrop.style.borderColor='transparent';
+  content.innerHTML=lex(el.value)+'\n';
+  backdrop.scrollTop=el.scrollTop;backdrop.scrollLeft=el.scrollLeft;
+ };
+ wrappers.set(el,sync);
+ el.addEventListener('input',sync);el.addEventListener('scroll',sync);
+ new ResizeObserver(sync).observe(el);
+ sync();
+}
+function refresh(){
+ document.querySelectorAll('textarea').forEach(el=>{
+  if(el.id==='importSource'||el.id==='v3source'||el.matches('[data-bind="raw"]'))enhance(el);
+ });
+ // Keep the existing preview token click behavior while upgrading its coloring.
+ const preview=document.getElementById('codePreview');
+ if(preview){
+  const tokens=preview.querySelectorAll('.preview-token');
+  if(tokens.length){
+   tokens.forEach(node=>{const value=node.textContent;const html=lex(value);if(node.innerHTML!==html)node.innerHTML=html});
+  }else if(!preview.querySelector('.sh-command,.sh-keyword'))preview.innerHTML=lex(preview.textContent);
+ }
+}
+let pending=false;
+const schedule=()=>{if(pending)return;pending=true;requestAnimationFrame(()=>{pending=false;refresh()})};
+const observer=new MutationObserver(mutations=>{
+ if(mutations.some(m=>m.addedNodes.length||m.target?.id==='codePreview'))schedule();
+});
+observer.observe(document.body,{childList:true,subtree:true});
+document.addEventListener('input',e=>{if(e.target?.matches('textarea'))wrappers.get(e.target)?.()},true);
+refresh();
 })();
 </script>
 </body>
