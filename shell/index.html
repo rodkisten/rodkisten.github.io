@@ -1210,5 +1210,81 @@
 
     })();
   </script>
+
+<style>
+.sc-wrap{position:relative}.sc-overlay{position:absolute;inset:0;pointer-events:none;overflow:hidden;white-space:pre-wrap;overflow-wrap:normal;color:transparent;font:12px/1.7 ui-monospace,SFMono-Regular,monospace;padding:12px;border:1px solid transparent;box-sizing:border-box;tab-size:4}.sc-overlay .sc-mark{text-decoration:underline wavy #ffb454 1.5px;text-underline-offset:3px;color:transparent}.sc-pop{position:absolute;z-index:30;max-width:min(380px,90vw);background:#1b2633;border:1px solid #6683a1;color:#e9eff6;padding:12px;border-radius:10px;box-shadow:0 12px 40px #0008;font:12px/1.5 system-ui}.sc-diagnostic{display:block;width:100%;background:#18222e;border:1px solid #354658;border-radius:8px;text-align:left;color:#e5eaf2;padding:10px;margin:6px 0;cursor:pointer}.sc-diagnostic:hover{border-color:#92b7dc}.sc-fix{background:#264c3d;color:#d5f7e6;border:1px solid #49816a;border-radius:6px;padding:5px 8px;cursor:pointer}
+</style>
+<script type="module" id="unix-shellcheck-wasm">
+(()=>{
+const editor=document.getElementById('v3source'), panel=document.getElementById('v3lint');
+if(!editor||!panel)return;
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const wrap=document.createElement('div');wrap.className='sc-wrap';
+editor.parentNode.insertBefore(wrap,editor);wrap.append(editor);
+const overlay=document.createElement('div');overlay.className='sc-overlay';overlay.setAttribute('aria-hidden','true');wrap.append(overlay);
+const pop=document.createElement('div');pop.className='sc-pop';pop.hidden=true;wrap.append(pop);
+const ui=document.createElement('section');ui.style.cssText='margin-top:14px;padding-top:12px;border-top:1px solid #384454';
+ui.innerHTML='<strong>ShellCheck WASM</strong><div class="v3-actions"><button id="scRun">Analisar</button><label><input id="scAuto" type="checkbox"> Automático</label><span id="scStatus" class="v3-note">Aguardando</span></div><div id="scDiagnostics"></div>';
+panel.append(ui);
+const $=id=>document.getElementById(id);
+let lintFn=null,loading=null,diagnostics=[],sourceAtLint='',sequence=0,timer=null;
+const normalize=r=>{if(typeof r==='string'){try{r=JSON.parse(r)}catch{return []}}return Array.isArray(r)?r:Array.isArray(r?.comments)?r.comments:Array.isArray(r?.diagnostics)?r.diagnostics:[]};
+async function load(){
+ if(lintFn)return lintFn;if(loading)return loading;
+ loading=(async()=>{
+  const mod=await import('https://esm.sh/shellcheck-wasm@0.3.3?bundle');
+  const fn=[mod.shellcheck,mod.check,mod.analyze,mod.default?.shellcheck,mod.default?.check,typeof mod.default==='function'?mod.default:null].find(f=>typeof f==='function');
+  if(!fn)throw Error('O módulo carregou, mas não expôs uma API compatível.');
+  lintFn=fn;return fn;
+ })();
+ try{return await loading}catch(e){loading=null;throw e}
+}
+function offsetFor(line,col,text){const ls=text.split('\n');return ls.slice(0,Math.max(0,line-1)).reduce((a,v)=>a+v.length+1,0)+Math.max(0,col-1)}
+function range(d){const a=offsetFor(Number(d.line||d.start?.line||1),Number(d.column||d.start?.character||1),sourceAtLint);const b=offsetFor(Number(d.endLine||d.end?.line||d.line||1),Number(d.endColumn||d.end?.character||d.column||1),sourceAtLint);return [a,Math.max(a+1,b)]}
+function fixFor(d){
+ if(String(d.code).replace(/^SC/,'')!=='2086')return null;
+ const [a,b]=range(d),part=sourceAtLint.slice(a,b);
+ if(!/^\$(?:[A-Za-z_]\w*|\{[A-Za-z_]\w*\})$/.test(part))return null;
+ return {a,b,replacement:'"'+part+'"'};
+}
+function paint(){
+ const src=editor.value;
+ if(src!==sourceAtLint){overlay.textContent='';return}
+ const ranges=diagnostics.map((d,i)=>({i,...{start:range(d)[0],end:range(d)[1]}})).sort((a,b)=>a.start-b.start);
+ let cursor=0,html='';
+ for(const r of ranges){if(r.start<cursor||r.start>=src.length)continue;html+=esc(src.slice(cursor,r.start));html+='<span class="sc-mark">'+esc(src.slice(r.start,Math.min(src.length,r.end)))+'</span>';cursor=Math.min(src.length,r.end)}
+ html+=esc(src.slice(cursor));overlay.innerHTML=html+'\n';
+ overlay.scrollTop=editor.scrollTop;overlay.scrollLeft=editor.scrollLeft;
+}
+function show(d,index){
+ const [a,b]=range(d);editor.focus();editor.setSelectionRange(a,b);
+ const fix=fixFor(d);
+ pop.hidden=false;
+ pop.innerHTML='<strong>'+esc('SC'+(d.code||'?'))+'</strong> · '+esc(d.level||'info')+'<p>'+esc(d.message||'Diagnóstico ShellCheck')+'</p>'+(fix?'<button class="sc-fix" id="scApply">Aplicar correção</button>':'')+' <button id="scClose">Fechar</button>';
+ pop.style.top=Math.min(editor.offsetHeight-10,Math.max(8,(Number(d.line||1)-1)*20-editor.scrollTop+22))+'px';pop.style.left='12px';
+ pop.querySelector('#scClose').onclick=()=>pop.hidden=true;
+ if(fix)pop.querySelector('#scApply').onclick=()=>{if(editor.value!==sourceAtLint)return;editor.value=sourceAtLint.slice(0,fix.a)+fix.replacement+sourceAtLint.slice(fix.b);editor.dispatchEvent(new Event('input',{bubbles:true}));pop.hidden=true;$('scStatus').textContent='Correção aplicada. Analise novamente.'};
+}
+function render(){
+ const counts={error:0,warning:0,info:0,style:0};
+ diagnostics.forEach(d=>{const k=String(d.level||d.type||'info').toLowerCase();counts[k in counts?k:'info']++});
+ $('scDiagnostics').innerHTML='<p class="v3-note">'+Object.entries(counts).map(([k,n])=>esc(k)+': '+n).join(' · ')+'</p>'+diagnostics.map((d,i)=>'<button class="sc-diagnostic" data-sc="'+i+'"><strong>SC'+esc(d.code||'?')+'</strong> · Linha '+esc(d.line||'?')+' · '+esc(d.message||'')+'</button>').join('');
+ paint();
+}
+async function run(){
+ const seq=++sequence;sourceAtLint=editor.value;pop.hidden=true;$('scStatus').textContent='Carregando/analisando...';
+ try{
+  const fn=await load();let r;
+  try{r=await fn(sourceAtLint,{format:'json'})}catch(e){r=await fn({script:sourceAtLint,format:'json'})}
+  if(seq!==sequence)return;diagnostics=normalize(r);$('scStatus').textContent=diagnostics.length+' diagnóstico(s)';render();
+ }catch(e){if(seq!==sequence)return;diagnostics=[];overlay.textContent='';$('scStatus').textContent='WASM indisponível';$('scDiagnostics').textContent='Não foi possível executar ShellCheck: '+e.message+'. O analisador básico continua disponível.'}
+}
+$('scRun').onclick=run;
+$('scAuto').onchange=()=>{if($('scAuto').checked)run()};
+editor.addEventListener('input',()=>{overlay.textContent='';pop.hidden=true;sequence++;if($('scAuto').checked){clearTimeout(timer);timer=setTimeout(run,1000)}});
+editor.addEventListener('scroll',()=>{overlay.scrollTop=editor.scrollTop;overlay.scrollLeft=editor.scrollLeft});
+$('scDiagnostics').addEventListener('click',e=>{const b=e.target.closest('[data-sc]');if(b)show(diagnostics[Number(b.dataset.sc)],Number(b.dataset.sc))});
+})();
+</script>
 </body>
 </html>
