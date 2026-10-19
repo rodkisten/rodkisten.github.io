@@ -251,6 +251,38 @@
 .v3-result:hover{background:#29394b}.v3-token{cursor:pointer;border-bottom:1px dotted #7da9cf}
 @media(max-width:750px){.v3-grid{grid-template-columns:1fr}.studio-v3{padding:12px}}
 </style>
+
+<style id="unix-studio-v46-fixes">
+@media (max-width:980px){
+  .inspector-backdrop { position:fixed; inset:0; z-index:39; background:#030509ac; backdrop-filter:blur(3px); display:none; cursor:pointer; touch-action:manipulation; }
+  #rightPanel.mobile-open + .inspector-backdrop { display:block; }
+  #rightPanel.mobile-open { width:min(425px,calc(100vw - 32px)); max-width:calc(100vw - 32px); z-index:40; }
+  #rightPanel.mobile-open .panel-close { display:inline-flex; font-size:25px; min-width:38px; min-height:38px; }
+  #rightPanel.mobile-open .right-head { position:sticky; top:-25px; z-index:5; background:#0e1117; padding:8px 0; }
+}
+.stage-inline { padding:9px 11px 11px; border-top:1px solid #28303b; background:#10151d; display:flex; gap:7px; align-items:center; flex-wrap:wrap; }
+.stage-inline-label { width:100%; font-size:10px; letter-spacing:.06em; font-weight:700; color:#96a4b7; }
+.stage-arg-item { display:flex; gap:4px; align-items:center; min-width:0; flex:1 1 170px; max-width:100%; }
+.stage-arg-item>.mini-icon { flex:0 0 26px; }
+.stage-arg-item .field { width:100%; min-width:0; }
+.stage-add-arg { border:1px dashed #59637b; border-radius:7px; color:#b4b8f5; background:#1c2230; padding:7px 11px; font-size:11px; white-space:nowrap; }
+.stage-add-arg:hover { background:#2b3143; }
+.sh-input-wrap { position:relative; display:block; min-width:0; width:100%; border-radius:8px; background:#181d25; isolation:isolate; }
+.field-row>.sh-input-wrap,.stage-arg-item>.sh-input-wrap { flex:1 1 auto; width:0; }
+.sh-input-wrap>.sh-input-layer { position:absolute; inset:0; pointer-events:none; overflow:hidden; white-space:pre; z-index:1; border:1px solid transparent; box-sizing:border-box; color:#dce6f1; }
+.sh-input-wrap>.sh-input-layer>.sh-input-text { display:block; white-space:pre; width:max-content; min-width:100%; box-sizing:border-box; }
+.sh-input-wrap>input.field { position:relative; z-index:2; display:block; width:100%; min-width:0; background:transparent!important; color:transparent!important; -webkit-text-fill-color:transparent!important; caret-color:#f4f6ff!important; }
+.sh-input-wrap>input.field::placeholder { color:#778497!important; -webkit-text-fill-color:#778497!important; }
+.sh-input-wrap>input.field::selection { background:#6d80b788!important; }
+.sh-input-wrap:focus-within { outline:1px solid #a5a8ff; }
+.sh-input-wrap:has(input:disabled) { opacity:.55; }
+.sh-awk-field { color:#ffc58e; }.sh-jq-path{color:#8ac6fb}.sh-pattern{color:#eccd89}.sh-replacement{color:#a7e4a3}
+.sh-punctuation{color:#f19db5}.sh-path{color:#b2cde9}.sh-bracket{color:#c7aff8}
+@media(max-width:620px){
+ .sh-input-wrap>input.field, .stage-arg-item input { font-size:16px; }
+ .stage-inline { gap:7px; }
+}
+</style>
 </head>
 <body>
   <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden" xmlns="http://www.w3.org/2000/svg">
@@ -761,13 +793,16 @@
           const join = i ? `<div class="connector-row"><div class="connector-track"></div><select data-role="join" data-id="${escapeHTML(stage.id)}" aria-label="Operador entre etapas">${OPERATORS.map(([value,label]) => `<option value="${value}" ${value === stage.join ? 'selected' : ''}>${escapeHTML(label)}</option>`).join('')}</select><span class="connector-caption">ligação</span></div>` : '';
           const symbol = stage.kind === 'raw' ? '{}' : (stage.command === 'jq' ? '.{}' : '$');
           const name = stage.kind === 'raw' ? 'Trecho livre' : (stage.command || 'Comando sem nome');
+          const inlineEditor = stage.kind === 'command' ? `<div class="stage-inline"><div class="stage-inline-label">ARGUMENTOS · edição rápida</div>
+            ${(stage.args || []).map((arg, argIndex) => `<div class="stage-arg-item"><input class="field" data-inline-arg data-stage-id="${escapeHTML(stage.id)}" data-inline-index="${argIndex}" aria-label="Argumento ${argIndex + 1} de ${escapeHTML(stage.command)}" placeholder="Argumento ${argIndex + 1}" spellcheck="false" autocomplete="off" value="${escapeHTML(arg.value)}" title="${escapeHTML(arg.mode === 'raw' ? 'Expressão Shell' : arg.mode === 'literal' ? 'Literal' : 'Escape automático')}"><button class="mini-icon danger" data-action="remove-inline-arg" data-id="${escapeHTML(stage.id)}" data-index="${argIndex}" aria-label="Remover argumento ${argIndex + 1}">${icon('trash')}</button></div>`).join('')}
+            <button type="button" class="stage-add-arg" data-action="add-inline-arg" data-id="${escapeHTML(stage.id)}">+ Argumento</button></div>` : '';
           return `<div class="stage-wrapper" data-wrapper="${escapeHTML(stage.id)}">${join}
             <div class="stage ${state.selectedId === stage.id ? 'selected' : ''}" draggable="true" data-stage="${escapeHTML(stage.id)}">
               <div class="stage-top"><span class="drag" title="Arraste para reordenar">⠿</span><span class="stage-num">${String(i+1).padStart(2,'0')}</span><span class="stage-symbol ${stage.kind === 'raw' ? 'raw' : ''}">${escapeHTML(symbol)}</span>
                 <div class="stage-body" data-action="select" data-id="${escapeHTML(stage.id)}"><div class="stage-name">${escapeHTML(name)}</div><div class="stage-code" title="${escapeHTML(buildCommand(stage))}">${escapeHTML(buildCommand(stage) || '(vazio)')}</div></div>
                 <div class="stage-buttons">${iconButton('edit','Editar','select',stage.id)}${iconButton('copy','Duplicar','duplicate',stage.id)}${iconButton('trash','Excluir','remove',stage.id)}</div>
               </div>
-              <div class="stage-bottom"><span>${escapeHTML(stage.kind === 'raw' ? 'Expressão shell direta' : (def?.description || 'Comando personalizado'))}</span><span style="margin-left:auto">${escapeHTML(getStageMeta(stage).join(' · '))}</span></div>
+              <div class="stage-bottom"><span>${escapeHTML(stage.kind === 'raw' ? 'Expressão shell direta' : (def?.description || 'Comando personalizado'))}</span><span data-stage-meta style="margin-left:auto">${escapeHTML(getStageMeta(stage).join(' · '))}</span></div>${inlineEditor}
             </div></div>`;
         }).join('');
       };
@@ -996,6 +1031,20 @@
       $('workspace').addEventListener('click', event => {
         const target = event.target.closest('[data-action]'); if (!target) return;
         const { action, id } = target.dataset;
+        if (action === 'add-inline-arg' || action === 'remove-inline-arg') {
+          const stage = state.stages.find(s => s.id === id);
+          if (!stage || stage.kind !== 'command') return;
+          const index = Number(target.dataset.index);
+          commit(() => {
+            if (action === 'add-inline-arg') stage.args.push(argument());
+            else if (index >= 0 && index < stage.args.length) stage.args.splice(index,1);
+          });
+          if (action === 'add-inline-arg') {
+            const inputs = [...$('workspace').querySelectorAll('input[data-inline-arg]')].filter(input => input.dataset.stageId === id);
+            inputs.at(-1)?.focus({preventScroll:true});
+          }
+          return;
+        }
         if (action === 'add-default') { addCommand('ls'); return; }
         if (action === 'select') {
           state.selectedId = id; persist(); render(true);
@@ -1016,11 +1065,42 @@
           });
         }
       });
+      $('workspace').addEventListener('input', event => {
+        const input = event.target.closest('input[data-inline-arg]');
+        if (!input) return;
+        const stage = state.stages.find(s => s.id === input.dataset.stageId);
+        const index = Number(input.dataset.inlineIndex);
+        if (!stage?.args?.[index] || stage.args[index].value === input.value) return;
+        const before = snapshot();
+        stage.args[index].value = input.value;
+        undoStack.push(before); if (undoStack.length > 75) undoStack.shift();
+        redoStack = [];
+        persist();
+        // Atualização cirúrgica: não destrói o input nem perde o cursor no iOS.
+        const card = input.closest('[data-stage]');
+        if (card) {
+          const code = card.querySelector('.stage-code');
+          if (code) { code.textContent = buildCommand(stage) || '(vazio)'; code.title = buildCommand(stage); }
+          const meta = card.querySelector('[data-stage-meta]');
+          if (meta) meta.textContent = getStageMeta(stage).join(' · ');
+        }
+        if (state.selectedId === stage.id) {
+          const counterpart = $('inspector').querySelector(`input[data-bind="arg-value"][data-index="${index}"]`);
+          if (counterpart && document.activeElement !== counterpart) {
+            counterpart.value = input.value;
+            counterpart.dispatchEvent(new Event('sh:sync'));
+          }
+        }
+        renderPreview();
+        ['undoBtn','undoInline'].forEach(id => $(id).disabled = false);
+        ['redoBtn','redoInline'].forEach(id => $(id).disabled = true);
+      });
       $('workspace').addEventListener('change', event => {
         const target = event.target.closest('[data-role="join"]'); if (!target) return;
         commit(() => { const stage = state.stages.find(s => s.id === target.dataset.id); if (stage) stage.join = target.value; },false);
       });
       $('workspace').addEventListener('dragstart', e => {
+        if (e.target.closest('input,select,button,.sh-input-wrap')) { e.preventDefault(); return; }
         const card = e.target.closest('[data-stage]'); if (!card) return;
         dragId = card.dataset.stage; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain',dragId);
       });
@@ -1062,6 +1142,13 @@
           if (bind === 'redir-target' && stage.redirs[+index]) stage.redirs[+index].target.value = target.value;
           if (bind === 'command') stage.command = target.value;
         },false);
+        if (bind === 'arg-value') {
+          const counterpart = $('workspace').querySelector(`input[data-inline-arg][data-stage-id="${stage.id}"][data-inline-index="${index}"]`);
+          if (counterpart && document.activeElement !== counterpart) {
+            counterpart.value = target.value;
+            counterpart.dispatchEvent(new Event('sh:sync'));
+          }
+        }
       });
       $('inspector').addEventListener('change', e => {
         const target = e.target; const stage = selected(); if (!stage) return;
@@ -1126,6 +1213,13 @@
         if (!state.stages.length) return;
         confirmDialog('Limpar pipeline?', 'Todas as etapas serão removidas. Você ainda poderá desfazer.', () => commit(() => {state.stages=[];state.selectedId=null;}));
       };
+      // Um backdrop real permite fechar o Inspector tocando fora do painel no iPhone.
+      const inspectorBackdrop = document.createElement('div');
+      inspectorBackdrop.id = 'inspectorBackdrop';
+      inspectorBackdrop.className = 'inspector-backdrop';
+      inspectorBackdrop.setAttribute('aria-label','Fechar Inspector e voltar ao pipeline');
+      $('rightPanel').after(inspectorBackdrop);
+      inspectorBackdrop.addEventListener('click', closeMobilePanels);
       $('mobileCatalog').onclick = () => toggleMobilePanel('sidebar');
       $('mobileEditor').onclick = () => toggleMobilePanel('rightPanel');
       $('closeEditorBtn').onclick = closeMobilePanels;
@@ -1345,8 +1439,63 @@ function lex(src){
 }
 window.UnixSyntax={highlight:lex};
 const wrappers=new WeakMap();
+function highlightArgument(value, el){
+ const src=String(value || '');
+ const inspector=el.closest('#inspector');
+ const inline=el.hasAttribute('data-inline-arg');
+ const stageId=inline?el.dataset.stageId:null;
+ const stage=stageId?document.querySelector(`[data-stage="${CSS.escape(stageId)}"]`):null;
+ const cmd=inline?(stage?.querySelector('.stage-name')?.textContent||''):(inspector?.querySelector('input[data-bind="command"]')?.value||'');
+ const context=cmd.toLowerCase().trim().split(/\s+/)[0];
+ const tokenPattern=/\$\{[^}]*\}|\$\([^)]*\)|\$[A-Za-z_]\w*|\$\d+|\$[?@#$!*]|"(?:\\.|[^"\\])*"|'(?:[^']*)'|(?:\b(?:print|printf|if|else|BEGIN|END|next|exit|select|map|keys|length|range|test|match|contains|empty|true|false|null)\b)|\.[A-Za-z_][\w.]*|--?[A-Za-z][\w-]*(?:=[^\s]+)?|(?:==|!=|<=|>=|!~|=~|\|\||&&|[{}\[\]();|<>])|\b\d+(?:\.\d+)?\b/g;
+ if(context==='sed' && /^s([^\w\s\\])/.test(src)){
+   const delim=src[1]; let i=2;const segments=[];let part='';
+   for(;i<src.length;i++){
+     if(src[i]==='\\' && i+1<src.length){part+=src.slice(i,i+2);i++;continue;}
+     if(src[i]===delim){segments.push(part);part='';if(segments.length===2){i++;break;}continue}
+     part+=src[i];
+   }
+   if(segments.length===2)return '<span class="sh-keyword">s</span><span class="sh-punctuation">'+esc(delim)+'</span><span class="sh-pattern">'+esc(segments[0])+'</span><span class="sh-punctuation">'+esc(delim)+'</span><span class="sh-replacement">'+esc(segments[1])+'</span><span class="sh-punctuation">'+esc(delim)+'</span><span class="sh-flag">'+esc(src.slice(i))+'</span>';
+ }
+ let html='',last=0,match;
+ while((match=tokenPattern.exec(src))){
+   html+=esc(src.slice(last,match.index));
+   const t=match[0];let kind='sh-punctuation';
+   if(t.startsWith('$'))kind='sh-variable';
+   else if(t.startsWith('"')||t.startsWith("'"))kind='sh-string';
+   else if(t.startsWith('--')||/^-[A-Za-z]/.test(t))kind='sh-flag';
+   else if(/^\d/.test(t))kind='sh-number';
+   else if(t[0]==='.')kind='sh-jq-path';
+   else if(/^(print|printf|if|else|BEGIN|END|next|exit|select|map|keys|length|range|test|match|contains|empty|true|false|null)$/.test(t))kind='sh-keyword';
+   else if(/[\[\]{}()]/.test(t))kind='sh-bracket';
+   html+='<span class="'+kind+'">'+esc(t)+'</span>';
+   last=tokenPattern.lastIndex;
+ }
+ html+=esc(src.slice(last));
+ if(!src)return '&#8203;';
+ return html;
+}
+function enhanceInput(el){
+ if(wrappers.has(el)||!el.isConnected)return;
+ const wrap=document.createElement('span');wrap.className='sh-input-wrap';
+ const backdrop=document.createElement('span');backdrop.className='sh-input-layer';backdrop.setAttribute('aria-hidden','true');
+ const content=document.createElement('span');content.className='sh-input-text';backdrop.append(content);
+ el.parentNode.insertBefore(wrap,el);wrap.append(backdrop,el);
+ const sync=()=>{
+  const cs=getComputedStyle(el);
+  for(const property of ['fontFamily','fontSize','fontWeight','fontStyle','lineHeight','letterSpacing','textAlign','tabSize','paddingTop','paddingRight','paddingBottom','paddingLeft','wordSpacing'])content.style[property]=cs[property];
+  backdrop.style.borderRadius=cs.borderRadius;
+  content.innerHTML=highlightArgument(el.value,el);
+  content.style.transform=`translateX(${-el.scrollLeft}px)`;
+ };
+ wrappers.set(el,sync);
+ for(const event of ['input','change','scroll','focus','click','keyup','compositionend','sh:sync'])el.addEventListener(event,sync);
+ new ResizeObserver(sync).observe(el);
+ sync();
+}
 function enhance(el){
  if(wrappers.has(el)||!el.isConnected||el.id==='v3sample')return;
+ if(el.tagName==='INPUT'){enhanceInput(el);return}
  const wrap=document.createElement('div');wrap.className='sh-edit-wrap';
  const backdrop=document.createElement('div');backdrop.className='sh-highlight';backdrop.setAttribute('aria-hidden','true');
  const content=document.createElement('div');content.className='sh-content';backdrop.append(content);
@@ -1365,8 +1514,8 @@ function enhance(el){
  sync();
 }
 function refresh(){
- document.querySelectorAll('textarea').forEach(el=>{
-  if(el.id==='importSource'||el.id==='v3source'||el.matches('[data-bind="raw"]'))enhance(el);
+ document.querySelectorAll('textarea,input[data-bind="arg-value"],input[data-bind="flag-value"],input[data-bind="extra"],input[data-bind="command"],input[data-bind="redir-target"],input[data-inline-arg]').forEach(el=>{
+  if(el.tagName === 'INPUT' || el.id==='importSource'||el.id==='v3source'||el.matches('[data-bind="raw"]'))enhance(el);
  });
  // Keep the existing preview token click behavior while upgrading its coloring.
  const preview=document.getElementById('codePreview');
