@@ -1,7 +1,7 @@
-/* Auto-generated from menu/menu.ts. at 10/19/2026, 3:35:33 PM Do not edit directly. */
+/* Auto-generated from menu/menu.ts. at 11/1/2026, 12:57:09 PM Do not edit directly. */
 var RodMenu = (function() {
 
-//#region \0rolldown/runtime.js
+// \0rolldown/runtime.js
 	var __defProp = Object.defineProperty;
 	var __exportAll = (all, no_symbols) => {
 		let target = {};
@@ -17,8 +17,7 @@ var RodMenu = (function() {
 		return target;
 	};
 
-//#endregion
-//#region menu/menu.ts
+// menu/menu.ts
 	var menu_exports = /* @__PURE__ */ __exportAll({});
 	(function installRodMenu(rootWindow) {
 		"use strict";
@@ -5418,8 +5417,7 @@ button {
 		publishEverywhere(api);
 	})(window);
 
-//#endregion
-//#region \0rod-iife-entry:browser:/home/runner/work/rodkisten.github.io/rodkisten.github.io/menu/menu.ts
+// \0rod-iife-entry:browser:/home/runner/work/rodkisten.github.io/rodkisten.github.io/menu/menu.ts
 	const __globalName = "RodMenu";
 	const __roots = [];
 	function __addRoot(value) {
@@ -5468,6 +5466,5 @@ button {
 	}
 	for (const __root of __roots) __publish(__root);
 
-//#endregion
 return __value;
 })();

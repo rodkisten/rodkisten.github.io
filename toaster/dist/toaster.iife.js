@@ -1,7 +1,7 @@
-/* Auto-generated from toaster/toaster.ts. at 10/19/2026, 3:35:33 PM Do not edit directly. */
+/* Auto-generated from toaster/toaster.ts. at 11/1/2026, 12:57:09 PM Do not edit directly. */
 var RodToaster = (function() {
 
-//#region \0rolldown/runtime.js
+// \0rolldown/runtime.js
 	var __defProp = Object.defineProperty;
 	var __exportAll = (all, no_symbols) => {
 		let target = {};
@@ -17,8 +17,7 @@ var RodToaster = (function() {
 		return target;
 	};
 
-//#endregion
-//#region toaster/toaster.ts
+// toaster/toaster.ts
 	var toaster_exports = /* @__PURE__ */ __exportAll({ default: () => toaster_default });
 	(function installRodToaster(globalWindow) {
 		"use strict";
@@ -8331,8 +8330,7 @@ var RodToaster = (function() {
 	})(window);
 	var toaster_default = {};
 
-//#endregion
-//#region \0rod-iife-entry:browser:/home/runner/work/rodkisten.github.io/rodkisten.github.io/toaster/toaster.ts
+// \0rod-iife-entry:browser:/home/runner/work/rodkisten.github.io/rodkisten.github.io/toaster/toaster.ts
 	const __globalName = "RodToaster";
 	const __roots = [];
 	function __addRoot(value) {
@@ -8381,6 +8379,5 @@ var RodToaster = (function() {
 	}
 	for (const __root of __roots) __publish(__root);
 
-//#endregion
 return __value;
 })();

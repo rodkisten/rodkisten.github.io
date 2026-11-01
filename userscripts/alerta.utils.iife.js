@@ -1,7 +1,7 @@
-/* Auto-generated from userscripts/alerta.utils.ts. at 10/19/2026, 3:35:33 PM Do not edit directly. */
+/* Auto-generated from userscripts/alerta.utils.ts. at 11/1/2026, 12:57:09 PM Do not edit directly. */
 var AlertaUtils = (function() {
 
-//#region \0rolldown/runtime.js
+// \0rolldown/runtime.js
 	var __defProp = Object.defineProperty;
 	var __exportAll = (all, no_symbols) => {
 		let target = {};
@@ -17,8 +17,7 @@ var AlertaUtils = (function() {
 		return target;
 	};
 
-//#endregion
-//#region userscripts/alerta.utils.ts
+// userscripts/alerta.utils.ts
 	var alerta_utils_exports = /* @__PURE__ */ __exportAll({});
 	[
 		{
@@ -69,8 +68,7 @@ var AlertaUtils = (function() {
 		{ createEventBus }
 	].forEach((util) => window.RodUtils[util] = util);
 
-//#endregion
-//#region \0rod-iife-entry:browser:/home/runner/work/rodkisten.github.io/rodkisten.github.io/userscripts/alerta.utils.ts
+// \0rod-iife-entry:browser:/home/runner/work/rodkisten.github.io/rodkisten.github.io/userscripts/alerta.utils.ts
 	const __globalName = "AlertaUtils";
 	const __roots = [];
 	function __addRoot(value) {
@@ -119,6 +117,5 @@ var AlertaUtils = (function() {
 	}
 	for (const __root of __roots) __publish(__root);
 
-//#endregion
 return __value;
 })();

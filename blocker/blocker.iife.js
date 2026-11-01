@@ -1,7 +1,7 @@
-/* Auto-generated from blocker/blocker.ts. at 10/19/2026, 3:35:33 PM Do not edit directly. */
+/* Auto-generated from blocker/blocker.ts. at 11/1/2026, 12:57:09 PM Do not edit directly. */
 var Blocker = (function() {
 
-//#region \0rolldown/runtime.js
+// \0rolldown/runtime.js
 	var __defProp = Object.defineProperty;
 	var __exportAll = (all, no_symbols) => {
 		let target = {};
@@ -17,8 +17,7 @@ var Blocker = (function() {
 		return target;
 	};
 
-//#endregion
-//#region blocker/blocker.ts
+// blocker/blocker.ts
 	var blocker_exports = /* @__PURE__ */ __exportAll({});
 	const ACTIONS = {
 		HIDE: "hide",
@@ -3928,8 +3927,7 @@ var Blocker = (function() {
 		*/
 	})(window);
 
-//#endregion
-//#region \0rod-iife-entry:browser:/home/runner/work/rodkisten.github.io/rodkisten.github.io/blocker/blocker.ts
+// \0rod-iife-entry:browser:/home/runner/work/rodkisten.github.io/rodkisten.github.io/blocker/blocker.ts
 	const __globalName = "Blocker";
 	const __roots = [];
 	function __addRoot(value) {
@@ -3978,6 +3976,5 @@ var Blocker = (function() {
 	}
 	for (const __root of __roots) __publish(__root);
 
-//#endregion
 return __value;
 })();

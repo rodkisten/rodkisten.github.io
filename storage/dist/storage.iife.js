@@ -1,7 +1,7 @@
-/* Auto-generated from storage/storage.ts. at 10/19/2026, 3:35:33 PM Do not edit directly. */
+/* Auto-generated from storage/storage.ts. at 11/1/2026, 12:57:09 PM Do not edit directly. */
 var RodStorage = (function() {
 
-//#region \0rolldown/runtime.js
+// \0rolldown/runtime.js
 	var __defProp = Object.defineProperty;
 	var __exportAll = (all, no_symbols) => {
 		let target = {};
@@ -17,8 +17,7 @@ var RodStorage = (function() {
 		return target;
 	};
 
-//#endregion
-//#region storage/storage.ts
+// storage/storage.ts
 	var storage_exports = /* @__PURE__ */ __exportAll({});
 	/**
 	* RodStorage v1.0.0
@@ -1117,8 +1116,7 @@ var RodStorage = (function() {
 		globalThis.RodStorage = RodStorage;
 	})();
 
-//#endregion
-//#region \0rod-iife-entry:browser:/home/runner/work/rodkisten.github.io/rodkisten.github.io/storage/storage.ts
+// \0rod-iife-entry:browser:/home/runner/work/rodkisten.github.io/rodkisten.github.io/storage/storage.ts
 	const __globalName = "RodStorage";
 	const __roots = [];
 	function __addRoot(value) {
@@ -1167,6 +1165,5 @@ var RodStorage = (function() {
 	}
 	for (const __root of __roots) __publish(__root);
 
-//#endregion
 return __value;
 })();

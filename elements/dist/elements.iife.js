@@ -1,7 +1,7 @@
-/* Auto-generated from elements/elements.ts. at 10/19/2026, 3:35:33 PM Do not edit directly. */
+/* Auto-generated from elements/elements.ts. at 11/1/2026, 12:57:09 PM Do not edit directly. */
 var RodElements = (function() {
 
-//#region \0rolldown/runtime.js
+// \0rolldown/runtime.js
 	var __defProp = Object.defineProperty;
 	var __exportAll = (all, no_symbols) => {
 		let target = {};
@@ -17,8 +17,7 @@ var RodElements = (function() {
 		return target;
 	};
 
-//#endregion
-//#region elements/elements.ts
+// elements/elements.ts
 	var elements_exports = /* @__PURE__ */ __exportAll({});
 	/**
 	* RodElements v1.2.0
@@ -1127,8 +1126,7 @@ var RodElements = (function() {
 		return api;
 	});
 
-//#endregion
-//#region \0rod-iife-entry:browser:/home/runner/work/rodkisten.github.io/rodkisten.github.io/elements/elements.ts
+// \0rod-iife-entry:browser:/home/runner/work/rodkisten.github.io/rodkisten.github.io/elements/elements.ts
 	const __globalName = "RodElements";
 	const __roots = [];
 	function __addRoot(value) {
@@ -1177,6 +1175,5 @@ var RodElements = (function() {
 	}
 	for (const __root of __roots) __publish(__root);
 
-//#endregion
 return __value;
 })();

@@ -1,7 +1,7 @@
-/* Auto-generated from object-inspector/object-inspector.ts. at 10/19/2026, 3:35:33 PM Do not edit directly. */
+/* Auto-generated from object-inspector/object-inspector.ts. at 11/1/2026, 12:57:09 PM Do not edit directly. */
 var RodObjectInspector = (function() {
 
-//#region \0rolldown/runtime.js
+// \0rolldown/runtime.js
 	var __defProp = Object.defineProperty;
 	var __exportAll = (all, no_symbols) => {
 		let target = {};
@@ -17,8 +17,7 @@ var RodObjectInspector = (function() {
 		return target;
 	};
 
-//#endregion
-//#region object-inspector/object-inspector.ts
+// object-inspector/object-inspector.ts
 	var object_inspector_exports = /* @__PURE__ */ __exportAll({});
 	(function RodObjectInspectorBundle(suppliedGlobal) {
 		"use strict";
@@ -1669,8 +1668,7 @@ var RodObjectInspector = (function() {
 		}));
 	})(typeof window !== "undefined" ? window : globalThis);
 
-//#endregion
-//#region \0rod-iife-entry:browser:/home/runner/work/rodkisten.github.io/rodkisten.github.io/object-inspector/object-inspector.ts
+// \0rod-iife-entry:browser:/home/runner/work/rodkisten.github.io/rodkisten.github.io/object-inspector/object-inspector.ts
 	const __globalName = "RodObjectInspector";
 	const __roots = [];
 	function __addRoot(value) {
@@ -1719,6 +1717,5 @@ var RodObjectInspector = (function() {
 	}
 	for (const __root of __roots) __publish(__root);
 
-//#endregion
 return __value;
 })();
