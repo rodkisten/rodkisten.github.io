@@ -1,20 +1,20 @@
-/* Auto-generated from storage/storage.ts. at 11/1/2026, 12:57:09 PM Do not edit directly. */
+/* Auto-generated from storage/storage.ts. at 11/16/2026, 12:49:48 PM Do not edit directly. */
 var RodStorage = (function() {
 
 // \0rolldown/runtime.js
 	var __defProp = Object.defineProperty;
-	var __exportAll = (all, no_symbols) => {
-		let target = {};
+	var __exportAll = (all, flags) => {
+		let target = Object.setPrototypeOf({}, null);
 		for (var name in all) {
 			__defProp(target, name, {
 				get: all[name],
 				enumerable: true
 			});
 		}
-		if (!no_symbols) {
+		if (!(flags & 1)) {
 			__defProp(target, Symbol.toStringTag, { value: "Module" });
 		}
-		return target;
+		return flags & 2 ? target : Object.preventExtensions(target);
 	};
 
 // storage/storage.ts
@@ -91,8 +91,8 @@ var RodStorage = (function() {
 			};
 			if (typeof value === "number") {
 				if (Number.isNaN(value)) return { [TYPE]: "NaN" };
-				if (value === Infinity) return { [TYPE]: "Infinity" };
-				if (value === -Infinity) return { [TYPE]: "-Infinity" };
+				if (value === 1e400) return { [TYPE]: "Infinity" };
+				if (value === -1e400) return { [TYPE]: "-Infinity" };
 			}
 			if (value === void 0) return { [TYPE]: "Undefined" };
 			if (value instanceof Date) return {
@@ -155,8 +155,8 @@ var RodStorage = (function() {
 			if (typeof tag === "string") switch (tag) {
 				case "Undefined": return;
 				case "NaN": return NaN;
-				case "Infinity": return Infinity;
-				case "-Infinity": return -Infinity;
+				case "Infinity": return 1e400;
+				case "-Infinity": return -1e400;
 				case "BigInt": return BigInt(String(tagged.value));
 				case "Date": return new Date(String(tagged.value));
 				case "URL": return new URL(String(tagged.value));

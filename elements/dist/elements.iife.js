@@ -1,20 +1,20 @@
-/* Auto-generated from elements/elements.ts. at 11/1/2026, 12:57:09 PM Do not edit directly. */
+/* Auto-generated from elements/elements.ts. at 11/16/2026, 12:49:48 PM Do not edit directly. */
 var RodElements = (function() {
 
 // \0rolldown/runtime.js
 	var __defProp = Object.defineProperty;
-	var __exportAll = (all, no_symbols) => {
-		let target = {};
+	var __exportAll = (all, flags) => {
+		let target = Object.setPrototypeOf({}, null);
 		for (var name in all) {
 			__defProp(target, name, {
 				get: all[name],
 				enumerable: true
 			});
 		}
-		if (!no_symbols) {
+		if (!(flags & 1)) {
 			__defProp(target, Symbol.toStringTag, { value: "Module" });
 		}
-		return target;
+		return flags & 2 ? target : Object.preventExtensions(target);
 	};
 
 // elements/elements.ts

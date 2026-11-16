@@ -1,20 +1,20 @@
-/* Auto-generated from toaster/toaster.ts. at 11/1/2026, 12:57:09 PM Do not edit directly. */
+/* Auto-generated from toaster/toaster.ts. at 11/16/2026, 12:49:48 PM Do not edit directly. */
 var RodToaster = (function() {
 
 // \0rolldown/runtime.js
 	var __defProp = Object.defineProperty;
-	var __exportAll = (all, no_symbols) => {
-		let target = {};
+	var __exportAll = (all, flags) => {
+		let target = Object.setPrototypeOf({}, null);
 		for (var name in all) {
 			__defProp(target, name, {
 				get: all[name],
 				enumerable: true
 			});
 		}
-		if (!no_symbols) {
+		if (!(flags & 1)) {
 			__defProp(target, Symbol.toStringTag, { value: "Module" });
 		}
-		return target;
+		return flags & 2 ? target : Object.preventExtensions(target);
 	};
 
 // toaster/toaster.ts
@@ -6415,7 +6415,7 @@ var RodToaster = (function() {
 			const multiple = options.multiple !== false;
 			const requestedMinimum = Number.isFinite(Number(options.minSelected)) ? Math.max(0, Math.floor(Number(options.minSelected))) : options.required === false ? 0 : 1;
 			const minimum = multiple ? requestedMinimum : Math.min(1, requestedMinimum);
-			const requestedMaximum = Number.isFinite(Number(options.maxSelected)) ? Math.max(0, Math.floor(Number(options.maxSelected))) : multiple ? Infinity : 1;
+			const requestedMaximum = Number.isFinite(Number(options.maxSelected)) ? Math.max(0, Math.floor(Number(options.maxSelected))) : multiple ? 1e400 : 1;
 			const maximum = multiple ? Math.max(minimum, requestedMaximum) : 1;
 			const selectedIds = getInitialPickerSelection(items, {
 				...options,
