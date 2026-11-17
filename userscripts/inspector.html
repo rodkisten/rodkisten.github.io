@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="dark"><title>Rod Inspector</title>
+<style>
+:root{font-family:Inter,-apple-system,sans-serif;color:#c0caf5;background:#1a1b26}*{box-sizing:border-box}body{margin:0;height:100dvh;display:flex;flex-direction:column}header,nav,footer{display:flex;align-items:center;gap:7px;padding:9px;border-bottom:1px solid #414868;background:#16161e}header strong{flex:1}button,input{font:inherit;color:inherit;background:#24283b;border:1px solid #414868;border-radius:7px;padding:7px 10px}button[aria-selected=true]{background:#3d59a1}nav{overflow-x:auto}main{flex:1;min-height:0;display:flex;flex-direction:column}.pane{display:none;flex:1;min-height:0;overflow:auto}.pane.active{display:block}#source{height:100%;overflow:hidden}#source .cm-editor{height:100%}#source .cm-scroller{overflow:auto!important;font-size:12px;font-family:ui-monospace,monospace}#source .cm-content{min-width:max-content}#source .cm-gutters{background:#16161e;color:#565f89}#fallback{display:none;width:100%;height:100%;resize:none;background:#1a1b26;color:#c0caf5;white-space:pre;overflow:auto;font:12px/1.5 monospace}#network,#console{font:12px/1.5 ui-monospace,monospace}.entry{padding:9px;border-bottom:1px solid #292e42;overflow-wrap:anywhere}.entry summary{cursor:pointer;color:#7aa2f7}.entry pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:45vh;overflow:auto}footer{font-size:11px;color:#9aa5ce;min-height:32px}
+</style></head><body><header><strong>◈ Rod Inspector</strong><button id="search">⌕</button><button id="wrap" aria-pressed="false">↵</button><button id="save">↓</button></header><nav><button data-tab="source" aria-selected="true">Elements / Source</button><button data-tab="network">Network <span id="net-count">0</span></button><button data-tab="console">Console <span id="log-count">0</span></button><button data-tab="diagnostics">Diagnóstico</button></nav><main><section id="source" class="pane active"><textarea id="fallback" spellcheck="false"></textarea></section><section id="network" class="pane"></section><section id="console" class="pane"></section><section id="diagnostics" class="pane"><pre id="diag" style="white-space:pre-wrap;overflow-wrap:anywhere;padding:12px"></pre></section></main><footer id="status">Aguardando captura da página…</footer>
+<script type="module">
+const $=s=>document.querySelector(s),events={network:[],console:[]};let editor=null,raw="",wrap=false,session="";
+const allowedOrigin=origin=>/^https?:\/\//.test(origin);
+function append(type,record){const items=events[type];items.push(record);if(items.length>1000)items.shift();const root=$("#"+type),el=document.createElement("details");el.className="entry";const title=document.createElement("summary");title.textContent=type==="network"?`${record.method||"GET"} ${record.status??"…"} ${record.url||""}`:`${record.level||"log"} · ${record.time||""}`;const pre=document.createElement("pre");pre.textContent=JSON.stringify(record,null,2);el.append(title,pre);root.append(el);while(root.children.length>1000)root.firstChild.remove();$("#"+(type==="network"?"net-count":"log-count")).textContent=items.length;}
+function receive(payload){if(payload.kind==="snapshot"){session=payload.session||"";raw=payload.html||"";$("#diag").textContent=JSON.stringify({url:payload.url,title:payload.title,capturedAt:payload.time,bytes:raw.length,userAgent:payload.userAgent,session},null,2);$("#status").textContent=`${payload.url||"Snapshot"} · ${raw.length.toLocaleString("pt-BR")} caracteres · ${editor?"CodeMirror 6":"aguardando editor"}`;if(editor)editor.dispatch({changes:{from:0,to:editor.state.doc.length,insert:raw}});else $("#fallback").value=raw;for(const e of payload.network||[])append("network",e);for(const e of payload.console||[])append("console",e);}
+if(payload.kind==="event"&&(!session||payload.session===session)&&["network","console"].includes(payload.channel))append(payload.channel,payload.data);}
+window.addEventListener("message",e=>{if(!allowedOrigin(e.origin)||!e.data||e.data.rodInspector!==1)return;receive(e.data.payload);});
+window.opener?.postMessage({rodInspector:1,kind:"ready"},"*");
+setInterval(()=>{if(!session)window.opener?.postMessage({rodInspector:1,kind:"ready"},"*");},1000);
+for(const b of document.querySelectorAll("[data-tab]"))b.onclick=()=>{for(const x of document.querySelectorAll("[data-tab]"))x.setAttribute("aria-selected",String(x===b));for(const x of document.querySelectorAll(".pane"))x.classList.toggle("active",x.id===b.dataset.tab);};
+$("#save").onclick=()=>{const blob=new Blob([raw],{type:"text/html;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="snapshot.html";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
+$("#wrap").onclick=()=>{wrap=!wrap;$("#wrap").setAttribute("aria-pressed",String(wrap));if(editor)editor.dispatch({effects:wrapCompartment.reconfigure(wrap?EditorView.lineWrapping:[])});else $("#fallback").style.whiteSpace=wrap?"pre-wrap":"pre";};
+let EditorView,wrapCompartment,searchPanel;
+$("#search").onclick=()=>{if(editor&&searchPanel)searchPanel(editor);else{const q=prompt("Buscar");if(q){const i=raw.indexOf(q);if(i>=0){$("#fallback").focus();$("#fallback").setSelectionRange(i,i+q.length);}}}};
+try{
+ const [basic,html,search,state,view,theme]=await Promise.all([
+ import("https://esm.sh/codemirror@6.0.2"),
+ import("https://esm.sh/@codemirror/lang-html@6.4.9"),
+ import("https://esm.sh/@codemirror/search@6.5.11"),
+ import("https://esm.sh/@codemirror/state@6.5.2"),
+ import("https://esm.sh/@codemirror/view@6.38.6"),
+ import("https://esm.sh/@codemirror/theme-one-dark@6.1.3")
+ ]);
+ EditorView=view.EditorView;wrapCompartment=new state.Compartment();searchPanel=search.openSearchPanel;
+ editor=new EditorView({parent:$("#source"),state:state.EditorState.create({doc:raw,extensions:[basic.basicSetup,html.html(),theme.oneDark,search.search({top:true}),search.highlightSelectionMatches(),wrapCompartment.of([]),EditorView.theme({".cm-scroller":{overflow:"auto"},".cm-content":{minWidth:"max-content"}})]})});
+ $("#fallback").remove();$("#status").textContent+=" · CM6 ativo";
+}catch(e){console.error(e);$("#fallback").style.display="block";$("#status").textContent="Falha ao carregar CodeMirror: "+e.message;}
+</script></body></html>
