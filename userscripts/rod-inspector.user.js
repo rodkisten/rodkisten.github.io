@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rod Inspector · DOM + Network + Console
 // @namespace    https://rod.migos.club/
-// @version      0.1.0
+// @version      0.2.0
 // @description  Dock de diagnóstico para userscripts no Safari
 // @match        http://*/*
 // @match        https://*/*
@@ -10,7 +10,7 @@
 // ==/UserScript==
 (()=>{"use strict";
 if(location.hostname==="rod.migos.club"&&location.pathname.startsWith("/userscripts/inspector"))return;
-const TARGET="https://rod.migos.club/userscripts/inspector.html",session=Math.random().toString(36).slice(2),network=[],logs=[];let popup=null,pickerActive=false,pickerOverlay=null,pickerTarget=null;
+const TARGET="https://rod.migos.club/userscripts/inspector.html",session=crypto.randomUUID(),network=[],logs=[];let popup=null,pickerActive=false,pickerOverlay=null,pickerTarget=null;
 const clean=(v)=>{try{return JSON.parse(JSON.stringify(v,(k,x)=>/authorization|cookie|token|secret|password|session|api.?key/i.test(k)?"[REDACTED]":x));}catch{return String(v).slice(0,3000);}};
 
 const nodePath=(node)=>{const indices=[];let n=node;while(n&&n!==document.documentElement&&indices.length<128){const p=n.parentNode;if(!p)break;indices.unshift(Array.prototype.indexOf.call(p.childNodes,n));n=p;}return n===document.documentElement?indices:null;};
@@ -32,7 +32,7 @@ XMLHttpRequest.prototype.send=function(...args){const record=this.__rodRequest;i
 for(const level of ["log","warn","error","info"]){const old=console[level];console[level]=function(...args){push("console",{level,time:new Date().toISOString(),args:args.map(x=>typeof x==="string"?x.slice(0,2000):clean(x))});return old.apply(this,args);};}
 function snapshot(){return{kind:"snapshot",session,url:location.href,title:document.title,time:new Date().toISOString(),userAgent:navigator.userAgent,html:document.documentElement?.outerHTML||"",network:network.slice(),console:logs.slice()};}
 function transmit(){if(!popup||popup.closed)return;popup.postMessage({rodInspector:1,payload:snapshot()},"https://rod.migos.club");}
-window.addEventListener("message",e=>{if(e.origin!=="https://rod.migos.club"||e.source!==popup||e.data?.rodInspector!==1)return;if(e.data.kind==="ready")transmit();else if(e.data.kind==="pick")startPicker();else if(e.data.kind==="highlight"){const node=nodeByPath(e.data.path);if(node instanceof Element){node.scrollIntoView({block:"center",inline:"nearest"});showOverlay(node);setTimeout(()=>{if(!pickerActive)clearOverlay();},2500);}}});
+window.addEventListener("message",e=>{if(e.origin!=="https://rod.migos.club"||e.source!==popup||e.data?.rodInspector!==1)return;if(e.source!==popup||e.origin!=="https://rod.migos.club")return;if(e.data.kind==="ready")transmit();else if(e.data.kind==="pick")startPicker();else if(e.data.kind==="highlight"){const node=nodeByPath(e.data.path);if(node instanceof Element){node.scrollIntoView({block:"center",inline:"nearest"});showOverlay(node);setTimeout(()=>{if(!pickerActive)clearOverlay();},2500);}}});
 function mount(){if(document.getElementById("rod-inspector-dock"))return;const host=document.createElement("div");host.id="rod-inspector-dock";host.style.cssText="position:fixed!important;right:0!important;top:42%!important;z-index:2147483647!important";const shadow=host.attachShadow({mode:"open"});shadow.innerHTML='<style>button{font:700 12px -apple-system,sans-serif;border:1px solid #7aa2f7;border-right:0;border-radius:12px 0 0 12px;background:#24283b;color:#c0caf5;padding:13px 9px;box-shadow:0 4px 20px #0008;touch-action:manipulation}</style><button type="button" aria-label="Abrir Rod Inspector">◈<br>DEV</button>';shadow.querySelector("button").onclick=()=>{popup=window.open(TARGET,"_blank");if(!popup)alert("Permita pop-ups para abrir o Rod Inspector.");else setTimeout(transmit,750);};document.documentElement.append(host);}
 if(document.documentElement)mount();else new MutationObserver((observer)=>{if(document.documentElement){observer.disconnect();mount();}}).observe(document,{childList:true});
 })();
