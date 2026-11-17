@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rod Inspector · DOM + Network + Console
 // @namespace    https://rod.migos.club/
-// @version      0.5.0
+// @version      0.6.0
 // @description  Dock de diagnóstico para userscripts no Safari
 // @match        http://*/*
 // @match        https://*/*
@@ -26,15 +26,6 @@ function selectPicker(e){if(!pickerActive||e.target.closest?.("#rod-inspector-do
 function startPicker(){stopPicker();pickerActive=true;document.addEventListener("pointermove",hoverPicker,true);document.addEventListener("touchstart",touchPicker,true);document.addEventListener("click",selectPicker,true);}
 function send(payload){if(popup&&!popup.closed)popup.postMessage({rodInspector:1,payload},"https://rod.migos.club");}
 const push=(channel,data)=>{const list=channel==="network"?network:logs;list.push(data);if(list.length>400)list.shift();if(popup&&!popup.closed)popup.postMessage({rodInspector:1,payload:{kind:"event",session,channel,data}},"https://rod.migos.club");};
-const originalFetch=window.fetch;
-if(originalFetch)window.fetch=function(...args){const request=args[0],url=String(request?.url||request),method=String(args[1]?.method||request?.method||"GET"),start=performance.now();return originalFetch.apply(this,args).then(response=>{const item={method,url,status:response.status,ms:Math.round(performance.now()-start),time:new Date().toISOString()};push("network",item);return response;},error=>{push("network",{method,url,error:String(error),ms:Math.round(performance.now()-start)});throw error;});};
-const xhrOpen=XMLHttpRequest.prototype.open,xhrSend=XMLHttpRequest.prototype.send;
-XMLHttpRequest.prototype.open=function(method,url,...rest){this.__rodRequest={method,url:String(url),start:0};return xhrOpen.call(this,method,url,...rest);};
-XMLHttpRequest.prototype.send=function(...args){const record=this.__rodRequest;if(record){record.start=performance.now();this.addEventListener("loadend",()=>push("network",{method:record.method,url:record.url,status:this.status,ms:Math.round(performance.now()-record.start)}),{once:true});}return xhrSend.apply(this,args);};
-for(const level of ["log","warn","error","info"]){const old=console[level];console[level]=function(...args){push("console",{level,time:new Date().toISOString(),args:args.map(x=>typeof x==="string"?x.slice(0,2000):clean(x))});return old.apply(this,args);};}
-function snapshot(){return{kind:"snapshot",session,url:location.href,title:document.title,time:new Date().toISOString(),userAgent:navigator.userAgent,html:document.documentElement?.outerHTML||"",network:network.slice(),console:logs.slice()};}
-function transmit(){if(!popup||popup.closed)return;popup.postMessage({rodInspector:1,payload:snapshot()},"https://rod.migos.club");}
-window.addEventListener("message",e=>{if(e.origin!=="https://rod.migos.club"||e.source!==popup||e.data?.rodInspector!==1)return;if(e.data.kind==="ready")transmit();else if(e.data.kind==="pick")startPicker();else if(e.data.kind==="highlight"){const node=(e.data.selector?document.querySelector(e.data.selector):null)||nodeByPath(e.data.path);if(node instanceof Element){node.scrollIntoView({block:"center",inline:"nearest"});showOverlay(node);setTimeout(()=>{if(!pickerActive)clearOverlay();},2500);}}});
 function openInspector(){popup=window.open(TARGET,"rod-inspector");if(!popup){alert("Rod Inspector: permita pop-ups no Safari.");return;}setTimeout(transmit,750);}
 function mount(){
   if(document.getElementById("rod-inspector-dock"))return;
@@ -50,6 +41,18 @@ function ensureDock(){if(!document.getElementById("rod-inspector-dock"))mount();
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",ensureDock,{once:true});
 else ensureDock();
 window.addEventListener("pageshow",ensureDock);
-console.info("[Rod Inspector] v0.5.0 initialized",location.href);
+console.info("[Rod Inspector] v0.6.0 initialized",location.href);
 setInterval(ensureDock,5000);
+
+try{
+const originalFetch=window.fetch;
+if(originalFetch)window.fetch=function(...args){const request=args[0],url=String(request?.url||request),method=String(args[1]?.method||request?.method||"GET"),start=performance.now();return originalFetch.apply(this,args).then(response=>{const item={method,url,status:response.status,ms:Math.round(performance.now()-start),time:new Date().toISOString()};push("network",item);return response;},error=>{push("network",{method,url,error:String(error),ms:Math.round(performance.now()-start)});throw error;});};
+const xhrOpen=XMLHttpRequest.prototype.open,xhrSend=XMLHttpRequest.prototype.send;
+XMLHttpRequest.prototype.open=function(method,url,...rest){this.__rodRequest={method,url:String(url),start:0};return xhrOpen.call(this,method,url,...rest);};
+XMLHttpRequest.prototype.send=function(...args){const record=this.__rodRequest;if(record){record.start=performance.now();this.addEventListener("loadend",()=>push("network",{method:record.method,url:record.url,status:this.status,ms:Math.round(performance.now()-record.start)}),{once:true});}return xhrSend.apply(this,args);};
+for(const level of ["log","warn","error","info"]){const old=console[level];console[level]=function(...args){push("console",{level,time:new Date().toISOString(),args:args.map(x=>typeof x==="string"?x.slice(0,2000):clean(x))});return old.apply(this,args);};}
+function snapshot(){return{kind:"snapshot",session,url:location.href,title:document.title,time:new Date().toISOString(),userAgent:navigator.userAgent,html:document.documentElement?.outerHTML||"",network:network.slice(),console:logs.slice()};}
+function transmit(){if(!popup||popup.closed)return;popup.postMessage({rodInspector:1,payload:snapshot()},"https://rod.migos.club");}
+window.addEventListener("message",e=>{if(e.origin!=="https://rod.migos.club"||e.source!==popup||e.data?.rodInspector!==1)return;if(e.data.kind==="ready")transmit();else if(e.data.kind==="pick")startPicker();else if(e.data.kind==="highlight"){const node=(e.data.selector?document.querySelector(e.data.selector):null)||nodeByPath(e.data.path);if(node instanceof Element){node.scrollIntoView({block:"center",inline:"nearest"});showOverlay(node);setTimeout(()=>{if(!pickerActive)clearOverlay();},2500);}}});
+}catch(error){console.error("[Rod Inspector] Hooks failed; dock remains available",error);}
 })();
