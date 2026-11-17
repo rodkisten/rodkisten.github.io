@@ -251,7 +251,7 @@
           <button type="button" data-inspector-tab="console" aria-pressed="false">▣ Console <span id="console-count">0</span></button>
           <button type="button" data-inspector-tab="diagnostics" aria-pressed="false">⚙ Diagnóstico</button>
         </nav>
-        <div id="inspector-output" hidden><section id="inspector-dom" hidden><div class="dom-tools"><input id="dom-query" type="search" placeholder="Buscar CSS selector ou texto…" autocomplete="off"><button type="button" id="dom-refresh">↻</button><span id="dom-count"></span></div><div id="dom-tree" role="tree" aria-label="Árvore DOM"></div><div id="dom-details" aria-live="polite"></div></section><div id="inspector-network"></div><div id="inspector-console"></div><pre id="inspector-diagnostics"></pre></div>
+        <div id="inspector-output" hidden><section id="inspector-dom" hidden><div class="dom-tools"><input id="dom-query" type="search" placeholder="Buscar CSS selector ou texto…" autocomplete="off"><button type="button" id="dom-pick">⌖ Pick</button><button type="button" id="dom-refresh">↻</button><span id="dom-count"></span></div><div id="dom-tree" role="tree" aria-label="Árvore DOM"></div><div id="dom-details" aria-live="polite"></div></section><div id="inspector-network"></div><div id="inspector-console"></div><pre id="inspector-diagnostics"></pre></div>
         <div id="tabs" class="tabs" role="tablist" aria-label="Arquivos abertos"></div>
         <div id="refs" class="refs" aria-label="Referências clicáveis"></div>
         <div id="search-panel" class="search-panel" role="search" data-open="false" aria-label="Buscar no código">
@@ -1447,6 +1447,7 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
           if(!event.origin.startsWith("http://")&&!event.origin.startsWith("https://")||event.data?.rodInspector!==1)return;
           const payload=event.data.payload;
           if(!payload)return;
+          if(payload.kind==="selection"&&payload.session===inspectorSession){document.querySelector('[data-inspector-tab="dom"]')?.click();selectDomPath(payload.path);return;}
           if(payload.kind==="snapshot"){
             inspectorSession=payload.session||"";
             resetProject(payload.html||"",{lang:"html",name:"index.html",base:payload.url||""});
@@ -1501,6 +1502,9 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
                 if(at>=0&&view){view.dispatch({selection:{anchor:at,head:at+marker.length},scrollIntoView:true});view.focus();}
               };
               details.append(sourceButton);
+              const highlightButton=document.createElement("button");highlightButton.textContent="Destacar na página ⌖";
+              highlightButton.onclick=()=>{const path=domPath(node);if(path)window.opener?.postMessage({rodInspector:1,kind:"highlight",path},"*");};
+              details.append(highlightButton);
             }
             if(!hasChildren)return;
             expanded=!expanded;caret.textContent=expanded?"▾":"▸";
@@ -1518,6 +1522,23 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
             childWrap.hidden=false;
           });
           return wrap;
+        }
+
+        function domPath(node){const indices=[];let n=node;while(n&&n!==domDocument.documentElement&&indices.length<128){const p=n.parentNode;if(!p)return null;indices.unshift(Array.prototype.indexOf.call(p.childNodes,n));n=p;}return n===domDocument.documentElement?indices:null;}
+        function domByPath(indices){let n=domDocument?.documentElement;for(const i of indices||[]){n=n?.childNodes?.[i];if(!n)return null;}return n;}
+        function selectDomPath(indices){
+          const node=domByPath(indices);if(!node)return;
+          const root=$("#dom-tree");root.replaceChildren();
+          const chain=[];let n=node;
+          while(n&&n!==domDocument.documentElement){chain.unshift(n);n=n.parentNode;}
+          chain.unshift(domDocument.documentElement);
+          let parent=root;
+          for(let i=0;i<chain.length;i++){
+            const wrap=domTreeNode(chain[i]);parent.append(wrap);
+            const row=wrap.querySelector(":scope > .dom-row");
+            if(i===chain.length-1){row?.click();row?.scrollIntoView({block:"center"});}
+            else{const group=document.createElement("div");group.className="dom-children";wrap.append(group);wrap.querySelector(".dom-caret").textContent="▾";parent=group;}
+          }
         }
         function domCssPath(node){
           if(node.nodeType!==1)return node.nodeName;
@@ -1552,6 +1573,7 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
         }
         $("#dom-query").addEventListener("input",()=>{clearTimeout(domSearchTimer);domSearchTimer=setTimeout(searchDomTree,180);});
         $("#dom-refresh").addEventListener("click",()=>loadDomTree(getCode()));
+        $("#dom-pick").addEventListener("click",()=>{if(!window.opener){toast("Abra pelo dock da página original.");return;}window.opener.postMessage({rodInspector:1,kind:"pick"},"*");toast("Toque no elemento na aba original.");});
 
         function initInspector(){
           const output=$("#inspector-output");
