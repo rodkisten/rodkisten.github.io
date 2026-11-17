@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rod Inspector · DOM + Network + Console
 // @namespace    https://rod.migos.club/
-// @version      0.3.0
+// @version      0.4.0
 // @description  Dock de diagnóstico para userscripts no Safari
 // @match        http://*/*
 // @match        https://*/*
@@ -33,7 +33,21 @@ XMLHttpRequest.prototype.send=function(...args){const record=this.__rodRequest;i
 for(const level of ["log","warn","error","info"]){const old=console[level];console[level]=function(...args){push("console",{level,time:new Date().toISOString(),args:args.map(x=>typeof x==="string"?x.slice(0,2000):clean(x))});return old.apply(this,args);};}
 function snapshot(){return{kind:"snapshot",session,url:location.href,title:document.title,time:new Date().toISOString(),userAgent:navigator.userAgent,html:document.documentElement?.outerHTML||"",network:network.slice(),console:logs.slice()};}
 function transmit(){if(!popup||popup.closed)return;popup.postMessage({rodInspector:1,payload:snapshot()},"https://rod.migos.club");}
-window.addEventListener("message",e=>{if(e.origin!=="https://rod.migos.club"||e.source!==popup||e.data?.rodInspector!==1)return;if(e.source!==popup||e.origin!=="https://rod.migos.club")return;if(e.data.kind==="ready")transmit();else if(e.data.kind==="pick")startPicker();else if(e.data.kind==="highlight"){const node=(e.data.selector?document.querySelector(e.data.selector):null)||nodeByPath(e.data.path);if(node instanceof Element){node.scrollIntoView({block:"center",inline:"nearest"});showOverlay(node);setTimeout(()=>{if(!pickerActive)clearOverlay();},2500);}}});
-function mount(){if(document.getElementById("rod-inspector-dock"))return;const host=document.createElement("div");host.id="rod-inspector-dock";host.style.cssText="position:fixed!important;right:0!important;top:42%!important;z-index:2147483647!important";const shadow=host.attachShadow({mode:"open"});shadow.innerHTML='<style>button{font:700 12px -apple-system,sans-serif;border:1px solid #7aa2f7;border-right:0;border-radius:12px 0 0 12px;background:#24283b;color:#c0caf5;padding:13px 9px;box-shadow:0 4px 20px #0008;touch-action:manipulation}</style><button type="button" aria-label="Abrir Rod Inspector">◈<br>DEV</button>';shadow.querySelector("button").onclick=()=>{popup=window.open(TARGET,"_blank");if(!popup)alert("Permita pop-ups para abrir o Rod Inspector.");else setTimeout(transmit,750);};document.documentElement.append(host);}
-if(document.documentElement)mount();else new MutationObserver((observer)=>{if(document.documentElement){observer.disconnect();mount();}}).observe(document,{childList:true});
+window.addEventListener("message",e=>{if(e.origin!=="https://rod.migos.club"||e.source!==popup||e.data?.rodInspector!==1)return;if(e.data.kind==="ready")transmit();else if(e.data.kind==="pick")startPicker();else if(e.data.kind==="highlight"){const node=(e.data.selector?document.querySelector(e.data.selector):null)||nodeByPath(e.data.path);if(node instanceof Element){node.scrollIntoView({block:"center",inline:"nearest"});showOverlay(node);setTimeout(()=>{if(!pickerActive)clearOverlay();},2500);}}});
+function openInspector(){popup=window.open(TARGET,"rod-inspector");if(!popup){alert("Rod Inspector: permita pop-ups no Safari.");return;}setTimeout(transmit,750);}
+function mount(){
+  if(document.getElementById("rod-inspector-dock"))return;
+  const host=document.createElement("div");
+  host.id="rod-inspector-dock";
+  host.style.cssText="position:fixed!important;right:0!important;bottom:25%!important;z-index:2147483647!important;display:block!important;visibility:visible!important;opacity:1!important";
+  const shadow=host.attachShadow({mode:"open"});
+  shadow.innerHTML='<style>:host{all:initial!important}button{appearance:none;display:block;font:700 13px -apple-system,BlinkMacSystemFont,sans-serif;border:1px solid #7aa2f7;border-right:0;border-radius:14px 0 0 14px;background:#24283b;color:#c0caf5;padding:14px 11px;box-shadow:0 4px 20px #0008;touch-action:manipulation;cursor:pointer;min-width:48px;min-height:48px}</style><button type="button" aria-label="Abrir Rod Inspector">◈<br>DEV</button>';
+  shadow.querySelector("button").addEventListener("click",openInspector);
+  (document.body||document.documentElement).append(host);
+}
+function ensureDock(){if(!document.getElementById("rod-inspector-dock"))mount();}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",ensureDock,{once:true});
+else ensureDock();
+window.addEventListener("pageshow",ensureDock);
+setInterval(ensureDock,5000);
 })();
