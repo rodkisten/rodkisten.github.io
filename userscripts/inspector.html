@@ -1447,7 +1447,7 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
           if(event.source!==window.opener||!/^https?:$/.test(new URL(event.origin).protocol)||event.data?.rodInspector!==1)return;
           const payload=event.data.payload;
           if(!payload)return;
-          if(payload.kind==="selection"&&payload.session===inspectorSession){document.querySelector('[data-inspector-tab="dom"]')?.click();selectDomPath(payload.path);return;}
+          if(payload.kind==="selection"&&payload.session===inspectorSession){document.querySelector('[data-inspector-tab="dom"]')?.click();let target=null;try{if(payload.selector)target=domDocument?.querySelector(payload.selector);}catch(error){console.warn(error);}selectDomPath(target?domPath(target):payload.path);return;}
           if(payload.kind==="snapshot"){
             if(inspectorSession&&payload.session!==inspectorSession)return;
             inspectorSession=payload.session||"";
@@ -1498,12 +1498,12 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
               const sourceButton=document.createElement("button");sourceButton.textContent="Abrir no Source ↗";
               sourceButton.onclick=()=>{
                 document.querySelector('[data-inspector-tab="source"]').click();
-                const marker="<"+node.localName,at=getCode().indexOf(marker);
-                if(at>=0&&view){view.dispatch({selection:{anchor:at,head:at+marker.length},scrollIntoView:true});view.focus();}
+                const raw=getCode(),serialized=node.outerHTML;const marker="<"+node.localName;let at=serialized&&serialized.length<100000?raw.indexOf(serialized):-1;if(at<0)at=raw.indexOf(marker);
+                if(at>=0&&view){view.dispatch({selection:{anchor:at,head:at+marker.length},scrollIntoView:true});view.focus();}else if(at>=0){nodes.fallback.focus();nodes.fallback.setSelectionRange(at,at+marker.length);}else toast("Posição exata indisponível neste snapshot.");
               };
               details.append(sourceButton);
               const highlightButton=document.createElement("button");highlightButton.textContent="Destacar na página ⌖";
-              highlightButton.onclick=()=>{const path=domPath(node);if(path)window.opener?.postMessage({rodInspector:1,kind:"highlight",path},"*");};
+              highlightButton.onclick=()=>{const path=domPath(node);if(path)window.opener?.postMessage({rodInspector:1,kind:"highlight",path,selector:domCssPath(node)},"*");};
               details.append(highlightButton);
             }
             if(!hasChildren)return;
