@@ -1,33 +1,1561 @@
-<!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="color-scheme" content="dark"><title>Rod Inspector</title>
-<style>
-:root{font-family:Inter,-apple-system,sans-serif;color:#c0caf5;background:#1a1b26}*{box-sizing:border-box}body{margin:0;height:100dvh;display:flex;flex-direction:column}header,nav,footer{display:flex;align-items:center;gap:7px;padding:9px;border-bottom:1px solid #414868;background:#16161e}header strong{flex:1}button,input{font:inherit;color:inherit;background:#24283b;border:1px solid #414868;border-radius:7px;padding:7px 10px}button[aria-selected=true]{background:#3d59a1}nav{overflow-x:auto}main{flex:1;min-height:0;display:flex;flex-direction:column}.pane{display:none;flex:1;min-height:0;overflow:auto}.pane.active{display:block}#source{height:100%;overflow:hidden}#source .cm-editor{height:100%}#source .cm-scroller{overflow:auto!important;font-size:12px;font-family:ui-monospace,monospace}#source .cm-content{min-width:max-content}#source .cm-gutters{background:#16161e;color:#565f89}#fallback{display:none;width:100%;height:100%;resize:none;background:#1a1b26;color:#c0caf5;white-space:pre;overflow:auto;font:12px/1.5 monospace}#network,#console{font:12px/1.5 ui-monospace,monospace}.entry{padding:9px;border-bottom:1px solid #292e42;overflow-wrap:anywhere}.entry summary{cursor:pointer;color:#7aa2f7}.entry pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:45vh;overflow:auto}footer{font-size:11px;color:#9aa5ce;min-height:32px}
-</style></head><body><header><strong>◈ Rod Inspector</strong><button id="search">⌕</button><button id="wrap" aria-pressed="false">↵</button><button id="save">↓</button></header><nav><button data-tab="source" aria-selected="true">Elements / Source</button><button data-tab="network">Network <span id="net-count">0</span></button><button data-tab="console">Console <span id="log-count">0</span></button><button data-tab="diagnostics">Diagnóstico</button></nav><main><section id="source" class="pane active"><textarea id="fallback" spellcheck="false"></textarea></section><section id="network" class="pane"></section><section id="console" class="pane"></section><section id="diagnostics" class="pane"><pre id="diag" style="white-space:pre-wrap;overflow-wrap:anywhere;padding:12px"></pre></section></main><footer id="status">Aguardando captura da página…</footer>
-<script type="module">
-const $=s=>document.querySelector(s),events={network:[],console:[]};let editor=null,raw="",wrap=false,session="";
-const allowedOrigin=origin=>/^https?:\/\//.test(origin);
-function append(type,record){const items=events[type];items.push(record);if(items.length>1000)items.shift();const root=$("#"+type),el=document.createElement("details");el.className="entry";const title=document.createElement("summary");title.textContent=type==="network"?`${record.method||"GET"} ${record.status??"…"} ${record.url||""}`:`${record.level||"log"} · ${record.time||""}`;const pre=document.createElement("pre");pre.textContent=JSON.stringify(record,null,2);el.append(title,pre);root.append(el);while(root.children.length>1000)root.firstChild.remove();$("#"+(type==="network"?"net-count":"log-count")).textContent=items.length;}
-function receive(payload){if(payload.kind==="snapshot"){session=payload.session||"";raw=payload.html||"";$("#diag").textContent=JSON.stringify({url:payload.url,title:payload.title,capturedAt:payload.time,bytes:raw.length,userAgent:payload.userAgent,session},null,2);$("#status").textContent=`${payload.url||"Snapshot"} · ${raw.length.toLocaleString("pt-BR")} caracteres · ${editor?"CodeMirror 6":"aguardando editor"}`;if(editor)editor.dispatch({changes:{from:0,to:editor.state.doc.length,insert:raw}});else $("#fallback").value=raw;for(const e of payload.network||[])append("network",e);for(const e of payload.console||[])append("console",e);}
-if(payload.kind==="event"&&(!session||payload.session===session)&&["network","console"].includes(payload.channel))append(payload.channel,payload.data);}
-window.addEventListener("message",e=>{if(!allowedOrigin(e.origin)||!e.data||e.data.rodInspector!==1)return;receive(e.data.payload);});
-window.opener?.postMessage({rodInspector:1,kind:"ready"},"*");
-setInterval(()=>{if(!session)window.opener?.postMessage({rodInspector:1,kind:"ready"},"*");},1000);
-for(const b of document.querySelectorAll("[data-tab]"))b.onclick=()=>{for(const x of document.querySelectorAll("[data-tab]"))x.setAttribute("aria-selected",String(x===b));for(const x of document.querySelectorAll(".pane"))x.classList.toggle("active",x.id===b.dataset.tab);};
-$("#save").onclick=()=>{const blob=new Blob([raw],{type:"text/html;charset=utf-8"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="snapshot.html";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
-$("#wrap").onclick=()=>{wrap=!wrap;$("#wrap").setAttribute("aria-pressed",String(wrap));if(editor)editor.dispatch({effects:wrapCompartment.reconfigure(wrap?EditorView.lineWrapping:[])});else $("#fallback").style.whiteSpace=wrap?"pre-wrap":"pre";};
-let EditorView,wrapCompartment,searchPanel;
-$("#search").onclick=()=>{if(editor&&searchPanel)searchPanel(editor);else{const q=prompt("Buscar");if(q){const i=raw.indexOf(q);if(i>=0){$("#fallback").focus();$("#fallback").setSelectionRange(i,i+q.length);}}}};
-try{
- const [basic,html,search,state,view,theme]=await Promise.all([
- import("https://esm.sh/codemirror@6.0.2"),
- import("https://esm.sh/@codemirror/lang-html@6.4.9"),
- import("https://esm.sh/@codemirror/search@6.5.11"),
- import("https://esm.sh/@codemirror/state@6.5.2"),
- import("https://esm.sh/@codemirror/view@6.38.6"),
- import("https://esm.sh/@codemirror/theme-one-dark@6.1.3")
- ]);
- EditorView=view.EditorView;wrapCompartment=new state.Compartment();searchPanel=search.openSearchPanel;
- editor=new EditorView({parent:$("#source"),state:state.EditorState.create({doc:raw,extensions:[basic.basicSetup,html.html(),theme.oneDark,search.search({top:true}),search.highlightSelectionMatches(),wrapCompartment.of([]),EditorView.theme({".cm-scroller":{overflow:"auto"},".cm-content":{minWidth:"max-content"}})]})});
- $("#fallback").remove();$("#status").textContent+=" · CM6 ativo";
-}catch(e){console.error(e);$("#fallback").style.display="block";$("#status").textContent="Falha ao carregar CodeMirror: "+e.message;}
-</script></body></html>
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1a1b26" />
+    <meta name="color-scheme" content="dark" />
+    <title>Rod Code · Mini Workspace</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #1a1b26;
+        --panel: #161822;
+        --panel-2: #202331;
+        --panel-3: #292d40;
+        --border: #34374a;
+        --text: #c0caf5;
+        --muted: #8992b3;
+        --accent: #7aa2f7;
+        --green: #7ed9aa;
+        --yellow: #f7c97b;
+        --red: #ff8e96;
+        --font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-family: var(--font);
+        background: var(--bg);
+        color: var(--text);
+        font-synthesis: none;
+        -webkit-text-size-adjust: 100%;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+      body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+      button, input, select { font: inherit; }
+      button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; cursor: pointer; }
+      button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+      }
+      button:disabled { opacity: .55; cursor: progress; }
+      .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+      .topbar {
+        flex: none;
+        z-index: 7;
+        background: var(--panel);
+        border-bottom: 1px solid var(--border);
+        padding-top: env(safe-area-inset-top, 0px);
+      }
+      .titlebar { min-height: 37px; padding: 3px 9px; display: flex; align-items: center; gap: 7px; }
+      .brand { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+      .brand-mark { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 8px; background: #193858; color: #c3e0ff; font: bold 13px var(--mono); }
+      .brand-name { font-weight: 760; font-size: 13px; letter-spacing: -.3px; white-space: nowrap; }
+      #crumb { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+      .icon-button, .toolbar button, .sidebar button, .tabs button, .refs button {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--panel-2);
+        color: var(--text);
+        min-height: 27px;
+        padding: 3px 8px;
+      }
+      .icon-button { flex: none; display: grid; place-items: center; font-size: 17px; width: 29px; padding: 0; }
+      .icon-button[aria-pressed="true"] { color: var(--accent); border-color: #315e91; background: #173354; }
+      .language { max-width: 118px; min-width: 90px; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; min-height: 28px; font-size: 11px; }
+      .toolbar { display: flex; gap: 4px; padding: 3px 9px 5px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+      .toolbar::-webkit-scrollbar, .tabs::-webkit-scrollbar, .refs::-webkit-scrollbar { display: none; }
+      .toolbar button { flex: none; white-space: nowrap; font-size: 11px; }
+      .toolbar button.primary { background: #303a60; border-color: #485b91; color: #c0caf5; }
+      .toolbar button[data-active="true"] { color: #d3e9ff; background: #193857; border-color: #356ba6; }
+
+      .main { display: flex; position: relative; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+      .sidebar { width: 250px; flex: none; min-width: 0; display: flex; flex-direction: column; background: var(--panel); border-right: 1px solid var(--border); }
+      .sidebar-heading { display: flex; gap: 6px; align-items: center; justify-content: space-between; padding: 12px 12px 8px; color: var(--muted); font-size: 10px; font-weight: 750; letter-spacing: .11em; text-transform: uppercase; }
+      .sidebar-heading button { background: transparent; min-height: 25px; border: 0; padding: 1px 5px; color: var(--muted); }
+      .sidebar-search { margin: 1px 10px 10px; width: calc(100% - 20px); min-height: 33px; border: 1px solid #34465d; background: #0b1420; border-radius: 7px; padding: 7px 9px; color: var(--text); font-size: 13px; }
+      .tree { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 8px; }
+      .section-title { display: flex; gap: 7px; align-items: center; padding: 8px 11px; text-transform: uppercase; letter-spacing: .06em; font-size: 10px; font-weight: 800; color: #9baec7; }
+      .section-title small { font-weight: 500; opacity: .8; }
+      .file-row { display: grid; grid-template-columns: 15px minmax(0, 1fr) 14px; align-items: center; gap: 7px; width: 100%; min-height: 42px; padding: 7px 10px 7px 13px; border: none !important; border-radius: 0 !important; text-align: left; background: transparent !important; }
+      .file-row[data-active="true"] { background: #1a2f49 !important; box-shadow: inset 2px 0 var(--accent); }
+      .file-row:active { background: #233a55 !important; }
+      .file-icon { font-size: 12px; font-family: var(--mono); font-weight: 750; color: #dbbb81; }
+      .file-row[data-kind="css"] .file-icon { color: #8abaff; }
+      .file-row[data-kind="js"] .file-icon { color: #f7d06f; }
+      .file-info { overflow: hidden; display: flex; flex-direction: column; gap: 2px; }
+      .file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: #e7edf7; }
+      .file-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; color: var(--muted); }
+      .file-state { text-align: right; font-size: 11px; color: var(--green); }
+      .file-state[data-status="error"] { color: var(--red); }
+      .file-state[data-status="loading"] { color: var(--yellow); }
+      .sidebar-bottom { border-top: 1px solid var(--border); flex: none; padding: 10px; display: grid; gap: 7px; }
+      .sidebar-bottom label { font-size: 10px; font-weight: 750; color: var(--muted); text-transform: uppercase; }
+      .base-input-row { display: flex; gap: 5px; }
+      #base-url, #url-input { min-width: 0; width: 100%; border: 1px solid #35475c; background: #0a131e; padding: 8px; border-radius: 7px; color: var(--text); font-size: 12px; }
+      #set-base { padding: 0 8px; }
+      .base-note { color: var(--muted); font-size: 10px; line-height: 1.45; }
+      .open-url-row { display: flex; gap: 5px; }
+      #load-url { flex: none; padding: 0 8px; }
+      #refresh { width: 100%; min-height: 32px; }
+      #overlay { display: none; }
+
+      .workbench { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--bg); }
+      .tabs { flex: none; display: flex; gap: 1px; overflow-x: auto; min-height: 31px; background: #161822; border-bottom: 1px solid var(--border); scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+      .tabs .tab { border: 0; border-right: 1px solid #263648; border-radius: 0; background: #111c29; color: #9daec4; display: flex; align-items: center; gap: 7px; min-width: 108px; max-width: 210px; white-space: nowrap; padding: 7px 12px; min-height: 31px; }
+      .tabs .tab[data-active="true"] { background: var(--bg); color: var(--text); box-shadow: inset 0 2px var(--accent); }
+      .tab .tab-name { overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+      .tab .tab-close { font-size: 15px; opacity: .65; line-height: 1; padding: 3px 5px; margin-right: -5px; }
+      .refs { min-height: 29px; max-height: 35px; display: flex; gap: 5px; align-items: center; flex: none; padding: 4px 9px; border-bottom: 1px solid #233044; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+      .refs-label { font-size: 10px; font-weight: 750; color: var(--muted); white-space: nowrap; }
+      .refs button { flex: none; min-height: 26px; padding: 3px 8px; font: 11px var(--mono); color: #afd0f9; background: #152638; border-color: #31485f; }
+      .refs button:active { color: white; background: #20446d; }
+      .refs .no-refs { font-size: 11px; color: #768ca7; white-space: nowrap; }
+      .inspector-nav {display:flex;gap:4px;overflow:auto;padding:5px 8px;background:#16161e;border-bottom:1px solid #414868;flex:none}
+      .inspector-nav button {flex:none;background:#24283b;border:1px solid #414868;color:#a9b1d6;border-radius:6px;font-size:11px;padding:6px 9px}
+      .inspector-nav button[aria-pressed="true"] {background:#364a7a;color:#fff}
+      #inspector-output {flex:1;min-height:0;overflow:auto;font:12px/1.5 var(--mono)}
+      #inspector-output[hidden] {display:none}
+      #inspector-output details {border-bottom:1px solid #414868;padding:9px;overflow-wrap:anywhere}
+      #inspector-output summary {color:#7aa2f7;cursor:pointer}
+      #inspector-output pre {white-space:pre-wrap;overflow-wrap:anywhere}
+      #inspector-output>div[hidden],#inspector-output>pre[hidden] {display:none}
+      .editor-area { flex: 1; position: relative; min-width: 0; min-height: 0; }
+      #editor, #fallback { display: block; width: 100%; height: 100%; overflow: hidden; }
+      #fallback { display: none; resize: none; border: 0; padding: 12px 12px 30px; background: var(--bg); color: var(--text); outline: none; font: 13px/1.58 var(--mono); tab-size: 2; white-space: pre-wrap; overflow-wrap: anywhere; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+      #fallback[data-nowrap="true"] { white-space: pre; overflow-wrap: normal; overflow-x: auto; }
+      .cm-editor { height: 100%; width: 100%; font-size: 13px; min-width: 0; }
+      .cm-scroller { height: 100%; overflow-x: auto !important; overflow-y: auto !important; line-height: 1.58; font-family: var(--mono) !important; -webkit-overflow-scrolling: touch; }
+      .cm-content { padding: 10px 0 40px; min-width: max-content; caret-color: #9bcdff !important; }
+      .cm-gutters { flex-shrink: 0; background: #171925 !important; color: #7288a2 !important; border-right: 1px solid #263649 !important; }
+      .cm-foldGutter { width: 21px; font-size: 17px; color: #a7bed7; }
+      .cm-foldGutter .cm-gutterElement { min-width: 20px; cursor: pointer; touch-action: manipulation; }
+      .cm-activeLine, .cm-activeLineGutter { background: #1b2b3c !important; }
+      .cm-selectionBackground { background: #295783 !important; }
+      .cm-panels { background: #172638 !important; color: var(--text) !important; }
+      .cm-search { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 8px !important; }
+      .cm-search input { font-size: 16px; min-height: 32px; max-width: 40vw; background: #091421; color: #fff; border: 1px solid #40516a; border-radius: 6px; padding: 4px; }
+      .cm-search button { min-height: 29px; background: var(--panel-3); color: var(--text); border: 1px solid #435a75; border-radius: 6px; padding: 3px 7px; }
+      .cm-resource-link { color: #94cbff !important; text-decoration: underline dotted #69a6e4 1px; text-underline-offset: 3px; cursor: pointer; -webkit-tap-highlight-color: #356da633; }
+      .cm-resource-link:hover { background: #1a3b5b; text-decoration-style: solid; }
+
+      .footer { flex: none; display: flex; align-items: center; gap: 9px; justify-content: space-between; min-height: 30px; padding: 5px 11px calc(5px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--border); background: var(--panel); color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+      #status { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      #position { flex: none; white-space: nowrap; }
+      #toast { position: fixed; z-index: 30; left: 50%; bottom: calc(49px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); max-width: calc(100vw - 20px); padding: 10px 14px; border: 1px solid #47668e; border-radius: 10px; background: #243c57; color: white; font-size: 12px; text-align: center; box-shadow: 0 8px 40px #000a; opacity: 0; pointer-events: none; transition: opacity .15s; }
+      #toast[data-show="true"] { opacity: 1; }
+      .empty-tree { padding: 8px 14px 16px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+
+
+      /* Tokyo Night: compact search panel, always visible above the editor */
+      .search-results { display:none; flex:none; height:138px; overflow:auto; position:relative; background:#161822; border-bottom:1px solid #414868; overscroll-behavior:contain; }
+      .search-results[data-open="true"] { display:block; }
+      .search-results-inner { position:relative; width:100%; }
+      .search-result { position:absolute; left:0; right:0; height:32px; display:flex; gap:9px; align-items:center; border:0; border-bottom:1px solid #292e42; background:transparent; color:#c0caf5; text-align:left; padding:0 12px; font:11px var(--mono); }
+      .search-result[data-active="true"] { background:#303c60; color:#fff; }
+      .search-result-line { color:#7aa2f7; flex:none; min-width:48px; }
+      .search-result-snippet { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+      .search-panel { display:none; flex:none; padding:7px 9px; gap:5px; align-items:center; flex-wrap:wrap; background:#1e2030; border-bottom:1px solid var(--border); }
+      .search-panel[data-open="true"] { display:flex; }
+      .search-input { flex:1 1 125px; min-width:80px; max-width:100%; height:30px; border:1px solid #414868; border-radius:7px; background:#161822; color:#c0caf5; padding:4px 9px; font-size:16px; outline:none; }
+      .search-input:focus { border-color:#7aa2f7; box-shadow:0 0 0 1px #7aa2f744; }
+      .search-count { color:#9aa5ce; font:11px var(--mono); white-space:nowrap; min-width:37px; text-align:center; }
+      .search-action { min-height:28px; padding:3px 8px; border:1px solid #414868; border-radius:7px; background:#292d40; color:#c0caf5; font-size:12px; }
+      .search-action[aria-pressed="true"] { background:#394b78; color:#fff; border-color:#7aa2f7; }
+      .search-action:disabled { opacity:.4; }
+      .cm-search-match { background:#e0af6844; border-bottom:1px solid #e0af68; }
+      .cm-search-current { background:#ff9e6480 !important; outline:1px solid #ff9e64; border-radius:2px; }
+      .cm-editor .cm-line { padding-right:8px; }
+      .cm-editor:not(.cm-focused) .cm-selectionBackground { background:#414868 !important; }
+      @media(max-width:390px) { .search-panel { gap:3px; padding:5px; } .search-action { padding:3px 6px; } }
+
+      @media (max-width: 739px) {
+        .sidebar { position: absolute; top: 0; bottom: 0; left: 0; z-index: 12; width: min(86vw, 330px); transform: translateX(-101%); transition: transform .18s ease; box-shadow: 10px 0 30px #0007; }
+        body.sidebar-open .sidebar { transform: translateX(0); }
+        #overlay { position: absolute; z-index: 11; inset: 0; background: #0008; }
+        body.sidebar-open #overlay { display: block; }
+        .titlebar { gap: 5px; }
+        .brand-name { font-size: 12px; }
+        #crumb { display: none; }
+        .language { max-width: 106px; }
+      }
+      @media (min-width: 740px) { #explorer-toggle { display: none; } }
+      @media (prefers-reduced-motion: reduce) { .sidebar, #toast { transition: none; } }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="titlebar">
+        <button id="explorer-toggle" type="button" class="icon-button" aria-label="Abrir arquivos" aria-pressed="false">☰</button>
+        <div class="brand"><span class="brand-mark">{ }</span><span class="brand-name">Rod Code</span><span id="crumb">Mini Workspace</span></div>
+        <label class="visually-hidden" for="language">Linguagem</label>
+        <select id="language" class="language" aria-label="Linguagem">
+          <option value="auto">Automático</option>
+          <option value="html">HTML</option>
+          <option value="javascript">JavaScript</option>
+          <option value="typescript">TypeScript</option>
+          <option value="css">CSS</option>
+          <option value="json">JSON</option>
+          <option value="markdown">Markdown</option>
+          <option value="text">Texto</option>
+        </select>
+      </div>
+      <nav class="toolbar" aria-label="Ações">
+        <button id="search" type="button">⌕ Buscar</button>
+        <button id="format" type="button" class="primary">✦ Prettier</button>
+        <button id="wrap" type="button" data-active="true" aria-pressed="true">↵ Wrap</button>
+        <button id="fold-all" type="button">⌄ Recolher</button>
+        <button id="unfold-all" type="button">› Expandir</button>
+        <button id="copy" type="button">Copiar</button>
+        <button id="link" type="button">Copiar link</button>
+        <button id="open" type="button">Abrir arquivo</button>
+        <button id="save" type="button">Salvar</button>
+      </nav>
+    </header>
+
+    <main class="main">
+      <aside class="sidebar" aria-label="Explorador de arquivos">
+        <div class="sidebar-heading"><span>Explorador <span id="file-count"></span></span><button id="close-explorer" type="button" title="Fechar explorador">✕</button></div>
+        <input id="file-filter" class="sidebar-search" type="search" placeholder="Filtrar arquivos…" aria-label="Filtrar arquivos" />
+        <div id="file-tree" class="tree"></div>
+        <div class="sidebar-bottom">
+          <label for="base-url">URL base para caminhos relativos</label>
+          <div class="base-input-row"><input id="base-url" type="url" spellcheck="false" placeholder="https://site.com/pagina.html" /><button id="set-base" type="button">OK</button></div>
+          <div class="base-note">Use a URL original do HTML. Recursos externos precisam permitir CORS para leitura no editor.</div>
+          <label for="url-input">Abrir HTML por URL (CORS)</label>
+          <div class="open-url-row"><input id="url-input" type="url" spellcheck="false" placeholder="https://site.com/index.html" /><button id="load-url" type="button">Abrir</button></div>
+          <button id="refresh" type="button">↻ Recarregar JS/CSS</button>
+        </div>
+      </aside>
+      <div id="overlay" aria-hidden="true"></div>
+      <section class="workbench" aria-label="Mini editor VS Code">
+        <nav class="inspector-nav" aria-label="Painéis de diagnóstico">
+          <button type="button" data-inspector-tab="source" aria-pressed="true">⌘ Source</button>
+          <button type="button" data-inspector-tab="network" aria-pressed="false">⇄ Network <span id="network-count">0</span></button>
+          <button type="button" data-inspector-tab="console" aria-pressed="false">▣ Console <span id="console-count">0</span></button>
+          <button type="button" data-inspector-tab="diagnostics" aria-pressed="false">⚙ Diagnóstico</button>
+        </nav>
+        <div id="inspector-output" hidden><div id="inspector-network"></div><div id="inspector-console"></div><pre id="inspector-diagnostics"></pre></div>
+        <div id="tabs" class="tabs" role="tablist" aria-label="Arquivos abertos"></div>
+        <div id="refs" class="refs" aria-label="Referências clicáveis"></div>
+        <div id="search-panel" class="search-panel" role="search" data-open="false" aria-label="Buscar no código">
+          <input id="search-input" class="search-input" type="search" placeholder="Buscar no arquivo…" aria-label="Texto a buscar" autocomplete="off" autocorrect="off" spellcheck="false" />
+          <span id="search-count" class="search-count" aria-live="polite">0/0</span>
+          <button id="search-prev" class="search-action" type="button" title="Anterior" aria-label="Resultado anterior">↑</button>
+          <button id="search-next" class="search-action" type="button" title="Próximo" aria-label="Próximo resultado">↓</button>
+          <button id="search-case" class="search-action" type="button" aria-pressed="false" title="Diferenciar maiúsculas">Aa</button>
+          <button id="search-regex" class="search-action" type="button" aria-pressed="false" title="Expressão regular">.*</button>
+          <button id="search-results-toggle" class="search-action" type="button" aria-pressed="false" title="Lista virtualizada de resultados">☷</button>
+          <button id="search-close" class="search-action" type="button" aria-label="Fechar busca">✕</button>
+        </div>
+        <div id="search-results" class="search-results" data-open="false" aria-label="Resultados da busca"><div id="search-results-inner" class="search-results-inner"></div></div>
+        <div class="editor-area">
+          <div id="editor" aria-label="CodeMirror 6"></div>
+          <textarea id="fallback" aria-label="Editor básico de código" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off"></textarea>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer"><span id="status" role="status">Inicializando…</span><span id="position">Ln 1, Col 1</span></footer>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <input id="file" type="file" hidden accept=".txt,.js,.jsx,.ts,.tsx,.mjs,.cjs,.json,.css,.html,.htm,.md,.xml,text/*" />
+
+    <script type="module">
+import * as state from "https://esm.sh/@codemirror/state@6.5.2";
+import * as viewModule from "https://esm.sh/@codemirror/view@6.38.6";
+import * as commands from "https://esm.sh/@codemirror/commands@6.10.2";
+import * as language from "https://esm.sh/@codemirror/language@6.11.3";
+import * as search from "https://esm.sh/@codemirror/search@6.5.11";
+import * as autocomplete from "https://esm.sh/@codemirror/autocomplete@6.18.6";
+import * as html from "https://esm.sh/@codemirror/lang-html@6.4.9";
+import * as javascript from "https://esm.sh/@codemirror/lang-javascript@6.2.4";
+import * as css from "https://esm.sh/@codemirror/lang-css@6.3.1";
+import * as json from "https://esm.sh/@codemirror/lang-json@6.0.2";
+import * as markdown from "https://esm.sh/@codemirror/lang-markdown@6.3.4";
+import * as highlight from "https://esm.sh/@lezer/highlight@1.2.1";
+import * as virtual from "https://esm.sh/@tanstack/virtual-core@3.13.12";
+window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@codemirror/commands":commands,
+"@codemirror/language":language,"@codemirror/search":search,"@codemirror/autocomplete":autocomplete,
+"@codemirror/lang-html":html,"@codemirror/lang-javascript":javascript,"@codemirror/lang-css":css,
+"@codemirror/lang-json":json,"@codemirror/lang-markdown":markdown,"@lezer/highlight":highlight,
+"@tanstack/virtual-core":virtual };
+      (() => {
+        "use strict";
+
+        const $ = (selector) => document.querySelector(selector);
+        const nodes = {
+          tree: $("#file-tree"), count: $("#file-count"), tabs: $("#tabs"), refs: $("#refs"),
+          filter: $("#file-filter"), editor: $("#editor"), fallback: $("#fallback"),
+          language: $("#language"), status: $("#status"), position: $("#position"),
+          toast: $("#toast"), base: $("#base-url"), url: $("#url-input"),
+          wrap: $("#wrap"), format: $("#format"), file: $("#file"),
+        };
+        const ROOT = "__root__";
+        const LIMITS = { files: 80, depth: 3, bytes: 2500000, timeout: 16000, concurrent: 4 };
+        const PRETTIER_BASE = "https://unpkg.com/prettier@3.6.2";
+        const prettierLoads = new Map();
+        const extFor = { javascript: "js", typescript: "ts", html: "html", css: "css", json: "json", markdown: "md", text: "txt" };
+        const files = new Map();
+        const openTabs = [ROOT];
+        let activeId = ROOT;
+        let baseUrl = location.href.split("#")[0];
+        let explicitBase = "";
+        let view = null;
+        let editorReady = false;
+        let cm = null;
+        let compartments = null;
+        let refreshDecoration = null;
+        let wordWrap = true;
+        let positionTimer = 0;
+        let toastTimer = 0;
+        let scanTimers = new Map();
+        let projectVersion = 0;
+        let queue = [];
+        let activeFetches = 0;
+        let abortControllers = new Set();
+        let lastReceivedHash = "";
+        const searchState = { matches: [], index: -1, caseSensitive: false, regex: false, timer: 0, error: "" };
+        let searchRefresh = null;
+
+        const makeRoot = (code = "", lang = "auto", name = "index.html") => ({
+          id: ROOT, name, kind: "root", url: "", source: "local", lang, content: code,
+          refs: [], status: "loaded", depth: 0, dirty: false, selection: 0, scrollTop: 0,
+          error: "", generation: projectVersion,
+        });
+        files.set(ROOT, makeRoot());
+
+        function toast(message) {
+          clearTimeout(toastTimer);
+          nodes.toast.textContent = message;
+          nodes.toast.dataset.show = "true";
+          toastTimer = setTimeout(() => { nodes.toast.dataset.show = "false"; }, 3500);
+        }
+
+        function decodeBase64Utf8(value) {
+          const cleaned = value.replace(/ /g, "+").replace(/\s/g, "").replace(/-/g, "+").replace(/_/g, "/");
+          if (!cleaned || cleaned.length % 4 === 1) throw new Error("Base64 inválido");
+          const binary = atob(cleaned.padEnd(Math.ceil(cleaned.length / 4) * 4, "="));
+          return new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(binary, (char) => char.charCodeAt(0)));
+        }
+
+        function encodeBase64UrlUtf8(value) {
+          const bytes = new TextEncoder().encode(value);
+          let binary = "";
+          for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+          return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+        }
+
+        function parseHash() {
+          const raw = location.hash.slice(1);
+          if (!raw) return null;
+          const isParams = /^(?:code|b64|base64|url|lang|base|name)=/i.test(raw) || /&(?:code|b64|base64|url)=/i.test(raw);
+          const params = isParams ? new URLSearchParams(raw) : null;
+          const value = params ? params.get("code") ?? params.get("b64") ?? params.get("base64") : decodeURIComponent(raw);
+          const url = params?.get("url") || "";
+          return {
+            code: value ? decodeBase64Utf8(value) : null,
+            url,
+            lang: params?.get("lang") || "auto",
+            name: params?.get("name") || "",
+            base: params?.get("base") || new URL(location.href).searchParams.get("base") || "",
+          };
+        }
+
+        function detectLanguage(code) {
+          const trimmed = code.trim();
+          if (!trimmed) return "text";
+          if (/^(?:<!doctype|<html\b|<(?:head|body|script|style|div|section|main|svg|button|p|span)\b)/i.test(trimmed)) return "html";
+          if (/^\s*[\[{]/.test(trimmed)) {
+            try { JSON.parse(trimmed); return "json"; } catch {}
+          }
+          if (/^(?:#{1,6}\s|```|>\s|\*\s|-\s\[.)/m.test(trimmed)) return "markdown";
+          if (/^\s*(?:@media\b|:root\b|[.#]?[\w-]+\s*\{)/.test(trimmed) && /:\s*[^;]+;/.test(trimmed)) return "css";
+          if (/\b(?:interface\s+\w+|type\s+\w+\s*=)/.test(trimmed)) return "typescript";
+          return "javascript";
+        }
+
+        function langFromName(name, fallback = "auto") {
+          const path = name.toLowerCase().split(/[?#]/)[0];
+          if (/\.html?$/.test(path)) return "html";
+          if (/\.tsx?$/.test(path)) return "typescript";
+          if (/\.(js|mjs|cjs|jsx)$/.test(path)) return "javascript";
+          if (/\.css$/.test(path)) return "css";
+          if (/\.json$/.test(path)) return "json";
+          if (/\.(md|markdown)$/.test(path)) return "markdown";
+          return fallback;
+        }
+
+        function languageFor(file) {
+          if (file.id === activeId && nodes.language.value !== "auto") return nodes.language.value;
+          if (file.lang && file.lang !== "auto") return file.lang;
+          return langFromName(file.name, detectLanguage(file.content));
+        }
+
+        function safeHttpUrl(value, base = baseUrl) {
+          try {
+            const url = new URL(value, base);
+            if (!/^https?:$/.test(url.protocol)) return null;
+            url.hash = "";
+            return url.href;
+          } catch { return null; }
+        }
+
+        function filenameFromUrl(value) {
+          try {
+            const url = new URL(value);
+            return decodeURIComponent(url.pathname.split("/").filter(Boolean).at(-1) || url.hostname);
+          } catch { return value; }
+        }
+
+        function shortOrigin(url) {
+          try {
+            const parsed = new URL(url);
+            return `${parsed.hostname}${parsed.pathname.substring(0, 42)}`;
+          } catch { return url; }
+        }
+
+        function htmlBase(code, fallback) {
+          // Reads <base href> without inserting or executing the received HTML.
+          const match = code.match(/<base\b[^>]*\bhref\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i);
+          return (match && safeHttpUrl(match[1] || match[2] || match[3], fallback)) || fallback;
+        }
+
+        function refBase(file) {
+          if (file.url) return file.url;
+          return htmlBase(file.content, explicitBase || baseUrl);
+        }
+
+        function referencesFor(file) {
+          const text = file.content;
+          const language = languageFor(file);
+          const result = [];
+          const base = refBase(file);
+          const seen = new Set();
+
+          function add(raw, from, to, kind) {
+            if (!raw || from < 0 || to <= from || /^(?:data:|blob:|javascript:|#)/i.test(raw)) return;
+            if (kind === "js" && !/^(?:[./]|https?:\/\/|\/)/.test(raw)) return;
+            const url = safeHttpUrl(raw.replace(/&amp;/gi, "&"), base);
+            if (!url || seen.has(`${from}:${to}:${url}`)) return;
+            seen.add(`${from}:${to}:${url}`);
+            result.push({ raw, from, to, url, kind });
+          }
+
+          if (language === "html") {
+            const tagPattern = /<(script|link)\b[^>]*>/gi;
+            let tag;
+            while ((tag = tagPattern.exec(text)) && result.length < 300) {
+              const tagText = tag[0];
+              const isScript = tag[1].toLowerCase() === "script";
+              const attr = tagText.match(isScript
+                ? /\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i
+                : /\bhref\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i);
+              if (!attr) continue;
+              const value = attr[1] || attr[2] || attr[3] || "";
+              const rel = tagText.match(/\brel\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i);
+              const relationship = (rel?.[1] || rel?.[2] || rel?.[3] || "").toLowerCase();
+              const asMatch = tagText.match(/\bas\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i);
+              const asValue = (asMatch?.[1] || asMatch?.[2] || asMatch?.[3] || "").toLowerCase();
+              const linkIsCode = relationship.includes("stylesheet") || relationship.includes("modulepreload") ||
+                (relationship.includes("preload") && ["script", "style"].includes(asValue)) || /\.(?:css|m?js|cjs|ts)(?:[?#]|$)/i.test(value);
+              if (!isScript && !linkIsCode) continue;
+              const offset = tagText.indexOf(value, attr.index);
+              add(value, tag.index + offset, tag.index + offset + value.length,
+                isScript || relationship.includes("modulepreload") || asValue === "script" || /\.(?:m?js|cjs|ts)(?:[?#]|$)/i.test(value) ? "js" : "css");
+            }
+          }
+
+          if (language === "javascript" || language === "typescript") {
+            const patterns = [
+              /\b(?:import|export)\s+(?:[\s\S]{0,160}?\s+from\s*)?["']([^"'\r\n]+)["']/g,
+              /\b(?:import|require)\s*\(\s*["']([^"'\r\n]+)["']\s*\)/g,
+              /\bnew\s+URL\s*\(\s*["']([^"'\r\n]+)["']\s*,\s*import\.meta\.url\s*\)/g,
+            ];
+            for (const regex of patterns) {
+              let match;
+              while ((match = regex.exec(text)) && result.length < 300) {
+                const raw = match[1];
+                const from = match.index + match[0].indexOf(raw);
+                if (/\.(?:m?js|cjs|jsx|tsx?|css)(?:[?#]|$)/i.test(raw) || raw.startsWith("./") || raw.startsWith("../")) {
+                  add(raw, from, from + raw.length, /\.css(?:[?#]|$)/i.test(raw) ? "css" : "js");
+                }
+              }
+            }
+          }
+
+          if (language === "css") {
+            const regex = /@import\s+(?:url\(\s*)?["']?([^"'\s);]+)["']?\s*\)?/gi;
+            let match;
+            while ((match = regex.exec(text)) && result.length < 300) {
+              const raw = match[1];
+              const from = match.index + match[0].indexOf(raw);
+              add(raw, from, from + raw.length, "css");
+            }
+          }
+
+          return result.sort((a, b) => a.from - b.from || a.to - b.to);
+        }
+
+        function groupFor(file) { return file.id === ROOT ? "html" : file.kind; }
+
+        function updateTree() {
+          const filter = nodes.filter.value.trim().toLowerCase();
+          const container = document.createDocumentFragment();
+          const groups = [
+            { kind: "html", name: "HTML / PRINCIPAL", files: [] },
+            { kind: "js", name: "JAVASCRIPT", files: [] },
+            { kind: "css", name: "CSS", files: [] },
+          ];
+          for (const file of files.values()) {
+            if (file.id === ROOT) groups[0].files.push(file);
+            else groups[file.kind === "css" ? 2 : 1].files.push(file);
+          }
+          nodes.count.textContent = `(${files.size})`;
+          for (const group of groups) {
+            const list = group.files.filter((file) => `${file.name} ${file.url}`.toLowerCase().includes(filter));
+            if (!list.length) continue;
+            const title = document.createElement("div");
+            title.className = "section-title";
+            title.textContent = group.name;
+            const qty = document.createElement("small");
+            qty.textContent = ` ${list.length}`;
+            title.appendChild(qty);
+            container.appendChild(title);
+            for (const file of list) {
+              const row = document.createElement("button");
+              row.type = "button";
+              row.className = "file-row";
+              row.dataset.kind = file.id === ROOT ? "html" : file.kind;
+              row.dataset.active = String(file.id === activeId);
+              row.title = file.url || "Arquivo principal";
+              row.setAttribute("aria-label", `${file.name} ${file.status}`);
+              const icon = document.createElement("span");
+              icon.className = "file-icon";
+              icon.textContent = file.id === ROOT ? "<>" : file.kind === "css" ? "#" : "JS";
+              const info = document.createElement("span");
+              info.className = "file-info";
+              const name = document.createElement("span");
+              name.className = "file-name";
+              name.textContent = `${file.name}${file.dirty ? " •" : ""}`;
+              const path = document.createElement("span");
+              path.className = "file-path";
+              path.textContent = file.id === ROOT ? "Local · Shortcuts / Base64" : shortOrigin(file.url);
+              info.append(name, path);
+              const state = document.createElement("span");
+              state.className = "file-state";
+              state.dataset.status = file.status;
+              state.textContent = file.status === "loading" ? "◌" : file.status === "error" ? "!" : file.status === "loaded" ? "✓" : "·";
+              if (file.status === "error") state.title = file.error;
+              row.append(icon, info, state);
+              row.addEventListener("click", () => {
+                switchFile(file.id);
+                if (file.status === "error") toast(`Falha ao carregar: ${file.error}`);
+                closeSidebar();
+              });
+              container.appendChild(row);
+            }
+          }
+          nodes.tree.replaceChildren(container);
+          if (!nodes.tree.childElementCount) {
+            const empty = document.createElement("p");
+            empty.className = "empty-tree";
+            empty.textContent = filter ? "Nenhum arquivo encontrado." : "Adicione <script src> ou <link rel=stylesheet> ao HTML para descobrir arquivos.";
+            nodes.tree.appendChild(empty);
+          }
+        }
+
+        function updateTabs() {
+          const fragment = document.createDocumentFragment();
+          for (const id of openTabs) {
+            const file = files.get(id);
+            if (!file) continue;
+            const tab = document.createElement("button");
+            tab.type = "button";
+            tab.className = "tab";
+            tab.dataset.active = String(id === activeId);
+            tab.setAttribute("role", "tab");
+            tab.setAttribute("aria-selected", String(id === activeId));
+            tab.title = file.url || file.name;
+            const type = document.createElement("span");
+            type.style.color = file.id === ROOT ? "#7ed9aa" : file.kind === "css" ? "#8abaff" : "#f5cb72";
+            type.textContent = file.id === ROOT ? "◇" : file.kind === "css" ? "#" : "JS";
+            const name = document.createElement("span");
+            name.className = "tab-name";
+            name.textContent = `${file.name}${file.dirty ? " •" : ""}`;
+            tab.append(type, name);
+            if (id !== ROOT) {
+              const close = document.createElement("span");
+              close.className = "tab-close";
+              close.textContent = "×";
+              close.title = "Fechar aba";
+              close.addEventListener("click", (event) => {
+                event.stopPropagation();
+                closeTab(id);
+              });
+              tab.appendChild(close);
+            }
+            tab.addEventListener("click", () => switchFile(id));
+            fragment.appendChild(tab);
+          }          nodes.tabs.replaceChildren(fragment);
+          const current = nodes.tabs.querySelector('.tab[data-active="true"]');
+          current?.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "auto" });
+        }
+
+        function updateReferenceBar() {
+          const file = files.get(activeId);
+          nodes.refs.replaceChildren();
+          const label = document.createElement("span");
+          label.className = "refs-label";
+          label.textContent = "LINKS";
+          nodes.refs.appendChild(label);
+          if (!file?.refs?.length) {
+            const empty = document.createElement("span");
+            empty.className = "no-refs";
+            empty.textContent = "Sem arquivos vinculados neste código";
+            nodes.refs.appendChild(empty);
+            return;
+          }
+          for (const ref of file.refs.slice(0, 40)) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.title = ref.url;
+            button.textContent = `↗ ${ref.raw}`;
+            button.addEventListener("click", () => openReference(ref));
+            nodes.refs.appendChild(button);
+          }
+        }
+
+        function updateUI() {
+          const file = files.get(activeId);
+          if (!file) return;
+          document.title = `${file.name} · Rod Code`;
+          $("#crumb").textContent = file.url || (explicitBase ? shortOrigin(explicitBase) : "Mini Workspace");
+          nodes.language.value = file.lang === "auto" ? "auto" : file.lang;
+          nodes.base.value = explicitBase || baseUrl;
+          updateTree();
+          updateTabs();
+          updateReferenceBar();
+          updateStatus();
+        }
+
+        function getCode() { return view ? view.state.doc.toString() : nodes.fallback.value; }
+
+        function saveActiveState() {
+          const file = files.get(activeId);
+          if (!file) return;
+          file.content = getCode();
+          if (view) {
+            file.selection = view.state.selection.main.head;
+            file.scrollTop = view.scrollDOM.scrollTop;
+          } else {
+            file.selection = nodes.fallback.selectionStart || 0;
+            file.scrollTop = nodes.fallback.scrollTop;
+          }
+        }
+
+        function switchFile(id) {
+          if (!files.has(id)) return;
+          if (id !== activeId) saveActiveState();
+          activeId = id;
+          if (!openTabs.includes(id)) openTabs.push(id);
+          const file = files.get(id);
+          nodes.language.value = file.lang;
+          if (editorReady && view && cm) {
+            const state = cm.state.EditorState.create({
+              doc: file.content,
+              selection: { anchor: Math.min(file.selection || 0, file.content.length) },
+              extensions: createEditorExtensions(),
+            });
+            view.setState(state);
+            requestAnimationFrame(() => { if (view) view.scrollDOM.scrollTop = file.scrollTop || 0; });
+            nodes.editor.style.display = "block";
+            nodes.fallback.style.display = "none";
+          } else {
+            nodes.fallback.value = file.content;
+            nodes.fallback.style.display = "block";
+            nodes.editor.style.display = "none";
+            nodes.fallback.selectionStart = nodes.fallback.selectionEnd = Math.min(file.selection || 0, file.content.length);
+            nodes.fallback.scrollTop = file.scrollTop || 0;
+          }
+          if (nodesSearchOpen()) rebuildSearch();
+          updateUI();
+        }
+
+        function closeTab(id) {
+          const index = openTabs.indexOf(id);
+          if (index < 0) return;
+          openTabs.splice(index, 1);
+          if (activeId === id) switchFile(openTabs[Math.max(0, index - 1)] || ROOT);
+          else updateTabs();
+        }
+
+        function updateCurrentCode(code, userEdit = false) {
+          const file = files.get(activeId);
+          if (!file) return;
+          file.content = code;
+          if (userEdit) file.dirty = true;
+          if (view) {
+            view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: code } });
+          } else {
+            nodes.fallback.value = code;
+          }
+          scheduleScan(file);
+          updateUI();
+        }
+
+        function scanFile(file) {
+          file.refs = referencesFor(file);
+          if (file.id === activeId) updateReferenceBar();
+          for (const ref of file.refs) {
+            if (file.depth >= LIMITS.depth || files.size >= LIMITS.files) break;
+            if (files.has(ref.url)) continue;
+            const remote = {
+              id: ref.url, url: ref.url, name: filenameFromUrl(ref.url), source: "remote", kind: ref.kind,
+              lang: langFromName(ref.url, ref.kind === "css" ? "css" : "javascript"), content: "", refs: [],
+              status: "queued", depth: file.depth + 1, dirty: false, selection: 0, scrollTop: 0,
+              error: "", generation: projectVersion,
+            };
+            files.set(remote.id, remote);
+            queue.push({ id: remote.id, version: projectVersion });
+          }
+          updateTree();
+          if (file.id === activeId && view && refreshDecoration) view.dispatch({ effects: refreshDecoration.of(null) });
+          runQueue();
+        }
+
+        function scheduleScan(file, immediate = false) {
+          clearTimeout(scanTimers.get(file.id));
+          scanTimers.set(file.id, setTimeout(() => {
+            scanTimers.delete(file.id);
+            if (files.has(file.id) && file.generation === projectVersion) scanFile(file);
+          }, immediate ? 0 : 240));
+        }
+
+        function runQueue() {
+          while (activeFetches < LIMITS.concurrent && queue.length) {
+            const task = queue.shift();
+            const file = files.get(task.id);
+            if (!file || file.status !== "queued" || task.version !== projectVersion) continue;
+            activeFetches++;
+            void loadRemote(file, task.version).finally(() => {
+              activeFetches--;
+              runQueue();
+            });
+          }
+        }
+
+        async function loadRemote(file, version) {
+          file.status = "loading";
+          file.error = "";
+          updateTree();
+          const controller = new AbortController();
+          abortControllers.add(controller);
+          const timeout = setTimeout(() => controller.abort(), LIMITS.timeout);
+          try {
+            const response = await fetch(file.url, {
+              method: "GET", mode: "cors", credentials: "omit", cache: "default",
+              redirect: "follow", signal: controller.signal,
+              headers: { Accept: "text/plain, text/javascript, text/css, text/html, */*;q=0.6" },
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
+            const length = Number(response.headers.get("content-length") || "0");
+            if (length > LIMITS.bytes) throw new Error(`Arquivo maior que ${Math.round(LIMITS.bytes / 1000000)} MB`);
+            const code = await response.text();
+            if (code.length > LIMITS.bytes) throw new Error("Arquivo muito grande para abrir");
+            if (version !== projectVersion || file.generation !== projectVersion) return;
+            if (!file.dirty) file.content = code;
+            file.status = "loaded";
+            if (file.id === activeId && !file.dirty) switchFile(file.id);
+            scheduleScan(file, true);
+          } catch (error) {
+            if (version !== projectVersion) return;
+            file.status = "error";
+            file.error = error?.name === "AbortError"
+              ? "Tempo limite de leitura excedido"
+              : error instanceof TypeError
+                ? "Rede ou CORS: servidor não permite leitura cross-origin"
+                : String(error?.message || error);
+            if (file.id === activeId) {
+              updateStatus();
+              toast(`${file.name}: ${file.error}`);
+            }
+          } finally {
+            clearTimeout(timeout);
+            abortControllers.delete(controller);
+            if (version === projectVersion) updateTree();
+          }
+        }
+
+        function openReference(ref) {
+          if (!files.has(ref.url)) {
+            const owner = files.get(activeId);
+            if (!owner || files.size >= LIMITS.files) return toast("Limite de arquivos atingido.");
+            const file = {
+              id: ref.url, url: ref.url, name: filenameFromUrl(ref.url), source: "remote", kind: ref.kind,
+              lang: langFromName(ref.url, ref.kind === "css" ? "css" : "javascript"),
+              content: "", refs: [], status: "queued", depth: owner.depth + 1,
+              dirty: false, selection: 0, scrollTop: 0, error: "", generation: projectVersion,
+            };
+            files.set(file.id, file);
+            queue.push({ id: file.id, version: projectVersion });
+            runQueue();
+          }
+          switchFile(ref.url);
+        }
+
+        function cancelFetches() {
+          for (const controller of abortControllers) controller.abort();
+          abortControllers.clear();
+          queue = [];
+          for (const timer of scanTimers.values()) clearTimeout(timer);
+          scanTimers = new Map();
+        }
+
+        function resetProject(code, options = {}) {
+          saveActiveState();
+          projectVersion++;
+          cancelFetches();
+          files.clear();
+          openTabs.splice(0, openTabs.length, ROOT);
+          activeId = ROOT;
+          explicitBase = options.base || "";
+          const detected = detectLanguage(code);
+          const name = options.name || (detected === "html" ? "index.html" : `codigo.${extFor[detected] || "txt"}`);
+          const lang = options.lang && options.lang !== "auto"
+            ? options.lang
+            : (options.name ? langFromName(name, detected) : detected);
+          const root = makeRoot(code, lang, name);
+          root.generation = projectVersion;
+          files.set(ROOT, root);
+          switchFile(ROOT);
+          scheduleScan(root, true);
+        }
+
+        function reloadAssets() {
+          let count = 0;
+          for (const file of files.values()) {
+            if (file.id === ROOT || file.dirty) continue;
+            file.status = "queued";
+            file.error = "";
+            queue.push({ id: file.id, version: projectVersion });
+            count++;
+          }
+          if (!count) return toast("Não há arquivos remotos para recarregar.");
+          updateTree();
+          runQueue();
+          toast(`Recarregando ${count} arquivos…`);
+        }
+
+        function getModule(name) {
+          const root = window.RodCDN || {};
+          const normalized = name.replace(/^@/, "")
+            .replace(/[^a-zA-Z0-9_$]+(.)?/g, (_match, next) => next ? next.toUpperCase() : "")
+            .replace(/^[^a-zA-Z_$]+/, "");
+          return root[name] || root[normalized] || root[name.replace(/^@[^/]+\//, "")] || {};
+        }
+
+        function createHighlightStyle() {
+          const language = cm.language;
+          const t = getModule("@lezer/highlight").tags || cm.language.tags;
+          if (!language.HighlightStyle || !language.syntaxHighlighting || !t) return language.syntaxHighlighting?.(language.defaultHighlightStyle, { fallback: true });
+          const rule = language.HighlightStyle.define([
+            { tag: [t.keyword, t.modifier], color: "#bb9af7" },
+            { tag: [t.variableName, t.name], color: "#e5edf8" },
+            { tag: [t.definition(t.variableName), t.function(t.variableName)], color: "#d7b5ff" },
+            { tag: [t.string, t.special(t.string)], color: "#9ece6a" },
+            { tag: [t.number, t.bool, t.null, t.atom], color: "#83bcff" },
+            { tag: [t.comment, t.lineComment, t.blockComment], color: "#869bad", fontStyle: "italic" },
+            { tag: [t.tagName, t.typeName, t.className], color: "#f7768e" },
+            { tag: [t.attributeName, t.propertyName], color: "#73daca" },
+            { tag: [t.operator, t.punctuation], color: "#cdd8e7" },
+            { tag: t.invalid, color: "#ff8e96", textDecoration: "underline" },
+          ]);
+          return language.syntaxHighlighting(rule, { fallback: true });
+        }
+
+        function languageExtension(lang) {
+          switch (lang) {
+            case "html": return cm.html.html?.() || [];
+            case "javascript": return cm.javascript.javascript?.({ jsx: true }) || [];
+            case "typescript": return cm.javascript.javascript?.({ typescript: true, jsx: true }) || [];
+            case "css": return cm.css.css?.() || [];
+            case "json": return cm.json.json?.() || [];
+            case "markdown": return cm.markdown.markdown?.() || [];
+            default: return [];
+          }
+        }
+
+        function createResourcePlugin() {
+          const { ViewPlugin, Decoration, EditorView } = cm.view;
+          if (!ViewPlugin || !Decoration) return [];
+          const updateEffect = refreshDecoration;
+          return ViewPlugin.fromClass(class {
+            constructor(editor) { this.decorations = this.build(editor); }
+            update(update) {
+              if (update.docChanged || update.viewportChanged ||
+                  update.transactions.some((tx) => tx.effects.some((effect) => effect.is(updateEffect)))) {
+                this.decorations = this.build(update.view);
+              }
+            }
+            build(editor) {
+              const file = files.get(activeId);
+              if (!file) return Decoration.none;
+              const shadow = { ...file, content: editor.state.doc.toString() };
+              const refs = referencesFor(shadow);
+              const marks = [];
+              for (const ref of refs) {
+                if (!editor.visibleRanges.some(({ from, to }) => ref.from < to && ref.to > from)) continue;
+                marks.push(Decoration.mark({
+                  class: "cm-resource-link",
+                  attributes: { "data-resource-url": ref.url, title: `Abrir ${ref.raw} no explorador` },
+                }).range(ref.from, ref.to));
+              }
+              return marks.length ? Decoration.set(marks, true) : Decoration.none;
+            }
+          }, { decorations: (plugin) => plugin.decorations });
+        }
+
+        function createSearchDecorations() {
+          const { ViewPlugin, Decoration } = cm.view;
+          if (!ViewPlugin || !Decoration) return [];
+          return ViewPlugin.fromClass(class {
+            constructor(editor) { this.decorations = this.build(editor); }
+            update(update) {
+              if (update.docChanged || update.viewportChanged || update.transactions.some(tx => tx.effects.some(effect => effect.is(searchRefresh)))) {
+                this.decorations = this.build(update.view);
+              }
+            }
+            build(editor) {
+              if (!searchState.matches.length) return Decoration.none;
+              const marks = [];
+              for (const range of editor.visibleRanges) {
+                for (let i = 0; i < searchState.matches.length; i++) {
+                  const match = searchState.matches[i];
+                  if (match.to < range.from) continue;
+                  if (match.from > range.to) break;
+                  if (match.from >= match.to) continue;
+                  marks.push(Decoration.mark({class:i === searchState.index ? "cm-search-current" : "cm-search-match"}).range(match.from,match.to));
+                }
+              }
+              return marks.length ? Decoration.set(marks, true) : Decoration.none;
+            }
+          }, { decorations: plugin => plugin.decorations });
+        }
+
+        function createEditorExtensions() {
+          const s = cm.state;
+          const v = cm.view;
+          const c = cm.commands;
+          const l = cm.language;
+          const a = cm.autocomplete;
+          const q = cm.search;
+          compartments.language = new s.Compartment();
+          compartments.wrap = new s.Compartment();
+          const active = files.get(activeId);
+          const language = languageFor(active);
+          const extensions = [
+            v.lineNumbers(), v.highlightActiveLineGutter?.(), v.highlightSpecialChars?.(),
+            v.drawSelection?.(), v.highlightActiveLine?.(), c.history?.(),
+            l.foldGutter?.({ markerDOM(open) {
+              const mark = document.createElement("span");
+              mark.textContent = open ? "⌄" : "›";
+              mark.setAttribute("aria-label", open ? "Recolher" : "Expandir");
+              return mark;
+            } }),
+            l.bracketMatching?.(), l.indentOnInput?.(), createHighlightStyle(),
+            a.closeBrackets?.(), a.autocompletion?.(), q.highlightSelectionMatches?.(),
+            compartments.language.of(languageExtension(language)),
+            compartments.wrap.of(wordWrap ? v.EditorView.lineWrapping : []),
+            createResourcePlugin(), createSearchDecorations(),
+            v.EditorView.domEventHandlers({
+              click(event) {
+                const el = event.target instanceof Element ? event.target.closest(".cm-resource-link") : null;
+                const url = el?.getAttribute("data-resource-url");
+                if (!url) return false;
+                const owner = files.get(activeId);
+                const ref = owner?.refs.find((entry) => entry.url === url) ||
+                  referencesFor({ ...owner, content: getCode() }).find((entry) => entry.url === url);
+                if (!ref) return false;
+                event.preventDefault();
+                openReference(ref);
+                closeSidebar();
+                return true;
+              },
+            }),
+            v.keymap.of([
+              ...(c.defaultKeymap || []), ...(c.historyKeymap || []),
+              ...(l.foldKeymap || []), ...(q.searchKeymap || []),
+              ...(a.completionKeymap || []), ...(a.closeBracketsKeymap || []),
+              { key: "Mod-s", run: () => { saveFile(); return true; } },
+            ]),
+            v.EditorView.updateListener.of((update) => {
+              if (update.docChanged) {
+                const file = files.get(activeId);
+                if (file) {
+                  file.content = update.state.doc.toString();
+                  file.dirty = true;
+                  scheduleScan(file);
+                  if (nodesSearchOpen()) scheduleSearch();
+                }
+                clearTimeout(positionTimer);
+                positionTimer = setTimeout(() => { updateTree(); updateTabs(); updateStatus(); }, 125);
+              } else if (update.selectionSet) {
+                updateStatus();
+              }
+            }),
+            v.EditorView.theme({
+              "&": { backgroundColor: "#1a1b26", color: "#c0caf5" },
+              ".cm-content": { minHeight: "100%" },
+              ".cm-cursor": { borderLeftColor: "#9bcdff" },
+              ".cm-focused": { outline: "none" },
+            }, { dark: true }),
+          ];
+          return extensions.filter(Boolean);
+        }
+
+        function mountCodeMirror() {
+          const state = getModule("@codemirror/state");
+          const editorView = getModule("@codemirror/view");
+          const language = getModule("@codemirror/language");
+          const fallbackCm = window.RodCDN?.codemirror || {};
+          cm = {
+            state: { ...state, EditorState: state.EditorState || fallbackCm.EditorState },
+            view: { ...editorView, EditorView: editorView.EditorView || fallbackCm.EditorView },
+            language, commands: getModule("@codemirror/commands"), search: getModule("@codemirror/search"),
+            autocomplete: getModule("@codemirror/autocomplete"),
+            html: getModule("@codemirror/lang-html"), javascript: getModule("@codemirror/lang-javascript"),
+            css: getModule("@codemirror/lang-css"), json: getModule("@codemirror/lang-json"),
+            markdown: getModule("@codemirror/lang-markdown"),
+          };
+          if (!cm.state.EditorState || !cm.view.EditorView || !cm.state.Compartment || !cm.view.lineNumbers || !language.foldGutter) {
+            throw new Error(`CodeMirror incompleto no CDN: ${Object.keys(window.RodCDN || {}).join(", ") || "nenhum módulo"}`);
+          }
+          compartments = {};
+          refreshDecoration = cm.state.StateEffect.define();
+          searchRefresh = cm.state.StateEffect.define();
+          const root = files.get(activeId);
+          const doc = cm.state.EditorState.create({ doc: root.content, extensions: createEditorExtensions() });
+          view = new cm.view.EditorView({ parent: nodes.editor, state: doc });
+          editorReady = true;
+          nodes.fallback.style.display = "none";
+          nodes.editor.style.display = "block";
+          updateUI();
+        }
+
+        function mountFallback(error) {
+          console.error("CodeMirror não inicializado", error);
+          editorReady = false;
+          view?.destroy?.();
+          view = null;
+          nodes.editor.style.display = "none";
+          nodes.fallback.style.display = "block";
+          nodes.fallback.value = files.get(activeId)?.content || "";
+          updateStatus();
+          toast("CodeMirror não carregou. Explorador e leitura de arquivos continuam disponíveis.");
+        }
+
+        function updateStatus() {
+          const file = files.get(activeId);
+          if (!file) return;
+          const code = getCode();
+          const lines = code.split("\n").length;
+          const status = file.status === "loading" || file.status === "queued" ? " · Carregando…" :
+            file.status === "error" ? ` · Erro: ${file.error}` : "";
+          nodes.status.textContent = `${file.name} · ${lines} linhas · ${code.length.toLocaleString("pt-BR")} caracteres · ${view ? "CM6" : "modo texto"}${status}`;
+          if (view) {
+            const head = view.state.selection.main.head;
+            const line = view.state.doc.lineAt(head);
+            nodes.position.textContent = `Ln ${line.number}, Col ${head - line.from + 1}`;
+          } else {
+            const left = code.slice(0, nodes.fallback.selectionStart || 0).split("\n");
+            nodes.position.textContent = `Ln ${left.length}, Col ${left.at(-1).length + 1}`;
+          }
+        }
+
+        function updateLanguage() {
+          const file = files.get(activeId);
+          if (!file) return;
+          file.lang = nodes.language.value;
+          if (view && compartments?.language) {
+            view.dispatch({ effects: compartments.language.reconfigure(languageExtension(languageFor(file))) });
+          }
+          scheduleScan(file);
+          updateStatus();
+        }
+
+        function toggleWrap() {
+          wordWrap = !wordWrap;
+          nodes.wrap.dataset.active = String(wordWrap);
+          nodes.wrap.setAttribute("aria-pressed", String(wordWrap));
+          if (view && compartments?.wrap) {
+            view.dispatch({ effects: compartments.wrap.reconfigure(wordWrap ? cm.view.EditorView.lineWrapping : []) });
+          }
+          nodes.fallback.dataset.nowrap = String(!wordWrap);
+          nodes.editor.dataset.nowrap = String(!wordWrap);
+        }
+
+        // CodeMirror 6 already virtualizes source lines and maintains Lezer syntax highlighting.
+        // TanStack Virtual Core virtualizes the potentially huge list of search hits only.
+        let searchVirtualizer = null;
+        function searchVirtualCore() { return getModule("@tanstack/virtual-core"); }
+        function ensureSearchVirtualizer() {
+          if (searchVirtualizer) return searchVirtualizer;
+          const core = searchVirtualCore();
+          if (!core.Virtualizer || !core.observeElementRect || !core.observeElementOffset || !core.elementScroll) return null;
+          const scroll = $("#search-results");
+          searchVirtualizer = new core.Virtualizer({
+            count:searchState.matches.length,
+            getScrollElement:()=>scroll,
+            estimateSize:()=>32,
+            overscan:6,
+            observeElementRect:core.observeElementRect,
+            observeElementOffset:core.observeElementOffset,
+            scrollToFn:core.elementScroll,
+            onChange:()=>renderSearchResults(),
+          });
+          return searchVirtualizer;
+        }
+        function renderSearchResults() {
+          const outer = $("#search-results");
+          if (outer.dataset.open !== "true") return;
+          const inner = $("#search-results-inner");
+          const v = ensureSearchVirtualizer();
+          if (!v) {
+            inner.textContent = "TanStack Virtual indisponível; a busca no editor continua funcionando.";
+            return;
+          }
+          v.setOptions({
+            ...v.options,
+            count:searchState.matches.length,
+          });
+          inner.style.height = `${v.getTotalSize()}px`;
+          const fragment = document.createDocumentFragment();
+          const code = getCode();
+          for (const item of v.getVirtualItems()) {
+            const match = searchState.matches[item.index];
+            if (!match) continue;
+            const line = view ? view.state.doc.lineAt(match.from) : null;
+            const lineNumber = line ? line.number : code.slice(0,match.from).split("\\n").length;
+            const start = line ? line.from : code.lastIndexOf("\\n",match.from-1)+1;
+            const end = line ? line.to : (code.indexOf("\\n",match.to) < 0 ? code.length : code.indexOf("\\n",match.to));
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "search-result";
+            button.style.transform = `translateY(${item.start}px)`;
+            button.dataset.active = String(item.index === searchState.index);
+            const number = document.createElement("span");
+            number.className = "search-result-line";
+            number.textContent = `L${lineNumber}`;
+            const snippet = document.createElement("span");
+            snippet.className = "search-result-snippet";
+            snippet.textContent = code.slice(start,Math.min(end,start+220)).trim();
+            button.append(number,snippet);
+            button.addEventListener("click",()=>goToSearchResult(item.index));
+            fragment.appendChild(button);
+          }
+          inner.replaceChildren(fragment);
+        }
+        function updateVirtualSearch() {
+          if ($("#search-results").dataset.open !== "true") return;
+          if (searchVirtualizer) searchVirtualizer.setOptions({...searchVirtualizer.options,count:searchState.matches.length});
+          renderSearchResults();
+        }
+        $("#search-results").addEventListener("scroll",()=>renderSearchResults(),{passive:true});
+        $("#search-results-toggle").addEventListener("click",()=>{
+          const expanded = $("#search-results").dataset.open !== "true";
+          $("#search-results").dataset.open = String(expanded);
+          $("#search-results-toggle").setAttribute("aria-pressed",String(expanded));
+          if (expanded) requestAnimationFrame(()=>{ renderSearchResults(); searchVirtualizer?.scrollToIndex(searchState.index < 0 ? 0 : searchState.index,{align:"center"}); });
+        });
+
+        function nodesSearchOpen() { return $("#search-panel").dataset.open === "true"; }
+
+        function refreshSearchDecorations() {
+          if (view && searchRefresh) view.dispatch({ effects: searchRefresh.of(null) });
+        }
+
+        function scheduleSearch() {
+          clearTimeout(searchState.timer);
+          searchState.timer = setTimeout(rebuildSearch, 90);
+        }
+
+        function rebuildSearch() {
+          const needle = $("#search-input").value;
+          const code = getCode();
+          searchState.matches = [];
+          searchState.index = -1;
+          searchState.error = "";
+          if (needle) {
+            try {
+              const flags = searchState.caseSensitive ? "g" : "gi";
+              const pattern = searchState.regex ? needle : needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+              const regex = new RegExp(pattern, flags);
+              let match;
+              // Cap matches to protect mobile Safari on huge source files.
+              while ((match = regex.exec(code)) && searchState.matches.length < 20000) {
+                if (match[0].length === 0) { regex.lastIndex++; continue; }
+                searchState.matches.push({ from: match.index, to: match.index + match[0].length });
+              }              const current = view ? view.state.selection.main.head : nodes.fallback.selectionStart;
+              const next = searchState.matches.findIndex(m => m.from >= current);
+              searchState.index = next >= 0 ? next : searchState.matches.length ? 0 : -1;
+            } catch (error) { searchState.error = "Regex inválida"; }
+          }
+          updateSearchCount();
+          refreshSearchDecorations();
+          if (searchState.index >= 0) goToSearchResult(searchState.index);
+        }
+
+        function updateSearchCount() {
+          $("#search-count").textContent = searchState.error || `${Math.max(0,searchState.index+1)}/${searchState.matches.length}${searchState.matches.length >= 20000 ? "+" : ""}`;
+          $("#search-prev").disabled = $("#search-next").disabled = !searchState.matches.length;
+        }
+
+        function goToSearchResult(index) {
+          if (!searchState.matches.length) return;
+          searchState.index = (index + searchState.matches.length) % searchState.matches.length;
+          const {from,to} = searchState.matches[searchState.index];
+          if (view) {
+            view.dispatch({ selection:{anchor:from,head:to}, effects:cm.view.EditorView.scrollIntoView(from,{y:"center",x:"center",yMargin:65,xMargin:30}) });
+            // Keep the search input focused so iPhone next/previous works without reopening the keyboard.
+          } else {
+            const textarea = nodes.fallback;
+            textarea.setSelectionRange(from,to);
+            const before = textarea.value.slice(0,from);
+            const line = before.split("\n").length - 1;
+            textarea.scrollTop = Math.max(0,line * parseFloat(getComputedStyle(textarea).lineHeight) - textarea.clientHeight/2);
+            if (!wordWrap) {
+              const column = before.length - before.lastIndexOf("\n") - 1;
+              textarea.scrollLeft = Math.max(0,column * parseFloat(getComputedStyle(textarea).fontSize) * .6 - textarea.clientWidth/2);
+            }
+          }
+          updateSearchCount();
+          refreshSearchDecorations();
+          updateStatus();
+        }
+
+        function openSearch() {
+          $("#search-panel").dataset.open = "true";
+          const input = $("#search-input");
+          input.focus({preventScroll:true});
+          input.select();
+          if (input.value) rebuildSearch();
+        }
+
+        function closeSearch() {
+          $("#search-panel").dataset.open = "false";
+          $("#search-results").dataset.open = "false";
+          $("#search-results-toggle").setAttribute("aria-pressed","false");
+          searchState.matches = [];
+          searchState.index = -1;
+          refreshSearchDecorations();
+          view?.focus();
+        }
+
+        function loadScript(url) {
+          if (!prettierLoads.has(url)) {
+            prettierLoads.set(url, new Promise((resolve, reject) => {
+              const script = document.createElement("script");
+              script.src = url;
+              script.async = true;
+              script.onload = resolve;
+              script.onerror = () => reject(new Error(`Falha no carregamento de ${url}`));
+              document.head.appendChild(script);
+            }));
+          }
+          return prettierLoads.get(url);
+        }
+
+        async function formatCode() {
+          const file = files.get(activeId);
+          const lang = languageFor(file);
+          const cfg = {
+            javascript: { parser: "babel", plugins: ["babel", "estree", "html", "postcss"] },
+            typescript: { parser: "typescript", plugins: ["typescript", "estree", "html", "postcss"] },
+            html: { parser: "html", plugins: ["html", "babel", "estree", "typescript", "postcss"] },
+            css: { parser: "css", plugins: ["postcss"] },
+            json: { parser: "json", plugins: ["babel", "estree"] },
+            markdown: { parser: "markdown", plugins: ["markdown"] },
+          }[lang];
+          if (!cfg) return toast("Selecione uma linguagem compatível com Prettier.");
+          nodes.format.disabled = true;
+          nodes.format.textContent = "Formatando…";
+          try {
+            await loadScript(`${PRETTIER_BASE}/standalone.js`);
+            await Promise.all(cfg.plugins.map((name) => loadScript(`${PRETTIER_BASE}/plugins/${name}.js`)));
+            if (!window.prettier?.format || !window.prettierPlugins) throw new Error("Prettier indisponível");
+            const code = getCode();
+            const formatted = await window.prettier.format(code, {
+              parser: cfg.parser, plugins: window.prettierPlugins, tabWidth: 2,
+              singleQuote: true, semi: true, printWidth: 100, endOfLine: "lf",
+            });
+            if (formatted !== code) {
+              updateCurrentCode(formatted, true);
+              toast("Arquivo formatado com Prettier ✨");
+            } else toast("O arquivo já está formatado.");
+          } catch (error) { toast(`Prettier: ${error?.message || error}`); }
+          finally { nodes.format.disabled = false; nodes.format.textContent = "✦ Prettier"; }
+        }
+
+        async function copyText(value) {
+          if (navigator.clipboard?.writeText && isSecureContext) return navigator.clipboard.writeText(value);
+          const temp = document.createElement("textarea");
+          temp.value = value;
+          temp.style.position = "fixed";
+          temp.style.left = "-200vw";
+          document.body.appendChild(temp);
+          temp.select();
+          const ok = document.execCommand("copy");
+          temp.remove();
+          if (!ok) throw new Error("Cópia bloqueada pelo navegador");
+        }
+
+        async function copyLink() {
+          try {
+            const file = files.get(activeId);
+            const hash = new URLSearchParams({
+              code: encodeBase64UrlUtf8(getCode()),
+              lang: languageFor(file),
+              name: file.name,
+              base: file.url || explicitBase || baseUrl,
+            });
+            const url = `${location.href.split("#")[0]}#${hash}`;
+            if (url.length > 120000) throw new Error("Link grande demais. Salve o arquivo.");
+            await copyText(url);
+            toast("Link Base64 copiado.");
+          } catch (error) { toast(error.message); }
+        }
+
+        function saveFile() {
+          const file = files.get(activeId);
+          const code = getCode();
+          const blob = new Blob([code], { type: "text/plain;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          const extension = extFor[languageFor(file)] || "txt";
+          const name = file.name || `codigo.${extension}`;
+          link.download = /\.[a-z0-9]+$/i.test(name) ? name : `${name}.${extension}`;
+          link.click();
+          setTimeout(() => URL.revokeObjectURL(url), 3500);
+        }
+
+        async function openLocalFile(event) {
+          const selected = event.target.files?.[0];
+          if (!selected) return;
+          try {
+            const code = await selected.text();
+            resetProject(code, { name: selected.name, lang: langFromName(selected.name) });
+            toast(`Aberto: ${selected.name}`);
+          } catch (error) { toast(`Falha ao abrir: ${error.message}`); }
+          finally { nodes.file.value = ""; }
+        }
+
+        async function openHtmlUrl(inputUrl) {
+          const url = safeHttpUrl(inputUrl);
+          if (!url) return toast("Informe uma URL HTTP(S) válida.");
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), LIMITS.timeout);
+          try {
+            const response = await fetch(url, { credentials: "omit", mode: "cors", signal: controller.signal });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const text = await response.text();
+            if (text.length > LIMITS.bytes) throw new Error("Arquivo muito grande");
+            resetProject(text, { name: filenameFromUrl(url) || "index.html", lang: "html", base: url });
+            closeSidebar();
+          } catch (error) {
+            toast(`Não foi possível abrir a URL: ${error?.message || error}. Verifique o CORS.`);
+          } finally { clearTimeout(timeout); }
+        }
+
+        function setBaseUrl() {
+          const url = safeHttpUrl(nodes.base.value.trim());
+          if (!url) return toast("URL base inválida. Use https://site.com/pagina.html");
+          explicitBase = url;
+          // Recreate only the discovered assets; leave the current HTML intact.
+          const root = files.get(ROOT);
+          const wasRoot = activeId === ROOT;
+          const code = root?.content || "";
+          const name = root?.name || "index.html";
+          const lang = root?.lang || "auto";
+          resetProject(code, { name, lang, base: url });
+          if (!wasRoot) toast("URL base atualizada. Projeto reaberto no HTML principal.");
+          else toast("URL base atualizada. Descobrindo referências…");
+        }
+
+        function openSidebar() {
+          document.body.classList.add("sidebar-open");
+          $("#explorer-toggle").setAttribute("aria-pressed", "true");
+        }
+
+        function closeSidebar() {
+          document.body.classList.remove("sidebar-open");
+          $("#explorer-toggle").setAttribute("aria-pressed", "false");
+        }
+
+        function receiveHash() {
+          if (!location.hash || location.hash === lastReceivedHash) return;
+          try {
+            const payload = parseHash();
+            if (!payload) return;
+            lastReceivedHash = location.hash;
+            if (payload.code !== null) {
+              resetProject(payload.code, payload);
+              toast("Código recebido pelo Shortcuts.");
+            } else if (payload.url) {
+              void openHtmlUrl(payload.url);
+            }
+          } catch (error) { toast(`Base64 inválido: ${error.message}`); }
+        }
+
+        const inspectorEvents = {network:[],console:[]};
+        let inspectorSession = "";
+        function inspectorRecord(channel, entry) {
+          const list=inspectorEvents[channel];
+          if(!list)return;
+          list.push(entry);
+          if(list.length>600)list.shift();
+          const root=$("#inspector-"+channel);
+          const item=document.createElement("details");
+          const summary=document.createElement("summary");
+          summary.textContent=channel==="network"
+            ? `${entry.method||"GET"} ${entry.status??"…"} ${entry.url||""}`
+            : `${entry.level||"log"} · ${entry.time||""}`;
+          const pre=document.createElement("pre");
+          pre.textContent=JSON.stringify(entry,null,2);
+          item.append(summary,pre);
+          root.append(item);
+          while(root.children.length>600)root.firstChild.remove();
+          $("#"+channel+"-count").textContent=String(list.length);
+        }
+        window.addEventListener("message",event=>{
+          if(!event.origin.startsWith("http://")&&!event.origin.startsWith("https://")||event.data?.rodInspector!==1)return;
+          const payload=event.data.payload;
+          if(!payload)return;
+          if(payload.kind==="snapshot"){
+            inspectorSession=payload.session||"";
+            resetProject(payload.html||"",{lang:"html",name:"index.html",base:payload.url||""});
+            $("#inspector-diagnostics").textContent=JSON.stringify({
+              url:payload.url,title:payload.title,time:payload.time,
+              userAgent:payload.userAgent,htmlLength:(payload.html||"").length
+            },null,2);
+            for(const type of ["network","console"]){
+              inspectorEvents[type]=[];
+              $("#inspector-"+type).replaceChildren();
+              for(const record of payload[type]||[])inspectorRecord(type,record);
+            }
+          } else if(payload.kind==="event"&&payload.session===inspectorSession){
+            inspectorRecord(payload.channel,payload.data);
+          }
+        });
+        function initInspector(){
+          const output=$("#inspector-output");
+          const editorNodes=[nodes.tabs,nodes.refs,$("#search-panel"),$("#search-results"),$(".editor-area")];
+          const panels={network:$("#inspector-network"),console:$("#inspector-console"),diagnostics:$("#inspector-diagnostics")};
+          for(const button of document.querySelectorAll("[data-inspector-tab]")){
+            button.addEventListener("click",()=>{
+              const active=button.dataset.inspectorTab;
+              for(const b of document.querySelectorAll("[data-inspector-tab]"))b.setAttribute("aria-pressed",String(b===button));
+              const source=active==="source";
+              for(const node of editorNodes)node.style.display=source?"":"none";
+              output.hidden=source;
+              for(const [name,panel] of Object.entries(panels))panel.hidden=active!==name;
+              if(source)view?.requestMeasure();
+            });
+          }
+          for(const panel of Object.values(panels))panel.hidden=true;
+          if(window.opener){
+            window.opener.postMessage({rodInspector:1,kind:"ready"},"*");
+            let attempts=0;
+            const timer=setInterval(()=>{
+              if(inspectorSession||!window.opener||++attempts>15)return clearInterval(timer);
+              window.opener.postMessage({rodInspector:1,kind:"ready"},"*");
+            },800);
+          }
+        }
+        function initialize() {
+          let hash;
+          try { hash = parseHash(); }
+          catch (error) { toast(`Falha ao decodificar URL: ${error.message}`); }
+          const code = hash?.code ?? "<!-- Cole HTML aqui ou receba pelo Shortcuts -->\n<!DOCTYPE html>\n<html lang=\"pt-BR\">\n  <head>\n    <title>Meu projeto</title>\n  </head>\n  <body>\n    <h1>Olá!</h1>\n  </body>\n</html>\n";
+          resetProject(code, hash || { lang: "html", name: "index.html" });
+          if (hash?.url && hash.code === null) void openHtmlUrl(hash.url);
+          lastReceivedHash = location.hash;
+
+          try { mountCodeMirror(); }
+          catch (error) { mountFallback(error); }
+          $("#explorer-toggle").addEventListener("click", () => {
+            document.body.classList.contains("sidebar-open") ? closeSidebar() : openSidebar();
+          });
+          $("#close-explorer").addEventListener("click", closeSidebar);
+          $("#overlay").addEventListener("click", closeSidebar);
+          nodes.filter.addEventListener("input", updateTree);
+          $("#set-base").addEventListener("click", setBaseUrl);
+          nodes.base.addEventListener("keydown", (event) => { if (event.key === "Enter") setBaseUrl(); });
+          $("#load-url").addEventListener("click", () => openHtmlUrl(nodes.url.value));
+          nodes.url.addEventListener("keydown", (event) => { if (event.key === "Enter") openHtmlUrl(nodes.url.value); });
+          $("#refresh").addEventListener("click", reloadAssets);
+          $("#search").addEventListener("click", openSearch);
+          $("#search-input").addEventListener("input", scheduleSearch);
+          $("#search-input").addEventListener("keydown", event => {
+            if (event.key === "Enter") { event.preventDefault(); goToSearchResult(searchState.index + (event.shiftKey ? -1 : 1)); }
+            if (event.key === "Escape") { event.preventDefault(); closeSearch(); }
+          });
+          $("#search-next").addEventListener("click", () => goToSearchResult(searchState.index + 1));
+          $("#search-prev").addEventListener("click", () => goToSearchResult(searchState.index - 1));
+          for (const [id,key] of [["search-case","caseSensitive"],["search-regex","regex"]]) {
+            $("#"+id).addEventListener("click", () => {
+              searchState[key] = !searchState[key];
+              $("#"+id).setAttribute("aria-pressed",String(searchState[key]));
+              rebuildSearch();
+            });
+          }
+          $("#search-close").addEventListener("click", closeSearch);
+          nodes.format.addEventListener("click", formatCode);
+          nodes.wrap.addEventListener("click", toggleWrap);
+          $("#fold-all").addEventListener("click", () => view && cm.language.foldAll?.(view));
+          $("#unfold-all").addEventListener("click", () => view && cm.language.unfoldAll?.(view));
+          $("#copy").addEventListener("click", async () => {
+            try { await copyText(getCode()); toast("Código copiado."); }
+            catch (error) { toast(error.message); }
+          });
+          $("#link").addEventListener("click", copyLink);
+          $("#save").addEventListener("click", saveFile);
+          $("#open").addEventListener("click", () => nodes.file.click());
+          nodes.file.addEventListener("change", openLocalFile);
+          nodes.language.addEventListener("change", updateLanguage);
+          nodes.fallback.addEventListener("input", () => {
+            const file = files.get(activeId);
+            if (!file) return;
+            file.content = nodes.fallback.value;
+            file.dirty = true;
+            scheduleScan(file);
+            if (nodesSearchOpen()) scheduleSearch();
+            updateStatus();
+            updateTabs();
+          });
+          nodes.fallback.addEventListener("click", updateStatus);
+          nodes.fallback.addEventListener("keyup", updateStatus);
+          document.addEventListener("keydown", (event) => {
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+              event.preventDefault();
+              saveFile();
+            }
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "f") {
+              event.preventDefault();
+              openSearch();
+            }
+            if (event.key === "Escape") { closeSidebar(); if (nodesSearchOpen()) closeSearch(); }
+          });
+          window.addEventListener("hashchange", receiveHash);
+          initInspector();
+          updateUI();
+        }
+
+        if (document.readyState === "loading") {
+          document.addEventListener("DOMContentLoaded", initialize, { once: true });
+        } else initialize();
+      })();
+    </script>
+  </body>
+</html>
