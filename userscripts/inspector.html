@@ -112,6 +112,20 @@
       .refs button { flex: none; min-height: 26px; padding: 3px 8px; font: 11px var(--mono); color: #afd0f9; background: #152638; border-color: #31485f; }
       .refs button:active { color: white; background: #20446d; }
       .refs .no-refs { font-size: 11px; color: #768ca7; white-space: nowrap; }
+      #inspector-dom{min-height:100%;color:#a9b1d6}
+      .dom-tools{display:flex;gap:5px;align-items:center;padding:8px;position:sticky;top:0;background:#16161e;z-index:3;border-bottom:1px solid #414868}
+      .dom-tools input{min-width:0;flex:1;border:1px solid #414868;background:#24283b;color:#c0caf5;border-radius:7px;padding:8px;font-size:12px}
+      .dom-tools button{background:#292e42;color:#c0caf5;border:1px solid #414868;border-radius:7px;padding:8px}
+      #dom-count{font-size:10px;color:#7aa2f7;white-space:nowrap}
+      #dom-tree{padding:8px 0;overflow:auto;max-height:65vh;font:12px/1.6 var(--mono)}
+      .dom-row{display:flex;align-items:baseline;gap:3px;white-space:nowrap;min-height:24px;padding:2px 8px;border:0;background:none;color:inherit;font:inherit;cursor:pointer;text-align:left;max-width:none}
+      .dom-row[data-selected="true"]{background:#33467c}
+      .dom-row:focus-visible{outline:2px solid #7aa2f7}
+      .dom-caret{display:inline-block;width:16px;color:#7aa2f7;flex:none}
+      .dom-tag{color:#7aa2f7}.dom-attr{color:#bb9af7}.dom-string{color:#9ece6a}.dom-punc{color:#a9b1d6}.dom-comment{color:#565f89}
+      .dom-children{margin-left:15px;border-left:1px solid #292e42}
+      #dom-details{border-top:1px solid #414868;background:#1f2335;padding:10px;overflow-wrap:anywhere;white-space:pre-wrap;font:11px/1.5 var(--mono)}
+      #dom-details button{background:#364a7a;color:#fff;border:1px solid #565f89;border-radius:6px;padding:6px;margin-top:7px}
       .inspector-nav {display:flex;gap:4px;overflow:auto;padding:5px 8px;background:#16161e;border-bottom:1px solid #414868;flex:none}
       .inspector-nav button {flex:none;background:#24283b;border:1px solid #414868;color:#a9b1d6;border-radius:6px;font-size:11px;padding:6px 9px}
       .inspector-nav button[aria-pressed="true"] {background:#364a7a;color:#fff}
@@ -231,12 +245,13 @@
       <div id="overlay" aria-hidden="true"></div>
       <section class="workbench" aria-label="Mini editor VS Code">
         <nav class="inspector-nav" aria-label="Painéis de diagnóstico">
+          <button type="button" data-inspector-tab="dom" aria-pressed="false">◇ DOM</button>
           <button type="button" data-inspector-tab="source" aria-pressed="true">⌘ Source</button>
           <button type="button" data-inspector-tab="network" aria-pressed="false">⇄ Network <span id="network-count">0</span></button>
           <button type="button" data-inspector-tab="console" aria-pressed="false">▣ Console <span id="console-count">0</span></button>
           <button type="button" data-inspector-tab="diagnostics" aria-pressed="false">⚙ Diagnóstico</button>
         </nav>
-        <div id="inspector-output" hidden><div id="inspector-network"></div><div id="inspector-console"></div><pre id="inspector-diagnostics"></pre></div>
+        <div id="inspector-output" hidden><section id="inspector-dom" hidden><div class="dom-tools"><input id="dom-query" type="search" placeholder="Buscar CSS selector ou texto…" autocomplete="off"><button type="button" id="dom-refresh">↻</button><span id="dom-count"></span></div><div id="dom-tree" role="tree" aria-label="Árvore DOM"></div><div id="dom-details" aria-live="polite"></div></section><div id="inspector-network"></div><div id="inspector-console"></div><pre id="inspector-diagnostics"></pre></div>
         <div id="tabs" class="tabs" role="tablist" aria-label="Arquivos abertos"></div>
         <div id="refs" class="refs" aria-label="Referências clicáveis"></div>
         <div id="search-panel" class="search-panel" role="search" data-open="false" aria-label="Buscar no código">
@@ -1435,6 +1450,7 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
           if(payload.kind==="snapshot"){
             inspectorSession=payload.session||"";
             resetProject(payload.html||"",{lang:"html",name:"index.html",base:payload.url||""});
+            loadDomTree(payload.html||"");
             $("#inspector-diagnostics").textContent=JSON.stringify({
               url:payload.url,title:payload.title,time:payload.time,
               userAgent:payload.userAgent,htmlLength:(payload.html||"").length
@@ -1448,10 +1464,99 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
             inspectorRecord(payload.channel,payload.data);
           }
         });
+
+        // DOM snapshot tree: parse without executing scripts or loading resources.
+        let domDocument=null,domSelected=null,domRaw="";
+        const domNodeLimit=30000;
+        function domSpan(cls,value){const span=document.createElement("span");span.className=cls;span.textContent=value;return span;}
+        function domTreeNode(node,depth=0){
+          const wrap=document.createElement("div");wrap.setAttribute("role","treeitem");
+          const children=node.childNodes?Array.from(node.childNodes):[];
+          const hasChildren=children.some(n=>n.nodeType===1||n.nodeType===3&&n.textContent.trim()||n.nodeType===8);
+          const row=document.createElement("button");row.type="button";row.className="dom-row";
+          const caret=domSpan("dom-caret",hasChildren?"▸":" ");row.append(caret);
+          if(node.nodeType===1){
+            row.append(domSpan("dom-punc","<"),domSpan("dom-tag",node.localName));
+            for(const attr of Array.from(node.attributes).slice(0,16)){
+              row.append(domSpan("dom-attr"," "+attr.name),domSpan("dom-punc",'="'),domSpan("dom-string",attr.value.slice(0,180)),domSpan("dom-punc",'"'));
+            }
+            if(node.attributes.length>16)row.append(domSpan("dom-comment"," …"));
+            row.append(domSpan("dom-punc",">"));
+          }else if(node.nodeType===3)row.append(domSpan("dom-string",(node.textContent||"").trim().slice(0,200)));
+          else row.append(domSpan("dom-comment","<!-- "+(node.textContent||"").slice(0,160)+" -->"));
+          wrap.append(row);
+          let expanded=false,childWrap=null;
+          row.addEventListener("click",()=>{
+            if(domSelected)domSelected.dataset.selected="false";
+            domSelected=row;row.dataset.selected="true";
+            const details=$("#dom-details");details.replaceChildren();
+            const path=domCssPath(node);
+            const summary=document.createElement("div");summary.textContent=path||node.nodeName;details.append(summary);
+            if(node.nodeType===1){
+              const attributes=document.createElement("pre");attributes.textContent=Array.from(node.attributes).map(a=>a.name+'="'+a.value+'"').join("\n");details.append(attributes);
+              const sourceButton=document.createElement("button");sourceButton.textContent="Abrir no Source ↗";
+              sourceButton.onclick=()=>{
+                document.querySelector('[data-inspector-tab="source"]').click();
+                const marker="<"+node.localName,at=getCode().indexOf(marker);
+                if(at>=0&&view){view.dispatch({selection:{anchor:at,head:at+marker.length},scrollIntoView:true});view.focus();}
+              };
+              details.append(sourceButton);
+            }
+            if(!hasChildren)return;
+            expanded=!expanded;caret.textContent=expanded?"▾":"▸";
+            if(!expanded){if(childWrap)childWrap.hidden=true;return;}
+            if(!childWrap){
+              childWrap=document.createElement("div");childWrap.className="dom-children";childWrap.setAttribute("role","group");
+              let count=0;
+              for(const child of children){
+                if(child.nodeType!==1&&child.nodeType!==8&&!(child.nodeType===3&&child.textContent.trim()))continue;
+                if(++count>600){childWrap.append(domSpan("dom-comment","… mais nós omitidos neste nível"));break;}
+                childWrap.append(domTreeNode(child,depth+1));
+              }
+              wrap.append(childWrap);
+            }
+            childWrap.hidden=false;
+          });
+          return wrap;
+        }
+        function domCssPath(node){
+          if(node.nodeType!==1)return node.nodeName;
+          const parts=[];let current=node;
+          while(current&&current.nodeType===1&&parts.length<12){
+            let part=current.localName;
+            if(current.id){part+="#"+CSS.escape(current.id);parts.unshift(part);break;}
+            const siblings=current.parentElement?Array.from(current.parentElement.children).filter(n=>n.localName===current.localName):[];
+            if(siblings.length>1)part+=":nth-of-type("+(siblings.indexOf(current)+1)+")";
+            parts.unshift(part);current=current.parentElement;
+          }
+          return parts.join(" > ");
+        }
+        function loadDomTree(html){
+          domRaw=html;domDocument=new DOMParser().parseFromString(html,"text/html");
+          const root=$("#dom-tree");root.replaceChildren();
+          const node=domDocument.documentElement;
+          if(node){const tree=domTreeNode(node);root.append(tree);tree.querySelector(".dom-row")?.click();}
+          $("#dom-count").textContent=domDocument.querySelectorAll("*").length.toLocaleString("pt-BR")+" nós";
+        }
+        let domSearchTimer;
+        function searchDomTree(){
+          const query=$("#dom-query").value.trim(),root=$("#dom-tree");
+          if(!query){loadDomTree(domRaw);return;}
+          if(!domDocument)return;
+          let matches=[];
+          try{matches=Array.from(domDocument.querySelectorAll(query)).slice(0,300);}
+          catch{const needle=query.toLowerCase();matches=Array.from(domDocument.querySelectorAll("*")).filter(n=>n.localName.includes(needle)||n.id.toLowerCase().includes(needle)||n.className&&typeof n.className==="string"&&n.className.toLowerCase().includes(needle)).slice(0,300);}
+          root.replaceChildren();
+          for(const node of matches)root.append(domTreeNode(node));
+          $("#dom-count").textContent=matches.length+(matches.length===300?"+":"")+" resultados";
+        }
+        $("#dom-query").addEventListener("input",()=>{clearTimeout(domSearchTimer);domSearchTimer=setTimeout(searchDomTree,180);});
+        $("#dom-refresh").addEventListener("click",()=>loadDomTree(getCode()));
+
         function initInspector(){
           const output=$("#inspector-output");
           const editorNodes=[nodes.tabs,nodes.refs,$("#search-panel"),$("#search-results"),$(".editor-area")];
-          const panels={network:$("#inspector-network"),console:$("#inspector-console"),diagnostics:$("#inspector-diagnostics")};
+          const panels={dom:$("#inspector-dom"),network:$("#inspector-network"),console:$("#inspector-console"),diagnostics:$("#inspector-diagnostics")};
           for(const button of document.querySelectorAll("[data-inspector-tab]")){
             button.addEventListener("click",()=>{
               const active=button.dataset.inspectorTab;
@@ -1549,6 +1654,7 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
           });
           window.addEventListener("hashchange", receiveHash);
           initInspector();
+          loadDomTree(getCode());
           updateUI();
         }
 
