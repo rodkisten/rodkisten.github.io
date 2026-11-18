@@ -1,4 +1,4 @@
-/* Auto-generated from blocker/blocker.ts. at 11/18/2026, 8:32:05 AM Do not edit directly. */
+/* Auto-generated from blocker/blocker.ts. at 11/18/2026, 8:53:16 AM Do not edit directly. */
 var Blocker = (function() {
 
 // \0rolldown/runtime.js
@@ -3022,7 +3022,7 @@ var Blocker = (function() {
 			};
 		}
 		function hashEasyListLine(value) {
-			let hash = 2166136261;
+			let hash = 0x811c9dc5;
 			for (let index = 0; index < value.length; index += 1) {
 				hash ^= value.charCodeAt(index);
 				hash = Math.imul(hash, 16777619);
