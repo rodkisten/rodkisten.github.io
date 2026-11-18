@@ -1106,6 +1106,21 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
           view = new cm.view.EditorView({ parent: nodes.editor, state: doc });
           console.info("[Rod Inspector] CM6 language",languageFor(root),"loaded");
           editorReady = true;
+          // Visible diagnostics distinguish a missing parser from missing CSS or stale deployment.
+          const diagnostic=document.createElement("span");
+          diagnostic.id="rod-highlight-health";
+          diagnostic.style.cssText="color:#e0af68;font-size:11px;margin-left:8px;white-space:nowrap";
+          nodes.status.after(diagnostic);
+          function inspectHighlight(){
+            if(!view)return;
+            const syntax=view.dom.querySelectorAll(".ͼb,.ͼc,.ͼd,.ͼe,.ͼf,.ͼg,.ͼh,.ͼi,.ͼj,.ͼk,.ͼl,.ͼm,.ͼn,.ͼo,.ͼp,.ͼq,.ͼr,.ͼs,.ͼt,.ͼu,.ͼv,.ͼw,.ͼx,.ͼy,.ͼz").length;
+            const fallback=view.dom.querySelectorAll(".rod-syntax-tag,.rod-syntax-attr,.rod-syntax-string").length;
+            const search=view.dom.querySelectorAll(".cm-search-match,.cm-search-current").length;
+            diagnostic.textContent="HL "+syntax+"/"+fallback+" · busca "+search+" · v2";
+            diagnostic.title="Tokens Lezer / tokens HTML visíveis / resultados de busca";
+          }
+          setInterval(inspectHighlight,1400);
+          inspectHighlight();
           nodes.fallback.style.display = "none";
           nodes.editor.style.display = "block";
           updateUI();
