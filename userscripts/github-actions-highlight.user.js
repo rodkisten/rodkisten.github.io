@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         💜 Rod GitHub Actions Run Highlighter
 // @namespace    https://rodkisten.github.io/userscripts
-// @version      1.0.0
+// @version      1.1.0
 // @description  Syntax highlighting for GitHub Actions run blocks, expressions and shell scripts on GitHub file views.
 // @match        https://github.com/*
 // @run-at       document-idle
@@ -16,7 +16,7 @@
   if (window[GLOBAL]) return;
   window[GLOBAL] = true;
 
-  const STYLE = `
+  const STYLE = `\n    .rod-actions-code span[class*=hljs-]{color:inherit}\n    .rod-actions-code .hljs-keyword{color:#ff7b72!important}\n    .rod-actions-code .hljs-built_in{color:#ffa657!important}\n    .rod-actions-code .hljs-variable{color:#79c0ff!important}\n    .rod-actions-code .hljs-string{color:#a5d6ff!important}\n    .rod-actions-code .hljs-comment{color:#8b949e!important}\n    .rod-actions-code .hljs-operator{color:#ff7b72!important}\n    .rod-actions-code .hljs-meta{color:#d2a8ff!important}\n    .rod-actions-code .hljs-number{color:#79c0ff!important}\n    .rod-actions-code .hljs-title{color:#d2a8ff!important}\n    .rod-actions-code .hljs-params{color:#e6edf3!important}\n    .rod-actions-code .hljs-subst{color:#79c0ff!important}\n    .rod-actions-code .rod-actions-expression{color:#d2a8ff!important}\n    
     .rod-actions-code .hljs-keyword,.rod-actions-code .hljs-selector-tag,.rod-actions-code .hljs-built_in{color:var(--color-prettylights-syntax-keyword,#cf222e)!important}
     .rod-actions-code .hljs-string,.rod-actions-code .hljs-attr,.rod-actions-code .hljs-template-variable{color:var(--color-prettylights-syntax-string,#0a3069)!important}
     .rod-actions-code .hljs-variable,.rod-actions-code .hljs-title,.rod-actions-code .hljs-function{color:var(--color-prettylights-syntax-entity,#8250df)!important}
@@ -30,7 +30,7 @@
   const SELECTORS = [
     '.react-code-line-contents',
     '[data-testid="code-line"] .react-code-text',
-    '.blob-code-inner',
+    '.blob-code-inner',\n    '[data-testid="code-view"] [data-line-number] .react-code-text',
   ];
   const RUN = /^(\s*)(?:-\s+)?run\s*:\s*([|>])([+-]?)(?:\s*#.*)?$/;
   const SHELL = /^\s*shell\s*:\s*([^\s#]+)/;
@@ -112,7 +112,7 @@
   const isWorkflow = () => /\/\.github\/workflows\/[^/?#]+\.ya?ml(?:$|[?#/])/.test(location.pathname) ||
     (/\.ya?ml$/.test(location.pathname) && document.body.textContent?.includes('run:'));
   let busy = false;
-  let lastUrl = '';
+  let lastUrl = '';\n  const debug = (...args) => console.debug('[Rod Actions Highlight]',...args);
   function update() {
     if (busy || !isWorkflow()) return;
     busy = true;
@@ -142,7 +142,7 @@
         });
       }
       nodes.forEach(node => node.dataset.rodActionsProcessed = '1');
-      lastUrl = signature;
+      lastUrl = signature;\n      debug('processed', {lines:nodes.length, blocks:parse(originalLines).length, hljs:!!window.hljs, path:location.pathname});
     } finally { busy = false; }
   }
   let queued = false;
