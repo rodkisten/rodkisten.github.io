@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rod Inspector · DOM + Network + Console
 // @namespace    https://rod.migos.club/
-// @version      0.6.0
+// @version      0.7.0
 // @description  Dock de diagnóstico para userscripts no Safari
 // @match        http://*/*
 // @match        https://*/*
@@ -29,20 +29,35 @@ const push=(channel,data)=>{const list=channel==="network"?network:logs;list.pus
 function openInspector(){popup=window.open(TARGET,"rod-inspector");if(!popup){alert("Rod Inspector: permita pop-ups no Safari.");return;}setTimeout(transmit,750);}
 function mount(){
   if(document.getElementById("rod-inspector-dock"))return;
-  const host=document.createElement("div");
-  host.id="rod-inspector-dock";
-  host.style.cssText="position:fixed!important;right:0!important;bottom:25%!important;z-index:2147483647!important;display:block!important;visibility:visible!important;opacity:1!important";
-  const shadow=host.attachShadow({mode:"open"});
-  shadow.innerHTML='<style>:host{all:initial!important}button{appearance:none;display:block;font:700 13px -apple-system,BlinkMacSystemFont,sans-serif;border:1px solid #7aa2f7;border-right:0;border-radius:14px 0 0 14px;background:#24283b;color:#c0caf5;padding:14px 11px;box-shadow:0 4px 20px #0008;touch-action:manipulation;cursor:pointer;min-width:48px;min-height:48px}</style><button type="button" aria-label="Abrir Rod Inspector">◈<br>DEV</button>';
-  shadow.querySelector("button").addEventListener("click",openInspector);
-  (document.body||document.documentElement).append(host);
+  const root=document.body||document.documentElement;
+  if(!root)return;
+  const button=document.createElement("button");
+  button.id="rod-inspector-dock";
+  button.type="button";
+  button.textContent="◈ DEV";
+  button.setAttribute("aria-label","Abrir Rod Inspector");
+  button.style.setProperty("all","initial","important");
+  const styles={
+    position:"fixed",right:"0px",bottom:"25%",top:"auto",left:"auto",
+    display:"block",visibility:"visible",opacity:"1",zIndex:"2147483647",
+    width:"64px",height:"54px",padding:"0",margin:"0",border:"2px solid #7aa2f7",
+    borderRight:"0",borderRadius:"14px 0 0 14px",background:"#24283b",
+    color:"#c0caf5",font:"bold 13px -apple-system, sans-serif",
+    textAlign:"center",cursor:"pointer",pointerEvents:"auto",touchAction:"manipulation",
+    boxShadow:"0 4px 20px #0008",transform:"none"
+  };
+  for(const [key,value] of Object.entries(styles))button.style.setProperty(key.replace(/[A-Z]/g,c=>"-"+c.toLowerCase()),value,"important");
+  button.addEventListener("click",openInspector);
+  root.appendChild(button);
 }
-function ensureDock(){if(!document.getElementById("rod-inspector-dock"))mount();}
+function ensureDock(){
+  try{mount();}catch(error){console.error("[Rod Inspector] Dock mount failed",error);}
+}
+ensureDock();
 if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",ensureDock,{once:true});
-else ensureDock();
 window.addEventListener("pageshow",ensureDock);
-console.info("[Rod Inspector] v0.6.0 initialized",location.href);
-setInterval(ensureDock,5000);
+setInterval(ensureDock,2500);
+console.info("[Rod Inspector] v0.7.0 bootstrap",location.href);
 
 try{
 const originalFetch=window.fetch;
