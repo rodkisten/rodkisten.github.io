@@ -970,13 +970,13 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
           }
           // Immediate, dependency-free fallback from the user's working miniHljs.
           const pattern=lang==="html"
-            ? /<!--[\\s\\S]*?-->|<\\/?[\\w:-]+|[\\w:-]+(?=\\s*=)|"(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'/g
-            : /\\/\\/.*$|\\/\\*.*?\\*\\/|"(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|\\b(?:async|await|class|const|else|export|false|for|from|function|if|import|let|new|null|return|this|throw|true|try|typeof|undefined|var|while)\\b|\\b\\d+(?:\\.\\d+)?\\b/g;
+            ? /<!--[\s\S]*?-->|<\/?[\w:-]+|[\w:-]+(?=\s*=)|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g
+            : /\/\/.*$|\/\*.*?\*\/|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\b(?:async|await|class|const|else|export|false|for|from|function|if|import|let|new|null|return|this|throw|true|try|typeof|undefined|var|while)\b|\b\d+(?:\.\d+)?\b/g;
           for(const match of source.matchAll(pattern)){
             const token=match[0];
             const cls=token.startsWith("<!--")||token.startsWith("//")||token.startsWith("/*")?"comment":
               token.startsWith('"')||token.startsWith("'")?"string":
-              token.startsWith("<")?"tag":/^\\d/.test(token)?"number":
+              token.startsWith("<")?"tag":/^\d/.test(token)?"number":
               lang==="html"?"attr":"keyword";
             add(match.index,match.index+token.length,"rod-hl-"+cls);
           }
