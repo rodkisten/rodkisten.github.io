@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         GitHub Actions Run Block Syntax Highlight (Auto-Detect)
+// @name         GitHub Actions YAML Extended Grammar (subLanguage)
 // @namespace    http://tampermonkey.net
-// @version      3.1
-// @description  Syntax highlight com detecção automática de linguagem em blocos run: no GitHub Web e PRs
+// @version      4.0
+// @description  Estende a gramática YAML do Highlight.js com subLanguage para blocos run: no GitHub
 // @match        https://github.com*
 // @require      https://jsdelivr.net
 // @resource     HLJS_DARK https://jsdelivr.net
@@ -14,156 +14,114 @@
 (function() {
     'use strict';
 
-    // Lista de linguagens permitidas na adivinhação automática (já inclusas no bundle comum do hljs)
-    const ALLOWED_LANGS = ['bash', 'python', 'powershell', 'javascript', 'ruby', 'go', 'sql'];
+    // 1. Aplica o tema do Highlight.js alinhado ao tema do GitHub
+    const isDark = document.documentElement.getAttribute('data-color-mode') === 'dark' ||
+                   (document.documentElement.getAttribute('data-color-mode') === 'auto' &&
+                    window.matchMedia('(prefers-color-scheme: dark)').matches);
 
-    function applyTheme() {
-        const isDark = document.documentElement.getAttribute('data-color-mode') === 'dark' ||
-                       (document.documentElement.getAttribute('data-color-mode') === 'auto' &&
-                        window.matchMedia('(prefers-color-scheme: dark)').matches);
+    GM_addStyle(GM_getResourceText(isDark ? 'HLJS_DARK' : 'HLJS_LIGHT'));
+    GM_addStyle('.hljs { background: transparent !important; padding: 0 !important; }');
 
-        const css = GM_getResourceText(isDark ? 'HLJS_DARK' : 'HLJS_LIGHT');
-        GM_addStyle(css);
-        GM_addStyle('.hljs { background: transparent !important; padding: 0 !important; display: inline !important; }');
+    // 2. Estende a definição nativa do YAML no Highlight.js
+    function extendYamlGrammar() {
+        const yamlLang = hljs.getLanguage('yaml');
+        if (!yamlLang || yamlLang._extendedForActions) return;
+
+        // Regra de injeção de sub-linguagem para blocos "run: |" ou "run: >"
+        const runBlockRule = {
+            begin: /^(\s*)(?:-\s*)?run:\s*[|>][+-]?\s*$/,
+            // Termina quando encontra uma linha não-vazia com indentação menor ou igual à do "run:"
+            end: /^(?=\s*\S)/,
+            excludeBegin: true,
+            excludeEnd: true,
+            // O Highlight.js tenta adivinhar automaticamente entre as linguagens listadas abaixo:
+            subLanguage: ['bash', 'python', 'powershell', 'javascript', 'ruby', 'go', 'sql']
+        };
+
+        // Adiciona a regra no topo das prioridades do YAML
+        yamlLang.contains.unshift(runBlockRule);
+        yamlLang._extendedForActions = true;
     }
 
-    applyTheme();
+    extendYamlGrammar();
 
-    function mapExplicitLang(langStr) {
-        const val = langStr.toLowerCase().trim();
-        if (val.includes('python') || val === 'py') return 'python';
-        if (val.includes('pwsh') || val.includes('powershell') || val === 'ps1') return 'powershell';
-        if (val.includes('node') || val.includes('js') || val === 'javascript') return 'javascript';
-        if (val.includes('ruby') || val === 'rb') return 'ruby';
-        if (val.includes('go')) return 'go';
-        if (val.includes('sql')) return 'sql';
-        if (val.includes('bash') || val === 'sh' || val === 'zsh') return 'bash';
-        return null;
-    }
+    // 3. Processa o arquivo YAML no DOM do GitHub
+    function highlightYamlPage() {
+        if (!/\.ya?ml$/.test(window.location.pathname)) return;
 
-    function highlightBlock(blockItems, explicitLang) {
-        if (!blockItems.length) return;
+        const lineElements = Array.from(document.querySelectorAll('.react-code-line-contents'));
+        if (!lineElements.length || lineElements[0].dataset.yamlExtended) return;
 
-        const fullCode = blockItems.map(item => item.code).join('\n');
-        let targetLang = explicitLang;
+        // Extrai o texto completo do arquivo para que o parser de gramática entenda o contexto
+        const fullYamlText = lineElements.map(el => el.textContent).join('\n');
 
-        // 1. Verifica comentário explícito ou shebang na primeira linha não-vazia
-        const firstNonEmpty = blockItems.find(item => item.code.trim().length > 0);
-        if (firstNonEmpty) {
-            const firstLine = firstNonEmpty.code.trim();
-            const commentMatch = firstLine.match(/^#\s*lang\s*=\s*([a-zA-Z0-9_-]+)/i);
-            const shebangMatch = firstLine.match(/^#!.*\/([a-zA-Z0-9_-]+)$/);
+        // Destaca o arquivo inteiro usando o YAML estendido
+        const highlightedHtml = hljs.highlight(fullYamlText, { language: 'yaml' }).value;
 
-            if (commentMatch) {
-                targetLang = mapExplicitLang(commentMatch[1]);
-            } else if (shebangMatch) {
-                targetLang = mapExplicitLang(shebangMatch[1]);
-            }
-        }
+        // Divide o HTML resultante de volta em linhas individuais (mantendo tags abertas entre linhas)
+        const htmlLines = splitHtmlByLines(highlightedHtml);
 
-        // 2. Adivinha a linguagem automaticamente se não houver definição explícita
-        if (!targetLang) {
-            const autoResult = hljs.highlightAuto(fullCode, ALLOWED_LANGS);
-            targetLang = (autoResult.relevance > 2 && autoResult.language) ? autoResult.language : 'bash';
-        }
-
-        // 3. Aplica o highlight linha a linha
-        blockItems.forEach(item => {
-            if (!item.code) return;
-            try {
-                const highlighted = hljs.highlight(item.code, { language: targetLang }).value;
-                item.element.innerHTML = item.diffPrefix + item.leadingSpaces + highlighted;
-                item.element.dataset.hljsDone = 'true';
-            } catch (e) {
-                // Mantém o texto original caso ocorra erro
-            }
-        });
-    }
-
-    function processLines(nodeList, isDiff = false) {
-        let inRunBlock = false;
-        let runIndent = 0;
-        let stepShell = null;
-        let currentBlock = [];
-
-        nodeList.forEach(line => {
-            if (line.dataset.hljsDone) return;
-
-            let rawText = line.textContent;
-            let diffPrefix = '';
-
-            if (isDiff && /^[+-]/.test(rawText)) {
-                diffPrefix = rawText[0];
-                rawText = rawText.slice(1);
-            }
-
-            const trimmed = rawText.trim();
-            const currentIndent = trimmed ? rawText.search(/\S/) : Infinity;
-
-            // Encerra o bloco se a indentação voltar ao nível do "run:" ou menor
-            if (inRunBlock && trimmed && currentIndent <= runIndent) {
-                highlightBlock(currentBlock, stepShell);
-                currentBlock = [];
-                inRunBlock = false;
-                stepShell = null;
-            }
-
-            // Reseta o shell ao iniciar um novo step
-            if (!inRunBlock && /^\s*-\s+/.test(rawText)) {
-                stepShell = null;
-            }
-
-            // Captura a chave "shell:" do step atual
-            const shellMatch = rawText.match(/^\s*(?:-\s*)?shell:\s*([a-zA-Z0-9_-]+)/);
-            if (shellMatch) {
-                stepShell = mapExplicitLang(shellMatch[1]);
-            }
-
-            // Detecta início de "run: |" ou "run: >"
-            if (!inRunBlock && /^\s*(?:-\s*)?run:\s*[|>]/.test(rawText)) {
-                inRunBlock = true;
-                runIndent = currentIndent;
-                return;
-            }
-
-            // Coleta as linhas internas do bloco
-            if (inRunBlock) {
-                if (!trimmed) {
-                    currentBlock.push({ element: line, diffPrefix, leadingSpaces: '', code: '' });
-                } else {
-                    const leadingSpaces = rawText.slice(0, currentIndent);
-                    const code = rawText.slice(currentIndent);
-                    currentBlock.push({ element: line, diffPrefix, leadingSpaces, code });
+        if (htmlLines.length === lineElements.length) {
+            lineElements.forEach((el, idx) => {
+                // Só substitui as linhas que estão dentro de um bloco run (preserva o tema nativo do resto do YAML)
+                if (el.dataset.isRunContent === 'true') {
+                    el.innerHTML = htmlLines[idx];
                 }
-            }
-        });
-
-        if (inRunBlock && currentBlock.length) {
-            highlightBlock(currentBlock, stepShell);
-        }
-    }
-
-    function scanPage() {
-        const url = window.location.pathname;
-
-        if (/\.ya?ml$/.test(url)) {
-            const blobLines = document.querySelectorAll('.react-code-line-contents');
-            if (blobLines.length) processLines(blobLines, false);
-        }
-
-        if (url.includes('/pull/') || url.includes('/commit/')) {
-            const fileContainers = document.querySelectorAll('[data-tagsearch-path$=".yml"], [data-tagsearch-path$=".yaml"], .file[data-file-type=".yml"], .file[data-file-type=".yaml"]');
-            fileContainers.forEach(container => {
-                const diffLines = container.querySelectorAll('.blob-code-inner');
-                if (diffLines.length) processLines(diffLines, true);
+                el.dataset.yamlExtended = 'true';
             });
         }
     }
 
-    const observer = new MutationObserver(() => {
-        scanPage();
-    });
+    // Função auxiliar para fechar e reabrir spans HTML quando um token cruza múltiplas linhas
+    function splitHtmlByLines(html) {
+        const lines = html.split('\n');
+        let openTags = [];
+        return lines.map(line => {
+            const prefix = openTags.join('');
+            const tagRegex = /<\/?span[^>]*>/g;
+            let match;
+            while ((match = tagRegex.exec(line)) !== null) {
+                if (match[0].startsWith('</')) {
+                    openTags.pop();
+                } else {
+                    openTags.push(match[0]);
+                }
+            }
+            const suffix = openTags.map(() => '</span>').join('');
+            return prefix + line + suffix;
+        });
+    }
 
+    // Marca quais linhas pertencem a blocos run: antes de substituir o HTML
+    function markAndHighlight() {
+        const lineElements = Array.from(document.querySelectorAll('.react-code-line-contents'));
+        if (!lineElements.length || lineElements[0].dataset.yamlExtended) return;
+
+        let inRun = false;
+        let runIndent = 0;
+
+        lineElements.forEach(el => {
+            const text = el.textContent;
+            const trimmed = text.trim();
+            if (!trimmed) return;
+
+            const indent = text.search(/\S/);
+            if (/^\s*(?:-\s*)?run:\s*[|>]/.test(text)) {
+                inRun = true;
+                runIndent = indent;
+            } else if (inRun) {
+                if (indent <= runIndent) {
+                    inRun = false;
+                } else {
+                    el.dataset.isRunContent = 'true';
+                }
+            }
+        });
+
+        highlightYamlPage();
+    }
+
+    const observer = new MutationObserver(markAndHighlight);
     observer.observe(document.body, { childList: true, subtree: true });
-    setTimeout(scanPage, 600);
+    setTimeout(markAndHighlight, 600);
 })();
