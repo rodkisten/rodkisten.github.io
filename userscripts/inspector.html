@@ -873,7 +873,7 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
         function createHighlightStyle() {
           const language = cm.language;
           const t = getModule("@lezer/highlight").tags || cm.language.tags;
-          if (!language.HighlightStyle || !language.syntaxHighlighting || !t) return language.syntaxHighlighting?.(language.defaultHighlightStyle, { fallback: true });
+          if (!language.HighlightStyle || !language.syntaxHighlighting || !t) return language.syntaxHighlighting?.(language.defaultHighlightStyle);
           const rule = language.HighlightStyle.define([
             { tag: [t.keyword, t.modifier], color: "#bb9af7" },
             { tag: [t.variableName, t.name], color: "#e5edf8" },
@@ -882,11 +882,13 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
             { tag: [t.number, t.bool, t.null, t.atom], color: "#83bcff" },
             { tag: [t.comment, t.lineComment, t.blockComment], color: "#869bad", fontStyle: "italic" },
             { tag: [t.tagName, t.typeName, t.className], color: "#f7768e" },
+            { tag: [t.angleBracket, t.bracket, t.separator], color: "#89ddff" },
+            { tag: [t.documentMeta, t.processingInstruction], color: "#bb9af7" },
             { tag: [t.attributeName, t.propertyName], color: "#73daca" },
             { tag: [t.operator, t.punctuation], color: "#cdd8e7" },
             { tag: t.invalid, color: "#ff8e96", textDecoration: "underline" },
           ]);
-          return language.syntaxHighlighting(rule, { fallback: true });
+          return language.syntaxHighlighting(rule);
         }
 
         function languageExtension(lang) {
@@ -1052,6 +1054,7 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
           const root = files.get(activeId);
           const doc = cm.state.EditorState.create({ doc: root.content, extensions: createEditorExtensions() });
           view = new cm.view.EditorView({ parent: nodes.editor, state: doc });
+          console.info("[Rod Inspector] CM6 language",languageFor(root),"extensions",doc.facet(cm.state.EditorState.languageData) ? "loaded" : "unknown");
           editorReady = true;
           nodes.fallback.style.display = "none";
           nodes.editor.style.display = "block";
