@@ -179,6 +179,12 @@
       .search-action[aria-pressed="true"] { background:#394b78; color:#fff; border-color:#7aa2f7; }
       .search-action:disabled { opacity:.4; }
       .cm-search-match { background:#e0af6844; border-bottom:1px solid #e0af68; }
+      .cm-editor .rod-syntax-tag { color:#f7768e !important; }
+      .cm-editor .rod-syntax-attr { color:#73daca !important; }
+      .cm-editor .rod-syntax-string { color:#9ece6a !important; }
+      .cm-editor .rod-syntax-comment { color:#869bad !important; font-style:italic; }
+      .cm-editor .cm-search-match { background:#e0af6877 !important; box-shadow:inset 0 -2px #e0af68; }
+      .cm-editor .cm-search-current { background:#ff9e64aa !important; outline:2px solid #ff9e64 !important; }
       .cm-search-current { background:#ff9e6480 !important; outline:1px solid #ff9e64; border-radius:2px; }
       .cm-editor .cm-line { padding-right:8px; }
       .cm-editor:not(.cm-focused) .cm-selectionBackground { background:#414868 !important; }
@@ -903,6 +909,50 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
           }
         }
 
+        // Visible-range token decorations keep syntax colors available even when
+        // a very large HTML snapshot exceeds Lezer's incremental parse budget.
+        function createVisibleSyntaxPlugin() {
+          const { ViewPlugin, Decoration } = cm.view;
+          return ViewPlugin.fromClass(class {
+            constructor(view) { this.decorations=this.build(view); }
+            update(update) {
+              if(update.docChanged||update.viewportChanged||update.startState!==update.state)
+                this.decorations=this.build(update.view);
+            }
+            build(view) {
+              if(languageFor(files.get(activeId))!=="html")return Decoration.none;
+              const marks=[];
+              for(const range of view.visibleRanges) {
+                const text=view.state.doc.sliceString(range.from,range.to);
+                const re=/<!--[\s\S]*?-->|<![^>]*>|<\/?[A-Za-z][^>]*>/g;
+                let match;
+                while((match=re.exec(text))) {
+                  const token=match[0],base=range.from+match.index;
+                  if(token.startsWith("<!--")) {
+                    marks.push(Decoration.mark({class:"rod-syntax-comment"}).range(base,base+token.length));
+                    continue;
+                  }
+                  const tag=/^<\/?([\w:-]+)/.exec(token);
+                  if(tag) {
+                    const start=base+token.indexOf(tag[1]);
+                    marks.push(Decoration.mark({class:"rod-syntax-tag"}).range(start,start+tag[1].length));
+                  }
+                  const attr=/([\w:-]+)(\s*=\s*)(?:"[^"]*"|'[^']*'|[^\s>]+)/g;
+                  let a;
+                  while((a=attr.exec(token))) {
+                    const nameStart=base+a.index;
+                    marks.push(Decoration.mark({class:"rod-syntax-attr"}).range(nameStart,nameStart+a[1].length));
+                    const valueStart=nameStart+a[1].length+a[2].length;
+                    const valueEnd=base+a.index+a[0].length;
+                    if(valueEnd>valueStart)marks.push(Decoration.mark({class:"rod-syntax-string"}).range(valueStart,valueEnd));
+                  }
+                }
+              }
+              return marks.length?Decoration.set(marks,true):Decoration.none;
+            }
+          },{decorations:plugin=>plugin.decorations});
+        }
+
         function createResourcePlugin() {
           const { ViewPlugin, Decoration, EditorView } = cm.view;
           if (!ViewPlugin || !Decoration) return [];
@@ -984,7 +1034,7 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
             a.closeBrackets?.(), a.autocompletion?.(), q.highlightSelectionMatches?.(),
             compartments.language.of(languageExtension(language)),
             compartments.wrap.of(wordWrap ? v.EditorView.lineWrapping : []),
-            createResourcePlugin(), createSearchDecorations(),
+            createResourcePlugin(), createVisibleSyntaxPlugin(), createSearchDecorations(),
             v.EditorView.domEventHandlers({
               click(event) {
                 const el = event.target instanceof Element ? event.target.closest(".cm-resource-link") : null;
