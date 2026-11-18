@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rod Inspector · DOM + Network + Console
 // @namespace    https://rod.migos.club/
-// @version      0.7.0
+// @version      0.8.0
 // @description  Dock de diagnóstico para userscripts no Safari
 // @match        http://*/*
 // @match        https://*/*
@@ -11,7 +11,7 @@
 // ==/UserScript==
 (()=>{"use strict";
 if(location.hostname==="rod.migos.club"&&location.pathname.startsWith("/userscripts/inspector"))return;
-const TARGET="https://rod.migos.club/userscripts/inspector.html",session=(globalThis.crypto?.randomUUID?.()||"rod-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2)),network=[],logs=[];let popup=null,pickerActive=false,pickerOverlay=null,pickerTarget=null;
+const TARGET="https://rod.migos.club/userscripts/inspector.html?v=highlight-diagnostics-2",session=(globalThis.crypto?.randomUUID?.()||"rod-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2)),network=[],logs=[];let popup=null,pickerActive=false,pickerOverlay=null,pickerTarget=null;
 const clean=(v)=>{try{return JSON.parse(JSON.stringify(v,(k,x)=>/authorization|cookie|token|secret|password|session|api.?key/i.test(k)?"[REDACTED]":x));}catch{return String(v).slice(0,3000);}};
 
 const nodePath=(node)=>{const indices=[];let n=node;while(n&&n!==document.documentElement&&indices.length<128){const p=n.parentNode;if(!p)break;indices.unshift(Array.prototype.indexOf.call(p.childNodes,n));n=p;}return n===document.documentElement?indices:null;};
