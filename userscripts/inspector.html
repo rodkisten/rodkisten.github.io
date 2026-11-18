@@ -1026,35 +1026,46 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
             return null;
           }
         }
+        // Recompute decorations after CM6 establishes its viewport.
+        // StateField avoids ViewPlugin's empty initial visibleRanges on mobile Safari.
         function createRodHighlightPlugin() {
-          const {ViewPlugin,Decoration}=cm.view;
-          return ViewPlugin.fromClass(class {
-            constructor(editor){this.decorations=this.build(editor);}
-            update(update){
-              if(update.docChanged||update.viewportChanged||
-                update.transactions.some(tx=>tx.effects.some(e=>e.is(refreshDecoration))))
-                this.decorations=this.build(update.view);
-            }
-            build(editor){
-              const lang=languageFor(files.get(activeId));
-              const marks=[];
-              for(const range of editor.visibleRanges){
-                let line=editor.state.doc.lineAt(range.from);
-                while(line.from<=range.to){
-                  const shiki=rodShikiTokens(line.text.slice(0,12000),lang);
-                  const tokens=shiki||rodTokenRanges(line.text,lang);
-                  for(const token of tokens){
-                    const from=line.from+token.from,to=line.from+token.to;
-                    if(from<range.to&&to>range.from)
-                      marks.push(Decoration.mark(shiki?{attributes:{style:"color:"+token.color+" !important"+(token.fontStyle&1?";font-style:italic":"")}}:{class:token.cls}).range(from,to));
-                  }
-                  if(line.to>=editor.state.doc.length)break;
-                  line=editor.state.doc.line(line.number+1);
+          const {StateField,StateEffect}=cm.state;
+          const {Decoration,EditorView}=cm.view;
+          const rebuild=refreshDecoration;
+          function build(state) {
+            const lang=languageFor(files.get(activeId));
+            const marks=[];
+            const doc=state.doc;
+            const viewport=view?.viewport || {from:0,to:Math.min(doc.length,12000)};
+            let line=doc.lineAt(Math.min(viewport.from,doc.length));
+            let processed=0;
+            while(line.from<=viewport.to && processed<160) {
+              const shiki=rodShikiTokens(line.text.slice(0,12000),lang);
+              const tokens=shiki||rodTokenRanges(line.text,lang);
+              for(const token of tokens) {
+                const from=line.from+token.from,to=line.from+token.to;
+                if(to>from && to<=doc.length) {
+                  const spec=shiki
+                    ? {attributes:{style:"color:"+token.color+" !important"+(token.fontStyle&1?";font-style:italic":"")}}
+                    : {class:token.cls};
+                  marks.push(Decoration.mark(spec).range(from,to));
                 }
               }
-              return marks.length?Decoration.set(marks.sort((a,b)=>a.from-b.from||a.to-b.to),true):Decoration.none;
+              processed++;
+              if(line.to>=doc.length)break;
+              line=doc.line(line.number+1);
             }
-          },{decorations:plugin=>plugin.decorations});
+            marks.sort((x,y)=>x.from-y.from||x.to-y.to);
+            return Decoration.set(marks,true);
+          }
+          return StateField.define({
+            create(state){return build(state);},
+            update(value,transaction){
+              if(transaction.docChanged || transaction.effects.some(e=>e.is(rebuild)))return build(transaction.state);
+              return value;
+            },
+            provide:field=>EditorView.decorations.from(field),
+          });
         }
 
         function createResourcePlugin() {
@@ -1208,6 +1219,7 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
           const root = files.get(activeId);
           const doc = cm.state.EditorState.create({ doc: root.content, extensions: createEditorExtensions() });
           view = new cm.view.EditorView({ parent: nodes.editor, state: doc });
+          requestAnimationFrame(()=>{if(view)view.dispatch({effects:refreshDecoration.of(3)});});
           console.info("[Rod Inspector] CM6 language",languageFor(root),"loaded");
           editorReady = true;
           loadRodHighlighter();
@@ -1220,9 +1232,9 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
           function inspectHighlight(){
             if(!view)return;
             const syntax=view.dom.querySelectorAll("[class*=ͼ]").length;
-            const fallback=view.dom.querySelectorAll("[class*=rod-hl-]").length;
+            const fallback=view.dom.querySelectorAll("[class*=rod-hl-],[style*=color]").length;
             const search=view.dom.querySelectorAll(".cm-search-match,.cm-search-current").length;
-            diagnostic.textContent="HL "+syntax+"/"+fallback+" · busca "+search+" · Shiki "+rodShikiStatus+" · HLJS "+(rodHljs?"on":"mini");
+            diagnostic.textContent="HL "+syntax+"/"+fallback+" · busca "+search+" · field · Shiki "+rodShikiStatus+" · HLJS "+(rodHljs?"on":"mini");
             diagnostic.title="Tokens Lezer / tokens HTML visíveis / resultados de busca";
           }
           setInterval(inspectHighlight,1400);
