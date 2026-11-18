@@ -1,4 +1,4 @@
-/* Auto-generated from elements/elements.ts. at 11/17/2026, 8:26:08 PM Do not edit directly. */
+/* Auto-generated from elements/elements.ts. at 11/18/2026, 11:33:43 AM Do not edit directly. */
 var RodElements = (function() {
 
 // \0rolldown/runtime.js
@@ -669,7 +669,7 @@ var RodElements = (function() {
 			return result;
 		}
 		function hashCss(value) {
-			let hash = 2166136261;
+			let hash = 0x811c9dc5;
 			for (let index = 0; index < value.length; index += 1) {
 				hash ^= value.charCodeAt(index);
 				hash = Math.imul(hash, 16777619);
@@ -787,7 +787,6 @@ var RodElements = (function() {
 			* Explicit destinations don't need relocation detection.
 			*/
 			if (!explicitRoot) {
-				const currentRoot = element.getRootNode?.();
 				/**
 				* If the element already belongs to a ShadowRoot, styleRootFor() has
 				* installed the rule correctly. Otherwise schedule one shared check to
@@ -798,7 +797,7 @@ var RodElements = (function() {
 				*
 				* in the same synchronous turn.
 				*/
-				if (!isShadowRoot(currentRoot)) scheduleCssMount(element, record);
+				if (!isShadowRoot(element.getRootNode?.())) scheduleCssMount(element, record);
 			}
 			return record.className;
 		}

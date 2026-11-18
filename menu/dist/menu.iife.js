@@ -1,4 +1,4 @@
-/* Auto-generated from menu/menu.ts. at 11/17/2026, 8:26:08 PM Do not edit directly. */
+/* Auto-generated from menu/menu.ts. at 11/18/2026, 11:33:43 AM Do not edit directly. */
 var RodMenu = (function() {
 
 // \0rolldown/runtime.js
@@ -26,7 +26,7 @@ var RodMenu = (function() {
 		const ROOT_ATTR = "data-rod-menu-host";
 		const ACTIVE_ATTR = "data-rod-menu-active";
 		const ID_PREFIX = "rod-menu";
-		const DEFAULT_Z_INDEX = 2147482500;
+		const DEFAULT_Z_INDEX = 0x7ffffb84;
 		const STYLE_VERSION = "v2.3.0";
 		const defaultDependencyUrls = {
 			elements: [
@@ -330,8 +330,7 @@ var RodMenu = (function() {
 				return true;
 			} catch {}
 			try {
-				const Executor = target.Function;
-				Executor(`${source}\n//# sourceURL=rod-menu-dependency.js`).call(target);
+				(0, target.Function)(`${source}\n//# sourceURL=rod-menu-dependency.js`).call(target);
 				return true;
 			} catch {}
 			return false;
@@ -2161,8 +2160,7 @@ button {
 			return compiled;
 		}
 		function appendStyle(root, instanceCss = "") {
-			const doc = root.ownerDocument;
-			const style = createElement(doc, "style");
+			const style = createElement(root.ownerDocument, "style");
 			style.dataset.rodMenuStyle = STYLE_VERSION;
 			const extra = [globalConfig.css, instanceCss].filter(Boolean).join("\n\n");
 			style.textContent = resolveCompiledStylesheet(extra ? `${css}\n\n${extra}` : css);

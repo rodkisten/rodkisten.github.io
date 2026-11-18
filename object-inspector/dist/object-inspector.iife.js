@@ -1,4 +1,4 @@
-/* Auto-generated from object-inspector/object-inspector.ts. at 11/17/2026, 8:26:08 PM Do not edit directly. */
+/* Auto-generated from object-inspector/object-inspector.ts. at 11/18/2026, 11:33:43 AM Do not edit directly. */
 var RodObjectInspector = (function() {
 
 // \0rolldown/runtime.js
@@ -24,7 +24,7 @@ var RodObjectInspector = (function() {
 		const VERSION = "3.2.0";
 		const GLOBAL_NAME = "RodObjectInspector";
 		const API_SYMBOL = Symbol.for("rod.object-inspector.api");
-		const MAX_Z_INDEX = 2147483647;
+		const MAX_Z_INDEX = 0x7fffffff;
 		const MAX_SAFE_ITEMS = 1e5;
 		const VALID_THEMES = /* @__PURE__ */ new Set([
 			"auto",

@@ -1,4 +1,4 @@
-/* Auto-generated from toaster/toaster.ts. at 11/17/2026, 8:26:08 PM Do not edit directly. */
+/* Auto-generated from toaster/toaster.ts. at 11/18/2026, 11:33:43 AM Do not edit directly. */
 var RodToaster = (function() {
 
 // \0rolldown/runtime.js
@@ -28,7 +28,7 @@ var RodToaster = (function() {
 		const STATE_SYMBOL = Symbol.for("rod.super-toaster.state");
 		const OPTIONS_SYMBOL = Symbol("rod.super-toaster.options");
 		const HISTORY_PATCH_SYMBOL = Symbol.for("rod.super-toaster.history-navigation-patch");
-		const MAX_Z_INDEX = 2147483647;
+		const MAX_Z_INDEX = 0x7fffffff;
 		const TOAST_COLORS = {
 			default: {
 				bg: "rgba(23,23,23,.985)",
@@ -460,7 +460,7 @@ var RodToaster = (function() {
 			return fallback;
 		}
 		function iconKeyHash(value) {
-			let hash = 2166136261;
+			let hash = 0x811c9dc5;
 			for (let index = 0; index < value.length; index += 1) {
 				hash ^= value.charCodeAt(index);
 				hash = Math.imul(hash, 16777619);
