@@ -911,45 +911,24 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
 
         // Visible-range token decorations keep syntax colors available even when
         // a very large HTML snapshot exceeds Lezer's incremental parse budget.
+        // MatchDecorator scans only the rendered viewport and handles very long lines.
         function createVisibleSyntaxPlugin() {
-          const { ViewPlugin, Decoration } = cm.view;
+          const {ViewPlugin, Decoration, MatchDecorator}=cm.view;
+          if(!MatchDecorator)return [];
+          const matcher=new MatchDecorator({
+            regexp:/<!--[^]*?-->|<\\/?[A-Za-z][\\w:-]*|\\b[\\w:-]+(?=\\s*=)|"[^"\\n]*"|'[^'\\n]*'/g,
+            decoration(match) {
+              const token=match[0];
+              const cls=token.startsWith("<!--")?"rod-syntax-comment":
+                token.startsWith("<")?"rod-syntax-tag":
+                token.startsWith('"')||token.startsWith("'")?"rod-syntax-string":"rod-syntax-attr";
+              return Decoration.mark({class:cls});
+            },
+            maxLength:20000
+          });
           return ViewPlugin.fromClass(class {
-            constructor(view) { this.decorations=this.build(view); }
-            update(update) {
-              if(update.docChanged||update.viewportChanged||update.startState!==update.state)
-                this.decorations=this.build(update.view);
-            }
-            build(view) {
-              if(languageFor(files.get(activeId))!=="html")return Decoration.none;
-              const marks=[];
-              for(const range of view.visibleRanges) {
-                const text=view.state.doc.sliceString(range.from,range.to);
-                const re=/<!--[\s\S]*?-->|<![^>]*>|<\/?[A-Za-z][^>]*>/g;
-                let match;
-                while((match=re.exec(text))) {
-                  const token=match[0],base=range.from+match.index;
-                  if(token.startsWith("<!--")) {
-                    marks.push(Decoration.mark({class:"rod-syntax-comment"}).range(base,base+token.length));
-                    continue;
-                  }
-                  const tag=/^<\/?([\w:-]+)/.exec(token);
-                  if(tag) {
-                    const start=base+token.indexOf(tag[1]);
-                    marks.push(Decoration.mark({class:"rod-syntax-tag"}).range(start,start+tag[1].length));
-                  }
-                  const attr=/([\w:-]+)(\s*=\s*)(?:"[^"]*"|'[^']*'|[^\s>]+)/g;
-                  let a;
-                  while((a=attr.exec(token))) {
-                    const nameStart=base+a.index;
-                    marks.push(Decoration.mark({class:"rod-syntax-attr"}).range(nameStart,nameStart+a[1].length));
-                    const valueStart=nameStart+a[1].length+a[2].length;
-                    const valueEnd=base+a.index+a[0].length;
-                    if(valueEnd>valueStart)marks.push(Decoration.mark({class:"rod-syntax-string"}).range(valueStart,valueEnd));
-                  }
-                }
-              }
-              return marks.length?Decoration.set(marks,true):Decoration.none;
-            }
+            constructor(view){this.decorations=matcher.createDeco(view);}
+            update(update){this.decorations=matcher.updateDeco(update,this.decorations);}
           },{decorations:plugin=>plugin.decorations});
         }
 
@@ -1113,10 +1092,10 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
           nodes.status.after(diagnostic);
           function inspectHighlight(){
             if(!view)return;
-            const syntax=view.dom.querySelectorAll(".ͼb,.ͼc,.ͼd,.ͼe,.ͼf,.ͼg,.ͼh,.ͼi,.ͼj,.ͼk,.ͼl,.ͼm,.ͼn,.ͼo,.ͼp,.ͼq,.ͼr,.ͼs,.ͼt,.ͼu,.ͼv,.ͼw,.ͼx,.ͼy,.ͼz").length;
+            const syntax=view.dom.querySelectorAll("[class*=ͼ]").length;
             const fallback=view.dom.querySelectorAll(".rod-syntax-tag,.rod-syntax-attr,.rod-syntax-string").length;
             const search=view.dom.querySelectorAll(".cm-search-match,.cm-search-current").length;
-            diagnostic.textContent="HL "+syntax+"/"+fallback+" · busca "+search+" · v2";
+            diagnostic.textContent="HL "+syntax+"/"+fallback+" · busca "+search+" · v3";
             diagnostic.title="Tokens Lezer / tokens HTML visíveis / resultados de busca";
           }
           setInterval(inspectHighlight,1400);
