@@ -912,26 +912,6 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
         // Visible-range token decorations keep syntax colors available even when
         // a very large HTML snapshot exceeds Lezer's incremental parse budget.
         // MatchDecorator scans only the rendered viewport and handles very long lines.
-        function createVisibleSyntaxPlugin() {
-          const {ViewPlugin, Decoration, MatchDecorator}=cm.view;
-          if(!MatchDecorator)return [];
-          const matcher=new MatchDecorator({
-            regexp:/<!--[^]*?-->|<\\/?[A-Za-z][\\w:-]*|\\b[\\w:-]+(?=\\s*=)|"[^"\\n]*"|'[^'\\n]*'/g,
-            decoration(match) {
-              const token=match[0];
-              const cls=token.startsWith("<!--")?"rod-syntax-comment":
-                token.startsWith("<")?"rod-syntax-tag":
-                token.startsWith('"')||token.startsWith("'")?"rod-syntax-string":"rod-syntax-attr";
-              return Decoration.mark({class:cls});
-            },
-            maxLength:20000
-          });
-          return ViewPlugin.fromClass(class {
-            constructor(view){this.decorations=matcher.createDeco(view);}
-            update(update){this.decorations=matcher.updateDeco(update,this.decorations);}
-          },{decorations:plugin=>plugin.decorations});
-        }
-
         function createResourcePlugin() {
           const { ViewPlugin, Decoration, EditorView } = cm.view;
           if (!ViewPlugin || !Decoration) return [];
@@ -1013,7 +993,7 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
             a.closeBrackets?.(), a.autocompletion?.(), q.highlightSelectionMatches?.(),
             compartments.language.of(languageExtension(language)),
             compartments.wrap.of(wordWrap ? v.EditorView.lineWrapping : []),
-            createResourcePlugin(), createVisibleSyntaxPlugin(), createSearchDecorations(),
+            createResourcePlugin(), createSearchDecorations(),
             v.EditorView.domEventHandlers({
               click(event) {
                 const el = event.target instanceof Element ? event.target.closest(".cm-resource-link") : null;
@@ -1095,7 +1075,7 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
             const syntax=view.dom.querySelectorAll("[class*=ͼ]").length;
             const fallback=view.dom.querySelectorAll(".rod-syntax-tag,.rod-syntax-attr,.rod-syntax-string").length;
             const search=view.dom.querySelectorAll(".cm-search-match,.cm-search-current").length;
-            diagnostic.textContent="HL "+syntax+"/"+fallback+" · busca "+search+" · v3";
+            diagnostic.textContent="HL "+syntax+"/"+fallback+" · busca "+search+" · recovery";
             diagnostic.title="Tokens Lezer / tokens HTML visíveis / resultados de busca";
           }
           setInterval(inspectHighlight,1400);
