@@ -1,4 +1,4 @@
-/* Auto-generated from object-inspector/object-inspector.ts. at 11/17/2026, 9:38:59 PM Do not edit directly. */
+/* Auto-generated from object-inspector/object-inspector.ts. at 11/18/2026, 12:38:57 AM Do not edit directly. */
 var RodObjectInspector = (function() {
 
 // \0rolldown/runtime.js
