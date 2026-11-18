@@ -179,6 +179,13 @@
       .search-action[aria-pressed="true"] { background:#394b78; color:#fff; border-color:#7aa2f7; }
       .search-action:disabled { opacity:.4; }
       .cm-search-match { background:#e0af6844; border-bottom:1px solid #e0af68; }
+      .cm-editor .rod-hl-tag { color:#f7768e !important; }
+      .cm-editor .rod-hl-attr { color:#73daca !important; }
+      .cm-editor .rod-hl-string { color:#9ece6a !important; }
+      .cm-editor .rod-hl-keyword { color:#bb9af7 !important; }
+      .cm-editor .rod-hl-number { color:#ffcb6b !important; }
+      .cm-editor .rod-hl-comment { color:#869bad !important; font-style:italic; }
+      .cm-editor .rod-hl-title { color:#7aa2f7 !important; }
       .cm-editor .rod-syntax-tag { color:#f7768e !important; }
       .cm-editor .rod-syntax-attr { color:#73daca !important; }
       .cm-editor .rod-syntax-string { color:#9ece6a !important; }
@@ -912,6 +919,99 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
         // Visible-range token decorations keep syntax colors available even when
         // a very large HTML snapshot exceeds Lezer's incremental parse budget.
         // MatchDecorator scans only the rendered viewport and handles very long lines.
+        // Adapted from Ultra Virtual Pretty Viewer: highlight.js tokens become
+        // native CM6 decorations. Only visible lines are tokenized; editing stays CM6.
+        let rodHljs = null;
+        let rodHighlightVersion = 0;
+        function loadRodHighlighter() {
+          const script = document.createElement("script");
+          script.src = "https://cdn.jsdelivr.net/npm/highlight.js@11.11.1/lib/common.min.js";
+          script.async = true;
+          script.onload = () => {
+            rodHljs = window.hljs || null;
+            rodHighlightVersion++;
+            if (view) view.dispatch({effects: refreshDecoration.of(rodHighlightVersion)});
+          };
+          script.onerror = () => console.warn("[Rod Inspector] HLJS unavailable; using built-in mini tokenizer");
+          document.head.appendChild(script);
+        }
+        function rodTokenRanges(line, lang) {
+          const ranges = [];
+          const add = (from, to, cls) => { if (to > from) ranges.push({from,to,cls}); };
+          const max = Math.min(line.length, 12000);
+          const source = line.slice(0,max);
+          if (rodHljs?.highlight) {
+            try {
+              const name = ({html:"xml",typescript:"typescript",javascript:"javascript",css:"css",json:"json"})[lang];
+              if (name && rodHljs.getLanguage(name)) {
+                const html = rodHljs.highlight(source,{language:name,ignoreIllegals:true}).value;
+                const template = document.createElement("template");
+                template.innerHTML = html;
+                const walker = document.createTreeWalker(template.content,NodeFilter.SHOW_TEXT);
+                let node, offset=0;
+                while((node=walker.nextNode())) {
+                  const len=node.textContent.length;
+                  const classes=[];
+                  for(let parent=node.parentElement;parent;parent=parent.parentElement) {
+                    if(parent.classList.contains("hljs-comment"))classes.push("comment");
+                    else if(parent.classList.contains("hljs-string"))classes.push("string");
+                    else if(parent.classList.contains("hljs-number")||parent.classList.contains("hljs-literal"))classes.push("number");
+                    else if(parent.classList.contains("hljs-keyword"))classes.push("keyword");
+                    else if(parent.classList.contains("hljs-attr")||parent.classList.contains("hljs-attribute"))classes.push("attr");
+                    else if(parent.classList.contains("hljs-name")||parent.classList.contains("hljs-tag"))classes.push("tag");
+                    else if(parent.classList.contains("hljs-title")||parent.classList.contains("hljs-built_in"))classes.push("title");
+                  }
+                  if(classes.length)add(offset,offset+len,"rod-hl-"+classes[0]);
+                  offset+=len;
+                }
+                return ranges;
+              }
+            }catch(error){console.warn("[Rod Inspector] HLJS tokenization",error);}
+          }
+          // Immediate, dependency-free fallback from the user's working miniHljs.
+          const pattern=lang==="html"
+            ? /<!--[\\s\\S]*?-->|<\\/?[\\w:-]+|[\\w:-]+(?=\\s*=)|"(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'/g
+            : /\\/\\/.*$|\\/\\*.*?\\*\\/|"(?:[^"\\\\]|\\\\.)*"|'(?:[^'\\\\]|\\\\.)*'|\\b(?:async|await|class|const|else|export|false|for|from|function|if|import|let|new|null|return|this|throw|true|try|typeof|undefined|var|while)\\b|\\b\\d+(?:\\.\\d+)?\\b/g;
+          for(const match of source.matchAll(pattern)){
+            const token=match[0];
+            const cls=token.startsWith("<!--")||token.startsWith("//")||token.startsWith("/*")?"comment":
+              token.startsWith('"')||token.startsWith("'")?"string":
+              token.startsWith("<")?"tag":/^\\d/.test(token)?"number":
+              lang==="html"?"attr":"keyword";
+            add(match.index,match.index+token.length,"rod-hl-"+cls);
+          }
+          return ranges;
+        }
+        function createRodHighlightPlugin() {
+          const {ViewPlugin,Decoration}=cm.view;
+          return ViewPlugin.fromClass(class {
+            constructor(editor){this.decorations=this.build(editor);}
+            update(update){
+              if(update.docChanged||update.viewportChanged||
+                update.transactions.some(tx=>tx.effects.some(e=>e.is(refreshDecoration))))
+                this.decorations=this.build(update.view);
+            }
+            build(editor){
+              const lang=languageFor(files.get(activeId));
+              const marks=[];
+              for(const range of editor.visibleRanges){
+                let line=editor.state.doc.lineAt(range.from);
+                while(line.from<=range.to){
+                  const tokens=rodTokenRanges(line.text,lang);
+                  for(const token of tokens){
+                    const from=line.from+token.from,to=line.from+token.to;
+                    if(from<range.to&&to>range.from)
+                      marks.push(Decoration.mark({class:token.cls}).range(from,to));
+                  }
+                  if(line.to>=editor.state.doc.length)break;
+                  line=editor.state.doc.line(line.number+1);
+                }
+              }
+              return marks.length?Decoration.set(marks.sort((a,b)=>a.from-b.from||a.to-b.to),true):Decoration.none;
+            }
+          },{decorations:plugin=>plugin.decorations});
+        }
+
         function createResourcePlugin() {
           const { ViewPlugin, Decoration, EditorView } = cm.view;
           if (!ViewPlugin || !Decoration) return [];
@@ -993,7 +1093,7 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
             a.closeBrackets?.(), a.autocompletion?.(), q.highlightSelectionMatches?.(),
             compartments.language.of(languageExtension(language)),
             compartments.wrap.of(wordWrap ? v.EditorView.lineWrapping : []),
-            createResourcePlugin(), createSearchDecorations(),
+            createResourcePlugin(), createRodHighlightPlugin(), createSearchDecorations(),
             v.EditorView.domEventHandlers({
               click(event) {
                 const el = event.target instanceof Element ? event.target.closest(".cm-resource-link") : null;
@@ -1065,6 +1165,7 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
           view = new cm.view.EditorView({ parent: nodes.editor, state: doc });
           console.info("[Rod Inspector] CM6 language",languageFor(root),"loaded");
           editorReady = true;
+          loadRodHighlighter();
           // Visible diagnostics distinguish a missing parser from missing CSS or stale deployment.
           const diagnostic=document.createElement("span");
           diagnostic.id="rod-highlight-health";
@@ -1073,9 +1174,9 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
           function inspectHighlight(){
             if(!view)return;
             const syntax=view.dom.querySelectorAll("[class*=ͼ]").length;
-            const fallback=view.dom.querySelectorAll(".rod-syntax-tag,.rod-syntax-attr,.rod-syntax-string").length;
+            const fallback=view.dom.querySelectorAll("[class*=rod-hl-]").length;
             const search=view.dom.querySelectorAll(".cm-search-match,.cm-search-current").length;
-            diagnostic.textContent="HL "+syntax+"/"+fallback+" · busca "+search+" · recovery";
+            diagnostic.textContent="HL "+syntax+"/"+fallback+" · busca "+search+" · HLJS "+(rodHljs?"on":"mini");
             diagnostic.title="Tokens Lezer / tokens HTML visíveis / resultados de busca";
           }
           setInterval(inspectHighlight,1400);
