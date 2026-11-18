@@ -1054,7 +1054,7 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
           const root = files.get(activeId);
           const doc = cm.state.EditorState.create({ doc: root.content, extensions: createEditorExtensions() });
           view = new cm.view.EditorView({ parent: nodes.editor, state: doc });
-          console.info("[Rod Inspector] CM6 language",languageFor(root),"extensions",doc.facet(cm.state.EditorState.languageData) ? "loaded" : "unknown");
+          console.info("[Rod Inspector] CM6 language",languageFor(root),"loaded");
           editorReady = true;
           nodes.fallback.style.display = "none";
           nodes.editor.style.display = "block";
