@@ -982,6 +982,50 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
           }
           return ranges;
         }
+        // Shiki uses TextMate grammars and the Tokyo Night theme. Tokens are
+        // applied as inline styles to CM6 decorations, bypassing stylesheet order.
+        let rodShiki = null;
+        let rodShikiStatus = "loading";
+        const rodShikiCache = new Map();
+        const rodShikiPending = new Set();
+        const rodShikiLanguages = ["html","javascript","typescript","css","json","markdown"];
+        async function loadRodShiki() {
+          try {
+            const mod = await import("https://esm.sh/shiki@3.17.0/bundle/web?bundle&target=es2022");
+            rodShiki = await mod.createHighlighter({
+              themes:["tokyo-night"],
+              langs:rodShikiLanguages,
+            });
+            rodShikiStatus = "ready";
+            rodShikiCache.clear();
+            if(view) view.dispatch({effects:refreshDecoration.of(1)});
+          } catch(error) {
+            rodShikiStatus = "error";
+            console.warn("[Rod Inspector] Shiki failed; HLJS/mini fallback retained",error);
+            if(view) view.dispatch({effects:refreshDecoration.of(2)});
+          }
+        }
+        function rodShikiTokens(line,lang) {
+          if(!rodShiki || !rodShikiLanguages.includes(lang)) return null;
+          const key=lang+"|"+line;
+          if(rodShikiCache.has(key))return rodShikiCache.get(key);
+          try {
+            const result=rodShiki.codeToTokens(line,{lang,theme:"tokyo-night"});
+            const tokens=[];
+            let offset=0;
+            for(const token of result.tokens[0]||[]){
+              const length=token.content.length;
+              if(length&&token.color)tokens.push({from:offset,to:offset+length,color:token.color,fontStyle:token.fontStyle||0});
+              offset+=length;
+            }
+            if(rodShikiCache.size>1200)rodShikiCache.clear();
+            rodShikiCache.set(key,tokens);
+            return tokens;
+          } catch(error) {
+            console.warn("[Rod Inspector] Shiki tokenization",error);
+            return null;
+          }
+        }
         function createRodHighlightPlugin() {
           const {ViewPlugin,Decoration}=cm.view;
           return ViewPlugin.fromClass(class {
@@ -997,11 +1041,12 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
               for(const range of editor.visibleRanges){
                 let line=editor.state.doc.lineAt(range.from);
                 while(line.from<=range.to){
-                  const tokens=rodTokenRanges(line.text,lang);
+                  const shiki=rodShikiTokens(line.text.slice(0,12000),lang);
+                  const tokens=shiki||rodTokenRanges(line.text,lang);
                   for(const token of tokens){
                     const from=line.from+token.from,to=line.from+token.to;
                     if(from<range.to&&to>range.from)
-                      marks.push(Decoration.mark({class:token.cls}).range(from,to));
+                      marks.push(Decoration.mark(shiki?{attributes:{style:"color:"+token.color+" !important"+(token.fontStyle&1?";font-style:italic":"")}}:{class:token.cls}).range(from,to));
                   }
                   if(line.to>=editor.state.doc.length)break;
                   line=editor.state.doc.line(line.number+1);
@@ -1166,6 +1211,7 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
           console.info("[Rod Inspector] CM6 language",languageFor(root),"loaded");
           editorReady = true;
           loadRodHighlighter();
+          void loadRodShiki();
           // Visible diagnostics distinguish a missing parser from missing CSS or stale deployment.
           const diagnostic=document.createElement("span");
           diagnostic.id="rod-highlight-health";
@@ -1176,7 +1222,7 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
             const syntax=view.dom.querySelectorAll("[class*=ͼ]").length;
             const fallback=view.dom.querySelectorAll("[class*=rod-hl-]").length;
             const search=view.dom.querySelectorAll(".cm-search-match,.cm-search-current").length;
-            diagnostic.textContent="HL "+syntax+"/"+fallback+" · busca "+search+" · HLJS "+(rodHljs?"on":"mini");
+            diagnostic.textContent="HL "+syntax+"/"+fallback+" · busca "+search+" · Shiki "+rodShikiStatus+" · HLJS "+(rodHljs?"on":"mini");
             diagnostic.title="Tokens Lezer / tokens HTML visíveis / resultados de busca";
           }
           setInterval(inspectHighlight,1400);
