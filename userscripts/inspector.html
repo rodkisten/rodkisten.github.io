@@ -1028,6 +1028,8 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
         }
         // Recompute decorations after CM6 establishes its viewport.
         // StateField avoids ViewPlugin's empty initial visibleRanges on mobile Safari.
+        let rodSyntaxField = null;
+        let rodSyntaxBuildStats = {lang:"",tokens:0,lines:0,error:""};
         function createRodHighlightPlugin() {
           const {StateField,StateEffect}=cm.state;
           const {Decoration,EditorView}=cm.view;
@@ -1036,7 +1038,7 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
             const lang=languageFor(files.get(activeId));
             const marks=[];
             const doc=state.doc;
-            const viewport=view?.viewport || {from:0,to:Math.min(doc.length,12000)};
+            const viewport={from:0,to:Math.min(doc.length,12000)};
             let line=doc.lineAt(Math.min(viewport.from,doc.length));
             let processed=0;
             while(line.from<=viewport.to && processed<160) {
@@ -1056,16 +1058,18 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
               line=doc.line(line.number+1);
             }
             marks.sort((x,y)=>x.from-y.from||x.to-y.to);
+            rodSyntaxBuildStats={lang,tokens:marks.length,lines:processed,error:""};
             return Decoration.set(marks,true);
           }
-          return StateField.define({
-            create(state){return build(state);},
+          rodSyntaxField = StateField.define({
+            create(state){try{return build(state);}catch(error){rodSyntaxBuildStats.error=String(error);console.error("[Rod Inspector] syntax field",error);return Decoration.none;}},
             update(value,transaction){
-              if(transaction.docChanged || transaction.effects.some(e=>e.is(rebuild)))return build(transaction.state);
+              if(transaction.docChanged || transaction.effects.some(e=>e.is(rebuild))) {try{return build(transaction.state);}catch(error){rodSyntaxBuildStats.error=String(error);console.error("[Rod Inspector] syntax field update",error);return Decoration.none;}}
               return value;
             },
             provide:field=>EditorView.decorations.from(field),
           });
+          return rodSyntaxField;
         }
 
         function createResourcePlugin() {
@@ -1234,7 +1238,9 @@ window.RodCDN = { "@codemirror/state":state,"@codemirror/view":viewModule,"@code
             const syntax=view.dom.querySelectorAll("[class*=ͼ]").length;
             const fallback=view.dom.querySelectorAll("[class*=rod-hl-],[style*=color]").length;
             const search=view.dom.querySelectorAll(".cm-search-match,.cm-search-current").length;
-            diagnostic.textContent="HL "+syntax+"/"+fallback+" · busca "+search+" · field · Shiki "+rodShikiStatus+" · HLJS "+(rodHljs?"on":"mini");
+            const field=view.state.field(rodSyntaxField,false);
+            let count=0;if(field)field.between(0,view.state.doc.length,()=>count++);
+            diagnostic.textContent="TOK "+rodSyntaxBuildStats.lang+" "+rodSyntaxBuildStats.tokens+"/"+count+"/"+fallback+" · "+rodShikiStatus+(rodSyntaxBuildStats.error?" · ERR "+rodSyntaxBuildStats.error.slice(0,65):"");
             diagnostic.title="Tokens Lezer / tokens HTML visíveis / resultados de busca";
           }
           setInterval(inspectHighlight,1400);
