@@ -27,6 +27,7 @@ const IGNORED_DIRECTORIES = new Set([
   "dist",
   "build",
   "coverage",
+  "scripts",
 ]);
 
 /**
