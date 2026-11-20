@@ -53,6 +53,7 @@
       html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
       body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
       button, input, select { font: inherit; }
+      button { font-size: 12px }
       button { -webkit-tap-highlight-color: transparent; touch-action: manipulation; cursor: pointer; }
       button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
         outline: 2px solid var(--accent);
@@ -86,7 +87,7 @@
         background: var(--panel-3);
         border-color: var(--muted);
       }
-      .icon-button { flex: none; display: grid; place-items: center; font-size: 17px; width: 29px; padding: 0; }
+      .icon-button { flex: none; display: grid; place-items: center; font-size: 14px; width: 29px; padding: 0; }
       .icon-button[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); background: var(--accent-subtle); }
       .language { max-width: 118px; min-width: 90px; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; min-height: 28px; font-size: 11px; }
       .toolbar { display: flex; gap: 4px; padding: 3px 9px 5px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
