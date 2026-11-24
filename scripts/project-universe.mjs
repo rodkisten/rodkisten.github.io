@@ -92,12 +92,16 @@ let successful=0;
 const totals={prs:0,healthy:0,failed:0,pending:0,unknown:0};
 for (const [repo,name,tag,color,shape] of projects) {
   const base='repos/rodkisten/'+repo, url='https://github.com/rodkisten/'+repo;
-  let meta, prs, runs;
+  let meta, prs, runs, issues=[];
   try {
     meta=api(base);
     if(meta.private || meta.visibility !== 'public') continue;
     prs=api(base+'/pulls?state=open&per_page=100',true).flat();
     runs=api(base+'/actions/runs?per_page=100').workflow_runs;
+    if(meta.has_issues) {
+      try { issues=api(base+'/issues?state=open&per_page=100',true).flat().filter(issue=>!issue.pull_request); }
+      catch(error) { console.warn('Issue lookup unavailable for '+repo+': '+error.message); }
+    }
   } catch(error) {
     console.warn('Unable to retrieve '+repo+': '+error.message);
     failures.push(repo);
@@ -143,8 +147,13 @@ for (const [repo,name,tag,color,shape] of projects) {
       }
     }catch{console.warn('Preview lookup unavailable for '+repo+' #'+pr.number);}
   }
-  const links=[...extra,'[Repository]('+url+')','[All PRs]('+url+'/pulls)','[Actions]('+url+'/actions)',...recent.map(r=>'['+label(r.name)+' · '+label(statusOf(r))+']('+r.html_url+')'),...prs.slice(0,3).map(p=>'[#'+p.number+' '+label(p.title)+']('+p.html_url+')')];
-  blocks.push('<a href="'+url+'">'+picture+'</a>\n\n'+links.join(' · '));
+  const links=[...extra,'[Repository]('+url+')','[All PRs]('+url+'/pulls)','[Issues]('+url+'/issues)','[Actions]('+url+'/actions)'];
+  const sections=[links.join(' · ')];
+  // Bare cross-repository references allow GitHub's native autolinking where supported.
+  if(prs.length) sections.push('**Pull requests:** '+prs.slice(0,5).map(p=>'rodkisten/'+repo+'#'+p.number).join(' · '));
+  if(issues.length) sections.push('**Issues:** '+issues.slice(0,5).map(issue=>'rodkisten/'+repo+'#'+issue.number).join(' · '));
+  if(recent.length) sections.push('**Recent workflows:** '+recent.map(r=>'['+label(r.name)+' · '+label(statusOf(r))+']('+r.html_url+')').join(' · '));
+  blocks.push('<a href="'+url+'">'+picture+'</a>\n\n'+sections.join('\n\n'));
   console.log(name+': '+status+' / '+prs.length+' open PRs');
 }
 if(!successful) throw new Error('No public project data retrieved; refusing to overwrite README. Check token permissions.');
