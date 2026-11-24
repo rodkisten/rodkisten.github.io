@@ -52,7 +52,37 @@ function renderCard({repo,name,tag,color,shape,theme,bg,fg,muted,status,prs,bran
   };
   const statusInk=dark?({success:'#4ade80',failure:'#fb7185',in_progress:'#93c5fd',queued:'#fde047'}[status]||'#a1a1aa'):(colors[status]||'#64748b');
   const info=escape((language||'Code')+' / '+branch);
-  return '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="248" viewBox="0 0 800 248"><title>'+escape(name)+' project card</title><defs><clipPath id="clip"><rect x="1" y="1" width="798" height="246" rx="24"/></clipPath><pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="'+ink+'" opacity=".15"/></pattern></defs><g clip-path="url(#clip)"><rect width="800" height="248" fill="'+bg+'"/><rect x="500" width="300" height="248" fill="'+color+'"/><rect x="500" width="300" height="248" fill="url(#dots)"/><g transform="translate(650 120)" color="'+color+'">'+(motifs[repo]||art[shape])+'</g><g font-family="Geist, Arial, sans-serif"><text x="32" y="34" fill="'+muted+'" font-size="12" letter-spacing="2">ROD / PROJECT UNIVERSE</text><text x="30" y="94" fill="'+fg+'" font-size="43" font-weight="700">'+escape(name)+'</text><text x="32" y="126" fill="'+muted+'" font-size="17">'+escape(tag)+'</text><text x="32" y="153" fill="'+muted+'" font-size="12">'+info+'</text><path d="M32 174H468" stroke="'+muted+'" opacity=".25"/><circle cx="39" cy="204" r="6" fill="'+statusInk+'"/><text x="52" y="209" fill="'+statusInk+'" font-size="13" font-weight="700">'+escape(status.replaceAll('_',' ').toUpperCase())+'</text><text x="265" y="209" fill="'+fg+'" font-size="13" font-weight="700">'+prs+' OPEN PRs</text><text x="775" y="228" text-anchor="end" fill="'+ink+'" font-size="11" letter-spacing="2">/ '+escape(repo.toUpperCase())+'</text></g></g><rect x="1" y="1" width="798" height="246" rx="24" fill="none" stroke="'+muted+'" stroke-opacity=".3"/></svg>';
+  const paper=dark?'#18181b':'#f5f3ee';
+  const subtle=dark?'#303036':'#dedbd4';
+  const statusLabel=escape(status.replaceAll('_',' ').toUpperCase());
+  const illustration=(motifs[repo]||art[shape]).replaceAll('currentColor',repo==='orb'||repo==='jardim'?'#f5f3ee':color);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="280" viewBox="0 0 800 280">
+  <title>${escape(name)} project card</title>
+  <defs><clipPath id="frame"><rect x="1" y="1" width="798" height="278" rx="18"/></clipPath>
+  <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#14141b" stroke-opacity=".09"/></pattern></defs>
+  <g clip-path="url(#frame)">
+  <rect width="800" height="280" fill="${paper}"/>
+  <rect x="508" width="292" height="280" fill="${color}"/>
+  <rect x="508" width="292" height="280" fill="url(#grid)"/>
+  <circle cx="654" cy="133" r="112" fill="none" stroke="#14141b" stroke-opacity=".18"/>
+  <circle cx="654" cy="133" r="94" fill="none" stroke="#14141b" stroke-opacity=".12"/>
+  <g transform="translate(654 133) scale(.88)" color="${color}">${illustration}</g>
+  <g font-family="Geist,Arial,sans-serif">
+  <circle cx="34" cy="32" r="5" fill="${color}"/>
+  <text x="48" y="36" font-size="11" font-weight="600" letter-spacing="2" fill="${muted}">RODKISTEN / PROJECTS</text>
+  <text x="30" y="103" font-size="48" letter-spacing="-2" font-weight="700" fill="${fg}">${escape(name)}</text>
+  <text x="33" y="136" font-size="17" fill="${muted}">${escape(tag)}</text>
+  <text x="33" y="166" font-size="12" font-family="monospace" fill="${muted}">${info}</text>
+  <path d="M32 193H476" stroke="${subtle}"/>
+  <rect x="32" y="211" width="208" height="37" rx="7" fill="${statusInk}" fill-opacity=".10"/>
+  <circle cx="47" cy="229" r="4" fill="${statusInk}"/>
+  <text x="59" y="233" font-size="11" font-weight="700" fill="${statusInk}">${statusLabel}</text>
+  <text x="264" y="235" font-size="24" font-weight="700" fill="${fg}">${prs}</text>
+  <text x="312" y="232" font-size="11" letter-spacing="1" fill="${muted}">OPEN PRs</text>
+  <text x="526" y="25" font-size="10" font-family="monospace" fill="#14141b">FIG. ${String(projects.findIndex(p=>p[0]===repo)+1).padStart(2,'0')}</text>
+  <text x="782" y="260" text-anchor="end" font-size="11" font-weight="700" letter-spacing="1.5" fill="#14141b">${escape(repo.toUpperCase())}</text>
+  </g></g><rect x="1" y="1" width="798" height="278" rx="18" fill="none" stroke="${subtle}"/></svg>`;
+
 }
 
 const dir='assets/projects';
@@ -90,7 +120,7 @@ for (const [repo,name,tag,color,shape] of projects) {
   else if(['failure','timed_out','action_required'].includes(status)) totals.failed++;
   else if(['in_progress','queued','pending','requested'].includes(status)) totals.pending++;
   else totals.unknown++;
-  for(const [theme,bg,fg,muted] of [['dark','#101218','#f8fafc','#a1a1aa'],['light','#f8fafc','#18181b','#52525b']]){
+  for(const [theme,bg,fg,muted] of [['dark','#18181b','#f8fafc','#a1a1aa'],['light','#f5f3ee','#18181b','#52525b']]){
     const file=repo+'-'+theme+'.svg';
     const svg=renderCard({repo,name,tag,color,shape,theme,bg,fg,muted,status,prs:prs.length,branch:meta.default_branch,language:meta.language});
     await writeFile(dir+'/'+file,svg);
@@ -121,7 +151,7 @@ if(!successful) throw new Error('No public project data retrieved; refusing to o
 console.log('Project Universe: '+successful+' projects retrieved; '+failures.length+' unavailable');
 for(const file of await readdir(dir)) if(projects.some(([repo])=>[repo+'-dark.svg',repo+'-light.svg'].includes(file))&&!generated.has(file)) await unlink(dir+'/'+file);
 const metrics=[['PROJECTS',successful,'#a78bfa'],['OPEN PRs',totals.prs,'#38bdf8'],['CI HEALTHY',totals.healthy,'#34d399'],['CI FAILING',totals.failed,'#fb7185']];
-for(const [theme,bg,fg,muted] of [['dark','#101218','#f8fafc','#a1a1aa'],['light','#f8fafc','#18181b','#52525b']]){
+for(const [theme,bg,fg,muted] of [['dark','#18181b','#f8fafc','#a1a1aa'],['light','#f8fafc','#18181b','#52525b']]){
   const tiles=metrics.map(([label,value,color],i)=>{
     const x=30+i*188;
     return '<g transform="translate('+x+' 176)"><rect width="176" height="92" rx="12" fill="'+color+'" fill-opacity=".12" stroke="'+color+'" stroke-opacity=".5"/><text x="15" y="28" font-size="11" letter-spacing="1.5" fill="'+muted+'">'+label+'</text><text x="14" y="69" font-size="36" font-weight="700" fill="'+fg+'">'+value+'</text></g>';
