@@ -17,6 +17,7 @@ const projects = [
 const sites = {
   photointel: 'https://photos.migos.club',
   shell: 'https://shell.migos.club',
+  'ast-explorer': null,
 };
 const art = {
   orbit: '<ellipse rx="80" ry="35" transform="rotate(-30)"/><circle r="37"/><circle cx="61" cy="-35" r="8"/>',
@@ -29,7 +30,7 @@ const art = {
   bolt: '<path d="M20 -65l-70 75h45l-15 55 70-85H5z"/>',
 };
 const escape = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
-const label = value => String(value).replace(/[^\p{L}\p{N} .:/#-]/gu,' ').slice(0,100);
+const label = value => String(value).replace(/[\r\n]+/g,' ').replace(/[\\[\]<>`*_]/g,c=>'\\'+c).trim().slice(0,120);
 const api = (path, paginate=false) => JSON.parse(execFileSync('gh',['api',...(paginate?['--paginate','--slurp']:[]),path],{encoding:'utf8',maxBuffer:20*1024*1024}));
 const statusOf = run => run.conclusion || run.status;
 const colors = {success:'#16a34a',failure:'#dc2626',in_progress:'#2563eb',queued:'#ca8a04'};
@@ -96,7 +97,7 @@ for (const [repo,name,tag,color,shape] of projects) {
     generated.add(file);
   }
   const picture='<picture><source media="(prefers-color-scheme: dark)" srcset="'+dir+'/'+repo+'-dark.svg"><img alt="'+escape(name)+' project status" src="'+dir+'/'+repo+'-light.svg" width="800"></picture>';
-  const production=sites[repo] || (/^https:\/\//.test(meta.homepage||'') ? meta.homepage : null);
+  const production=Object.hasOwn(sites,repo) ? sites[repo] : (/^https:\/\//.test(meta.homepage||'') ? meta.homepage : null);
   const safeUrl=value=>{try{const u=new URL(value);return u.protocol==='https:'?u.href.replaceAll('(','%28').replaceAll(')','%29'):null;}catch{return null;}};
   const extra=[];
   if(safeUrl(production)) extra.push('[Live app]('+safeUrl(production)+')');
