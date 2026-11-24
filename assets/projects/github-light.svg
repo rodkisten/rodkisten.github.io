@@ -1,1 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="248" viewBox="0 0 800 248"><title>GitHub Tools project card</title><defs><clipPath id="clip"><rect x="1" y="1" width="798" height="246" rx="24"/></clipPath><pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#14141b" opacity=".15"/></pattern></defs><g clip-path="url(#clip)"><rect width="800" height="248" fill="#f8fafc"/><rect x="500" width="300" height="248" fill="#c084fc"/><rect x="500" width="300" height="248" fill="url(#dots)"/><g transform="translate(650 120)" color="#c084fc"><g fill="#14141b"><rect x="-100" y="-65" width="65" height="42" rx="9"/><rect x="35" y="-65" width="65" height="42" rx="9"/><rect x="-32" y="25" width="64" height="42" rx="9"/></g><path d="M-68 -23V0H68V-23M0 0V25" fill="none" stroke="#14141b" stroke-width="5"/><path d="M-83 -44l10 10 20-20M52 -44l10 10 20-20M-15 45l10 10 20-20" stroke="currentColor" stroke-width="5" fill="none"/></g><g font-family="Geist, Arial, sans-serif"><text x="32" y="34" fill="#52525b" font-size="12" letter-spacing="2">ROD / PROJECT UNIVERSE</text><text x="30" y="94" fill="#18181b" font-size="43" font-weight="700">GitHub Tools</text><text x="32" y="126" fill="#52525b" font-size="17">Engineering automation</text><text x="32" y="153" fill="#52525b" font-size="12">TypeScript / main</text><path d="M32 174H468" stroke="#52525b" opacity=".25"/><circle cx="39" cy="204" r="6" fill="#dc2626"/><text x="52" y="209" fill="#dc2626" font-size="13" font-weight="700">FAILURE</text><text x="265" y="209" fill="#18181b" font-size="13" font-weight="700">2 OPEN PRs</text><text x="775" y="228" text-anchor="end" fill="#14141b" font-size="11" letter-spacing="2">/ GITHUB</text></g></g><rect x="1" y="1" width="798" height="246" rx="24" fill="none" stroke="#52525b" stroke-opacity=".3"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="280" viewBox="0 0 800 280">
+  <title>GitHub Tools project card</title>
+  <defs><clipPath id="frame"><rect x="1" y="1" width="798" height="278" rx="18"/></clipPath>
+  <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#14141b" stroke-opacity=".09"/></pattern></defs>
+  <g clip-path="url(#frame)">
+  <rect width="800" height="280" fill="#f5f3ee"/>
+  <rect x="508" width="292" height="280" fill="#c084fc"/>
+  <rect x="508" width="292" height="280" fill="url(#grid)"/>
+  <circle cx="654" cy="133" r="112" fill="none" stroke="#14141b" stroke-opacity=".18"/>
+  <circle cx="654" cy="133" r="94" fill="none" stroke="#14141b" stroke-opacity=".12"/>
+  <g transform="translate(654 133) scale(.88)" color="#c084fc"><g fill="#14141b"><rect x="-100" y="-65" width="65" height="42" rx="9"/><rect x="35" y="-65" width="65" height="42" rx="9"/><rect x="-32" y="25" width="64" height="42" rx="9"/></g><path d="M-68 -23V0H68V-23M0 0V25" fill="none" stroke="#14141b" stroke-width="5"/><path d="M-83 -44l10 10 20-20M52 -44l10 10 20-20M-15 45l10 10 20-20" stroke="#c084fc" stroke-width="5" fill="none"/></g>
+  <g font-family="Geist,Arial,sans-serif">
+  <circle cx="34" cy="32" r="5" fill="#c084fc"/>
+  <text x="48" y="36" font-size="11" font-weight="600" letter-spacing="2" fill="#52525b">RODKISTEN / PROJECTS</text>
+  <text x="30" y="103" font-size="48" letter-spacing="-2" font-weight="700" fill="#18181b">GitHub Tools</text>
+  <text x="33" y="136" font-size="17" fill="#52525b">Engineering automation</text>
+  <text x="33" y="166" font-size="12" font-family="monospace" fill="#52525b">TypeScript / main</text>
+  <path d="M32 193H476" stroke="#dedbd4"/>
+  <rect x="32" y="211" width="208" height="37" rx="7" fill="#dc2626" fill-opacity=".10"/>
+  <circle cx="47" cy="229" r="4" fill="#dc2626"/>
+  <text x="59" y="233" font-size="11" font-weight="700" fill="#dc2626">FAILURE</text>
+  <text x="264" y="235" font-size="24" font-weight="700" fill="#18181b">2</text>
+  <text x="312" y="232" font-size="11" letter-spacing="1" fill="#52525b">OPEN PRs</text>
+  <text x="526" y="25" font-size="10" font-family="monospace" fill="#14141b">FIG. 09</text>
+  <text x="782" y="260" text-anchor="end" font-size="11" font-weight="700" letter-spacing="1.5" fill="#14141b">GITHUB</text>
+  </g></g><rect x="1" y="1" width="798" height="278" rx="18" fill="none" stroke="#dedbd4"/></svg>

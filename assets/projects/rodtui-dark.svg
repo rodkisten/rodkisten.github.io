@@ -1,1 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="248" viewBox="0 0 800 248"><title>RodTUI project card</title><defs><clipPath id="clip"><rect x="1" y="1" width="798" height="246" rx="24"/></clipPath><pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#14141b" opacity=".15"/></pattern></defs><g clip-path="url(#clip)"><rect width="800" height="248" fill="#101218"/><rect x="500" width="300" height="248" fill="#fb923c"/><rect x="500" width="300" height="248" fill="url(#dots)"/><g transform="translate(650 120)" color="#fb923c"><g fill="#14141b"><ellipse cy="15" rx="62" ry="43"/><path d="M-50 0L-100 -40L-85 -80L-60 -45L-38 -65L-20 -30ZM50 0L100 -40L85 -80L60 -45L38 -65L20 -30Z"/></g><path d="M-45 35l-40 35M45 35l40 35M-20 50l-15 28M20 50l15 28" stroke="#14141b" stroke-width="12" stroke-linecap="round"/><circle cx="-23" cy="5" r="8" fill="currentColor"/><circle cx="23" cy="5" r="8" fill="currentColor"/></g><g font-family="Geist, Arial, sans-serif"><text x="32" y="34" fill="#a1a1aa" font-size="12" letter-spacing="2">ROD / PROJECT UNIVERSE</text><text x="30" y="94" fill="#f8fafc" font-size="43" font-weight="700">RodTUI</text><text x="32" y="126" fill="#a1a1aa" font-size="17">Terminal interfaces in Rust</text><text x="32" y="153" fill="#a1a1aa" font-size="12">Rust / main</text><path d="M32 174H468" stroke="#a1a1aa" opacity=".25"/><circle cx="39" cy="204" r="6" fill="#fb7185"/><text x="52" y="209" fill="#fb7185" font-size="13" font-weight="700">FAILURE</text><text x="265" y="209" fill="#f8fafc" font-size="13" font-weight="700">0 OPEN PRs</text><text x="775" y="228" text-anchor="end" fill="#14141b" font-size="11" letter-spacing="2">/ RODTUI</text></g></g><rect x="1" y="1" width="798" height="246" rx="24" fill="none" stroke="#a1a1aa" stroke-opacity=".3"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="280" viewBox="0 0 800 280">
+  <title>RodTUI project card</title>
+  <defs><clipPath id="frame"><rect x="1" y="1" width="798" height="278" rx="18"/></clipPath>
+  <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#14141b" stroke-opacity=".09"/></pattern></defs>
+  <g clip-path="url(#frame)">
+  <rect width="800" height="280" fill="#18181b"/>
+  <rect x="508" width="292" height="280" fill="#fb923c"/>
+  <rect x="508" width="292" height="280" fill="url(#grid)"/>
+  <circle cx="654" cy="133" r="112" fill="none" stroke="#14141b" stroke-opacity=".18"/>
+  <circle cx="654" cy="133" r="94" fill="none" stroke="#14141b" stroke-opacity=".12"/>
+  <g transform="translate(654 133) scale(.88)" color="#fb923c"><g fill="#14141b"><ellipse cy="15" rx="62" ry="43"/><path d="M-50 0L-100 -40L-85 -80L-60 -45L-38 -65L-20 -30ZM50 0L100 -40L85 -80L60 -45L38 -65L20 -30Z"/></g><path d="M-45 35l-40 35M45 35l40 35M-20 50l-15 28M20 50l15 28" stroke="#14141b" stroke-width="12" stroke-linecap="round"/><circle cx="-23" cy="5" r="8" fill="#fb923c"/><circle cx="23" cy="5" r="8" fill="#fb923c"/></g>
+  <g font-family="Geist,Arial,sans-serif">
+  <circle cx="34" cy="32" r="5" fill="#fb923c"/>
+  <text x="48" y="36" font-size="11" font-weight="600" letter-spacing="2" fill="#a1a1aa">RODKISTEN / PROJECTS</text>
+  <text x="30" y="103" font-size="48" letter-spacing="-2" font-weight="700" fill="#f8fafc">RodTUI</text>
+  <text x="33" y="136" font-size="17" fill="#a1a1aa">Terminal interfaces in Rust</text>
+  <text x="33" y="166" font-size="12" font-family="monospace" fill="#a1a1aa">Rust / main</text>
+  <path d="M32 193H476" stroke="#303036"/>
+  <rect x="32" y="211" width="208" height="37" rx="7" fill="#fb7185" fill-opacity=".10"/>
+  <circle cx="47" cy="229" r="4" fill="#fb7185"/>
+  <text x="59" y="233" font-size="11" font-weight="700" fill="#fb7185">FAILURE</text>
+  <text x="264" y="235" font-size="24" font-weight="700" fill="#f8fafc">0</text>
+  <text x="312" y="232" font-size="11" letter-spacing="1" fill="#a1a1aa">OPEN PRs</text>
+  <text x="526" y="25" font-size="10" font-family="monospace" fill="#14141b">FIG. 07</text>
+  <text x="782" y="260" text-anchor="end" font-size="11" font-weight="700" letter-spacing="1.5" fill="#14141b">RODTUI</text>
+  </g></g><rect x="1" y="1" width="798" height="278" rx="18" fill="none" stroke="#303036"/></svg>

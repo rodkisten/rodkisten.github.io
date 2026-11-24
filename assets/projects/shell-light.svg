@@ -1,1 +1,26 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="800" height="248" viewBox="0 0 800 248"><title>Shell project card</title><defs><clipPath id="clip"><rect x="1" y="1" width="798" height="246" rx="24"/></clipPath><pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#14141b" opacity=".15"/></pattern></defs><g clip-path="url(#clip)"><rect width="800" height="248" fill="#f8fafc"/><rect x="500" width="300" height="248" fill="#34d399"/><rect x="500" width="300" height="248" fill="url(#dots)"/><g transform="translate(650 120)" color="#34d399"><rect x="-110" y="-76" width="220" height="152" rx="16" fill="#14141b"/><path d="M-83 -35l30 25-30 25M-40 15h65" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="round"/><path d="M-82 42h130M-82 56h80" stroke="currentColor" opacity=".35" stroke-width="5"/></g><g font-family="Geist, Arial, sans-serif"><text x="32" y="34" fill="#52525b" font-size="12" letter-spacing="2">ROD / PROJECT UNIVERSE</text><text x="30" y="94" fill="#18181b" font-size="43" font-weight="700">Shell</text><text x="32" y="126" fill="#52525b" font-size="17">Explore the command line</text><text x="32" y="153" fill="#52525b" font-size="12">TypeScript / main</text><path d="M32 174H468" stroke="#52525b" opacity=".25"/><circle cx="39" cy="204" r="6" fill="#64748b"/><text x="52" y="209" fill="#64748b" font-size="13" font-weight="700">UNKNOWN</text><text x="265" y="209" fill="#18181b" font-size="13" font-weight="700">4 OPEN PRs</text><text x="775" y="228" text-anchor="end" fill="#14141b" font-size="11" letter-spacing="2">/ SHELL</text></g></g><rect x="1" y="1" width="798" height="246" rx="24" fill="none" stroke="#52525b" stroke-opacity=".3"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="280" viewBox="0 0 800 280">
+  <title>Shell project card</title>
+  <defs><clipPath id="frame"><rect x="1" y="1" width="798" height="278" rx="18"/></clipPath>
+  <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#14141b" stroke-opacity=".09"/></pattern></defs>
+  <g clip-path="url(#frame)">
+  <rect width="800" height="280" fill="#f5f3ee"/>
+  <rect x="508" width="292" height="280" fill="#34d399"/>
+  <rect x="508" width="292" height="280" fill="url(#grid)"/>
+  <circle cx="654" cy="133" r="112" fill="none" stroke="#14141b" stroke-opacity=".18"/>
+  <circle cx="654" cy="133" r="94" fill="none" stroke="#14141b" stroke-opacity=".12"/>
+  <g transform="translate(654 133) scale(.88)" color="#34d399"><rect x="-110" y="-76" width="220" height="152" rx="16" fill="#14141b"/><path d="M-83 -35l30 25-30 25M-40 15h65" fill="none" stroke="#34d399" stroke-width="9" stroke-linecap="round"/><path d="M-82 42h130M-82 56h80" stroke="#34d399" opacity=".35" stroke-width="5"/></g>
+  <g font-family="Geist,Arial,sans-serif">
+  <circle cx="34" cy="32" r="5" fill="#34d399"/>
+  <text x="48" y="36" font-size="11" font-weight="600" letter-spacing="2" fill="#52525b">RODKISTEN / PROJECTS</text>
+  <text x="30" y="103" font-size="48" letter-spacing="-2" font-weight="700" fill="#18181b">Shell</text>
+  <text x="33" y="136" font-size="17" fill="#52525b">Explore the command line</text>
+  <text x="33" y="166" font-size="12" font-family="monospace" fill="#52525b">TypeScript / main</text>
+  <path d="M32 193H476" stroke="#dedbd4"/>
+  <rect x="32" y="211" width="208" height="37" rx="7" fill="#64748b" fill-opacity=".10"/>
+  <circle cx="47" cy="229" r="4" fill="#64748b"/>
+  <text x="59" y="233" font-size="11" font-weight="700" fill="#64748b">UNKNOWN</text>
+  <text x="264" y="235" font-size="24" font-weight="700" fill="#18181b">4</text>
+  <text x="312" y="232" font-size="11" letter-spacing="1" fill="#52525b">OPEN PRs</text>
+  <text x="526" y="25" font-size="10" font-family="monospace" fill="#14141b">FIG. 05</text>
+  <text x="782" y="260" text-anchor="end" font-size="11" font-weight="700" letter-spacing="1.5" fill="#14141b">SHELL</text>
+  </g></g><rect x="1" y="1" width="798" height="278" rx="18" fill="none" stroke="#dedbd4"/></svg>
