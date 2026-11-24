@@ -13,6 +13,11 @@ const projects = [
   ['github','GitHub Tools','Engineering automation','#c084fc','orbit'],
   ['ejc','EJC','Community tools','#f472b6','flower'],
 ];
+// Explicit production URLs; preview URLs are only taken from GitHub deployment records.
+const sites = {
+  photointel: 'https://photos.migos.club',
+  shell: 'https://shell.migos.club',
+};
 const art = {
   orbit: '<ellipse rx="80" ry="35" transform="rotate(-30)"/><circle r="37"/><circle cx="61" cy="-35" r="8"/>',
   flower: Array.from({length:8},(_,i)=>'<ellipse cy="-43" rx="16" ry="30" transform="rotate('+i*45+')"/>').join('')+'<circle r="20"/>',
@@ -72,8 +77,9 @@ for (const [repo,name,tag,color,shape] of projects) {
     if(!latest.has(key)) latest.set(key,run);
   }
   const recent=[...latest.values()].slice(0,3);
-  const main=[...latest.values()].find(run=>run.head_branch===meta.default_branch);
-  const status=main?statusOf(main):'unknown';
+  const main=[...latest.values()].filter(run=>run.head_branch===meta.default_branch);
+  const states=main.map(statusOf);
+  const status=['failure','timed_out','action_required','in_progress','queued','pending','requested'].find(state=>states.includes(state)) || (states.length&&states.every(state=>state==='success')?'success':states[0]||'unknown');
   for(const [theme,bg,fg,muted] of [['dark','#101218','#f8fafc','#a1a1aa'],['light','#f8fafc','#18181b','#52525b']]){
     const file=repo+'-'+theme+'.svg';
     const svg=renderCard({repo,name,tag,color,shape,theme,bg,fg,muted,status,prs:prs.length,branch:meta.default_branch,language:meta.language});
@@ -81,14 +87,30 @@ for (const [repo,name,tag,color,shape] of projects) {
     generated.add(file);
   }
   const picture='<picture><source media="(prefers-color-scheme: dark)" srcset="'+dir+'/'+repo+'-dark.svg"><img alt="'+escape(name)+' project status" src="'+dir+'/'+repo+'-light.svg" width="800"></picture>';
-  const links=['[Repository]('+url+')','[All PRs]('+url+'/pulls)','[Actions]('+url+'/actions)',...recent.map(r=>'['+label(r.name)+' · '+label(statusOf(r))+']('+r.html_url+')'),...prs.slice(0,3).map(p=>'[#'+p.number+' '+label(p.title)+']('+p.html_url+')')];
+  const production=sites[repo] || (/^https:\/\//.test(meta.homepage||'') ? meta.homepage : null);
+  const safeUrl=value=>{try{const u=new URL(value);return u.protocol==='https:'?u.href.replaceAll('(','%28').replaceAll(')','%29'):null;}catch{return null;}};
+  const extra=[];
+  if(safeUrl(production)) extra.push('[Live app]('+safeUrl(production)+')');
+  // A preview is linked only when GitHub reports a successful deployment for the PR head.
+  for(const pr of prs.slice(0,3)){
+    try {
+      const deployments=api(base+'/deployments?sha='+encodeURIComponent(pr.head.sha)+'&per_page=10');
+      for(const deployment of deployments.filter(d=>/preview|pr[- /]|pull.request/i.test(d.environment)).slice(0,3)){
+        const states=api(base+'/deployments/'+deployment.id+'/statuses?per_page=1');
+        const state=states[0];
+        const preview=safeUrl(state?.environment_url);
+        if(state?.state==='success'&&preview){extra.push('[Preview #'+pr.number+']('+preview+')');break;}
+      }
+    }catch{console.warn('Preview lookup unavailable for '+repo+' #'+pr.number);}
+  }
+  const links=[...extra,'[Repository]('+url+')','[All PRs]('+url+'/pulls)','[Actions]('+url+'/actions)',...recent.map(r=>'['+label(r.name)+' · '+label(statusOf(r))+']('+r.html_url+')'),...prs.slice(0,3).map(p=>'[#'+p.number+' '+label(p.title)+']('+p.html_url+')')];
   blocks.push('<a href="'+url+'">'+picture+'</a>\n\n'+links.join(' · '));
   console.log(name+': '+status+' / '+prs.length+' open PRs');
 }
 for(const file of await readdir(dir)) if(projects.some(([repo])=>[repo+'-dark.svg',repo+'-light.svg'].includes(file))&&!generated.has(file)) await unlink(dir+'/'+file);
 const old=await readFile('README.md','utf8');
 const start='<!-- project-universe:start -->',end='<!-- project-universe:end -->';
-const section=start+'\n\n## Project Universe\n\n'+blocks.join('\n\n')+'\n\n'+end;
+const section=start+'\n\n## Project Universe\n\nA living dashboard of public projects. CI reflects recent default-branch workflows; preview links require successful GitHub deployments.\n\n'+blocks.join('\n\n')+'\n\n'+end;
 const a=old.indexOf(start),b=old.indexOf(end);
 if((a<0)!==(b<0)|| (a>=0&&b<a)) throw new Error('Invalid README markers');
 await writeFile('README.md',a>=0?old.slice(0,a)+section+old.slice(b+end.length):section+'\n\n---\n\n'+old);
