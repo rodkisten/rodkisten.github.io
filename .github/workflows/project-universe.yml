@@ -8,6 +8,9 @@ on:
     paths: ['.github/workflows/project-universe.yml', 'scripts/project-universe.mjs']
 permissions:
   contents: write
+  actions: read
+  pull-requests: read
+  deployments: read
 concurrency:
   group: project-universe
   cancel-in-progress: false
@@ -19,10 +22,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Validate generator syntax
+        run: node --check scripts/project-universe.mjs
       - name: Generate project cards
         env:
           GH_TOKEN: ${{ secrets.PROJECT_RADAR_TOKEN || github.token }}
         run: node scripts/project-universe.mjs
+      - name: Verify generated dashboard
+        run: |
+          grep -q '<!-- project-universe:start -->' README.md
+          test "$(find assets/projects -name '*.svg' | wc -l)" -gt 0
+          echo "### Project Universe" >> "$GITHUB_STEP_SUMMARY"
+          echo "Generated SVGs: $(find assets/projects -name '*.svg' | wc -l)" >> "$GITHUB_STEP_SUMMARY"
+          git diff --stat >> "$GITHUB_STEP_SUMMARY"
       - name: Publish changed cards
         run: |
           git config user.name 'github-actions[bot]'
@@ -30,4 +42,5 @@ jobs:
           git add -A -- README.md assets/projects
           if git diff --cached --quiet; then exit 0; fi
           git commit -m 'chore: refresh project universe [skip ci]'
-          git push
+          git pull --rebase origin master
+          git push origin HEAD:master
