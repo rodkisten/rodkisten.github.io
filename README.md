@@ -2,7 +2,7 @@
 
 ## Project Universe
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/universe-dark.svg"><img alt="Project Universe: 10 projects, 17 open PRs, 1 healthy, 5 failing" src="assets/projects/universe-light.svg" width="800"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/universe-dark.svg"><img alt="Project Universe: 10 projects, 19 open PRs, 0 healthy, 7 failing" src="assets/projects/universe-light.svg" width="800"></picture>
 
 A living dashboard of public projects. CI reflects recent default-branch workflows; preview links require successful GitHub deployments.
 
@@ -16,9 +16,9 @@ A living dashboard of public projects. CI reflects recent default-branch workflo
 
 [Repository](https://github.com/rodkisten/jardim) · [All PRs](https://github.com/rodkisten/jardim/pulls) · [Issues](https://github.com/rodkisten/jardim/issues) · [Actions](https://github.com/rodkisten/jardim/actions)
 
-**Pull requests:** rodkisten/jardim#25 · rodkisten/jardim#24 · rodkisten/jardim#22 · rodkisten/jardim#19
+**Pull requests:** rodkisten/jardim#28 · rodkisten/jardim#27 · rodkisten/jardim#25 · rodkisten/jardim#24 · rodkisten/jardim#19
 
-**Recent workflows:** [🌱 Jardim · 25/merge · pull\_request · success](https://github.com/rodkisten/jardim/actions/runs/45385806315) · [🎨 Prettier · Format Jardim · failure](https://github.com/rodkisten/jardim/actions/runs/45259842800) · [📦 Update pnpm lockfile · success](https://github.com/rodkisten/jardim/actions/runs/45256909631)
+**Recent workflows:** [Jardim PR preview · success](https://github.com/rodkisten/jardim/actions/runs/45491011493) · [React migration validation · success](https://github.com/rodkisten/jardim/actions/runs/45491011213) · [🌱 Jardim · 27/merge · pull\_request · success](https://github.com/rodkisten/jardim/actions/runs/45491011120)
 
 <a href="https://github.com/rodkisten/photointel"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/photointel-dark.svg"><img alt="PhotoIntel project status" src="assets/projects/photointel-light.svg" width="800"></picture></a>
 
@@ -26,15 +26,15 @@ A living dashboard of public projects. CI reflects recent default-branch workflo
 
 **Pull requests:** rodkisten/photointel#257
 
-**Recent workflows:** [🌐 Cloudflare · Push · main · success](https://github.com/rodkisten/photointel/actions/runs/45062104078) · [🧪 TypeScript environment contract · success](https://github.com/rodkisten/photointel/actions/runs/45062103964) · [🧪 Terminal validation · success](https://github.com/rodkisten/photointel/actions/runs/45062103962)
+**Recent workflows:** [🧪 CI · PR #257 · pull\_request · success](https://github.com/rodverse/rodverse/actions/runs/45490448036) · [Cloudflare PR preview · success](https://github.com/rodverse/rodverse/actions/runs/45490447564) · [📦 Lockfiles · PR #257 · failure](https://github.com/rodverse/rodverse/actions/runs/45490447527)
 
 <a href="https://github.com/rodkisten/userscripts-cf"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/userscripts-cf-dark.svg"><img alt="Userscripts project status" src="assets/projects/userscripts-cf-light.svg" width="800"></picture></a>
 
 [Repository](https://github.com/rodkisten/userscripts-cf) · [All PRs](https://github.com/rodkisten/userscripts-cf/pulls) · [Issues](https://github.com/rodkisten/userscripts-cf/issues) · [Actions](https://github.com/rodkisten/userscripts-cf/actions)
 
-**Pull requests:** rodkisten/userscripts-cf#140 · rodkisten/userscripts-cf#138 · rodkisten/userscripts-cf#135
+**Pull requests:** rodkisten/userscripts-cf#145 · rodkisten/userscripts-cf#144 · rodkisten/userscripts-cf#138 · rodkisten/userscripts-cf#135
 
-**Recent workflows:** [🧪 Validate changed · 140/merge · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45386443486) · [📦 Bundle Diet · PR #140 · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45385993902) · [▲ PR userscript previews · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45385993900)
+**Recent workflows:** [📦 Bundle Diet · PR #145 · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45489290632) · [🧪 Validate changed · 145/merge · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45489290608) · [🧩 US · ▲ PR userscript previews · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45489290604)
 
 <a href="https://github.com/rodkisten/shell"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/shell-dark.svg"><img alt="Shell project status" src="assets/projects/shell-light.svg" width="800"></picture></a>
 
@@ -42,15 +42,15 @@ A living dashboard of public projects. CI reflects recent default-branch workflo
 
 **Pull requests:** rodkisten/shell#27 · rodkisten/shell#26 · rodkisten/shell#23 · rodkisten/shell#22
 
-**Recent workflows:** [Cloudflare PR Preview · success](https://github.com/rodkisten/shell/actions/runs/45385301434) · [ShellConductor CI · 27/merge · success](https://github.com/rodkisten/shell/actions/runs/45356065116) · [🧠 Shell Flow WASM · success](https://github.com/rodkisten/shell/actions/runs/45356063785)
+**Recent workflows:** [ShellConductor CI · 26/merge · failure](https://github.com/rodkisten/shell/actions/runs/45499992883) · [Cloudflare PR Preview · success](https://github.com/rodkisten/shell/actions/runs/45499991917) · [🧠 Shell Flow WASM · success](https://github.com/rodkisten/shell/actions/runs/45499991773)
 
 <a href="https://github.com/rodkisten/ast-explorer"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/ast-explorer-dark.svg"><img alt="AST Explorer project status" src="assets/projects/ast-explorer-light.svg" width="800"></picture></a>
 
 [Repository](https://github.com/rodkisten/ast-explorer) · [All PRs](https://github.com/rodkisten/ast-explorer/pulls) · [Issues](https://github.com/rodkisten/ast-explorer/issues) · [Actions](https://github.com/rodkisten/ast-explorer/actions)
 
-**Pull requests:** rodkisten/ast-explorer#4
+**Pull requests:** rodkisten/ast-explorer#5 · rodkisten/ast-explorer#4
 
-**Recent workflows:** [Unit Test · failure](https://github.com/rodkisten/ast-explorer/actions/runs/45062367180) · [Formatting Check · failure](https://github.com/rodkisten/ast-explorer/actions/runs/45062367001) · [Cloudflare AST Explorer · failure](https://github.com/rodkisten/ast-explorer/actions/runs/45062366915)
+**Recent workflows:** [🌳 AST · Unit Test · failure](https://github.com/rodkisten/ast-explorer/actions/runs/45487557738) · [🌳 AST · Formatting Check · failure](https://github.com/rodkisten/ast-explorer/actions/runs/45487556772) · [🌳 AST · Cloudflare AST Explorer · success](https://github.com/rodkisten/ast-explorer/actions/runs/45487556753)
 
 <a href="https://github.com/rodkisten/rodtui"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/rodtui-dark.svg"><img alt="RodTUI project status" src="assets/projects/rodtui-light.svg" width="800"></picture></a>
 
@@ -70,9 +70,9 @@ A living dashboard of public projects. CI reflects recent default-branch workflo
 
 [Repository](https://github.com/rodkisten/github) · [All PRs](https://github.com/rodkisten/github/pulls) · [Issues](https://github.com/rodkisten/github/issues) · [Actions](https://github.com/rodkisten/github/actions)
 
-**Pull requests:** rodkisten/github#13 · rodkisten/github#11
+**Pull requests:** rodkisten/github#11
 
-**Recent workflows:** [🧩 Validate Actions Console · success](https://github.com/rodkisten/github/actions/runs/45387412402) · [🎨 Format PR · failure](https://github.com/rodkisten/github/actions/runs/45387412241) · [🧪 Validate TypeScript Actions · success](https://github.com/rodkisten/github/actions/runs/45387412225)
+**Recent workflows:** [🧪 Validate TypeScript Actions · failure](https://github.com/rodkisten/github/actions/runs/45473574040) · [🚀 \[main\] · fix(executor): resolve JavaScript bundle relative to launcher · success](https://github.com/rodkisten/github/actions/runs/45473573754) · [📦 Public Actions · main · success](https://github.com/rodkisten/github/actions/runs/45471913939)
 
 <a href="https://github.com/rodkisten/ejc"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/ejc-dark.svg"><img alt="EJC project status" src="assets/projects/ejc-light.svg" width="800"></picture></a>
 
