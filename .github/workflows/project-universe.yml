@@ -5,7 +5,7 @@ on:
     - cron: '17 * * * *'
   push:
     branches: [master]
-    paths: ['.github/workflows/project-universe.yml']
+    paths: ['.github/workflows/project-universe.yml', 'scripts/project-universe.mjs']
 permissions:
   contents: write
 concurrency:
@@ -16,83 +16,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - name: Generate project cards
         env:
           GH_TOKEN: ${{ secrets.PROJECT_RADAR_TOKEN || github.token }}
-        shell: python
-        run: |
-          import json, subprocess, pathlib, html, re
-          projects = [
-              ('orb','orb','Automation in orbit','#a78bfa','orbit'),
-              ('jardim','Jardim','A garden of digital memories','#fbbf24','flower'),
-              ('photointel','PhotoIntel','Visual intelligence cloud','#38bdf8','camera'),
-              ('userscripts-cf','Userscripts','Make the web yours','#fb7185','puzzle'),
-              ('shell','Shell','Explore the command line','#34d399','terminal'),
-              ('ast-explorer','AST Explorer','Code beneath the surface','#2dd4bf','tree'),
-              ('rodtui','RodTUI','Terminal interfaces in Rust','#fb923c','crab'),
-              ('eita','Eita','Developer tooling','#facc15','bolt'),
-              ('github','GitHub Tools','Engineering automation','#c084fc','orbit'),
-              ('ejc','EJC','Community tools','#f472b6','flower'),
-          ]
-          def api(path):
-              return json.loads(subprocess.check_output(['gh','api',path],text=True))
-          def esc(s): return html.escape(str(s),quote=True)
-          def md(s): return re.sub(r'[^\w .:/#-]', ' ', str(s))[:100]
-          out=pathlib.Path('assets/projects')
-          out.mkdir(parents=True,exist_ok=True)
-          blocks=[]
-          shapes={
-              'orbit':'<ellipse cx="530" cy="80" rx="78" ry="32" transform="rotate(-30 530 80)"/><circle cx="530" cy="80" r="36"/><circle cx="590" cy="44" r="8"/>',
-              'flower':''.join(f'<ellipse cx="530" cy="40" rx="17" ry="32" transform="rotate({i*45} 530 80)"/>' for i in range(8))+'<circle cx="530" cy="80" r="20"/>',
-              'camera':'<rect x="465" y="35" width="130" height="90" rx="18"/><circle cx="530" cy="80" r="30"/><path d="M490 35l12 -15h48l12 15"/>',
-              'terminal':'<rect x="460" y="25" width="140" height="110" rx="15"/><path d="M480 55l25 25 -25 25 M520 105h48"/>',
-              'tree':'<path d="M530 30v35 M480 65h100 M480 65v35 M580 65v35"/><circle cx="530" cy="25" r="12"/><circle cx="480" cy="110" r="12"/><circle cx="580" cy="110" r="12"/>',
-              'bolt':'<path d="M550 15l-70 75h45l-15 55 70-85h-45z"/>',
-              'puzzle':'<path d="M475 35h40a15 15 0 1 1 30 0h40v40a15 15 0 1 1 0 30v30H475V95a15 15 0 1 0 0-30z"/>',
-              'crab':'<ellipse cx="530" cy="90" rx="45" ry="30"/><path d="M490 80l-30-25 15-25 20 20 M570 80l30-25-15-25-20 20 M490 110l-25 20 M570 110l25 20"/><circle cx="515" cy="80" r="3"/><circle cx="545" cy="80" r="3"/>'
-          }
-          for repo,name,tag,color,shape in projects:
-              base='repos/rodkisten/'+repo
-              url='https://github.com/rodkisten/'+repo
-              try:
-                  meta=api(base)
-                  if meta.get('private'): continue
-                  prs=api(base+'/pulls?state=open&per_page=100')
-                  runs=api(base+'/actions/runs?per_page=100')['workflow_runs']
-              except subprocess.CalledProcessError:
-                  blocks.append(f'**{name}** · Data unavailable')
-                  continue
-              latest={}
-              for run in runs:
-                  if run.get('actor',{}).get('type')=='Bot' or run.get('conclusion') in ('skipped','cancelled'): continue
-                  key=(run['workflow_id'],run.get('head_branch'))
-                  latest.setdefault(key,run)
-              recent=list(latest.values())[:3]
-              status=(recent[0].get('conclusion') or recent[0]['status']) if recent else 'No runs'
-              status_color={'success':'#4ade80','failure':'#fb7185','in_progress':'#60a5fa','queued':'#fbbf24'}.get(status,'#94a3b8')
-              for theme,bg,fg,muted in [('dark','#101218','#f8fafc','#a1a1aa'),('light','#f8fafc','#18181b','#52525b')]:
-                  svg=f'<svg xmlns="http://www.w3.org/2000/svg" width="640" height="180" viewBox="0 0 640 180"><rect x="1" y="1" width="638" height="178" rx="20" fill="{bg}" stroke="{color}" stroke-opacity=".45"/><rect x="20" y="22" width="5" height="136" rx="2" fill="{color}"/><g fill="none" stroke="{color}" stroke-width="3" opacity=".65">{shapes[shape]}</g><g font-family="Arial,sans-serif"><text x="42" y="39" font-size="11" letter-spacing="3" fill="{color}">ROD / PROJECT UNIVERSE</text><text x="40" y="82" font-size="32" font-weight="bold" fill="{fg}">{esc(name)}</text><text x="42" y="108" font-size="14" fill="{muted}">{esc(tag)}</text><circle cx="48" cy="145" r="5" fill="{status_color}"/><text x="60" y="150" font-size="13" fill="{fg}">{esc(status.replace("_"," ").upper())} · {len(prs)}{"+" if len(prs)==100 else ""} OPEN PRs</text></g></svg>'
-                  (out/f'{repo}-{theme}.svg').write_text(svg)
-              picture=f'<picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/{repo}-dark.svg"><img alt="{name} project status" src="assets/projects/{repo}-light.svg" width="640"></picture>'
-              links=[f'[Repository]({url})',f'[All PRs]({url}/pulls)',f'[Actions]({url}/actions)']
-              links += [f'[{md(r["name"])} · {md(r.get("conclusion") or r["status"])}]({r["html_url"]})' for r in recent]
-              links += [f'[#{p["number"]} {md(p["title"])}]({p["html_url"]})' for p in prs[:3]]
-              blocks.append(f'<a href="{url}">{picture}</a>\n\n'+' · '.join(links))
-          readme=pathlib.Path('README.md')
-          old=readme.read_text()
-          start='<!-- project-universe:start -->'
-          end='<!-- project-universe:end -->'
-          section=start+'\n\n## Project Universe\n\n'+'\n\n'.join(blocks)+'\n\n'+end
-          if start in old and end in old:
-              new=old.split(start,1)[0]+section+old.split(end,1)[1]
-          else:
-              new=section+'\n\n---\n\n'+old
-          readme.write_text(new)
+        run: node scripts/project-universe.mjs
       - name: Publish changed cards
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add README.md assets/projects
+          git add -A -- README.md assets/projects
           if git diff --cached --quiet; then exit 0; fi
           git commit -m 'chore: refresh project universe [skip ci]'
           git push
