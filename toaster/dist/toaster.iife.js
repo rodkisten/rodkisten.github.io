@@ -1,4 +1,4 @@
-/* Auto-generated from toaster/toaster.ts. at 11/24/2026, 8:49:29 AM Do not edit directly. */
+/* Auto-generated from toaster/toaster.ts. at 11/24/2026, 8:50:20 AM Do not edit directly. */
 var RodToaster = (function() {
 
 // \0rolldown/runtime.js
