@@ -56,7 +56,8 @@ function renderCard({repo,name,tag,color,shape,theme,bg,fg,muted,status,prs,bran
 
 const dir='assets/projects';
 await mkdir(dir,{recursive:true});
-const blocks=[], generated=new Set();
+const blocks=[], generated=new Set(), failures=[];
+let successful=0;
 for (const [repo,name,tag,color,shape] of projects) {
   const base='repos/rodkisten/'+repo, url='https://github.com/rodkisten/'+repo;
   let meta, prs, runs;
@@ -66,10 +67,12 @@ for (const [repo,name,tag,color,shape] of projects) {
     prs=api(base+'/pulls?state=open&per_page=100',true).flat();
     runs=api(base+'/actions/runs?per_page=100').workflow_runs;
   } catch(error) {
-    console.warn('Unable to retrieve '+repo);
+    console.warn('Unable to retrieve '+repo+': '+error.message);
+    failures.push(repo);
     blocks.push('**'+name+'** · Data unavailable');
     continue;
   }
+  successful++;
   const latest=new Map();
   for(const run of runs){
     if(run.actor?.type==='Bot'||['skipped','cancelled'].includes(run.conclusion)) continue;
@@ -107,6 +110,8 @@ for (const [repo,name,tag,color,shape] of projects) {
   blocks.push('<a href="'+url+'">'+picture+'</a>\n\n'+links.join(' · '));
   console.log(name+': '+status+' / '+prs.length+' open PRs');
 }
+if(!successful) throw new Error('No public project data retrieved; refusing to overwrite README. Check token permissions.');
+console.log('Project Universe: '+successful+' projects retrieved; '+failures.length+' unavailable');
 for(const file of await readdir(dir)) if(projects.some(([repo])=>[repo+'-dark.svg',repo+'-light.svg'].includes(file))&&!generated.has(file)) await unlink(dir+'/'+file);
 const old=await readFile('README.md','utf8');
 const start='<!-- project-universe:start -->',end='<!-- project-universe:end -->';
