@@ -58,6 +58,7 @@ const dir='assets/projects';
 await mkdir(dir,{recursive:true});
 const blocks=[], generated=new Set(), failures=[];
 let successful=0;
+const totals={prs:0,healthy:0,failed:0,pending:0,unknown:0};
 for (const [repo,name,tag,color,shape] of projects) {
   const base='repos/rodkisten/'+repo, url='https://github.com/rodkisten/'+repo;
   let meta, prs, runs;
@@ -83,6 +84,11 @@ for (const [repo,name,tag,color,shape] of projects) {
   const main=[...latest.values()].filter(run=>run.head_branch===meta.default_branch);
   const states=main.map(statusOf);
   const status=['failure','timed_out','action_required','in_progress','queued','pending','requested'].find(state=>states.includes(state)) || (states.length&&states.every(state=>state==='success')?'success':states[0]||'unknown');
+  totals.prs+=prs.length;
+  if(status==='success') totals.healthy++;
+  else if(['failure','timed_out','action_required'].includes(status)) totals.failed++;
+  else if(['in_progress','queued','pending','requested'].includes(status)) totals.pending++;
+  else totals.unknown++;
   for(const [theme,bg,fg,muted] of [['dark','#101218','#f8fafc','#a1a1aa'],['light','#f8fafc','#18181b','#52525b']]){
     const file=repo+'-'+theme+'.svg';
     const svg=renderCard({repo,name,tag,color,shape,theme,bg,fg,muted,status,prs:prs.length,branch:meta.default_branch,language:meta.language});
@@ -113,9 +119,21 @@ for (const [repo,name,tag,color,shape] of projects) {
 if(!successful) throw new Error('No public project data retrieved; refusing to overwrite README. Check token permissions.');
 console.log('Project Universe: '+successful+' projects retrieved; '+failures.length+' unavailable');
 for(const file of await readdir(dir)) if(projects.some(([repo])=>[repo+'-dark.svg',repo+'-light.svg'].includes(file))&&!generated.has(file)) await unlink(dir+'/'+file);
+const metrics=[['PROJECTS',successful,'#a78bfa'],['OPEN PRs',totals.prs,'#38bdf8'],['CI HEALTHY',totals.healthy,'#34d399'],['CI FAILING',totals.failed,'#fb7185']];
+for(const [theme,bg,fg,muted] of [['dark','#101218','#f8fafc','#a1a1aa'],['light','#f8fafc','#18181b','#52525b']]){
+  const tiles=metrics.map(([label,value,color],i)=>{
+    const x=30+i*188;
+    return '<g transform="translate('+x+' 176)"><rect width="176" height="92" rx="12" fill="'+color+'" fill-opacity=".12" stroke="'+color+'" stroke-opacity=".5"/><text x="15" y="28" font-size="11" letter-spacing="1.5" fill="'+muted+'">'+label+'</text><text x="14" y="69" font-size="36" font-weight="700" fill="'+fg+'">'+value+'</text></g>';
+  }).join('');
+  const planets=projects.map((p,i)=>{const a=i*2.399963;const x=666+Math.cos(a)*(40+i*7);const y=79+Math.sin(a)*(18+i*3);return '<circle cx="'+x.toFixed(2)+'" cy="'+y.toFixed(2)+'" r="'+(5+i%4*2)+'" fill="'+p[3]+'"/>';}).join('');
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="800" height="300" viewBox="0 0 800 300"><title>Rod’s Project Universe</title><rect x="1" y="1" width="798" height="298" rx="24" fill="'+bg+'" stroke="'+muted+'" stroke-opacity=".3"/><g font-family="Geist,Arial,sans-serif"><text x="32" y="38" font-size="12" letter-spacing="3" fill="'+muted+'">@RODKISTEN / LIVE DASHBOARD</text><text x="29" y="90" font-size="43" font-weight="700" fill="'+fg+'">Project Universe</text><text x="32" y="122" font-size="16" fill="'+muted+'">Ideas in orbit. Software in motion.</text><text x="32" y="150" font-size="12" fill="'+muted+'">'+totals.pending+' pending · '+totals.unknown+' unknown · '+failures.length+' unavailable</text>'+tiles+'</g><g fill="none" stroke="'+muted+'" stroke-opacity=".3"><ellipse cx="666" cy="79" rx="100" ry="42" transform="rotate(-20 666 79)"/><ellipse cx="666" cy="79" rx="77" ry="28" transform="rotate(25 666 79)"/></g>'+planets+'</svg>';
+  await writeFile(dir+'/universe-'+theme+'.svg',svg);
+}
+const hero='<picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/universe-dark.svg"><img alt="Project Universe: '+successful+' projects, '+totals.prs+' open PRs, '+totals.healthy+' healthy, '+totals.failed+' failing" src="assets/projects/universe-light.svg" width="800"></picture>';
+
 const old=await readFile('README.md','utf8');
 const start='<!-- project-universe:start -->',end='<!-- project-universe:end -->';
-const section=start+'\n\n## Project Universe\n\nA living dashboard of public projects. CI reflects recent default-branch workflows; preview links require successful GitHub deployments.\n\n'+blocks.join('\n\n')+'\n\n'+end;
+const section=start+'\n\n## Project Universe\n\n'+hero+'\n\nA living dashboard of public projects. CI reflects recent default-branch workflows; preview links require successful GitHub deployments.\n\n'+blocks.join('\n\n')+'\n\n'+end;
 const a=old.indexOf(start),b=old.indexOf(end);
 if((a<0)!==(b<0)|| (a>=0&&b<a)) throw new Error('Invalid README markers');
 await writeFile('README.md',a>=0?old.slice(0,a)+section+old.slice(b+end.length):section+'\n\n---\n\n'+old);
