@@ -2,7 +2,7 @@
 
 ## Project Universe
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/universe-dark.svg"><img alt="Project Universe: 10 projects, 16 open PRs, 2 healthy, 6 failing" src="assets/projects/universe-light.svg" width="800"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/universe-dark.svg"><img alt="Project Universe: 10 projects, 17 open PRs, 3 healthy, 5 failing" src="assets/projects/universe-light.svg" width="800"></picture>
 
 A living dashboard of public projects. CI reflects recent default-branch workflows; preview links require successful GitHub deployments.
 
@@ -12,7 +12,7 @@ A living dashboard of public projects. CI reflects recent default-branch workflo
 
 **Pull requests:** rodkisten/orb#4
 
-**Recent workflows:** [🪐 API verification · success](https://github.com/rodkisten/orb/actions/runs/45732469946) · [🪐 ORB · PR preview · success](https://github.com/rodkisten/orb/actions/runs/45732469867) · [🪐 Web verification · success](https://github.com/rodkisten/orb/actions/runs/45732469835)
+**Recent workflows:** [🪐 Web verification · failure](https://github.com/rodkisten/orb/actions/runs/45740699845) · [🪐 ORB · PR preview · failure](https://github.com/rodkisten/orb/actions/runs/45740699648) · [🪐 API verification · success](https://github.com/rodkisten/orb/actions/runs/45740699630)
 
 <a href="https://github.com/rodkisten/jardim"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/jardim-dark.svg"><img alt="Jardim project status" src="assets/projects/jardim-light.svg" width="800"></picture></a>
 
@@ -34,9 +34,9 @@ A living dashboard of public projects. CI reflects recent default-branch workflo
 
 [Repository](https://github.com/rodkisten/userscripts-cf) · [All PRs](https://github.com/rodkisten/userscripts-cf/pulls) · [Issues](https://github.com/rodkisten/userscripts-cf/issues) · [Actions](https://github.com/rodkisten/userscripts-cf/actions)
 
-**Pull requests:** rodkisten/userscripts-cf#138 · rodkisten/userscripts-cf#135
+**Pull requests:** rodkisten/userscripts-cf#150 · rodkisten/userscripts-cf#138 · rodkisten/userscripts-cf#135
 
-**Recent workflows:** [🧪 US · Validate & Preview · 149 · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45731751648) · [🧪 US · Validate & Preview · main · failure](https://github.com/rodkisten/userscripts-cf/actions/runs/45731751428) · [🧩 US · 📦 Import ZIPs → PR · failure](https://github.com/rodkisten/userscripts-cf/actions/runs/45731751217)
+**Recent workflows:** [📝 Review annotations · schedule · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45744829470) · [🧪 US · Validate & Preview · 150 · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45740666460) · [🧩 US · Dependency Graph · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45740666413)
 
 <a href="https://github.com/rodkisten/shell"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/shell-dark.svg"><img alt="Shell project status" src="assets/projects/shell-light.svg" width="800"></picture></a>
 
