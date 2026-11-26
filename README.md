@@ -2,7 +2,7 @@
 
 ## Project Universe
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/universe-dark.svg"><img alt="Project Universe: 10 projects, 17 open PRs, 3 healthy, 5 failing" src="assets/projects/universe-light.svg" width="800"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/universe-dark.svg"><img alt="Project Universe: 10 projects, 16 open PRs, 1 healthy, 5 failing" src="assets/projects/universe-light.svg" width="800"></picture>
 
 A living dashboard of public projects. CI reflects recent default-branch workflows; preview links require successful GitHub deployments.
 
@@ -10,33 +10,33 @@ A living dashboard of public projects. CI reflects recent default-branch workflo
 
 [Repository](https://github.com/rodkisten/orb) · [All PRs](https://github.com/rodkisten/orb/pulls) · [Issues](https://github.com/rodkisten/orb/issues) · [Actions](https://github.com/rodkisten/orb/actions)
 
-**Pull requests:** rodkisten/orb#4
+**Pull requests:** rodkisten/orb#5
 
-**Recent workflows:** [🪐 Web verification · failure](https://github.com/rodkisten/orb/actions/runs/45740699845) · [🪐 ORB · PR preview · failure](https://github.com/rodkisten/orb/actions/runs/45740699648) · [🪐 API verification · success](https://github.com/rodkisten/orb/actions/runs/45740699630)
+**Recent workflows:** [🪐 ORB · PR preview · success](https://github.com/rodkisten/orb/actions/runs/45883928414) · [🪐 ORB · CI · success](https://github.com/rodkisten/orb/actions/runs/45883928400) · [🪐 ORB · Maintenance · success](https://github.com/rodkisten/orb/actions/runs/45883922925)
 
 <a href="https://github.com/rodkisten/jardim"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/jardim-dark.svg"><img alt="Jardim project status" src="assets/projects/jardim-light.svg" width="800"></picture></a>
 
 [Repository](https://github.com/rodkisten/jardim) · [All PRs](https://github.com/rodkisten/jardim/pulls) · [Issues](https://github.com/rodkisten/jardim/issues) · [Actions](https://github.com/rodkisten/jardim/actions)
 
-**Pull requests:** rodkisten/jardim#30 · rodkisten/jardim#25 · rodkisten/jardim#24
+**Pull requests:** rodkisten/jardim#32 · rodkisten/jardim#24
 
-**Recent workflows:** [🌱 Jardim · 30/merge · pull\_request · success](https://github.com/rodkisten/jardim/actions/runs/45665957961) · [🌻 Jardim · PR preview · success](https://github.com/rodkisten/jardim/actions/runs/45665957888) · [🌱 Jardim · main · push · success](https://github.com/rodkisten/jardim/actions/runs/45636264347)
+**Recent workflows:** [🌻 JA · Repair PR lockfile · success](https://github.com/rodkisten/jardim/actions/runs/45884475513) · [🌻 Jardim · PR preview · success](https://github.com/rodkisten/jardim/actions/runs/45884475483) · [🌱 Jardim · 32/merge · pull\_request · success](https://github.com/rodkisten/jardim/actions/runs/45884475384)
 
 <a href="https://github.com/rodkisten/photointel"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/photointel-dark.svg"><img alt="PhotoIntel project status" src="assets/projects/photointel-light.svg" width="800"></picture></a>
 
 [Live app](https://photos.migos.club/) · [Repository](https://github.com/rodkisten/photointel) · [All PRs](https://github.com/rodkisten/photointel/pulls) · [Issues](https://github.com/rodkisten/photointel/issues) · [Actions](https://github.com/rodkisten/photointel/actions)
 
-**Pull requests:** rodkisten/photointel#257
+**Pull requests:** rodkisten/photointel#260 · rodkisten/photointel#257
 
-**Recent workflows:** [🧪 CI · PR #257 · pull\_request · success](https://github.com/rodverse/rodverse/actions/runs/45490448036) · [Cloudflare PR preview · success](https://github.com/rodverse/rodverse/actions/runs/45490447564) · [📦 Lockfiles · PR #257 · failure](https://github.com/rodverse/rodverse/actions/runs/45490447527)
+**Recent workflows:** [🔮 RV · 🧪 Terminal validation · success](https://github.com/rodverse/rodverse/actions/runs/45884406500) · [🔮 RV · 🧪 TypeScript environment contract · success](https://github.com/rodverse/rodverse/actions/runs/45884406492) · [📦 Lockfiles · PR #260 · success](https://github.com/rodverse/rodverse/actions/runs/45884406491)
 
 <a href="https://github.com/rodkisten/userscripts-cf"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/userscripts-cf-dark.svg"><img alt="Userscripts project status" src="assets/projects/userscripts-cf-light.svg" width="800"></picture></a>
 
 [Repository](https://github.com/rodkisten/userscripts-cf) · [All PRs](https://github.com/rodkisten/userscripts-cf/pulls) · [Issues](https://github.com/rodkisten/userscripts-cf/issues) · [Actions](https://github.com/rodkisten/userscripts-cf/actions)
 
-**Pull requests:** rodkisten/userscripts-cf#150 · rodkisten/userscripts-cf#138 · rodkisten/userscripts-cf#135
+**Pull requests:** rodkisten/userscripts-cf#138 · rodkisten/userscripts-cf#135
 
-**Recent workflows:** [📝 Review annotations · schedule · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45744829470) · [🧪 US · Validate & Preview · 150 · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45740666460) · [🧩 US · Dependency Graph · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45740666413)
+**Recent workflows:** [🧪 US · Validate & Preview · 150 · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45844976313) · [🧪 US · Validate & Preview · main · failure](https://github.com/rodkisten/userscripts-cf/actions/runs/45844972395) · [🚀 Release · patch · main · pending](https://github.com/rodkisten/userscripts-cf/actions/runs/45844972391)
 
 <a href="https://github.com/rodkisten/shell"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/shell-dark.svg"><img alt="Shell project status" src="assets/projects/shell-light.svg" width="800"></picture></a>
 
