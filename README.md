@@ -2,7 +2,7 @@
 
 ## Project Universe
 
-<picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/universe-dark.svg"><img alt="Project Universe: 10 projects, 17 open PRs, 1 healthy, 6 failing" src="assets/projects/universe-light.svg" width="800"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/universe-dark.svg"><img alt="Project Universe: 10 projects, 18 open PRs, 2 healthy, 5 failing" src="assets/projects/universe-light.svg" width="800"></picture>
 
 A living dashboard of public projects. CI reflects recent default-branch workflows; preview links require successful GitHub deployments.
 
@@ -20,15 +20,15 @@ A living dashboard of public projects. CI reflects recent default-branch workflo
 
 **Pull requests:** rodkisten/jardim#32 · rodkisten/jardim#24
 
-**Recent workflows:** [🌻 JA · Repair PR lockfile · success](https://github.com/rodkisten/jardim/actions/runs/45930480983) · [🌻 Jardim · PR preview · success](https://github.com/rodkisten/jardim/actions/runs/45930480946) · [🌱 Jardim · 32/merge · pull\_request · in\_progress](https://github.com/rodkisten/jardim/actions/runs/45930480923)
+**Recent workflows:** [🌻 Jardim · PR preview · success](https://github.com/rodkisten/jardim/actions/runs/45985859036) · [🌻 JA · Repair PR lockfile · success](https://github.com/rodkisten/jardim/actions/runs/45985858993) · [🌱 Jardim · 32/merge · pull\_request · success](https://github.com/rodkisten/jardim/actions/runs/45985858982)
 
 <a href="https://github.com/rodkisten/photointel"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/photointel-dark.svg"><img alt="PhotoIntel project status" src="assets/projects/photointel-light.svg" width="800"></picture></a>
 
 [Live app](https://photos.migos.club/) · [Repository](https://github.com/rodkisten/photointel) · [All PRs](https://github.com/rodkisten/photointel/pulls) · [Issues](https://github.com/rodkisten/photointel/issues) · [Actions](https://github.com/rodkisten/photointel/actions)
 
-**Pull requests:** rodkisten/photointel#261 · rodkisten/photointel#257
+**Pull requests:** rodkisten/photointel#262 · rodkisten/photointel#261 · rodkisten/photointel#257
 
-**Recent workflows:** [🌐 Cloudflare · PR #261 · success](https://github.com/rodverse/rodverse/actions/runs/45930087944) · [📦 Lockfiles · PR #261 · success](https://github.com/rodverse/rodverse/actions/runs/45930087830) · [🧪 CI · PR #261 · pull\_request · in\_progress](https://github.com/rodverse/rodverse/actions/runs/45930087786)
+**Recent workflows:** [🧪 CI · PR #261 · pull\_request · failure](https://github.com/rodverse/rodverse/actions/runs/45992006905) · [🧱 GCP · plan · photointel · success](https://github.com/rodverse/rodverse/actions/runs/45992006845) · [🔮 TF · Validate · 261/merge · success](https://github.com/rodverse/rodverse/actions/runs/45992006841)
 
 <a href="https://github.com/rodkisten/userscripts-cf"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/userscripts-cf-dark.svg"><img alt="Userscripts project status" src="assets/projects/userscripts-cf-light.svg" width="800"></picture></a>
 
@@ -36,7 +36,7 @@ A living dashboard of public projects. CI reflects recent default-branch workflo
 
 **Pull requests:** rodkisten/userscripts-cf#151 · rodkisten/userscripts-cf#138 · rodkisten/userscripts-cf#135
 
-**Recent workflows:** [🧩 US · Dependency Graph · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45924412087) · [🛠️ Maintenance · lockfile · fix/rodx-css-integrity · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45924219426) · [🧪 US · Validate & Preview · 151 · failure](https://github.com/rodkisten/userscripts-cf/actions/runs/45920124223)
+**Recent workflows:** [📝 Review annotations · schedule · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45943104951) · [🧩 US · Dependency Graph · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45924412087) · [🛠️ Maintenance · lockfile · fix/rodx-css-integrity · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45924219426)
 
 <a href="https://github.com/rodkisten/shell"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/shell-dark.svg"><img alt="Shell project status" src="assets/projects/shell-light.svg" width="800"></picture></a>
 
