@@ -10,9 +10,9 @@ A living dashboard of public projects. CI reflects recent default-branch workflo
 
 [Repository](https://github.com/rodkisten/orb) · [All PRs](https://github.com/rodkisten/orb/pulls) · [Issues](https://github.com/rodkisten/orb/issues) · [Actions](https://github.com/rodkisten/orb/actions)
 
-**Pull requests:** rodkisten/orb#5
+**Pull requests:** rodkisten/orb#11 · rodkisten/orb#6 · rodkisten/orb#5
 
-**Recent workflows:** [🪐 ORB · PR preview · success](https://github.com/rodkisten/orb/actions/runs/45883928414) · [🪐 ORB · CI · success](https://github.com/rodkisten/orb/actions/runs/45883928400) · [🪐 ORB · Maintenance · success](https://github.com/rodkisten/orb/actions/runs/45883922925)
+**Recent workflows:** [🪐 ORB · Production · success](https://github.com/rodkisten/orb/actions/runs/46062191970) · [🪐 ORB · PR preview · success](https://github.com/rodkisten/orb/actions/runs/46062186233) · [🪐 ORB · CI · failure](https://github.com/rodkisten/orb/actions/runs/46061882967)
 
 <a href="https://github.com/rodkisten/jardim"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/jardim-dark.svg"><img alt="Jardim project status" src="assets/projects/jardim-light.svg" width="800"></picture></a>
 
@@ -26,25 +26,25 @@ A living dashboard of public projects. CI reflects recent default-branch workflo
 
 [Live app](https://photos.migos.club/) · [Repository](https://github.com/rodkisten/photointel) · [All PRs](https://github.com/rodkisten/photointel/pulls) · [Issues](https://github.com/rodkisten/photointel/issues) · [Actions](https://github.com/rodkisten/photointel/actions)
 
-**Pull requests:** rodkisten/photointel#262 · rodkisten/photointel#261 · rodkisten/photointel#257
+**Pull requests:** rodkisten/photointel#261 · rodkisten/photointel#257
 
-**Recent workflows:** [🧪 CI · PR #261 · pull\_request · failure](https://github.com/rodverse/rodverse/actions/runs/45992006905) · [🧱 GCP · plan · photointel · success](https://github.com/rodverse/rodverse/actions/runs/45992006845) · [🔮 TF · Validate · 261/merge · success](https://github.com/rodverse/rodverse/actions/runs/45992006841)
+**Recent workflows:** [🌐 Cloudflare · Push · main · failure](https://github.com/rodverse/rodverse/actions/runs/46017847224) · [🧪 CI · main · push · failure](https://github.com/rodverse/rodverse/actions/runs/46017846951) · [📦 Lockfiles · main · success](https://github.com/rodverse/rodverse/actions/runs/46017846701)
 
 <a href="https://github.com/rodkisten/userscripts-cf"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/userscripts-cf-dark.svg"><img alt="Userscripts project status" src="assets/projects/userscripts-cf-light.svg" width="800"></picture></a>
 
 [Repository](https://github.com/rodkisten/userscripts-cf) · [All PRs](https://github.com/rodkisten/userscripts-cf/pulls) · [Issues](https://github.com/rodkisten/userscripts-cf/issues) · [Actions](https://github.com/rodkisten/userscripts-cf/actions)
 
-**Pull requests:** rodkisten/userscripts-cf#151 · rodkisten/userscripts-cf#138 · rodkisten/userscripts-cf#135
+**Pull requests:** rodkisten/userscripts-cf#153 · rodkisten/userscripts-cf#138 · rodkisten/userscripts-cf#135
 
-**Recent workflows:** [📝 Review annotations · schedule · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45943104951) · [🧩 US · Dependency Graph · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45924412087) · [🛠️ Maintenance · lockfile · fix/rodx-css-integrity · success](https://github.com/rodkisten/userscripts-cf/actions/runs/45924219426)
+**Recent workflows:** [Import aliases · migrate · failure](https://github.com/rodkisten/userscripts-cf/actions/runs/46065242130) · [🧪 US · Validate & Preview · main · failure](https://github.com/rodkisten/userscripts-cf/actions/runs/46065198205) · [🚀 Release · patch · main · pending](https://github.com/rodkisten/userscripts-cf/actions/runs/46065198150)
 
 <a href="https://github.com/rodkisten/shell"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/shell-dark.svg"><img alt="Shell project status" src="assets/projects/shell-light.svg" width="800"></picture></a>
 
 [Live app](https://shell.migos.club/) · [Repository](https://github.com/rodkisten/shell) · [All PRs](https://github.com/rodkisten/shell/pulls) · [Issues](https://github.com/rodkisten/shell/issues) · [Actions](https://github.com/rodkisten/shell/actions)
 
-**Pull requests:** rodkisten/shell#28 · rodkisten/shell#23 · rodkisten/shell#22
+**Pull requests:** rodkisten/shell#23 · rodkisten/shell#22
 
-**Recent workflows:** [🔒 Lockfile · feat/code-workflow-studio · success](https://github.com/rodkisten/shell/actions/runs/45718850386) · [💻 SH · Federation · success](https://github.com/rodkisten/shell/actions/runs/45718850360) · [ShellConductor CI · main · failure](https://github.com/rodkisten/shell/actions/runs/45671053621)
+**Recent workflows:** [ShellConductor CI · main · success](https://github.com/rodkisten/shell/actions/runs/46037294348) · [🐚 SH · Cloudflare PR Preview · success](https://github.com/rodkisten/shell/actions/runs/46037293805) · [🔒 Lockfile · main · success](https://github.com/rodkisten/shell/actions/runs/46037293420)
 
 <a href="https://github.com/rodkisten/ast-explorer"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/projects/ast-explorer-dark.svg"><img alt="AST Explorer project status" src="assets/projects/ast-explorer-light.svg" width="800"></picture></a>
 
